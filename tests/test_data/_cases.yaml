@@ -1,0 +1,36 @@
+edz_0:
+    transport_fullscale/bulk_field_params/cond_max: 1e-9
+    transport_fullscale/fractures/fixed_seed: 282
+    #transport_fullscale/bulk_field_params/cond_min: 3e-13 
+noedz_0:
+    transport_fullscale/bulk_field_params/cond_max: 3e-13
+    transport_fullscale/fractures/fixed_seed: 282
+    #transport_fullscale/bulk_field_params/cond_min: 3e-13
+
+edz_1:
+    transport_fullscale/bulk_field_params/cond_max: 1e-9
+    transport_fullscale/fractures/fixed_seed: 202
+noedz_1:
+    transport_fullscale/bulk_field_params/cond_max: 3e-13
+    transport_fullscale/fractures/fixed_seed: 202
+
+edz_2:
+    transport_fullscale/bulk_field_params/cond_max: 1e-9
+    transport_fullscale/fractures/fixed_seed: 545
+noedz_2:
+    transport_fullscale/bulk_field_params/cond_max: 3e-13
+    transport_fullscale/fractures/fixed_seed: 545
+
+edz_3:
+    transport_fullscale/bulk_field_params/cond_max: 1e-9
+    transport_fullscale/fractures/fixed_seed: 906
+noedz_3:
+    transport_fullscale/bulk_field_params/cond_max: 3e-13
+    transport_fullscale/fractures/fixed_seed: 906
+
+edz_4:
+    transport_fullscale/bulk_field_params/cond_max: 1e-9
+    transport_fullscale/fractures/fixed_seed: 632
+noedz_4:
+    transport_fullscale/bulk_field_params/cond_max: 3e-13
+    transport_fullscale/fractures/fixed_seed: 632

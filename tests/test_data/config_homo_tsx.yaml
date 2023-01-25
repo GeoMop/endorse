@@ -1,0 +1,307 @@
+
+pe_flow_env: &pe_config
+    flow_executable:
+    # release
+    - /home/paulie/Workspace/flow123d/bin/fterm
+    - rel
+    - --no-term
+    - run
+
+jb_flow_env: &jb_config
+    flow_executable:
+    # release
+    - /home/jb/workspace/flow123d/bin/fterm
+    - --no-term
+    - run
+  #   - /storage/liberec3-tul/home/jan_brezina/workspace/flow123d/bin/flow123d
+  #    - cmd
+  #    - c:/Users/peta/AppData/Local/Flow123d/v3.0.3/bin/flow123d.bat
+  #    - --no-term
+  #    - rel
+  #    - run
+    # debug
+    #- /storage/liberec3-tul/home/jan_brezina/workspace/flow-dbg/flow123d/bin/flow123d
+
+flow_env: *jb_config
+
+mlmc:
+    # flow base image: 4.0.0a_d4c856
+    singularity_image: docker://flow123d/geomop-gnu:2.0.0
+    #singularity_image: None
+    _pbs:
+        n_cores: 1
+        n_nodes: 1
+        select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+        mem: 8Gb
+        queue: charon
+        pbs_name: endorse-flow123d
+        walltime: 2:00:00
+
+indicators: # quantiles to compute
+  quantiles: [0.005, 0.002, 0.001, 0.0005]
+  plots: 0, 2
+
+
+metacentrum: false
+
+mc_samples: 10
+
+#copy_files:
+#  - transport_2022_5_tmpl.yaml
+#  - conc_flux_UOS.csv
+#  - large_model.msh
+#  - tunnel_mesh_cut_healed.msh
+#  - accepted_parameters.csv
+
+geometry: &one_borehole_geometry !include config_geometry.yaml
+fractures: &fractures
+    # SKB fracture parameters for upper domain
+    population:  !include config_fractures.yaml
+    # upper limit on the number of fractures
+    n_frac_limit: 10
+
+#
+fractures_repo: &fractures_repo
+    # SKB fracture population for repository domain
+    population:  !include config_fr_Forsmark_repo.yaml
+    # upper limit on the number of (small) fractures
+    n_frac_limit: 30
+    fixed_seed: 101
+    large_min_r: 30
+    large_box:  [100, 80, 60]
+    # Would be better to have separate domains for known large fractures close to tunnel and
+    # uncertain large fractures, need support in Population
+
+
+# Set to None to generate new meshes. ABSOLUTE PATH
+#mesh_repository:
+#mesh_repository: /storage/liberec3-tul/home/jan_brezina/workspace/wgc/mlmc_random_frac/fr200_unif_s100/mesh_repository/
+#mesh_repository: /home/pavel_exner/WGC2020-THM-MC/mlmc_random_frac/mesh_repository
+
+sample_dir: samples
+mesh_files:
+  input: random_fractures_healed.msh
+  output: random_fractures_healed_2.msh
+
+# base of the mesh file name
+mesh_name: random_fractures
+
+fine_conductivity_interpolated:
+    # Description of the EDZ conductivity field
+    yz_plane_mesh:
+        mesh_file: hm_plane.msh  # YZ profile given by
+        fields:
+          conductivity: conductivity
+          conductivity_tn: conductivity_tn
+          porosity: porosity
+    x_profile:    # relative conductivity with respect to the yz_plane
+        # x_coord : relative factor
+        0: 1.2
+        10: 0.8
+        20: 1.0
+
+bulk_field_parametric: &bulk_field_parametric
+    cond_zero: 1e-16
+    cond_max: 1e-11  # permeability 1e-18
+    cond_min: 1e-13  # permeability 1e-20
+    por_max: 0.0025    # Use 0.004
+    por_min: 0.002
+
+    # values with respect to EDZ radius
+    h_axis: 1.5
+    v_axis: 2
+    # radius for c_min
+    inner_radius: 1.1
+
+
+
+
+transport_microscale:
+    # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
+    input_template: transport_micro_static_tmpl.yaml
+    #mesh_file: "micro_mesh.msh"
+    mesh_params:
+        # mesh step on fractures
+        fracture_mesh_step: 10
+        # mesh step on outer boundary
+        boundary_mesh_step: 50
+        # mesh step on outer boundary of EDZ (just around boreholes right now)
+        edz_mesh_step: 0.6
+        # mesh step on inner boreholes
+        boreholes_mesh_step: 0.2   # haxagon boreholes
+        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+        main_tunnel_mesh_step: 2
+
+    pressure_loads: [ [1,0,0], [0,1,0], [0,0,1], [0,1,1], [1,0,1], [1,1,0]]
+    # the mesh regions:
+    #   outer - outside of the storage borehole
+    #   borehole - the sealed and filled storage borehole
+    #output_file: "output/flow_fields.msh"
+    #load_grad_field_p0: "piezo_head_grad_p0"
+    #load_field_p1: "piezo_head_grad_p0"
+    load_field_indirect_conductivity: "conductivity"
+    response_field_p0: "velocity_p0"
+
+transport_macroscale:
+    # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
+    input_template: flow_macro_tmpl.yaml
+    mesh_step: 2.5
+    default_conductivity: 1e-16
+    input_fields_file: "input_fields.msh2"
+    piezo_head_input_file: "test_data/large_model_local.msh2"
+    # the mesh regions:
+    #   outer - outside of the storage borehole
+    #   borehole - the sealed and filled storage borehole
+    #output_file: "output/flow_fields.msh"
+    #load_grad_field_p0: "piezo_head_grad_p0"
+    #load_field_p1: "piezo_head_grad_p0"
+    #response_field_p0: "velocity_p0"
+
+transport_fine:
+    geometry: *one_borehole_geometry
+    fractures: *fractures_repo
+    bulk_fields: *bulk_field_parametric
+    mesh:
+        # mesh step on fractures
+        fracture_mesh_step: 10
+        # mesh step on outer boundary
+        boundary_mesh_step: 50
+        # mesh step on outer boundary of EDZ (just around boreholes right now)
+        edz_mesh_step: 1
+        # mesh step on inner boreholes
+        boreholes_mesh_step: 0.3   # haxagon boreholes
+        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+        main_tunnel_mesh_step: 2
+
+    # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
+    input_template: flow_fine_tmpl.yaml
+    #mesh_file: "micro_mesh.msh"
+    default_conductivity: 1e-16
+    input_fields_file: "input_fields.msh2"
+    piezo_head_input_file: "test_data/large_model_local.msh2"
+    # the mesh regions:
+    #   outer - outside of the storage borehole
+    #   borehole - the sealed and filled storage borehole
+    #output_file: "output/flow_fields.msh"
+    #load_grad_field_p0: "piezo_head_grad_p0"
+    #load_field_p1: "piezo_head_grad_p0"
+    #response_field_p0: "velocity_p0"
+
+
+  # parameters substituted into the TH model template
+transport_fullscale:
+    geometry: *one_borehole_geometry
+    fractures: *fractures_repo
+    # The mesh to use in both simulations.
+
+    # templates are part of the endorse sources
+    input_template: transport_fullscale_tmpl.yaml
+
+    # relative to main config
+    piezo_head_input_file: "large_model_local.msh2"
+    conc_flux_file: "conc_flux_UOS_kg_y.csv"
+    conc_name: U235
+    mesh:
+        # mesh step on fractures
+        fracture_mesh_step: 10
+        # mesh step on outer boundary
+        boundary_mesh_step: 50
+        # mesh step on outer boundary of EDZ (just around boreholes right now)
+        edz_mesh_step: 1
+        # mesh step on inner boreholes
+        boreholes_mesh_step: 0.3   # haxagon boreholes
+        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+        main_tunnel_mesh_step: 2
+
+    bulk_field_params: *bulk_field_parametric
+    fr_field_params:
+        apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
+        #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
+        permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
+        #sigma_bulk_conductivity: 1e-7
+        #min_fr_cross_section: 5e-5
+        #max_fr_cross_section: 5e-3
+
+    #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
+    #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
+    diffusivity_effective: 1e-15    # should be smaller then advection
+    dispersivity_L: 1    # [m]
+    dispersivity_T: 0.1     # [m]
+    #dispersivity_L: 0    # [m]
+    #dispersivity_T: 0     # [m]
+
+
+
+
+    # setup for point source
+    # TODO: max source search, use P0 approximation with space refinement spacing
+    source_params:
+        source_ipos: 2 # ith position of the leaking container from beginning of the borehole
+        source_length: 4 # length of the container [m]
+        source_space: 2
+
+    flow_solver__a_tol: 1e-16
+    flow_solver__r_tol: 1e-8
+    #flow_solver__options:
+
+
+    trans_solver__a_tol: 1e-8
+    trans_solver__r_tol: 1e-4
+        # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+#        # Boomeramg options:
+#        # -ksp_type richardson              - recomended usage when solving just by multigrid
+#        #  -pc_hypre_boomeramg_cycle_type <V> Cycle type (choose one of) V W (None)
+#        #                                 cans try: V, W
+#        #  -pc_hypre_boomeramg_max_levels <25>: Number of levels (of grids) allowed (None)
+#        #  -pc_hypre_boomeramg_max_iter <1>: Maximum iterations used PER hypre call (None)
+#        #                                  PETSC recomend more then 1 when just richardson KSP is used
+#        #  -pc_hypre_boomeramg_tol <0.>: Convergence tolerance PER hypre call (0.0 = use a fixed number of iterations) (None)
+#        #                                  PETSC says 1e-7 is default, when previous is not set
+#        #  -pc_hypre_boomeramg_strong_threshold <0.25>: Threshold for being strongly connected (None)
+#        #                                  HYPRE recommends 0.5 for 3d problems
+#        #
+#        #  -pc_hypre_boomeramg_P_max <0>: Max elements per row for interpolation operator (0=unlimited) (None)
+#        #  -pc_hypre_boomeramg_agg_nl <0>: Number of levels of aggressive coarsening (None)
+#        #  -pc_hypre_boomeramg_agg_num_paths <1>: Number of paths for aggressive coarsening (None)
+#        #  -pc_hypre_boomeramg_strong_threshold <0.25>: Threshold for being strongly connected (None)
+#        #  -pc_hypre_boomeramg_coarsen_type <Falgout> Coarsen type (choose one of) CLJP Ruge-Stueben  modifiedRuge-Stueben   Falgout  PMIS  HMIS (None)
+#        #  -pc_hypre_boomeramg_interp_type <classical> Interpolation type (choose one of) classical   direct multipass multipass-wts ext+i ext+i-cc standard standard-wts block block-wtd FF FF1 (None)
+#
+#        #  -pc_hypre_boomeramg_relax_type_all <symmetric-SOR/Jacobi> Relax type for the up and down cycles (choose one of) Jacobi sequential-Gauss-Seidel seqboundary-Gauss-Seidel SOR/Jacobi backward-SOR/Jacobi  symmetric-SOR/Jacobi  l1scaled-SOR/Jacobi Gaussian-elimination      CG Chebyshev FCF-Jacobi l1scaled-Jacobi (None)
+#        #  -pc_hypre_boomeramg_relax_type_down <symmetric-SOR/Jacobi> Relax type for the down cycles (choose one of) Jacobi sequential-Gauss-Seidel seqboundary-Gauss-Seidel SOR/Jacobi backward-SOR/Jacobi  symmetric-SOR/Jacobi  l1scaled-SOR/Jacobi Gaussian-elimination      CG Chebyshev FCF-Jacobi l1scaled-Jacobi (None)
+#        #  -pc_hypre_boomeramg_relax_type_up <symmetric-SOR/Jacobi> Relax type for the up cycles (choose one of) Jacobi sequential-Gauss-Seidel seqboundary-Gauss-Seidel SOR/Jacobi backward-SOR/Jacobi  symmetric-SOR/Jacobi  l1scaled-SOR/Jacobi Gaussian-elimination      CG Chebyshev FCF-Jacobi l1scaled-Jacobi (None)
+#        #  -pc_hypre_boomeramg_relax_type_coarse <Gaussian-elimination> Relax type on coarse grid (choose one of) Jacobi sequential-Gauss-Seidel seqboundary-Gauss-Seidel SOR/Jacobi backward-SOR/Jacobi  symmetric-SOR/Jacobi  l1scaled-SOR/Jacobi Gaussian-elimination      CG Chebyshev FCF-Jacobi l1scaled-Jacobi (None)
+#        #  -pc_hypre_boomeramg_relax_weight_all <1.>: Relaxation weight for all levels (0 = hypre estimates, -k = determined with k CG steps) (None)
+#        #  -pc_hypre_boomeramg_relax_weight_level <1.>: Set the relaxation weight for a particular level (weight,level) (None)
+#        #  -pc_hypre_boomeramg_outer_relax_weight_all <1.>: Outer relaxation weight for all levels (-k = determined with k CG steps) (None)
+#        #  -pc_hypre_boomeramg_outer_relax_weight_level <1.>: Set the outer relaxation weight for a particular level (weight,level) (None)
+#        #  -pc_hypre_boomeramg_no_CF: <FALSE> Do not use CF-relaxation (None)
+#
+#
+#        # -pc_hypre_boomeramg_max_iter <1>  - number of V/W cycles
+#        # -pc_hypre_boomeramg_tol <1e-7>    - tolerance of MG solver
+#        # -pc_hypre_boomeramg_coarsen_type  [PMIS  HMIS]  - recomenden for 3d problems
+#        # -pc_hypre_boomeramg_interp_type [ext+i ext+i-cc] - probably recomended for 3d problems
+#        # -pc_hypre_boomeramg_strong_threshold <0.5> - recomended for 3d problems
+#        # for cg one must use symmetric smoother (default is hybrid Gauss-Siedel)
+#        # options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+#
+#        # Experiements:
+#        # options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+#        # it: 421 r_tol 1e-7
+#        #options: -ksp_type gmres -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type PMIS -pc_hypre_boomeramg_strong_threshold 0.5 -ksp_monitor
+#        # it: 696 r_tol 1e-7
+#        #opti
+
+    #heat_solver__options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type PMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+    # faild fo indef PC
+    #heat_solver__options: -ksp_type gmres -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type PMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+    # failed do to 1000 iterations
+    # heat_solver__options: -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps
+    # out of memory 12GB
+    #trans_solver__options: -ksp_type gmres -pc_type ilu -pc_factor_levels 3 -ksp_diagonal_scale -ksp_diagonal_scale_fix -pc_factor_fill 1.0 -ksp_monitor
+
+  # edz_phys_group: 77
+
+
+tsx_hm_model: !include config_tsx.yaml

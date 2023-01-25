@@ -1,0 +1,186 @@
+#
+bayes_samples_input_file: "accepted_parameters.csv"
+#
+## true -> work with pbs on metacentrum
+## false -> run locally, no pbs
+## if run by run_all*, it is set automatically
+#
+#run_on_metacentrum: False
+#metacentrum:
+#  chunks: 2
+#  ncpus_per_chunk: 15 # max 20 cpus per node(chunk)
+#  walltime: 10:00:00
+#  memory: 12gb
+#  queue: charon
+#  name: TSX_bayes
+#  workspace_rel: ../../workspace
+
+
+collect_only: False
+mesh_only: False
+make_plots: True
+
+# if True, it removes sample dir right after the sample is collected
+clean_sample_dir: False
+
+#run_best_n_accepted: 0
+
+# lower smoother
+#smooth_factor:  5e-4 #1e-2 #1e-4 #1e-5 #1e-6 #5e-6
+
+# FULL time axis
+start_time: &start_time 0
+end_time: &end_time 365
+bored_time: &bored_time 17
+output_times: &output_times
+  - {begin: *start_time, step: 10, end: *bored_time}
+  - {begin: *bored_time, step: 10, end: 100}
+  - {begin: 100, step: 20, end: *end_time}
+
+# SHORT TESTING time axis
+#start_time: &start_time 0
+#end_time: &end_time 30
+#bored_time: &bored_time 17
+#output_times: &output_times
+#  - {begin: *start_time, step: 10, end: *bored_time}
+#  - {begin: *bored_time, step: 5, end: *end_time}
+
+
+surrDAMH_parameters:
+  config_file: &config_bayes config_mcmc_bayes.yaml
+  parameters:
+    - name: biot_coefficient
+      type: normal_to_beta
+      options:
+        alfa: 50.0
+        beta: 200.0
+    #- name: bulk_conductivity
+      #type: normal_to_lognormal
+      #options:
+        #mu: -32.766
+        #sigma: 3.0
+    - name: storativity
+      type: normal_to_lognormal
+      options:
+        mu: -16.434
+        sigma: 2.0
+    - name: young_modulus
+      type: normal_to_lognormal
+      options:
+        mu: 24.817
+        sigma: 2.0
+    - name: init_stress_x
+      type: normal_to_lognormal
+      options:
+        mu: 17.622
+        sigma: 2.0
+    - name: perm_kr
+      type: normal_to_lognormal
+      options:
+        mu: -48.865
+        sigma: 3.0
+    - name: perm_km
+      type: normal_to_lognormal
+      options:
+        mu: -37.064
+        sigma: 3.0
+    - name: perm_beta
+      type: normal_to_lognormal
+      options:
+        mu: -14.732
+        sigma: 2.0
+    - name: perm_gamma
+      type: normal_to_lognormal
+      options:
+        mu: -15.019
+        sigma: 2.0
+#    - name: young_modulus
+#      type: null
+#      options:
+#        mu: 60e9
+#        sigma: 20e9
+#        mu: 24.817
+#        sigma: 1.0
+#    - name: young_modulus_1
+#      type: null
+#      options:
+#        mu: 30e9
+#        sigma: 20e9
+#        mu: 24.124
+#        sigma: 1.0
+
+#    - name: init_stress_x
+#      type: normal_to_lognormal
+#      options:
+#        mu: 17.622
+#        sigma: 0.5
+  observe_points:
+    - HGT1-5
+    #- HGT1-4
+    #- HGT2-4
+    #- HGT2-3
+
+#geometry:
+#  # base of the mesh file name
+#  mesh_name: tunnel_mesh
+#  # depth of the center of the box and of the coordinate system
+#  # x,y,z dimension
+#  box_dimensions: [100, 100]
+#  # tunnel center
+#  tunnel_center: [0, 0, 0]
+#  tunnel_dimX: &tunnel_dimX 4.375 # X cross-section
+#  tunnel_dimY: &tunnel_dimY 3.5 # Y cross-section
+#  tunnel_mesh_step: 0.25 # 0.0625 # 0.25 # 0.125 # 0.5
+#  max_elem_size: 10 # 5 # 10 # 3.7
+
+# parameters substituted into the HM model template
+hm_params:
+    mesh: tunnel_mesh.msh # healed mesh is used at the end (programmatically replaced)
+#    in_file: A01_hm
+#    in_file: A02_hm
+    input_template: A03_hm_tmpl.yaml
+#    in_file: A04_hm
+#    in_file: C04_hm
+#    in_file: B02long_hm
+#    in_file: B02ustaleni_hm
+
+    output_times: *output_times
+    start_time: *start_time
+    end_time: *end_time
+    bored_time: *bored_time
+
+# physical parameters of main interest:
+    biot_coefficient: 0.2
+    # porosity nu=0.007, beta_w=4e-10 Pa-1, beta_s = (biot-nu)*(1-biot)/bulk_modulus
+    storativity: 7.290792E-08  # S = rho * g * (beta_s + nu * beta_w)
+    # permeability k=6e-22 m2, dyn. viscosity mu=0.001 Pa.s, g=9.81 m.s-2
+    bulk_conductivity: 5.886E-15  # K = k * rho * g /mu
+    young_modulus: 60e9
+    young_modulus_1: 30e9
+    poisson_ratio: 0.2
+    init_stress_x: 45e6
+    init_pressure: 300
+
+    # non-linear permeability
+    perm_kr: 6e-22
+    perm_km: 8e-17
+    perm_beta: 4e-7
+    perm_gamma: 3e-7
+
+    # heterogenous conductivity
+    kx2: 1e-12
+    kx1: 6e-15
+    ky2: 1e-10
+    ky1: 6e-15
+
+# solver's settings
+    mechanics_solver__a_tol: 0
+    mechanics_solver__r_tol: 1e-12
+    mechanics_solver__options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg #-ksp_monitor
+        # -ksp_type cg -pc_type icc -pc_factor_levels 2 -ksp_diagonal_scale -ksp_diagonal_scale_fix -pc_factor_fill 3.0 -ksp_monitor
+
+    flow_solver__a_tol: 0
+    flow_solver__r_tol: 1e-12
+
+    flow_solver__options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg #-ksp_monitor
+        # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor

@@ -1,0 +1,5 @@
+# Included yaml type
+file_type: yaml
+content: empty
+other: !include _cfg_b.yaml
+

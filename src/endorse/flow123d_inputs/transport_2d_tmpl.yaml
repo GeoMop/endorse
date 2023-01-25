@@ -1,0 +1,163 @@
+#################
+# Test goal: Test of boundary field interpolation
+# Author: Jan Stebel
+# Source for reference: qualitative
+
+flow123d_version: 3.1.0
+problem: !Coupling_Sequential
+  description: |
+      Transport problem with Darcy flow driven by the boundary condition from the larger model.
+      Source term is prescribed on a part of the borehole boundary given by the index of container position.
+  mesh:
+    mesh_file: <mesh_file>
+    #regions:
+      #- !From_Label
+        #name: .fr_bore
+        #mesh_label: .fr_boreholes
+        #allow_empty: True
+      #- !Union
+        #name: fractures
+        #regions:
+            #- fr_l
+            #- fr_small
+
+  flow_equation: !Flow_Darcy_LMH
+    output_specific:
+    nonlinear_solver:
+      linear_solver: !Petsc
+        a_tol: 1e-16
+        r_tol: 1e-8
+        options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+
+    input_fields:
+      - region: .BOUNDARY
+        bc_type: dirichlet
+        bc_piezo_head: !FieldFormula
+          value: -0.2*x + -y
+      - region: box
+        conductivity: 1e-12
+      - region:  fractures
+        conductivity: 1e-3
+        cross_section: 0.001
+    output:
+      fields:
+        - piezo_head_p0
+        #- pressure_p0
+        #- pressure_p1
+        - velocity_p0
+        - region_id
+        - conductivity
+        - cross_section
+    balance:
+      cumulative: true
+    output_stream:
+      format: !vtk
+        variant: ascii
+
+  solute_equation: !Coupling_OperatorSplitting
+    substances:
+        - name: tracer # uranium 235; should rather be Iodium with zero K_d.
+          molar_mass: 0.235
+    transport: !Solute_AdvectionDiffusion_DG
+      user_fields:
+        - name: bc_flux_x
+          is_boundary: true
+          scalar_field: !FieldFormula
+            # variant for more boreholes
+            #value: if((y > <source_y0>)and(y < <source_y1>)and(x > <source_x0>)and(x < <source_x1>),1.0,0) #if((y>-1129275)and(y<-1129250)and(x>-682460)and(x<-682450),1,0)
+            # variant for single borehole
+            value: if((x > <source_x0>)and(x < <source_x1>),1.0,0.0)
+        - name: bc_flux_t
+          is_boundary: true
+          scalar_field: !FieldTimeFunction
+#            time_function:
+#              values: !include_csv
+#                file: <conc_flux_file>
+#                separator: " "
+#                n_head_lines: 1
+#                format:
+#                  t:
+#                    time: $0
+#                  value: $1
+            time_function:  # conc_flux_UOS_[kg:y]
+              values: !include_csv
+                file: <conc_flux_file>
+                separator: ","
+                n_head_lines: 1
+                format:
+                  t:
+                    time: $0
+                  value: $1
+
+      input_fields:
+        - region: fractures
+          porosity: 1
+        - region: box
+          porosity: 0.002
+          # dg_penalty: 1       # mass: 80, error: 4.5, default value, solution highly oscilates
+          # dg_penalty: 10      # mass: 40, error: 4.0,  high error, hard to converge
+          # dg_penalty: 100     # mass: 27, error: 16,  high error, hard to converge
+          dg_penalty: 10
+          diff_m: 1e-16
+          disp_l: 1
+          disp_t: 0.1
+
+        - region: .source
+          bc_type: total_flux
+          bc_flux: !FieldFormula
+            #value: bc_flux_x * bc_flux_t / (365.2425 * 24 * 3600)  conc in mg/m3
+            value: bc_flux_x * bc_flux_t / (365.2425 * 0.24 * 0.36)
+            #unit: kg*m*md/y  unfortunately does not work so we scale manually from kg/y/m2 to kg/s/m2
+            # even for nonzero diffusion getting zero mass in balance and substantial error (since fluxes are taken from field evaluation)
+            # trying some scaling in between (could be interpreted as change in conc unit anyway)
+      solver:
+        a_tol: 1e-8
+        r_tol: 1e-4
+        options: -ksp_type gmres -pc_type ilu -pc_factor_levels 2 -ksp_diagonal_scale -ksp_diagonal_scale_fix -pc_factor_fill 1.0 -ksp_monitor
+
+      output:    
+        fields:
+        - field: conc
+          interpolation: [P0_value, P1_average, D1_value] #[P0_value, P1_average, D1_value]
+        - region_id
+    output_stream:
+      format: !vtk
+        variant: ascii
+      times:
+        - [500, 'y']
+        - [1100, 'y']
+        - [2300, 'y']
+        - [5000, 'y']
+        - [10000, 'y']
+        - time: [20000, 'y']
+          step: [20000, 'y']
+
+
+    time:
+      end_time: [200000, 'y']
+      max_dt: [20000, 'y']
+      dt_limits:
+        - time: [0, 'y']
+          max_dt: [30, 'y']
+        - time: [60, 'y']             # 2
+          max_dt: [60, 'y']
+        - time: [540, 'y']            # 10
+          max_dt: [120, 'y']
+        - time: [1100, 'y']           # 15
+          max_dt: [240, 'y']
+        - time: [2300, 'y']          # 20
+          max_dt: [500, 'y']
+        - time: [5000, 'y']          # 25
+          max_dt: [1000, 'y']        #
+        - time: [10000, 'y']          # 30
+          max_dt: [2500, 'y']        #
+        - time: [20000, 'y']          # 34
+          max_dt: [5000, 'y']        #
+        - time: [40000, 'y']          # 38
+          max_dt: [10000, 'y']        #
+        - time: [80000, 'y']          # 42
+          max_dt: [20000, 'y']        # 53
+      common_time_unit: y
+      write_used_timesteps: time_steps.yaml
+    balance:
+      cumulative: true

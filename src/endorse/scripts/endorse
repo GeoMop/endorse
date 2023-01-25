@@ -1,0 +1,75 @@
+#!/bin/bash
+
+set -x
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+
+
+function print_usage() {
+cat << EOF
+  
+Usage:  
+    
+    endorse [-q <queue>] <command> <options>
+
+    ? pbs option has to take configuration from somewhere
+    idea is to set most pbs options according to the job and provide only what is necessary
+
+EOF
+
+}
+
+WORKDIR_REL="--"
+while [ "${1#-}" != "$1" ]      # arg starts with '-'
+  do
+  key="$1"
+  case $key in
+    -w|--workdir)
+      shift
+      # TODO: fix pwd, how it is meant to be used?
+      WORKDIR_REL="$1"
+      shift
+    ;;  
+    -q|--queue)
+      shift  
+      QUEUE=$1
+      shift
+    ;;
+    -c|--cluser)
+      shift
+      CLUSTER=$1
+      shift
+    ;;
+    -h|--help)
+    ;;
+    *)
+      echo -e "${bred}ERROR:$reset ${red} Invalid argument '$1'!$reset"
+      print_usage
+      echo -e "${bred}ERROR:$reset ${red} Invalid argument '$1'!$reset"
+      exit 1
+    ;;
+  esac
+done
+
+
+if [ -z "${QUEUE}" ]
+then
+    # without PBS
+    ${SCRIPTPATH}/endorse_swrap "$WORKDIR_REL" "$@"
+else
+    WORKDIR_BASE="${HOME}/endorse_work"
+    stdoe="${WORKDIR_BASE}/"
+    if [ -n "${CLUSTER}" ]
+    then
+        cluster_restrict=":cluster=${CLUSTER}"
+    fi
+    if [ "${QUEUE}" == "q_1d" ]
+    then
+        queue=
+        walltime="-l walltime=3:00:00"
+    else
+        queue="-q ${QUEUE}"
+    fi
+    select="-l select=1:ncpus=8:mem=8gb${cluster_restrict}"
+    qsub ${queue} -S /bin/bash -N endorse-main -j oe -o ${stdoe} ${select} ${walltime} -- ${SCRIPTPATH}/endorse_swrap "$WORKDIR_REL" "$@" 
+fi

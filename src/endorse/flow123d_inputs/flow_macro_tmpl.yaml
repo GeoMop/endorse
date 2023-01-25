@@ -1,0 +1,85 @@
+#################
+# Author: Jan Brezina
+
+flow123d_version: 3.9.0
+problem: !Coupling_Sequential
+  description: |
+      Macro flow model. Driven by piezohead of the precomputed outer field.
+  mesh:
+    # Input mesh with 'outer' and 'borehole' regions.
+    mesh_file: <mesh_file>
+  flow_equation: !Flow_Darcy_LMH
+    output_specific:
+    nonlinear_solver:
+      linear_solver: !Petsc
+        a_tol: 1e-6
+        r_tol: 1e-3
+        # options: <flow_solver__options>
+    input_fields:
+      - region: .BOUNDARY
+        bc_type: dirichlet
+        bc_piezo_head: !FieldFE
+          mesh_data_file: <piezo_head_input_file>
+          field_name: piezo_head_p0
+          interpolation: P0_intersection
+      - region: BULK
+        conductivity:  1
+        anisotropy: !FieldFE
+          mesh_data_file: <input_fields_file>
+          field_name: conductivity_tn
+          #interpolation: P0_intersection
+        #cross_section:  !FieldFE
+        #  mesh_data_file: input_fields.msh
+        #  field_name: cross_section
+
+
+        # TODO: heterogeneous layerd and possibly anisotropic conductivity here
+        # given as FieldFormula or rather FieldFE computed for particular position.
+    n_schurs: 2
+    output:
+      fields:
+        - piezo_head_p0
+        #- pressure_p0
+        #- pressure_p1
+        - velocity_p0
+        - region_id        
+        - anisotropy
+    balance: {}
+    output_stream:      
+      format: !gmsh 
+      #format: !vtk
+      #  variant: ascii
+
+#  solute_equation: !Coupling_OperatorSplitting
+#    substances:
+#        - name: tracer
+#          molar_mass: 1
+#    transport: !Solute_ConcDispersion_DG
+#      input_fields:
+#        - region: outer
+#          porosity: 0.01
+#        - region: borehole
+#          porosity: 0.01
+#        - region: .BOUNDARY
+#          bc_type:  dirichlet
+#          bc_conc: <bc_conc>
+#          bc_conc: !FieldFormula
+#              formula: "<conc_grad> @ X"
+#
+#      solver:
+#        a_tol: 1e-6
+#        r_tol: 1e-3
+#        #options: <trans_solver__options>
+#      output:
+#        fields:
+#        - field: conc
+#          interpolation: [P0_value, D1_value] #[P0_value, P1_average, D1_value]
+#    output_stream:
+#      format: !gmsh
+#      times:
+#        - step: 1
+#    time:
+#      end_time: 1
+#      time_step: 1
+#    balance:
+#      cumulative: true

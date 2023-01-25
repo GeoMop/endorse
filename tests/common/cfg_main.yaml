@@ -1,0 +1,7 @@
+a: !include _cfg_a.yaml
+b: 0
+c:
+  - other_file1.any
+  - a: 0
+    b: None
+    c: other_file2.any

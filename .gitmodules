@@ -1,0 +1,24 @@
+
+[submodule "submodules/jsondata"]
+	path = submodules/jsondata
+	url = ../../GeoMop/JsonData.git
+[submodule "submodules/bgem"]
+	path = submodules/bgem
+	url = ../../GeoMop/bgem.git
+        branch = JB_endorse_fix
+[submodule "submodules/bih"]
+	path = submodules/bih
+	url = ../../flow123d/bih.git
+        branch = master
+[submodule "submodules/MLMC"]
+	path = submodules/MLMC
+	url = ../../GeoMop/MLMC.git
+        branch = MS_endorse
+[submodule "submodules/redis-cache"]
+	path = submodules/redis-cache
+	url = ../../jbrezmorf/redis-simple-cache-3k.git
+        branch = JB_endorse
+[submodule "submodules/swrap"]
+	path = submodules/swrap
+	url = ../../flow123d/swrap
+        branch = JB_endorse

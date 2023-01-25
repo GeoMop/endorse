@@ -1,0 +1,84 @@
+#!/bin/bash
+
+
+set -x
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_BASE="$SCRIPTPATH/../../.."
+
+
+if [ -z "$PBS_O_WORKDIR" ]
+then
+        
+    CALC_HOME=${HOME}
+else
+    user=${PBS_O_WORKDIR#**/home/}
+    user=${user%%/*}
+    CALC_HOME="${PBS_O_WORKDIR%%home/*}home/${user}"
+fi
+
+WORKDIR_BASE="${CALC_HOME}/endorse_work"
+mkdir -p ${WORKDIR_BASE} 
+calculation_name="$1"    
+shift
+
+
+if [ "${calculation_name}" == "--" ]
+then
+    # default wokrdir = PWD
+    WORKDIR="`pwd`"
+else
+    if [ "$calculation_name" == "-" ]
+    then
+        calculation_name="calc_`date '+%y.%m.%d'`"
+    fi                
+    WORKDIR="$WORKDIR_BASE/$calculation_name"        
+fi
+
+echo "Queue: ${PBS_O_QUEUE}"
+echo "Job Name: ${PBS_JOBNAME}"
+
+
+
+# build_image 
+tag=a785dd
+#tag=7d9354
+source_image="docker://flow123d/endorse_ci:${tag}"
+image_file="$WORKDIR_BASE/endorse_ci_${tag}.sif"
+if [ ! -f ${image_file} ]
+then
+    singularity build  ${image_file} ${source_image}  
+fi
+
+
+# auxiliary hack how to detect we are running with 'charon.nti.tul.cz' configuration
+# TODO: design more general resolution pattern
+if [ ! "${SCRIPTPATH#/auto/liberec3-tul}" == "${SCRIPTPATH}" ]
+then
+    export ENDORSE_HOSTNAME="charon.nti.tul.cz"
+elif [ ! "${SCRIPTPATH#/auto/brno2}" == "${SCRIPTPATH}" ]
+then
+    export ENDORSE_HOSTNAME="skirit.ics.muni.cz"
+fi
+
+command=$1
+if [ "${command}" == "setup_venv" ]
+then
+    cd $ENDORSE_BASE
+    rm -rf ./venv
+    singularity exec $image_file package/setup_venv.sh
+    exit 0
+fi
+
+# other commands are passed to the Python script
+test_data="$ENDORSE_BASE/tests/test_data"
+mkdir -p ${WORKDIR} 
+cp "$test_data"/*.yaml  "${WORKDIR}"
+cp "$test_data"/large_model_local.msh2  "${WORKDIR}"
+cd "${WORKDIR}"
+export PYTHONPATH="$ENDORSE_BASE/submodules/swrap/src/swrap"
+python3 -m sexec -i $image_file -e "$ENDORSE_BASE/venv" endorse_mlmc "$@"
+
+
+
+
