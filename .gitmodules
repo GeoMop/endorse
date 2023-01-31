@@ -22,3 +22,7 @@
 	path = submodules/swrap
 	url = ../../flow123d/swrap
         branch = JB_endorse
+[submodule "submodules/surrDAMH"]
+	path = submodules/surrDAMH
+	url = ../../dom0015/surrDAMH.git
+        branch = PE_endorse
