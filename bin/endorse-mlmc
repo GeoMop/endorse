@@ -1,0 +1,260 @@
+#!/bin/bash
+
+set -x
+
+# Endorse image
+tag=a785dd
+ENDORSE_IMAGE_DOCKER_URL="flow123d/endorse_ci:${tag}"
+
+
+function safe_mkdir() {
+  DIR_PATH="$1"
+  if [ ! -d "$1" ]
+  then
+      mkdir -p "$1"
+  fi
+}
+
+function error() {
+    echo -e "${bred}ERROR:$reset ${red} $1!$reset"
+    exit 1
+}
+
+function build_singularity_image() {
+    # prepare singularity image: download, convert, (install) 
+    ENDORSE_IMAGE="$ENDORSE_WORKSPACE/endorse_ci_${tag}.sif"
+    if [ ! -f $ENDORSE_IMAGE ]
+    then
+        singularity build  $ENDORSE_IMAGE "docker://$ENDORSE_IMAGE_DOCKER_URL"  
+    fi
+    CONTAINER_TOOL=singularity
+}
+
+function build_docker_image() {
+    ENDORSE_IMAGE=$ENDORSE_IMAGE_DOCKER_URL
+    docker pull $ENDORSE_IMAGE
+    CONTAINER_TOOL=docker
+}
+
+function setup_dev_env() {
+    rm -rf $ENDORSE_SRC_ROOT/venv
+    call_container $ENDORSE_SRC_ROOT/package/setup_venv.sh
+}
+
+function setup_container() {
+    if [ -z "$CONTAINER_TOOL" ]; then
+        if command -v docker &> /dev/null
+        then
+            build_docker_image
+        elif command -v singularity &> /dev/null
+        then
+            build_singularity_image
+        else
+            error "No container tool. Not supported."
+        fi
+        $DEV_ENV_SETUP    # optionaly setup venv
+    fi
+}
+
+function docker_path_home_translate() {
+    # translate  path under $HOME to /mnt$HOME
+    # set RETURN return corresponding docker path
+    local PATH_HOST=$1
+    local rel_host="${PATH_HOST##$HOME}"
+    if [ "$rel_host" == "$PATH_HOST" ]
+    then
+        # preserve path out of home
+        RETURN="$PATH_HOST"
+    else
+        RETURN="/mnt$HOME/$rel_host"
+    fi
+}
+
+function call_container() {
+    # Setup container tool, docker prefered
+    setup_container   # setup CONTAINER_TOOL and ENDORSE_IMAGE vars, prepare environment
+    cd ${WORKDIR}
+    # TODO: move container tool resolution into swrap
+    if [ "$CONTAINER_TOOL" == "singularity" ]
+    then
+        export PYTHONPATH="$ENDORSE_SRC_ROOT/submodules/swrap/src/swrap"
+        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" endorse_mlmc "$@"
+    else
+        # docker
+        envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
+        docker_path_home_translate $ENDORSE_SRC_ROOT
+        local docker_src_root=$RETURN
+        docker_path_home_translate $ENDORSE_WORKSPACE
+        local docker_workspace=$RETURN
+        docker_path_home_translate $WORKDIR
+        local docker_workdir=$RETURN
+
+        args=("${@}")
+        for i in ${!args[@]}
+        do
+            docker_path_home_translate "${args[$i]}"
+            args[$i]="$RETURN"
+        done
+        
+        path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
+        $CONTAINER_TOOL run $path_env $envarg $bind $ENDORSE_IMAGE "${args[@]}"
+    fi
+}
+
+
+
+
+
+# Set global paths
+# Endorse workspace
+ENDORSE_WORKSPACE="${ENDORSE_WORKSPACE:-${HOME}/endorse_space}"
+export ENDORSE_WORKSPACE
+safe_mkdir "$ENDORSE_WORKSPACE"
+
+# Development: root of the sources
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
+
+
+
+
+
+
+function print_usage() {
+cat << EOF
+  
+Usage:  
+  
+    Execute COMMAND under PBS:
+    endorse [-q <QUEUE>] [-c <CLUSTER>] [-w <WORKDIR>] <command> <options>
+
+    Execute COMMAND directly:
+    endorse [-q <QUEUE> -c <CLUSTER> -s] [-w <WORKDIR>] <command> <options>
+
+    Direct script tasks. 
+    endorse -s [dev] | [-w <WORKDIR>]] -e [<EXAMPLE>] | -h
+    
+
+    The environment variable ENDORSE_WORKSPACE contains Endorse workspace path.
+    It is used for store images,  result database, and is prefered root directory for 
+    the calculations. Supposed to be on the network directory visibel from the cluster nodes
+    used to run the calculation.
+    
+Options:
+-c, --cluster <CLUSTER>
+    Submit the command to the PBS, to given cluster. This implies QUEUE="q_1d" by default.
+    
+-q, --queue <QUEUE>
+    Submit the command to the PBS, use given queue.
+    
+    With -c or -q option the command is submitted to the PBS (Portable batch system).
+    STDOUT and STDERR are merged and saved in the workspace of the calculation. 
+    Without these options the command is executed instantly.
+
+-w, --workdir <WORKDIR>
+    Run the command within given WORKDIR.
+    If WORKDIR does not contain '/' it is interpreted as relative to the Endorse workspace.
+    Default WORKDIR is current directory.
+-s, --setup [dev]
+    Download Endorse Docker image and prepare its conversion to the Singularity image.
+    
+    Given 'dev' option, setup virtual environment for Endorse development, editable sources used
+    inside the Endorse image.
+
+
+-p, --example [<EXAMPLE>]
+    Populate WORKDIR with example input files.
+    
+Commands and options:
+EOF
+
+# TODO direct run endorse_mlmc.py 
+
+}
+
+
+WORKDIR=`pwd`
+DEV_ENV_SETUP=
+while [ "${1#-}" != "$1" ]      # arg starts with '-'
+  do
+  key="$1"
+  case $key in
+    -w|--workdir)
+      shift
+      WORKDIR="$1"
+      WORKNAME=${WORKDIR%/**}
+      if [ "$WORKNAME" == "$WORKDIR" ]
+      then
+          WORKDIR="$ENDORSE_WORKSPACE/$WORKNAME"
+          safe_mkdir $WORKDIR
+      fi  
+      WORKDIR="$( cd -- "$WORKDIR" >/dev/null 2>&1 ; pwd -P )"
+      shift
+    ;;  
+    -q|--queue)
+      shift  
+      QUEUE=$1
+      shift
+    ;;
+    -c|--cluser)
+      shift
+      CLUSTER=$1
+      QUEUE=$(QUEUE:-"q_1d")
+      shift
+    ;;
+    -h|--help)
+      print_usage
+      exit 0
+    ;;
+    -s|--setup)
+      shift 
+      if [ "$1" == "dev" ]
+      then
+          DEV_ENV_SETUP=setup_dev_env
+      fi
+      setup_container
+      exit 0
+    ;;
+    -p|--example)
+      shift
+      EXAMPLE="$1"
+      # TODO: treat various examples
+      test_data="$ENDORSE_SRC_ROOT/tests/test_data"
+      ln -s "$test_data"/*.yaml  "${WORKDIR}"
+      ln -s "$test_data"/large_model_local.msh2  "${WORKDIR}"
+      exit 0
+    ;;
+    *)
+      print_usage
+      error "Invalid argument '$1'"
+    ;;
+  esac
+done
+
+if [ -z "$1" ]; then print_usage; error "Missing command"; fi 
+
+
+if [ -z "${QUEUE}" ]
+then
+    # without PBS    
+    cont_call endorse_mlmc "$@"
+else
+    stdoe="${WORKDIR}/"
+    if [ -n "${CLUSTER}" ]
+    then
+        cluster_restrict=":cluster=${CLUSTER}"
+    fi
+    if [ "${QUEUE}" == "q_1d" ]
+    then
+        queue=
+        walltime="-l walltime=3:00:00"
+    else
+        queue="-q ${QUEUE}"
+    fi
+    select="-l select=1:ncpus=8:mem=8gb${cluster_restrict}"
+    qsub ${queue} -S /bin/bash -N endorse-main -j oe -o ${stdoe} ${select} ${walltime} \
+    -v ENDORSE_WORKSPACE,WORKDIR,ENDORSE_SRC_ROOT,call_swrap - <<PBS_END
+    cont_call endorse_mlmc "$@"
+PBS_END
+fi
+
