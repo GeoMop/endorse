@@ -15,6 +15,12 @@ function safe_mkdir() {
   fi
 }
 
+function input_copy {
+    # links seems to not work from containers
+    #ln -s "$@"
+    cp "$@"
+}
+
 function error() {
     echo -e "${bred}ERROR:$reset ${red} $1!$reset"
     exit 1
@@ -38,8 +44,9 @@ function build_docker_image() {
 
 function setup_dev_env() {
     rm -rf $ENDORSE_SRC_ROOT/venv
-    call_container $ENDORSE_SRC_ROOT/package/setup_venv.sh
+    __call_container $ENDORSE_SRC_ROOT/package/setup_venv.sh
 }
+
 
 function setup_container() {
     if [ -z "$CONTAINER_TOOL" ]; then
@@ -56,7 +63,7 @@ function setup_container() {
     fi
 }
 
-function docker_path_home_translate() {
+function __docker_path_home_translate() {
     # translate  path under $HOME to /mnt$HOME
     # set RETURN return corresponding docker path
     local PATH_HOST=$1
@@ -70,36 +77,46 @@ function docker_path_home_translate() {
     fi
 }
 
-function call_container() {
+
+
+function __call_container() {
+    # Call command in a container for:
+    # WORKDIR - where the command will be executed
+    # ENDORSE_IMAGE - container image
+    # ENDORSE_SRC_ROOT - 
+    # CONTAINER_TOOL
+    # ENDORSE_WORKSPACE
+    
+    
     # Setup container tool, docker prefered
-    setup_container   # setup CONTAINER_TOOL and ENDORSE_IMAGE vars, prepare environment
     cd ${WORKDIR}
     # TODO: move container tool resolution into swrap
     if [ "$CONTAINER_TOOL" == "singularity" ]
     then
         export PYTHONPATH="$ENDORSE_SRC_ROOT/submodules/swrap/src/swrap"
-        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" endorse_mlmc "$@"
+        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" "$@"
     else
         # docker
-        envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
-        docker_path_home_translate $ENDORSE_SRC_ROOT
+        local envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
+        __docker_path_home_translate $ENDORSE_SRC_ROOT
         local docker_src_root=$RETURN
-        docker_path_home_translate $ENDORSE_WORKSPACE
+        __docker_path_home_translate $ENDORSE_WORKSPACE
         local docker_workspace=$RETURN
-        docker_path_home_translate $WORKDIR
+        __docker_path_home_translate $WORKDIR
         local docker_workdir=$RETURN
 
         args=("${@}")
         for i in ${!args[@]}
         do
-            docker_path_home_translate "${args[$i]}"
+            __docker_path_home_translate "${args[$i]}"
             args[$i]="$RETURN"
         done
         
-        path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
-        $CONTAINER_TOOL run $path_env $envarg $bind $ENDORSE_IMAGE "${args[@]}"
+        local path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
+        $CONTAINER_TOOL run $path_env $envarg $ENDORSE_IMAGE "${args[@]}"
     fi
 }
+
 
 
 
@@ -220,8 +237,8 @@ while [ "${1#-}" != "$1" ]      # arg starts with '-'
       EXAMPLE="$1"
       # TODO: treat various examples
       test_data="$ENDORSE_SRC_ROOT/tests/test_data"
-      ln -s "$test_data"/*.yaml  "${WORKDIR}"
-      ln -s "$test_data"/large_model_local.msh2  "${WORKDIR}"
+      input_copy "$test_data"/*.yaml  "${WORKDIR}"
+      input_copy "$test_data"/large_model_local.msh2  "${WORKDIR}"
       exit 0
     ;;
     *)
@@ -237,8 +254,9 @@ if [ -z "$1" ]; then print_usage; error "Missing command"; fi
 if [ -z "${QUEUE}" ]
 then
     # without PBS    
-    cont_call endorse_mlmc "$@"
+    EXECUTOR=bash 
 else
+    # with PBS
     stdoe="${WORKDIR}/"
     if [ -n "${CLUSTER}" ]
     then
@@ -252,9 +270,78 @@ else
         queue="-q ${QUEUE}"
     fi
     select="-l select=1:ncpus=8:mem=8gb${cluster_restrict}"
-    qsub ${queue} -S /bin/bash -N endorse-main -j oe -o ${stdoe} ${select} ${walltime} \
-    -v ENDORSE_WORKSPACE,WORKDIR,ENDORSE_SRC_ROOT,call_swrap - <<PBS_END
-    cont_call endorse_mlmc "$@"
-PBS_END
+    EXECUTOR="qsub ${queue} -S /bin/bash -N endorse-main -j oe -o ${stdoe} ${select} ${walltime}  -" 
 fi
+
+
+# Export these two functions in order to pass them to the QSUB script
+# Mostly temporary solution, should be part of swrap
+#export -f __docker_path_home_translate
+#export -f __call_container
+
+setup_container   # setup CONTAINER_TOOL and ENDORSE_IMAGE vars, prepare environment
+$EXECUTOR <<SCRIPT_END
+set -x
+
+
+function __docker_path_home_translate() {
+    # translate  path under $HOME to /mnt$HOME
+    # set RETURN return corresponding docker path
+    local PATH_HOST=$1
+    local rel_host="${PATH_HOST##$HOME}"
+    if [ "$rel_host" == "$PATH_HOST" ]
+    then
+        # preserve path out of home
+        RETURN="$PATH_HOST"
+    else
+        RETURN="/mnt$HOME/$rel_host"
+    fi
+}
+
+function __call_container() {
+    set -x
+    # Call command in a container for:
+    # WORKDIR - where the command will be executed
+    # ENDORSE_IMAGE - container image
+    # ENDORSE_SRC_ROOT - 
+    # CONTAINER_TOOL
+    # ENDORSE_WORKSPACE
+    
+    
+    # Setup container tool, docker prefered
+    cd ${WORKDIR}
+    # TODO: move container tool resolution into swrap
+    if [ "$CONTAINER_TOOL" == "singularity" ]
+    then
+        export PYTHONPATH="$ENDORSE_SRC_ROOT/submodules/swrap/src/swrap"
+        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" "$@"
+    else
+        # docker
+        local envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
+        __docker_path_home_translate $ENDORSE_SRC_ROOT
+        local docker_src_root=$RETURN
+        __docker_path_home_translate $ENDORSE_WORKSPACE
+        local docker_workspace=$RETURN
+        __docker_path_home_translate $WORKDIR
+        local docker_workdir=$RETURN
+
+        args=("${@}")
+        for i in ${!args[@]}
+        do
+            __docker_path_home_translate "${args[$i]}"
+            args[$i]="$RETURN"
+        done
+        
+        local path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
+        $CONTAINER_TOOL run $path_env $envarg $ENDORSE_IMAGE "${args[@]}"
+    fi
+}
+
+    CONTAINER_TOOL=$CONTAINER_TOOL
+    ENDORSE_IMAGE=$ENDORSE_IMAGE
+    WORKDIR="$WORKDIR"
+    ENDORSE_SRC_ROOT="$ENDORSE_SRC_ROOT"
+    ENDORSE_WORKSPACE="$ENDORSE_WORKSPACE"    
+    __call_container endorse_mlmc $@
+SCRIPT_END
 
