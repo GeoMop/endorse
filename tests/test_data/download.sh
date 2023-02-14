@@ -19,7 +19,7 @@ update() {
 
 # download big test data
 #update large_model.msh https://flow.nti.tul.cz/endorse_large_data/large_model.tar.gz
-update large_model_local.msh2 http://flow.nti.tul.cz/endorse_large_data/large_model_local.tar.gz 
+update large_model_local.msh2 https://flow.nti.tul.cz/endorse_large_data/large_model_local.tar.gz 
 
 #update flow_fields.pvd https://flow.nti.tul.cz/endorse_large_data/output_transport_2022_5.tar.gz
 #update solute_fields.pvd https://flow.nti.tul.cz/endorse_large_data/output_transport_2022_5.tar.gz

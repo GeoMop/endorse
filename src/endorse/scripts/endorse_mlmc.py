@@ -9,7 +9,10 @@ import shutil
 import time
 import logging
 
-logging.basicConfig(level=logging.INFO, filename='endorse_mlmc.log')
+logging.basicConfig(
+    level=logging.INFO, 
+    filename='endorse_mlmc.log', 
+    format='%(asctime)s %(message)s')
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 from concurrent.futures import ProcessPoolExecutor
@@ -184,6 +187,7 @@ def run_fixed(cfg, n_samples, debug, n_proc):
         sleep=sampling_params.sample_sleep,
         timeout=sampling_params.sample_timeout)    
     logging.info(f"[{work_dir}] init N running: {running}")
+    logging.info(f"[{work_dir}] set init N = {n_samples}")
     
     sampler.set_initial_n_samples(n_samples)
     sampler.schedule_samples()
@@ -666,7 +670,7 @@ class RunCmd:
             #cfg_file = "cfg_variant.yaml"
             #with open(cfg_file, "w") as f:
             #        yaml.dump(common.dotdict.serialize(cfg_var), f)
-            n_samples = cfg.mlmc.n_samples
+            n_samples = cfg_var.mlmc.n_samples
             cfg_var._model_dim = model_dim
             run_fixed(cfg_var, n_samples, debug, n_proc=np)
 
