@@ -300,6 +300,9 @@ function __docker_path_home_translate() {
 
 function __call_container() {
     set -x
+    echo \$1
+    echo \$2
+    echo \$3
     # Call command in a container for:
     # WORKDIR - where the command will be executed
     # ENDORSE_IMAGE - container image
@@ -314,7 +317,7 @@ function __call_container() {
     if [ "$CONTAINER_TOOL" == "singularity" ]
     then
         export PYTHONPATH="$ENDORSE_SRC_ROOT/submodules/swrap/src/swrap"
-        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" "$@"
+        python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" "\$@"
     else
         # docker
         local envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
@@ -325,7 +328,7 @@ function __call_container() {
         __docker_path_home_translate $WORKDIR
         local docker_workdir=$RETURN
 
-        args=("${@}")
+        args=("\${@}")
         for i in ${!args[@]}
         do
             __docker_path_home_translate "${args[$i]}"
@@ -333,7 +336,7 @@ function __call_container() {
         done
         
         local path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
-        $CONTAINER_TOOL run $path_env $envarg $ENDORSE_IMAGE "${args[@]}"
+        $CONTAINER_TOOL run $path_env $envarg $ENDORSE_IMAGE "\${args[@]}"
     fi
 }
 
