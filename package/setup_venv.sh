@@ -1,8 +1,12 @@
 #!/bin/bash
 
+set -x
 # !! Needs redis server installed.
 # sudo apt install redis
 
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
+cd "$ENDORSE_SRC_ROOT"
 
 # Setup virtual environment for development
 
