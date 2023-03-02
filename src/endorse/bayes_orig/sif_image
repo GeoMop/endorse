@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# get image from fterm
+# image=$(./endorse_fterm image)
+
+# image=/storage/plzen1/home/pavel_exner/workspace/flow123d_images/flow123d_geomop-gnu:2.0.0.sif
+# image=/storage/plzen1/home/pavel_exner/workspace/flow123d_images/endorse.sif
+image=/home/paulie/Workspace/Endorse-2Dtest-Bayes/endorse.sif
+echo $image
