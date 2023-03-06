@@ -1,3 +1,8 @@
+-e ./submodules/bgem
+-e ./submodules/bih
+-e ./submodules/redis-cache
+-e ./submodules/MLMC
+
 pyvista
 pyyaml
 pyyaml-include
