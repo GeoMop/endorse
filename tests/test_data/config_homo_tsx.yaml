@@ -53,17 +53,17 @@ mc_samples: 10
 #  - tunnel_mesh_cut_healed.msh
 #  - accepted_parameters.csv
 
-geometry: &one_borehole_geometry !include config_geometry.yaml
+geometry: &one_borehole_geometry !include _geometry.yaml
 fractures: &fractures
     # SKB fracture parameters for upper domain
-    population:  !include config_fractures.yaml
+    population:  !include _fractures.yaml
     # upper limit on the number of fractures
     n_frac_limit: 10
 
 #
 fractures_repo: &fractures_repo
     # SKB fracture population for repository domain
-    population:  !include config_fr_Forsmark_repo.yaml
+    population:  !include _fr_Forsmark_repo.yaml
     # upper limit on the number of (small) fractures
     n_frac_limit: 30
     fixed_seed: 101
@@ -304,4 +304,4 @@ transport_fullscale:
   # edz_phys_group: 77
 
 
-tsx_hm_model: !include config_tsx.yaml
+tsx_hm_model: !include _bayes_tsx.yaml

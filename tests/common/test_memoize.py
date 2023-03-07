@@ -2,6 +2,7 @@ from endorse import common
 import os
 import time
 import pytest
+from fixtures import sandbox_fname
 
 import logging
 
@@ -28,8 +29,8 @@ def test_file_memoization():
     cache = common.EndorseCache.instance()
     cache.expire_all()
 
-    input_file = "sandbox/memoize_file.txt"
-    output_file = "sandbox/output_file.txt"
+    input_file = sandbox_fname("memoize_file.txt")
+    output_file = sandbox_fname("output_file.txt")
     with open(input_file, "w") as ff:
         ff.write(f"First line.")
     try:
