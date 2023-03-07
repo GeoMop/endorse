@@ -296,14 +296,19 @@ def plot_mc_cases(cases_data: List[Tuple[str,str,List[float]]], quantity_label, 
 
 
 
-
-def plot_log_errorbar_groups(group_data, value_label):
+CaseName=str
+SourceName=str
+MeanLog=float
+StdLog=float
+Samples=List[float]
+CaseData=Tuple[CaseName, SourceName, MeanLog, StdLog, Samples]
+def plot_log_errorbar_groups(group_data: Sequence[CaseData], value_label: str) -> None:
     """
-    Input for individual bar plots, list of:
-    [case, source, samples]
+    Violin plot and error bar for a list of cases.
+    group_data is a list of #cases * #sources and appropriate data.
     """
 
-    mean = [np.mean()]
+    #mean = [np.mean()]
 
 
     matplotlib.rcParams.update({'font.size': 22})
@@ -329,7 +334,7 @@ def plot_log_errorbar_groups(group_data, value_label):
         Y = np.exp(samples)
         X = np.full_like(Y, x)
         #ax.scatter(X, Y, color=colors[ig2], marker="v")
-        ax.violinplot(Y, x, vert=bool, showmedians=True, quantiles=[0.25, 0.75])
+        ax.violinplot([Y], [x], vert=bool, showmedians=True, quantiles=[0.25, 0.75])
         ax.set_yscale('log')
 
         # add errorbar, not able to pass array of colors for every quantile case
