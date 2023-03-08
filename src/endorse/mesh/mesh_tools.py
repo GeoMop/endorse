@@ -65,7 +65,7 @@ def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: 
     return field.maximum(inner, outer)
 
 
-def edz_meshing(factory, objects, mesh_file):
+def edz_meshing(factory, objects, mesh_file, el_range=None):
     """
     Common EDZ and transport domain meshing setup.
     """
@@ -86,8 +86,13 @@ def edz_meshing(factory, objects, mesh_file):
     #mesh.CharacteristicLengthFromPoints = True
     #factory.mesh_options.CharacteristicLengthFromCurvature = False
     #factory.mesh_options.CharacteristicLengthExtendFromBoundary = 2  # co se stane if 1
-    #mesh.CharacteristicLengthMin = min_el_size
-    #mesh.CharacteristicLengthMax = max_el_size
+
+    if el_range is not None:
+        el_min, el_max = el_range
+        if el_min:
+            factory.mesh_options.CharacteristicLengthMin = el_min
+        if el_max:
+            factory.mesh_options.CharacteristicLengthMax = el_max
 
     #factory.keep_only(*objects)
     #factory.remove_duplicate_entities()
