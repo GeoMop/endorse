@@ -18,6 +18,7 @@ class MeshFactory:
             mesh_name = mesh_name + "_cut"
         mesh_file = os.path.join(output_dir, mesh_name + ".msh")
         mesh_healed = os.path.join(output_dir, mesh_name + "_healed.msh")
+        mesh_healed2 = os.path.join(output_dir, mesh_name + "_healed.msh2")
 
         # if os.path.isfile(mesh_healed):
         #     shutil.copyfile(os.path.join(config_dict["common_files_dir"], mesh_healed), mesh_healed)
@@ -31,9 +32,8 @@ class MeshFactory:
         hm = heal_mesh.HealMesh.read_mesh(mesh_file, node_tol=1e-4)
         hm.heal_mesh(gamma_tol=0.01)
         hm.stats_to_yaml(os.path.join(output_dir, mesh_name + "_heal_stats.yaml"))
-        hm.write(mesh_healed)
-        print(hm.healed_mesh_name, mesh_healed, flush=True)
-        # assert hm.healed_mesh_name == mesh_healed
+        hm.write(mesh_healed2)
+        os.rename(mesh_healed2, mesh_healed)
 
     @staticmethod
     def make_mesh_A(geom_config, mesh_name, mesh_file, cut_tunnel):
