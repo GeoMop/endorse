@@ -22,10 +22,9 @@ def preprocess(config_dict):
     times, values = md.generate_measured_samples(boreholes)
 
     config_bayes_file = config_dict["bayes_config_file"]
-    yaml_handler = yaml.YAML()
     with open(config_bayes_file) as f:
         file_content = f.read()
-    conf = yaml_handler.load(file_content)
+    conf = yaml.safe_load(file_content)
     # print(conf.ca)
 
     npar = len(conf_bayes["parameters"])
@@ -70,7 +69,7 @@ def preprocess(config_dict):
     conf["no_solvers"] = int(np.round(0.5*(config_dict["metacentrum"]["chunks"] * config_dict["metacentrum"]["ncpus_per_chunk"]-2)))
 
     with open(config_bayes_file, 'w') as f:
-        yaml_handler.dump(conf, f)
+        yaml.dump(conf, f)
 
     MeshFactory.prepare_mesh(config_dict["geometry"], config_dict["common_files_dir"], cut_tunnel=True)
 

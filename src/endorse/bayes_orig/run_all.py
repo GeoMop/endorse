@@ -84,6 +84,7 @@ if __name__ == "__main__":
     config_dict = setup(output_dir, can_overwrite=(not visualize), clean=clean)
     problem_path = config_dict["bayes_config_file"]
 
+    surrDAMH_path = os.path.abspath(config_dict["script_dir"] + "/../../../submodules/surrDAMH")
     # run sampling
     # paths are relative to repository dir
     # paths passed to surrDAMH are absolute
@@ -98,17 +99,17 @@ if __name__ == "__main__":
         C = Configuration(N, problem_path)
         args = [str(N), problem_path, output_dir]
         if os.path.exists("surrDAMH/examples/visualization/" + C.problem_name + ".py"):
-            command = "python3 surrDAMH/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
+            command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
         else:
-            command = "python3 surrDAMH/examples/visualization/general_visualization.py " + " ".join(args)
+            command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
     else:
         if oversubscribe:
             opt = " --oversubscribe "
         else:
             opt = " "
-        sampler = "python3 -m mpi4py surrDAMH/surrDAMH/process_SAMPLER.py " + output_dir
-        solver = "python3 -m mpi4py surrDAMH/surrDAMH/process_SOLVER.py " + problem_path + " " + output_dir
-        collector = "python3 -m mpi4py surrDAMH/surrDAMH/process_COLLECTOR.py"
+        sampler = "python3 -m mpi4py " + surrDAMH_path + "/surrDAMH/process_SAMPLER.py " + output_dir
+        solver = "python3 -m mpi4py " + surrDAMH_path + "/surrDAMH/process_SOLVER.py " + problem_path + " " + output_dir
+        collector = "python3 -m mpi4py " + surrDAMH_path + "/surrDAMH/process_COLLECTOR.py"
 
         # prepare running command for local run
         # or prepare PBS script for running on Metacentrum
