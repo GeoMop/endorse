@@ -22,7 +22,7 @@ def test_homogenisation():
 #def test_fine_conductivity_field():
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_macro_transport():
    # with common.workdir("sandbox"):
     #common.EndorseCache.instance().expire_all()

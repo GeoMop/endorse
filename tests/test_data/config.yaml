@@ -54,7 +54,7 @@ machine_config:
     #    - flow123d
         
 mlmc:
-    n_samples: 100
+    n_samples: 5
     n_levels: 1
  
 # TODO: replace hardwired indicator list. 
@@ -109,7 +109,27 @@ fractures_repo: &fractures_repo
     # uncertain large fractures, need support in Population
     # main box : [100, 80, 60]
 
+_transport_fine_mesh: &fine_mesh
+        # Mesh size scaling for the 3d mechanics paper:
+        # #fr   steps: borehole   tunnel      edz     fr      boundary        #elements
+        # 300          0.5        1           2       10      50              500k
+        # 200          0.8        1           2       10      50              308k
+        # 200          0.4        0.5         1       5       25              359k
+        # 200          0.3        0.4         0.5     2       6               503k
+        # 200          0.2        0.3         0.3     1       4               1051k
 
+        # Full EDZ model values
+        # mesh step on inner boreholes
+        boreholes_mesh_step: 0.3
+        # mesh step on access tunnels
+        main_tunnel_mesh_step: 2
+        # mesh step on outer boundary of EDZ (just around boreholes right now)
+        edz_mesh_step: 1
+
+        # mesh step on fractures
+        fracture_mesh_step: 10
+        # mesh step on outer boundary
+        boundary_mesh_step: 50
 
 #sample_dir: samples
 #mesh_files:
@@ -176,6 +196,7 @@ transport_microscale:
     response_field_p0: "velocity_p0"
     bulk_field_params: *bulk_field_parametric
 
+
 transport_macroscale:
     # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
     input_template: flow_macro_tmpl.yaml
@@ -196,17 +217,7 @@ transport_fine:
     geometry: *one_borehole_geometry
     fractures: *fractures_repo
     bulk_field_params: *bulk_field_parametric
-    mesh:
-        # mesh step on fractures
-        fracture_mesh_step: 10
-        # mesh step on outer boundary
-        boundary_mesh_step: 50
-        # mesh step on outer boundary of EDZ (just around boreholes right now)
-        edz_mesh_step: 1
-        # mesh step on inner boreholes
-        boreholes_mesh_step: 0.3   # haxagon boreholes
-        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
-        main_tunnel_mesh_step: 2
+    mesh: *fine_mesh
 
     # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
     input_template: flow_fine_tmpl.yaml
@@ -236,17 +247,7 @@ transport_fullscale:
     piezo_head_input_file: "large_model_local.msh2"
     conc_flux_file: "conc_flux_UOS_kg_y.csv"
     conc_name: I
-    mesh:
-        # mesh step on fractures
-        fracture_mesh_step: 10
-        # mesh step on outer boundary
-        boundary_mesh_step: 50
-        # mesh step on outer boundary of EDZ (just around boreholes right now)
-        edz_mesh_step: 1
-        # mesh step on inner boreholes
-        boreholes_mesh_step: 0.3   # haxagon boreholes
-        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
-        main_tunnel_mesh_step: 2
+    mesh: *fine_mesh
 
     bulk_field_params: *bulk_field_parametric
     fr_field_params:

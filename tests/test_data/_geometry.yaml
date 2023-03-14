@@ -79,6 +79,7 @@ tsx_tunnel:
 #  tunnel_dimY: 3.5 # Y cross-section
   radius: *borehole_radius
 
+  # Note: mesh steps for the 3d transport mesh is in the main config file
   tunnel_mesh_step: 0.125 # 0.0625 # 0.25 # 0.125 # 0.5
   max_elem_size: 10 # 5 # 10 # 3.7
 

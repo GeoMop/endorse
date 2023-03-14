@@ -207,11 +207,15 @@ def load_config(path, collect_files=False, hostname=None):
     uses pyyaml-tags namely for:
     include tag:
         geometry: <% include(path="config_geometry.yaml")>
+    If the main value of the YAML is not the mapping, then create default main mapping,
+    with YAML content stored under the key 'content'.
     """
     instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
     cfg_dir = os.path.dirname(path)
     with open(path) as f:
         cfg = yaml.load(f, Loader=YamlNoTimestampSafeLoader)
+    if not isinstance(cfg, dict):
+        cfg = {'content': cfg}
     cfg['_config_root_dir'] = os.path.abspath(cfg_dir)
     dd = dotdict.create(cfg)
     dd = resolve_machine_configuration(dd, hostname)
