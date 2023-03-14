@@ -7,7 +7,9 @@ import subprocess
 script_dir = os.path.dirname(os.path.realpath(__file__))
 endorse_dir = os.path.join(script_dir, "../..")
 
-
+pytestmark = pytest.mark.charon
+# TODO: currently this is not a test, rather simulation execution point.
+# modify it to am integration test with some small scale problem
 
 def run_script(args, workdir=None):
     script_args = ['python', os.path.join(endorse_dir, 'src/endorse/scripts/endorse_mlmc.py')]
@@ -45,7 +47,7 @@ def test_plot_cases():
 
     run_script(['plot', 'mc_cases', 'edz_0,noedz_0', '2,5,10'], workdir=workdir)
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_plot_cases_variants():
     #run_script(['plot', 'cases', '*', '2'])
     #run_script(['plot', 'cases', 'base dg_1 dg_3 dg_30 tol_low tol_high', '2'])
