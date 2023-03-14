@@ -20,6 +20,25 @@ problem: !Coupling_Sequential
         regions:
             - fr_large
             - fr_small
+      - !Union
+        name: .box_outer
+        regions:
+            - ".side_z0"
+            - ".side_z1"
+            - ".side_y0"
+            - ".side_y1"
+            - ".side_x0"
+            - ".side_x1"
+      - !Union
+        name: .fr_outer
+        regions:
+            - ".fr_side_z0"
+            - ".fr_side_z1"
+            - ".fr_side_y0"
+            - ".fr_side_y1"
+            - ".fr_side_x0"
+            - ".fr_side_x1"
+
 
   flow_equation: !Flow_Darcy_LMH
     output_specific:

@@ -29,8 +29,8 @@ def test_file_memoization():
     cache = common.EndorseCache.instance()
     cache.expire_all()
 
-    input_file = sandbox_fname("memoize_file.txt")
-    output_file = sandbox_fname("output_file.txt")
+    input_file = sandbox_fname(script_dir, "memoize_file.txt")
+    output_file = sandbox_fname(script_dir, "output_file.txt")
     with open(input_file, "w") as ff:
         ff.write(f"First line.")
     try:
