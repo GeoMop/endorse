@@ -215,6 +215,8 @@ class endorse_2Dtest():
         output_dir = "output_" + fname
         config_dict[param_key]["output_dir"] = output_dir
 
+        stdout_path = fname + "_stdout"
+        stderr_path = fname + "_stderr"
         if all([os.path.isfile(os.path.join(output_dir, f)) for f in result_files]):
             status = True
         else:
@@ -226,16 +228,14 @@ class endorse_2Dtest():
 
             arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
             print("Running: ", " ".join(arguments))
-            with open(fname + "_stdout", "w") as stdout:
-                with open(fname + "_stderr", "w") as stderr:
+            with open(stdout_path, "w") as stdout:
+                with open(stderr_path, "w") as stderr:
                     completed = subprocess.run(arguments, stdout=stdout, stderr=stderr)
             print("Exit status: ", completed.returncode)
             status = completed.returncode == 0
 
         if status:
-            # log_file = os.path.join(self.sample_dir, output_dir, "flow123.0.log")
-            # conv_check = aux_functions.check_conv_reasons(log_file)
-            fo = common.flow_call.FlowOutput(completed, stdout.path, stderr.path)
+            fo = common.flow_call.FlowOutput(completed, stdout_path, stderr_path, output_dir)
             conv_check = fo.check_conv_reasons()
             print("converged: ", conv_check)
             status = conv_check >= 0
