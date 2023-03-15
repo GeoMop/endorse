@@ -57,7 +57,7 @@ def test_tunnel_interpolation():
 def test_run_single_sample():
     seed = 102
     np.random.seed(seed)
-    conf_file = os.path.join(script_dir, "test_data/config_homo_tsx.yaml")
+    conf_file = os.path.join(script_dir, "test_data/config.yaml")
     cfg = common.load_config(conf_file)
 
     files_to_copy = [f"{script_dir}/test_data/accepted_parameters.csv"]

@@ -81,7 +81,7 @@ class Edz_HM_TSX_2D():
 
         params = config_dict.tsx_hm_model.hm_params
         template = os.path.join(flow123d_inputs_path, params.input_template)
-        self.flow_output = common.call_flow(config_dict.flow_env, template, params)
+        self.flow_output = common.call_flow(config_dict.machine_config, template, params)
 
         if not self.flow_output.success:
             # raise Exception("HM model failed.")
