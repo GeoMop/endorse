@@ -98,7 +98,7 @@ if __name__ == "__main__":
         print(problem_path, flush=True)
         C = Configuration(N, problem_path)
         args = [str(N), problem_path, output_dir]
-        if os.path.exists("surrDAMH/examples/visualization/" + C.problem_name + ".py"):
+        if os.path.exists(surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py"):
             command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
         else:
             command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
