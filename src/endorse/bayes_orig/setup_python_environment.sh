@@ -11,6 +11,8 @@ pip -V
 
 # already installed in image: numpy
 pip install matplotlib scipy pandas
+# ruamel keeps comments and order when loading and dumping yaml around
+pip install ruamel.yaml
 
 # if not included in docker image
 # pip install mpi4py
