@@ -6,8 +6,7 @@ import yaml
 import aux_functions
 from preprocess import preprocess
 
-sys.path.append("../../../submodules")
-from surrDAMH.surrDAMH.configuration import Configuration
+from surrDAMH.configuration import Configuration
 
 # this script is supposed to be dependent only on python packages present on any machine
 # all other python scripts are later run inside docker container
