@@ -28,6 +28,9 @@ class MeasuredData:
 
         self.temp_color = {'HGT1-1': 'sienna', 'HGT1-2': 'yellow', 'HGT1-3': 'orange', 'HGT1-4': 'green',
                            'HGT1-5': 'red', 'HGT2-1': 'teal', 'HGT2-2': 'cyan', 'HGT2-3': 'blue', 'HGT2-4': 'violet'}
+        
+        self.bnames_dict = {'V1':'HGT1-5', 'V2':'HGT1-4',
+                            'H1':'HGT2-4', 'H2':'HGT2-3'}
 
     def generate_measured_samples(self, boreholes):
         times = generate_time_axis(self._config)
@@ -35,7 +38,8 @@ class MeasuredData:
         # sample measured data at generated times
         values = []
         for bname in boreholes:
-            p = self.interp_data[bname](times)
+            bn = self.bnames_dict[bname]
+            p = self.interp_data[bn](times)
             values.extend(p)
         return times, values
 

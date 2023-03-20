@@ -67,17 +67,17 @@ problem: !Coupling_Sequential
 #            - pressure_p0
 #            - velocity_p0
 #            - region_id
-          observe_fields: [pressure_p0]
+          observe_fields: [pressure_p0, conductivity]
         #balance:
           #cumulative: true
         output_stream:
           file: flow.pvd
           format: !vtk
           observe_points: &observe_points
-            - { name: HGT1-5, point: [ 0, 3.25, 0 ] }  # HGT1-5: 3.5/2 + 1.5
-            - { name: HGT1-4, point: [ 0, 5.75, 0 ] }  # HGT1-4: 3.5/2 + 4
-            - { name: HGT2-4, point: [ 3.6875, 0, 0 ] }  # HGT2-4: 4.375/2 + 1.5
-            - { name: HGT2-3, point: [ 6.1875, 0, 0 ] }  # HGT2-3: 4.375/2 + 4
+            - { name: V1, point: [ 0, 3.25, 0 ] }  # HGT1-5: 3.5/2 + 1.5
+            - { name: V2, point: [ 0, 5.75, 0 ] }  # HGT1-4: 3.5/2 + 4
+            - { name: H1, point: [ 3.6875, 0, 0 ] }  # HGT2-4: 4.375/2 + 1.5
+            - { name: H2, point: [ 6.1875, 0, 0 ] }  # HGT2-3: 4.375/2 + 4
     mechanics_equation:
         output_stream:
           file: mechanics.pvd
@@ -93,7 +93,7 @@ problem: !Coupling_Sequential
 #            - von_mises_stress
 #            - initial_stress
 #            - region_id
-#          observe_fields: [displacement]
+          observe_fields: [von_mises_stress]
         solver: !Petsc
           a_tol: <mechanics_solver__a_tol>
           r_tol: <mechanics_solver__r_tol>

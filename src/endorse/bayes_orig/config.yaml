@@ -140,10 +140,10 @@ surrDAMH_parameters:
 #        mu: 24.124
 #        sigma: 1.0
   observe_points:
-    - HGT1-5
-    - HGT1-4
-    - HGT2-4
-    - HGT2-3
+    #- V1 # HGT1-5
+    #- V2 # HGT1-4
+    - H1 # HGT2-4
+    #- H2 # HGT2-3
 
 geometry:
   # base of the mesh file name
