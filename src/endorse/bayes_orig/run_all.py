@@ -149,7 +149,7 @@ if __name__ == "__main__":
                 '#PBS -S /bin/bash',
                 '#PBS -l select=' + str(met["chunks"]) + ':ncpus=' + str(met["ncpus_per_chunk"]) + ':mem=' + met["memory"],
                 '#PBS -l place=scatter',
-                '#PBS -l walltime=' + met["walltime"],
+                '#PBS -l walltime=' + str(met["walltime"]),
                 '#PBS -q ' + met["queue"],
                 '#PBS -N ' + met["name"],
                 '#PBS -o ' + os.path.join(output_dir,met["name"] + '.out'),
