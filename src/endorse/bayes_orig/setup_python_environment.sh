@@ -19,6 +19,7 @@ pip install matplotlib scipy pandas
 pip install pybind11 # for bih
 pip install attrs # for bgem
 pip install -e ../../../submodules/bgem
+pip install -e ../../../submodules/surrDAMH
 pip install -e ../../../submodules/redis-cache
 pip install -e ../../.. # install endorse
 
