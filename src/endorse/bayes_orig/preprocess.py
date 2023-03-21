@@ -18,8 +18,9 @@ def preprocess(config_dict):
 
     conf_bayes = config_dict["surrDAMH_parameters"]
 
-    boreholes = conf_bayes["observe_points"]
-    times, values = md.generate_measured_samples(boreholes)
+    pressure_obs_points = conf_bayes["observe_points"]
+    conductivity_obs_points = conf_bayes["conductivity_observe_points"]
+    times, values = md.generate_measured_samples(pressure_obs_points)
 
     config_bayes_file = config_dict["bayes_config_file"]
     yaml_handler = yaml.YAML()
@@ -28,6 +29,8 @@ def preprocess(config_dict):
     conf = yaml_handler.load(file_content)
     # print(conf.ca)
 
+    npob = len(pressure_obs_points)
+    ncob = len(conductivity_obs_points)
     npar = len(conf_bayes["parameters"])
     conf["no_parameters"] = npar
     # not necessary due to conf["noise_parameters"]
@@ -45,22 +48,28 @@ def preprocess(config_dict):
     dict_01["std"] = 20
     dict_01["cov_type"] = "default"
     offset = 0
-    for i in range(len(boreholes)):
+    for i in range(npob):
         d = dict_01.copy()
-        d["range"] = [offset, len(times)]
+        length = len(times)
+        d["range"] = [offset, offset+length-1]
         noise_model_list.append(d)
+        offset = offset + length
     # noise for conductivity
-    # dict_02 = dict_01.copy()
-    # dict_02["time_grid"] = [times[-1]]
-    # dict_02["corr_length"] = 0
-    # dict_02["std"] = 1.0
-    # noise_model_list = [dict_01.copy()] * len(boreholes)
+    dict_02 = dict_01.copy()
+    dict_02["time_grid"] = np.array(times[-1]).tolist()
+    dict_02["corr_length"] = 0
+    dict_02["std"] = 1.0
+    for i in range(ncob):
+        d = dict_02.copy()
+        d["range"] = [offset, offset]
+        noise_model_list.append(d)
+        offset = offset + 1
 
     conf["noise_model"] = noise_model_list
 
     conf["solver_module_path"] = os.path.join(config_dict["script_dir"], "flow_wrapper.py")
     conf["transformations"] = conf_bayes["parameters"]
-    conf["observe_points"] = boreholes
+    conf["observe_points"] = pressure_obs_points
 
     for i, par in enumerate(conf_bayes["parameters"]):
         if par["type"] is None:

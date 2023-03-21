@@ -33,7 +33,7 @@ class MeasuredData:
                             'H1':'HGT2-4', 'H2':'HGT2-3'}
 
     def generate_measured_samples(self, boreholes):
-        times = generate_time_axis(self._config)
+        times = np.array(generate_time_axis(self._config))
 
         # sample measured data at generated times
         values = []
@@ -41,7 +41,23 @@ class MeasuredData:
             bn = self.bnames_dict[bname]
             p = self.interp_data[bn](times)
             values.extend(p)
+
+        values.extend(self.conductivity_measurement(times))
         return times, values
+
+    def conductivity_measurement(self, times):
+        n = len(times)
+        # initial bulk conductivity
+        # init_cond = np.log10(1e7 * 6e-22)
+        # values at points V01_cond, V02_cond, H01_cond, H02_cond
+        values = np.log10(1e7 * np.array([2e-17, 1e-19, 3e-19, 7e-21]))
+        # make time rows
+        # values = np.tile(values, (n, 1)).transpose()
+
+        # replace initial conductivity
+        # bored_time = float(self._config['bored_time'])
+        # values[:, times < bored_time] = init_cond * np.ones(np.shape(values[:, times < bored_time]))
+        return values.flatten()
 
     def plot_interp_data(self):
         fig, ax1 = plt.subplots()

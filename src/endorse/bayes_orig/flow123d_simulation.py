@@ -156,39 +156,22 @@ class endorse_2Dtest():
 
     def collect_results(self, config_dict):
         output_dir = config_dict["hm_params"]["output_dir"]
-        points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
+        pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
+        cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
+
+        values = np.empty((0,))
 
         # the times defined in input
         times = np.array(generate_time_axis(config_dict))
         with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
             loaded_yaml = yaml.load(f, yaml.CSafeLoader)
-            points = loaded_yaml['points']
-            point_names = [p["name"] for p in points]
 
-            points2collect_indices = []
-            for p2c in points2collect:
-                tmp = [i for i, pn in enumerate(point_names) if pn == p2c]
-                assert len(tmp) == 1
-                points2collect_indices.append(tmp[0])
+            vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
+            values = np.concatenate((values, vals), axis=None)
 
-            print("Collecting results for observe points: ", points2collect)
-            data = loaded_yaml['data']
-            data_values = np.array([d["pressure_p0"] for d in data])
-            values = data_values[:, points2collect_indices]
-            obs_times = np.array([d["time"] for d in data]).transpose()
-
-            # check that observe data are computed at all times of defined time axis
-            all_times_computed = np.alltrue(np.isin(times, obs_times))
-            if not all_times_computed:
-                raise Exception("Observe data not computed at all times as defined by input!")
-            # skip the times not specified in input
-            t_indices = np.isin(obs_times, times).nonzero()
-            values = values[t_indices].transpose()
-
-            if "smooth_factor" in config_dict.keys():
-                smooth_factor = config_dict["smooth_factor"]
-                for i in range(len(values)):
-                    values[i] = self.smooth_ode(times, values[i], smooth_factor)
+            vals = self.get_from_observe(loaded_yaml, cond_points2collect, 'conductivity', times[-1])
+            vals = np.log10(vals)  # consider log10!
+            values = np.concatenate((values, vals), axis=None)
 
         if config_dict["clean_sample_dir"]:
             shutil.rmtree(self.sample_dir)
@@ -196,6 +179,40 @@ class endorse_2Dtest():
         # flatten to format: [Point0_all_all_times, Point1_all_all_times, Point2_all_all_times, ...]
         res = values.flatten()
         return res
+
+    def get_from_observe(self, observe_dict, point_names, field_name, select_times=None):
+        points = observe_dict['points']
+        all_point_names = [p["name"] for p in points]
+        print('all_point_names', all_point_names)
+        print('point_names', point_names)
+        points2collect_indices = []
+        for p2c in point_names:
+            tmp = [i for i, pn in enumerate(all_point_names) if pn == p2c]
+            assert len(tmp) == 1
+            points2collect_indices.append(tmp[0])
+
+        print("Collecting results for observe points: ", point_names)
+        data = observe_dict['data']
+        data_values = np.array([d[field_name] for d in data])
+        values = data_values[:, points2collect_indices]
+        obs_times = np.array([d["time"] for d in data]).transpose()
+
+        if select_times is not None:
+            # check that observe data are computed at all times of defined time axis
+            all_times_computed = np.alltrue(np.isin(select_times, obs_times))
+            if not all_times_computed:
+                raise Exception("Observe data not computed at all times as defined by input!")
+            # skip the times not specified in input
+            t_indices = np.isin(obs_times, select_times).nonzero()
+            values = values[t_indices]
+        values = values.transpose()
+
+        # if "smooth_factor" in config_dict.keys():
+        #     smooth_factor = config_dict["smooth_factor"]
+        #     for i in range(len(values)):
+        #         values[i] = self.smooth_ode(times, values[i], smooth_factor)
+
+        return values
 
     def call_flow(self, config_dict, param_key, result_files):
         """
@@ -447,21 +464,21 @@ class endorse_2Dtest():
     def observe_time_plot(self, config_dict):
 
         output_dir = config_dict["hm_params"]["output_dir"]
+        pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
 
         with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
             loaded_yaml = yaml.load(f, yaml.CSafeLoader)
-            points = loaded_yaml['points']
-            point_names = [p["name"] for p in points]
             data = loaded_yaml['data']
-            values = np.array([d["pressure_p0"] for d in data]).transpose()
             times = np.array([d["time"] for d in data]).transpose()
+
+            values = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0')
 
             fig, ax1 = plt.subplots()
             temp_color = ['red', 'green', 'violet', 'blue']
             ax1.set_xlabel('time [d]')
             ax1.set_ylabel('pressure [m]')
-            for i in range(0, len(point_names)):
-                ax1.plot(times, values[i, 0:], color=temp_color[i], label=point_names[i])
+            for i in range(0, len(pressure_points2collect)):
+                ax1.plot(times, values[i, 0:], color=temp_color[i], label=pressure_points2collect[i])
 
             ax1.tick_params(axis='y')
             ax1.legend()
