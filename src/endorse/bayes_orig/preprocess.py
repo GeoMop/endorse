@@ -51,7 +51,7 @@ def preprocess(config_dict):
     for i in range(npob):
         d = dict_01.copy()
         length = len(times)
-        d["range"] = [offset, offset+length-1]
+        d["range"] = [offset, offset + length]
         noise_model_list.append(d)
         offset = offset + length
     # noise for conductivity
@@ -61,9 +61,10 @@ def preprocess(config_dict):
     dict_02["std"] = 1.0
     for i in range(ncob):
         d = dict_02.copy()
-        d["range"] = [offset, offset]
+        length = 1
+        d["range"] = [offset, offset + length]
         noise_model_list.append(d)
-        offset = offset + 1
+        offset = offset + length
 
     conf["noise_model"] = noise_model_list
 
