@@ -12,7 +12,7 @@
 	branch = master
 [submodule "submodule.submodules/MLMC.path"]
 	path = submodules/MLMC
-	url = ../../GeoMop/MLMC.git
+	url = ../../Geomop/MLMC.git
 	branch = MS_endorse
 [submodule "submodule.submodules/redis-cache.path"]
 	path = submodules/redis-cache
@@ -22,3 +22,7 @@
 	path = submodules/swrap
 	url = ../../flow123d/swrap
 	branch = JB_endorse
+[submodule "submodules/surrDAMH"]
+	path = submodules/surrDAMH
+	url = ../../dom0015/surrDAMH.git
+	branch = PE_endorse

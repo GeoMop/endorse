@@ -52,11 +52,11 @@ class EquationOutput:
 
 class FlowOutput:
 
-    def __init__(self, process: subprocess.CompletedProcess, stdout: File, stderr: File):
+    def __init__(self, process: subprocess.CompletedProcess, stdout: File, stderr: File, output_dir="output"):
         self.process = process
         self.stdout = stdout
         self.stderr = stderr
-        with workdir("output"):
+        with workdir(output_dir):
             self.log = File("flow123.0.log")
             # TODO: flow ver 4.0 unify output file names
             self.hydro = EquationOutput("flow", "water")

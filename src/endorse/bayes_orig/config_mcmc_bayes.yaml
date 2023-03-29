@@ -1,0 +1,110 @@
+# surrDAMH template (Bayesian inverse problem related to the TSX experiment)
+
+
+# GENERAL SETTINGS:
+no_parameters: 1 # number of parameters (WILL BE SET AUTOMATICALLY)
+no_observations: 1 # number of observations (WILL BE SET AUTOMATICALLY)
+save_raw_data: true # save all data (including rejected samples)
+save_transformed_data: true
+debug: false # print debug messages (true/false)
+
+
+# PRIOR DISTRIBUTION SETTINGS:
+# internally, normal distribution is used
+# if the prior distribution is not normal, transformations have to be specified
+# (WILL BE SET AUTOMATICALLY) from main config
+transformations:
+- name: par1
+  type: normal_to_lognormal
+  options:
+    mu: 1
+    sigma: 0.1
+
+
+# SAMPLING PROCESS SETTINGS:
+initial_sample_type: prior # choice of initial samples for each chain (prior/lhs)
+samplers_list: # stages of the sampling process (here MH, DAMH-SMU, DAMH)
+
+# stage 1: initial surrogate model created during MH sampling
+- type: MH # sampling algorithm (MH/DAMH)
+  surrogate_is_updated: true
+  proposal_std: 0.1
+#  max_samples: 2
+#  time_limit: 180 # 10800 # 3600 # 14400
+  max_samples: 10000
+  time_limit: 14400 # 10800 # 3600 # 14400
+
+# stage 2: DAMH algorithm with surrogate model updates
+- type: DAMH
+  surrogate_is_updated: true
+  proposal_std: 0.2
+#  max_samples: 2
+#  time_limit: 180 # 10800 # 7200 # 1200 # 14400
+  max_samples: 100000
+  time_limit: 36000 # 10800 # 7200 # 1200 # 14400
+
+# stage 3: DAMH algorithm, surrogate model is no longer updated
+#- type: DAMH
+#  surrogate_is_updated: false
+#  proposal_std: 0.3
+#  max_samples: 100000
+#  time_limit: 7200 # 10800 # 7200 # 1200 # 7200
+  
+
+# SOLVER SETTINGS (here Flow123d wrapper):
+no_solvers: 20 # number of solvers running in parallel
+solver_module_name: flow_wrapper
+# solver_module_path WILL BE SET AUTOMATICALLY by process.py
+solver_module_path: /home/domesova/GIT/Endorse-2Dtest-Bayes/flow_wrapper.py
+solver_init_name: Wrapper
+solver_returns_tag: true # wrapper returns [convergence_tag, collected_values]
+solver_parameters: {} # optional wrapper-specific parameters
+pickled_observations: false
+
+# surrogate model settings:
+#surrogate_type: rbf # type of surrogate model (rbf/poly)
+## polynominal surrogate model requires different parameters
+#surr_solver_parameters:
+#  kernel_type: 1
+#surr_updater_parameters:
+#  expensive: false
+#  kernel_type: 1
+#  no_keep: 5000
+
+surrogate_type: poly
+surr_updater_parameters:
+  max_degree: 5
+
+
+# PARAMETERS OF THE BAYESIAN INVERSE PROBLEM:
+# instead of problem_parameters["noise_std"], noise_type + noise_parameters + noise_grid is specified
+#noise_type: Gaussian_process # WILL BE SET AUTOMATICALLY
+#noise_parameters: # WILL BE SET AUTOMATICALLY
+#- - 30
+#  - 50
+#noise_grid: # WILL BE SET AUTOMATICALLY
+#- 0.0
+
+# WILL BE SET AUTOMATICALLY
+# observation vector can be constructed from several quantities
+# each can time-dependent with different time grid
+# [q1_1...q1_N1, q2_1...N2, q3_1...N3, ...]
+noise_model:
+  - std: [ ]  # constant or vector of length of time_grid
+    corr_length: 0  # if zero, unit matrix will be used
+    cov_type: # "squared_exponential" or default
+    time_grid: [ ]
+#    range: []  # range of data in observation vector
+#    noise_type: Gaussian_process # WILL BE SET AUTOMATICALLY
+
+
+problem_parameters:
+# internal distribution (before transformation) is N(prior_mean,prior_std)
+# if prior_mean and prior_std is not specified, default internal distribution is N(0,1)
+# if noise is not Gaussian_process and noise_std is not specified, default noise distribution is N(0,1)
+  prior_mean: # scalar/vector # WILL BE SET AUTOMATICALLY
+  - 0.0
+  prior_std: # scalar/vector/covariance matrix # WILL BE SET AUTOMATICALLY
+  - 1.0
+  observations: # observations WILL BE SET AUTOMATICALLY by measured_data.py
+  - 1
