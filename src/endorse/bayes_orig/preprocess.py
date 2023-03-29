@@ -20,7 +20,10 @@ def preprocess(config_dict):
 
     pressure_obs_points = conf_bayes["observe_points"]
     conductivity_obs_points = conf_bayes["conductivity_observe_points"]
-    times, values = md.generate_measured_samples(pressure_obs_points)
+    if config_dict["synthetic_data"]:
+        times, values = md.generate_synthetic_samples(pressure_obs_points)
+    else:
+        times, values = md.generate_measured_samples(pressure_obs_points)
 
     config_bayes_file = config_dict["bayes_config_file"]
     yaml_handler = yaml.YAML()
