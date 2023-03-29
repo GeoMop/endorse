@@ -11,8 +11,7 @@ from measured_data import MeasuredData
 from run_all import setup
 from preprocess import preprocess
 
-sys.path.append("../../../submodules")
-from surrDAMH.surrDAMH.modules import visualization_and_analysis as va
+from surrDAMH.modules import visualization_and_analysis as va
 
 
 def just_run_flow123d(measured_data, params_in, output_dir_in, boreholes_in):
