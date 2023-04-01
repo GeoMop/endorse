@@ -46,10 +46,10 @@ def setup(output_dir, can_overwrite, clean):
 
     return config_dict
 
-def create_bash_python_script(filename, command):
+def create_bash_python_script(venv_path, filename, command):
     with open(filename, 'w') as f:
         f.write('\n'.join(['#!/bin/bash',
-                           'source ' + os.path.join(config_dict["script_dir"],'venv/bin/activate'),
+                           'source ' + os.path.join(venv_path, 'bin', 'activate'),
                            command]))
 
     abs_filename = os.path.abspath(filename)
@@ -57,6 +57,11 @@ def create_bash_python_script(filename, command):
     return abs_filename
 
 if __name__ == "__main__":
+
+    # resolve root dir of Endorse repository
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    endorse_root = os.path.abspath(os.path.join(script_dir, "../../.."))
+    venv_path = os.path.join(endorse_root, "venv_bayes")
 
     # default parameters
     output_dir = "flow123d_sim"
@@ -83,14 +88,14 @@ if __name__ == "__main__":
     config_dict = setup(output_dir, can_overwrite=(not visualize), clean=clean)
     problem_path = config_dict["bayes_config_file"]
 
-    surrDAMH_path = os.path.abspath(config_dict["script_dir"] + "/../../../submodules/surrDAMH")
+    surrDAMH_path = os.path.join(endorse_root, "submodules/surrDAMH")
     # run sampling
     # paths are relative to repository dir
     # paths passed to surrDAMH are absolute
     command = None
     if visualize:
         # os.error("Visualization not implemented.")
-        os.chdir(config_dict["script_dir"])
+        # os.chdir(script_dir)
         if not os.path.isfile(problem_path):
             raise Exception("Missing problem configuration '" + problem_path + "'."
                             + " Call simulation with 'run' command first!")
@@ -121,17 +126,17 @@ if __name__ == "__main__":
             command = mpirun + " -n " + str(N) + opt + sampler \
                       + " : " + "-n 1" + opt + solver + " : " + "-n 1" + opt + collector
         else:
-            sampler_bash = create_bash_python_script("sampler.sh", sampler)
-            solver_bash = create_bash_python_script("solver.sh", solver)
-            collector_bash = create_bash_python_script("collector.sh", collector)
+            sampler_bash = create_bash_python_script(venv_path, "sampler.sh", sampler)
+            solver_bash = create_bash_python_script(venv_path, "solver.sh", solver)
+            collector_bash = create_bash_python_script(venv_path, "collector.sh", collector)
 
             met = config_dict["metacentrum"]
             common_lines = [
                 'set -x',
                 '\n# absolute path to output_dir',
                 'output_dir="' + output_dir + '"',
-                '\n# run from the repository directory',
-                'cd "' + config_dict["script_dir"] + '"',
+                '\n# Endorse root directory',
+                # 'endorse_root="' + endorse_root + '"',
                 # '\n# command for running correct docker image',
                 # 'image_name="$(./endorse_fterm image)"',
                 # '\n',
@@ -139,7 +144,8 @@ if __name__ == "__main__":
                 '\n',
                 'sing_script="' + met["swrap"] + '"',
                 '\n',
-                'image=$(' + os.path.join(config_dict["script_dir"], 'sif_image') + ')'
+                'image="' + os.path.join(endorse_root, 'endorse.sif') + '"',
+                'cd $output_dir'
             ]
 
             # prepare PBS script
@@ -161,13 +167,13 @@ if __name__ == "__main__":
                                     '-n', str(1),solver_bash, ':',
                                     '-n', str(1),collector_bash]) + '"',
                 'echo $command', 'eval $command', '\n',
-                'command="' + ' '.join(['./run_all_local.sh', '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
+                'command="' + ' '.join([os.path.join(script_dir,'run_visualize.sh'), '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
                 'echo $command', 'eval $command', '\n',
-                'cd ' + output_dir,
+                'cd $output_dir'
                 'zip -r samples.zip solver_*',
                 'rm -r solver_*',
                 'cd ..',
-                'command="' + ' '.join(['./run_set.sh', output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
+                'command="' + ' '.join([os.path.join(script_dir,'run_set.sh'), output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
                 'echo $command', 'eval $command'
             ]
             with open("pbs_job.sh", 'w') as f:
@@ -179,7 +185,7 @@ if __name__ == "__main__":
     # final command call
     if not config_dict["run_on_metacentrum"] or visualize:
         # local command call
-        os.chdir(config_dict["script_dir"])
+        os.chdir(script_dir)
         print(command)
         os.system(command)
     else:

@@ -9,9 +9,11 @@ from flow123d_simulation import generate_time_axis
 
 class MeasuredData:
     def __init__(self, config):
-        self.measured_data = {}
         self.borehole_names = []
+        self.measured_data = {}
+        self.synthetic_data = {}
         self.interp_data = {}
+        self.interp_synth_data = {}
         self.zm_data = {}
         self.temp_color = {}
         self._config = config
@@ -19,12 +21,17 @@ class MeasuredData:
     def initialize(self):
         self.borehole_names, self.measured_data = self.read_chandler_data()
         zm_bnames, self.zm_data = self.read_zm_data()
+        bn_new, self.synthetic_data = self.read_sim_data()
 
         for bname in self.borehole_names:
             t = self.measured_data[bname]["time"]
             p = self.measured_data[bname]["pressure"]
-            # self.interp_data[bname] = interpolate.splrep(t, p)
             self.interp_data[bname] = interpolate.CubicSpline(t, p, bc_type='natural')
+
+        for bname in bn_new:
+            t = self.synthetic_data[bname]["time"]
+            p = self.synthetic_data[bname]["pressure"]
+            self.interp_synth_data[bname] = interpolate.CubicSpline(t, p, bc_type='natural')
 
         self.temp_color = {'HGT1-1': 'sienna', 'HGT1-2': 'yellow', 'HGT1-3': 'orange', 'HGT1-4': 'green',
                            'HGT1-5': 'red', 'HGT2-1': 'teal', 'HGT2-2': 'cyan', 'HGT2-3': 'blue', 'HGT2-4': 'violet'}
@@ -239,9 +246,97 @@ class MeasuredData:
             dat["pressure"] = v * 100
         return borehole_names, data
 
+    def read_sim_data(self):
+        # read ZM data
+        datafile = os.path.join(self._config["measured_data_dir"], "synthetic_data.csv")
+        borehole_names, data = self.read_csv_graph_data(datafile)
+        # sorting and cropping data
+        for bname, dat in data.items():
+            v = np.array(dat["pressure"])
+            dat["pressure"] = v
+        return borehole_names, data
+
+    def generate_synthetic_samples(self, boreholes):
+        times = np.array(generate_time_axis(self._config))
+
+        L = 20.0/365     # correlation length
+        noise_std = 20.0 # target std of the synthetic noise
+
+        # noise will be applied at the same time steps as the underlying data
+        N = len(times)
+        # rescale target std to std of coefficients of Fourier basis
+        # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
+        std = noise_std / np.sqrt(2 * N + 1)
+        # print("std", std)
+
+        # Construct the orthonormal Fourier basis on interval [0,1]
+        x = np.linspace(0, 1, N)
+        # dimension of basis is given by the intended correlation length (its inverse)
+        Nk = int(1/L)
+        # print(Nk)
+        Nb = 2 * Nk + 1
+        basis = np.zeros((N, Nb))
+        basis[:, 0] = 1
+        for i in range(1, Nk+1):
+            basis[:, i] = np.sqrt(2)*np.cos(2 * np.pi * i * x)
+            basis[:, Nk+i] = np.sqrt(2)*np.sin(2 * np.pi * i * x)
+
+        # Generate uncorrelated random coefficients
+        np.random.seed(2)
+        coeffs = np.random.normal(size=Nb, scale=std)
+        # print("coeffs", coeffs)
+
+        # Compute noise
+        # print("basis shape", np.shape(basis))
+        # print("coeffs shape", np.shape(coeffs))
+        noise = np.dot(basis, coeffs)
+        # print("noise shape", np.shape(noise))
+
+        import copy
+        data_synth = copy.deepcopy(self.synthetic_data)
+        values = []
+        for bname in boreholes:
+            p = self.interp_synth_data[bname](times)
+            data_synth[bname]["pressure"] = p + noise
+            values.extend(data_synth[bname]["pressure"])
+
+        fig, ax1 = plt.subplots()
+        ax1.set_xlabel('time [d]')
+        ax1.set_ylabel('pressure head [m]')
+        self.plot_data_set(boreholes, self.synthetic_data, ax1, linestyle='solid')
+        self.plot_data_set(boreholes, data_synth, ax1, linestyle='dotted')
+
+        # print(noise)
+        # ax1.plot(data_synth["H1"]["time"], noise,
+        #                    label="H1", linestyle='solid')
+
+        # for i in range(4):
+        #     ax1.plot(data_synth["H1"]["time"], basis[:, i],
+        #              label="H1", linestyle='solid')
+
+        self.additional_annotation(ax1)
+
+        props = dict(boxstyle='square', facecolor='white', alpha=0.25)
+        ax1.text(0.60, 0.72, "best_fit(solid)\nsynth. noise(dotted) N(0," + str(noise_std**2) + ")",
+                 transform=ax1.transAxes, fontsize=9,
+                 verticalalignment='top', bbox=props)
+
+        ax1.tick_params(axis='y')
+        ax1.legend(ncol=2)
+
+        fig.tight_layout()
+        # plt.show()
+        fig_file = os.path.join(self._config["work_dir"], "measured_synthetic.pdf")
+        plt.savefig(fig_file)
+
+        values.extend(self.conductivity_measurement(times))
+        return times, values
+
     def plot_data_set(self, bnames, data, axes, linestyle):
         for bname in bnames:
-            axes.plot(data[bname]["time"], data[bname]["pressure"], color=self.temp_color[bname],
+            bn = bname if bname in self.temp_color.keys() else self.bnames_dict[bname]
+            color = self.temp_color[bn]
+            axes.plot(data[bname]["time"], data[bname]["pressure"], color=color,
                       label=bname, linestyle=linestyle)
 
 
