@@ -1,9 +1,6 @@
 #!/bin/bash
 set -x
 
-# set running on metacentrum to False
-sed -i '/run_on_metacentrum:/c\run_on_metacentrum: False' config.yaml
-
 # output directory
 output_dir=$1
 
@@ -22,26 +19,29 @@ if [ "$3" == "sing" ]; then
 fi
 
 
-command="source ./venv/bin/activate && python3 run_set_flow123d.py $output_dir $csv_data"
+# Development: root of the sources
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/../../.."
+ENDORSE_SRC_BAYES="${SCRIPTPATH}"
+ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv_bayes"
+
+# visualize
+command="source ${ENDORSE_VENV_BAYES}/bin/activate && python3 ${ENDORSE_SRC_BAYES}/run_set_flow123d.py $output_dir $csv_data"
+
 
 if [ "$sing" == true ]; then
 
-  # command for running correct docker image
-  rep_dir=$(pwd)
-  # image=$(./endorse_fterm image)
-  # sing_command="singularity exec -B $rep_dir:$rep_dir docker://$image"
-  image=$(./sif_image)
-  sing_command="singularity exec -B $rep_dir:$rep_dir $image"
+  sif_image="${ENDORSE_SRC_ROOT}/endorse.sif"
+  sing_command="singularity exec -B ${ENDORSE_SRC_ROOT}:${ENDORSE_SRC_ROOT} $sif_image"
 
-  # auxiliary command for opening Python environment inside docker image
-#  bash_py="bash -c 'source ./venv/bin/activate &&"
-
-  # run setup, prepare PBS script (locally, single proc)
-#  command="$sing_command $bash_py python3 -m mpi4py run_all.py $output_dir $n_chains'"
-  command="$sing_command bash -c \"$command\""
-  echo $command
-  eval $command
-
+  final_command="${sing_command} bash -c \"${command}\""
+  echo ${final_command}
 else
-    ./endorse_fterm exec "bash -c \"$command\""
+
+  final_command="bash -c \"${command}\""
+  echo ${final_command}
+
+  if [ "$debug" == false ]; then
+    ./endorse_fterm exec ${final_command}
+  fi
 fi
