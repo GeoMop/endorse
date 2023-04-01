@@ -7,7 +7,20 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
 cd "$ENDORSE_SRC_ROOT"
 
-rm -rf venv_bayes
 
-image=$(src/endorse/bayes_orig/sif_image)
-singularity exec $image package/setup_venv_bayes.sh
+# CREATE SIF IMAGE
+sif_image="endorse.sif"
+
+if [ -e ${sif_image} ]
+then
+    echo "SIF image '${sif_image}' already exists."
+else
+    image=$(${ENDORSE_SRC_ROOT}/src/endorse/bayes_orig/endorse_fterm image)
+    echo "Building SIF image '${sif_image}' from '${image}'"
+    singularity build ${sif_image} docker://$image
+fi
+
+
+# CREATE PYTHON VENV
+rm -rf venv_bayes
+singularity exec $sif_image package/setup_venv_bayes.sh
