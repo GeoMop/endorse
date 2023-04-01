@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -x
+
+# Development: root of the sources
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
+cd "$ENDORSE_SRC_ROOT"
+
+rm -rf venv_bayes
+
+image=$(src/endorse/bayes_orig/sif_image)
+singularity exec $image package/setup_venv_bayes.sh
