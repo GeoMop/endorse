@@ -2,8 +2,7 @@ import os
 import sys
 # import shutil
 import subprocess
-import matplotlib.pyplot as plt
-import numpy as np
+# import matplotlib.pyplot as plt
 import yaml
 
 from endorse import common
@@ -28,6 +27,7 @@ if __name__ == "__main__":
 
     import json
     import flow_wrapper
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
     output_dir = None
     len_argv = len(sys.argv)
@@ -36,13 +36,12 @@ if __name__ == "__main__":
         output_dir = os.path.abspath(sys.argv[1])
 
     config_dict = flow_wrapper.setup_config(output_dir)
-    print(config_dict)
 
     report_dir = os.path.join(output_dir, "report")
     if not os.path.isdir(report_dir):
         os.mkdir(report_dir)
 
-    tex_template = "DOC/bayes_results_template.tex"
+    tex_template = os.path.join(script_dir, "DOC/bayes_results_template.tex")
     tex_file = os.path.join(report_dir, "bayes_results_report.tex")
     # shutil.copyfile(tex_template, tex_file)
 
@@ -69,19 +68,17 @@ if __name__ == "__main__":
 
     os.chdir(output_dir)
     arguments = ["pdflatex", "-interaction=nonstopmode", "-output-directory", report_dir, tex_file]
-    # stdout_path = os.path.join(report_dir, "tex_stdout")
-    # stderr_path = os.path.join(report_dir, "tex_stderr")
-    # print("Running LaTeX: ", " ".join(arguments))
-    # with open(stdout_path, "w") as stdout:
-    #     with open(stderr_path, "w") as stderr:
-    #         completed = subprocess.run(arguments, stdout=stdout, stderr=stderr)
-    # print("Exit status: ", completed.returncode)
+    stdout_path = os.path.join(report_dir, "tex_stdout")
+    stderr_path = os.path.join(report_dir, "tex_stderr")
+    print("Running LaTeX: ", " ".join(arguments))
+    with open(stdout_path, "w") as stdout:
+        with open(stderr_path, "w") as stderr:
+            completed = subprocess.run(arguments, stdout=stdout, stderr=stderr)
+    print("Exit status: ", completed.returncode)
+    # os.system(" ".join(arguments))
 
     # is best fit accepted or rejected?
-    os.system(" ".join(arguments))
-
     num = print_num(best_fit[0], 'e', 14)[:14]
-    # print(num)
     # res = os.system("grep -rn saved_samples -e \"" + num +"\"")
     res = subprocess.check_output(["grep -rn saved_samples -e \"" + num +"\""], shell=True)
     res = str(res)
