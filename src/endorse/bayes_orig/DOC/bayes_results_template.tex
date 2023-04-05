@@ -1,0 +1,149 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{pdfpages}
+% \usepackage[czech]{babel}
+
+\usepackage{geometry}
+\geometry{
+ a4paper,
+%  total={170mm,257mm},
+ top=40mm,
+ left=30mm,
+ right=30mm,
+ bottom=25mm
+ }
+
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{enumerate}
+
+\usepackage{subcaption}
+
+% \usepackage{natbib}
+%\bibliographystyle{abbrvnat}
+% \bibliographystyle{plain}
+\bibliographystyle{abbrv}
+% \bibliographystyle{amsplain}
+% \bibliographystyle{dinat-etal}
+% \bibliographystyle{plainnat}
+% \setcitestyle{authoryear}
+
+\usepackage[colorlinks=true]{hyperref}
+
+\title{Application of Bayesian Inversion to Characterization of EDZ}
+\author{Pavel Exner}
+\date{2022}
+
+% \include{math_defs}
+
+\def\abs#1{\lvert#1\rvert}
+\def\prtl{\partial}
+\def\unit#1{\mathrm{#1}}
+\def\bunit#1{[\mathrm{#1}]}
+% \def\eps{\varepsilon}
+% \def\T{\intercal}
+\def\grad{\nabla}
+\def\div{\operatorname{div}}
+\def\tr{\operatorname{tr}}
+\def\vc#1{\mathbf{\boldsymbol{#1}}}     % vector
+\def\tn#1{{\mathbb{#1}}}    % tensor
+\def\sqr#1{{{\left(#1\right)}^2}}    % tensor
+
+\def\uu{\vc u}
+\def\nn{\vc n}
+\def\ee{\vc\varepsilon}
+
+
+\newcommand{\pe}[1]{{\color{red} \textbf{PE: #1}}}
+\newcommand{\figpath}{figs/}
+\newcommand{\imgBayes}{saved_samples/config_mcmc_bayes/img_Bayes/}
+\newcommand{\respath}{results/}
+\newcommand{\eq}[1]{\begin{equation}{#1}\end{equation}}
+
+\newcommand\figref[1]{Figure~\ref{#1}}
+\newcommand\tabref[1]{Table~\ref{#1}}
+% reffering subfigure
+% \newcommand{\figref}[2][{}]{\hyperref[#2]{\figurename~\ref{#2}#1}} 
+
+\begin{document}
+
+% \maketitle
+\begin{center}
+\today
+\end{center}
+
+\section{<name>}
+
+
+\begin{figure}[htb!]
+    \centering
+    \includegraphics[width=\textwidth]{\imgBayes hist_G1.pdf}
+    \caption{Histogram of pressure head responce at observation point H1.}
+    \label{fig:hist_G1}
+\end{figure}
+
+% \begin{figure}[htb!]
+%     \centering
+%     \includegraphics[width=\textwidth]{\imgBayes hist_G1_100best.pdf}
+%     \caption{Histogram of pressure head responce at observation point H1 versus 100 best fits.}
+%     \label{fig:hist_G1}
+% \end{figure}
+
+\cleardoublepage
+
+\Large
+% noise std: 100
+
+% estimated noise std (best fit-observations): 20.734248744348072\\
+
+\vspace{10pt}
+MH:\\
+- proposal std: 0.1\\
+- N samples [a, r, pr, all]: <MH_N>\\
+- acceptance ratio [a/r, a/all]: <MH_acceptance>\\
+
+DAMH(SMU):\\
+- proposal std: 0.2\\
+- N samples [a, r, pr, all]: <DAMHsmu_N>\\
+- acceptance ratio [a/r, a/all]: <DAMHsmu_acceptance>\\
+
+% DAMH:\\
+% - proposal std: 0.3\\
+% - N samples [a, r, pr, all]: [3809, 1805, 4725, 10339]\\
+% - acceptance ratio [a/r, a/all]: [2.1102493074792243, 0.3684108714575878]\\
+
+\cleardoublepage
+\begin{figure}[htb!]
+    \centering
+    \begin{subfigure}[t]{\textwidth}
+      \includegraphics[width=\textwidth]{\imgBayes average0.pdf}
+      \caption{MH}
+    \end{subfigure}
+    \begin{subfigure}[t]{\textwidth}
+      \includegraphics[width=\textwidth]{\imgBayes average1.pdf}
+      \caption{DAMH(SMU)}
+    \end{subfigure}
+%     \begin{subfigure}[t]{\textwidth}
+%       \includegraphics[width=\textwidth]{average2.pdf}
+%       \caption{DAMH}
+%     \end{subfigure}
+
+    \caption{Mean value convergence of chains.}
+    \label{fig:average}
+\end{figure}
+
+
+\begin{figure}[htb!]
+    \centering
+    \includegraphics[width=\textwidth]{\imgBayes histograms0.pdf}
+    \caption{Marginal posterior distribution histograms phase MH.}
+    \label{fig:posterior_histogram}
+\end{figure}
+
+\begin{figure}[htb!]
+    \centering
+    \includegraphics[width=\textwidth]{\imgBayes histograms1.pdf}
+    \caption{Marginal posterior distribution histograms, DAMH(SMU).}
+    \label{fig:posterior_histogram}
+\end{figure}
+
+\end{document}
