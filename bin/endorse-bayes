@@ -8,15 +8,26 @@ ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
 ENDORSE_SRC_BAYES="${ENDORSE_SRC_ROOT}/src/endorse/bayes_orig"
 ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv_bayes"
 
+run=false
+visualize=false
+report=false
+
 debug=false
 clean=""
 
-obligatory_param=0
-while getopts ":hdn:o:c" opt; do
+#obligatory_param=0
+while getopts ":hdt:n:o:c" opt; do
   case $opt in
     h)
       # help
-      echo "Usage: ./run_all_metacentrum.sh -n <N_CHAINS> -o <OUTPUT_DIR> -c -d"
+      echo "Usage: ./run_all_metacentrum.sh -t <TASK> -n <N_CHAINS> -o <OUTPUT_DIR> -c -d"
+      echo "-t ... 'run' or 'visualize' or 'report'"
+      echo "       - run:       runs the Bayes inversion (sampling, visualization)"
+      echo "                    (PBS, inside container)"
+      echo "       - visualize: runs visualization (locally, inside container)"
+      echo "                    valid options: all except 'c'"
+      echo "       - report:    runs outside container, needs Python and LaTeX"
+      echo "                    valid option: OUTPUT_DIR"
       echo "-c ... cleans the <OUTPUT_DIR> at first"
       echo "-d ... only print the container command"
       exit 0
@@ -28,12 +39,27 @@ while getopts ":hdn:o:c" opt; do
     n)
       # number of Markov chains
       n_chains=$OPTARG
-      ((obligatory_param=obligatory_param+1))
+#      ((obligatory_param=obligatory_param+1))
       ;;
     o)
       # output directory
       output_dir=$OPTARG
-      ((obligatory_param=obligatory_param+1))
+#      ((obligatory_param=obligatory_param+1))
+      ;;
+    t)
+      # task
+      comm=$OPTARG
+      if [ "$comm" == "visualize" ]; then
+        visualize=true
+      elif [ "$comm" == "run" ]; then
+        run=true
+      elif [ "$comm" == "report" ]; then
+        report=true
+      else
+        echo "Unknown task '$comm'!" >&2
+        exit 1
+      fi
+#      ((obligatory_param=obligatory_param+1))
       ;;
     c)
       # output directory
@@ -53,27 +79,50 @@ done
 if [ "$debug" == true ]; then
   echo "n_chains = $n_chains"
   echo "output_dir = $output_dir"
+  echo "visualize = $visualize"
+  echo "run = $run"
   echo "clean = $clean"
 fi
 
-if [[ $obligatory_param -lt 2 ]]; then
-  echo "Not all obligatory parameters set!"
-  exit 1
-fi
+#if [[ $obligatory_param -lt 3 ]]; then
+#  echo "Not all obligatory parameters set!"
+#  exit 1
+#fi
 
 
 sif_image="${ENDORSE_SRC_ROOT}/endorse.sif"
 
 # singulairity part
 sing_command="singularity exec -B ${ENDORSE_SRC_ROOT}:${ENDORSE_SRC_ROOT} ${sif_image}"
+venv_command="source ${ENDORSE_VENV_BAYES}/bin/activate"
 
-# command that should be run inside singularity
-command="source ${ENDORSE_VENV_BAYES}/bin/activate && python3 -m mpi4py ${ENDORSE_SRC_BAYES}/run_all.py ${output_dir} $n_chains $clean"
+# select task
+# run all
+if [ "$run" == true ]; then
+  command="$venv_command && python3 -m mpi4py ${ENDORSE_SRC_BAYES}/run_all.py ${output_dir} $n_chains $clean"
+fi
 
+# visualize
+if [ "$visualize" == true ]; then
+  command="$venv_command && python3 ${ENDORSE_SRC_BAYES}/run_all.py $output_dir $n_chains '' visualize"
+fi
+
+# report
+if [ "$report" == true ]; then
+  command="$venv_command && python3 ${ENDORSE_SRC_BAYES}/make_results_report.py $output_dir"
+  eval "${command}"
+  exit 0
+fi
+
+
+# finalize command
 final_command="${sing_command} bash -c \"${command}\""
 echo "${final_command}"
 
 if [ "$debug" == false ]; then
   eval "${final_command}"
-  qsub "${output_dir}/pbs_job.sh"
+
+  if [ "$run" == true ]; then
+    qsub "${output_dir}/pbs_job.sh"
+  fi
 fi
