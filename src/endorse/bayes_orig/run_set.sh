@@ -36,6 +36,7 @@ if [ "$sing" == true ]; then
 
   final_command="${sing_command} bash -c \"${command}\""
   echo ${final_command}
+  eval "${final_command}"
 else
 
   final_command="bash -c \"${command}\""

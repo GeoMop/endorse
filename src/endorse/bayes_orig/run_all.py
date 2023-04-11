@@ -169,10 +169,8 @@ if __name__ == "__main__":
                 'echo $command', 'eval $command', '\n',
                 'command="' + ' '.join([os.path.join(script_dir,'run_visualize.sh'), '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
                 'echo $command', 'eval $command', '\n',
-                'cd $output_dir'
                 'zip -r samples.zip solver_*',
                 'rm -r solver_*',
-                'cd ..',
                 'command="' + ' '.join([os.path.join(script_dir,'run_set.sh'), output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
                 'echo $command', 'eval $command'
             ]
