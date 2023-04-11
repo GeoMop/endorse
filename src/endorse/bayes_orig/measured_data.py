@@ -136,7 +136,8 @@ class MeasuredData:
         idx = 0
         label_comsol="comsol"
         for bname in boreholes:
-            p_interp = self.interp_data[bname](t)
+            bn = self.bnames_dict[bname]
+            p_interp = self.interp_data[bn](t)
             end_idx = idx + len(t)
             p_comp = computed_data[idx:end_idx]
             zm_t = self.zm_data[bname]["time"]
