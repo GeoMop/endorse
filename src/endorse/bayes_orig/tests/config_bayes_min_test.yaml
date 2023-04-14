@@ -17,7 +17,7 @@ metacentrum:
 collect_only: False
 mesh_only: False
 make_plots: True
-synthetic_data: True
+synthetic_data: False
 
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: False
@@ -221,9 +221,8 @@ hm_params:
     flow_solver__options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg #-ksp_monitor
         # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
 
-measured_data_dir: /storage/liberec3-tul/home/pavel_exner/workspace/endorse/tests/test_data/tsx_measured_data
+#measured_data_dir: /storage/liberec3-tul/home/pavel_exner/workspace/endorse/tests/test_data/tsx_measured_data
+measured_data_dir: /home/paulie/Workspace/endorse/tests/test_data/tsx_measured_data
 copy_files:
-  - config.yaml
   - *config_bayes
-  - flow123d_simulation.py
   - A04_hm_tmpl.yaml

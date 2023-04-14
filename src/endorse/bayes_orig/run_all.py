@@ -23,9 +23,16 @@ def setup(output_dir, can_overwrite, clean):
     os.chdir(work_dir)
 
     # test if config exists, copy from rep_dir if necessary
-    config_file = os.path.join(common_files_dir, "config.yaml")
+    config_file = os.path.join(work_dir, "config.yaml")
     if not os.path.exists(config_file):
-        shutil.copyfile(os.path.join(rep_dir, "config.yaml"), config_file)
+        # to enable processing older results
+        config_file = os.path.join(common_files_dir, "config.yaml")
+        if not os.path.exists(config_file):
+            raise Exception("Main configuration file 'config.yaml' not found in workdir.")
+        else:
+            import warnings
+            warnings.warn("Main configuration file 'config.yaml' found in 'workdir/common_files'.",
+                          category=DeprecationWarning)
 
     # read config file and setup paths
     with open(config_file, "r") as f:
