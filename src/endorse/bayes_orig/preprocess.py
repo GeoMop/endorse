@@ -20,10 +20,11 @@ def preprocess(config_dict):
 
     pressure_obs_points = conf_bayes["observe_points"]
     conductivity_obs_points = conf_bayes["conductivity_observe_points"]
+
     if config_dict["synthetic_data"]:
-        times, values = md.generate_synthetic_samples(pressure_obs_points)
+        times, values = md.generate_synthetic_samples(pressure_obs_points, conductivity_obs_points)
     else:
-        times, values = md.generate_measured_samples(pressure_obs_points)
+        times, values = md.generate_measured_samples(pressure_obs_points, conductivity_obs_points)
 
     config_bayes_file = config_dict["bayes_config_file"]
     yaml_handler = yaml.YAML()
@@ -43,30 +44,25 @@ def preprocess(config_dict):
     conf["problem_parameters"]["prior_std"] = [1.0] * npar
     conf["no_observations"] = len(values)
 
-    noise_model_list = []
-    # noise for pressure head in boreholes
-    dict_01 = dict()
-    dict_01["time_grid"] = np.array(times).tolist()
-    dict_01["corr_length"] = 30
-    dict_01["std"] = 20
-    dict_01["cov_type"] = "default"
+    noise_model_list = conf_bayes["noise_model"]
+
+    assert len(noise_model_list) >= npob, "Not enough parameters for pressure observations in config.yaml."
+    assert len(noise_model_list) == npob+ncob, "Dimension mismatch in noise model in config.yaml."
     offset = 0
+    # noise for pressure head in boreholes
     for i in range(npob):
-        d = dict_01.copy()
+        dict_01 = noise_model_list[i]
+        dict_01["time_grid"] = np.array(times).tolist()
         length = len(times)
-        d["range"] = [offset, offset + length]
-        noise_model_list.append(d)
+        dict_01["range"] = [offset, offset + length]
         offset = offset + length
+
     # noise for conductivity
-    dict_02 = dict_01.copy()
-    dict_02["time_grid"] = np.array(times[-1]).tolist()
-    dict_02["corr_length"] = 0
-    dict_02["std"] = 1.0
     for i in range(ncob):
-        d = dict_02.copy()
+        dict_02 = noise_model_list[npob+i]
+        dict_02["time_grid"] = np.array(times[-1]).tolist()
         length = 1
-        d["range"] = [offset, offset + length]
-        noise_model_list.append(d)
+        dict_02["range"] = [offset, offset + length]
         offset = offset + length
 
     conf["noise_model"] = noise_model_list

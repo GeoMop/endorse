@@ -39,7 +39,7 @@ class MeasuredData:
         self.bnames_dict = {'V1':'HGT1-5', 'V2':'HGT1-4',
                             'H1':'HGT2-4', 'H2':'HGT2-3'}
 
-    def generate_measured_samples(self, boreholes):
+    def generate_measured_samples(self, boreholes, cond_boreholes):
         times = np.array(generate_time_axis(self._config))
 
         # sample measured data at generated times
@@ -49,15 +49,20 @@ class MeasuredData:
             p = self.interp_data[bn](times)
             values.extend(p)
 
-        values.extend(self.conductivity_measurement(times))
+        values.extend(self.conductivity_measurement(cond_boreholes, times))
         return times, values
 
-    def conductivity_measurement(self, times):
+    def conductivity_measurement(self, boreholes, times):
+        measurements = {"V01_cond": 2e-17, "V02_cond": 1e-19, "H01_cond": 3e-19, "H02_cond": 7e-21}
         n = len(times)
         # initial bulk conductivity
         # init_cond = np.log10(1e7 * 6e-22)
         # values at points V01_cond, V02_cond, H01_cond, H02_cond
-        values = np.log10(1e7 * np.array([2e-17, 1e-19, 3e-19, 7e-21]))
+        # values = np.log10(1e7 * np.array([2e-17, 1e-19, 3e-19, 7e-21]))
+        values = []
+        for b in boreholes:
+            values.append(measurements[b])
+        values = np.log10(1e7 * np.array(values))
         # make time rows
         # values = np.tile(values, (n, 1)).transpose()
 
@@ -257,7 +262,7 @@ class MeasuredData:
             dat["pressure"] = v
         return borehole_names, data
 
-    def generate_synthetic_samples(self, boreholes):
+    def generate_synthetic_samples(self, boreholes, cond_boreholes):
         times = np.array(generate_time_axis(self._config))
 
         L = 20.0/365     # correlation length
@@ -330,7 +335,7 @@ class MeasuredData:
         fig_file = os.path.join(self._config["work_dir"], "measured_synthetic.pdf")
         plt.savefig(fig_file)
 
-        values.extend(self.conductivity_measurement(times))
+        values.extend(self.conductivity_measurement(cond_boreholes, times))
         return times, values
 
     def plot_data_set(self, bnames, data, axes, linestyle):
