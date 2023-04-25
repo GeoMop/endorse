@@ -19,7 +19,10 @@ metacentrum:
 collect_only: False
 mesh_only: False
 make_plots: True
-synthetic_data: True
+
+synthetic_data:
+  corr_length: 20
+  noise_std: 20
 
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: False

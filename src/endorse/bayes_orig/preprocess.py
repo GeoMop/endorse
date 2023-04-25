@@ -21,7 +21,7 @@ def preprocess(config_dict):
     pressure_obs_points = conf_bayes["observe_points"]
     conductivity_obs_points = conf_bayes["conductivity_observe_points"]
 
-    if config_dict["synthetic_data"]:
+    if "synthetic_data" in config_dict.keys():
         times, values = md.generate_synthetic_samples(pressure_obs_points, conductivity_obs_points)
     else:
         times, values = md.generate_measured_samples(pressure_obs_points, conductivity_obs_points)

@@ -265,38 +265,41 @@ class MeasuredData:
     def generate_synthetic_samples(self, boreholes, cond_boreholes):
         times = np.array(generate_time_axis(self._config))
 
-        L = 20.0/365     # correlation length
-        noise_std = 20.0 # target std of the synthetic noise
+        L = float(self._config["synthetic_data"]["corr_length"])/365     # correlation length
+        noise_std = float(self._config["synthetic_data"]["noise_std"]) # target std of the synthetic noise
 
-        # noise will be applied at the same time steps as the underlying data
-        N = len(times)
-        # rescale target std to std of coefficients of Fourier basis
-        # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
-        std = noise_std / np.sqrt(2 * N + 1)
-        # print("std", std)
+        if noise_std > 0:
+          # noise will be applied at the same time steps as the underlying data
+          N = len(times)
+          # rescale target std to std of coefficients of Fourier basis
+          # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
+          std = noise_std / np.sqrt(2 * N + 1)
+          # print("std", std)
 
-        # Construct the orthonormal Fourier basis on interval [0,1]
-        x = np.linspace(0, 1, N)
-        # dimension of basis is given by the intended correlation length (its inverse)
-        Nk = int(1/L)
-        # print(Nk)
-        Nb = 2 * Nk + 1
-        basis = np.zeros((N, Nb))
-        basis[:, 0] = 1
-        for i in range(1, Nk+1):
-            basis[:, i] = np.sqrt(2)*np.cos(2 * np.pi * i * x)
-            basis[:, Nk+i] = np.sqrt(2)*np.sin(2 * np.pi * i * x)
+          # Construct the orthonormal Fourier basis on interval [0,1]
+          x = np.linspace(0, 1, N)
+          # dimension of basis is given by the intended correlation length (its inverse)
+          Nk = int(1/L)
+          # print(Nk)
+          Nb = 2 * Nk + 1
+          basis = np.zeros((N, Nb))
+          basis[:, 0] = 1
+          for i in range(1, Nk+1):
+              basis[:, i] = np.sqrt(2)*np.cos(2 * np.pi * i * x)
+              basis[:, Nk+i] = np.sqrt(2)*np.sin(2 * np.pi * i * x)
 
-        # Generate uncorrelated random coefficients
-        np.random.seed(2)
-        coeffs = np.random.normal(size=Nb, scale=std)
-        # print("coeffs", coeffs)
+          # Generate uncorrelated random coefficients
+          np.random.seed(2)
+          coeffs = np.random.normal(size=Nb, scale=std)
+          # print("coeffs", coeffs)
 
-        # Compute noise
-        # print("basis shape", np.shape(basis))
-        # print("coeffs shape", np.shape(coeffs))
-        noise = np.dot(basis, coeffs)
-        # print("noise shape", np.shape(noise))
+          # Compute noise
+          # print("basis shape", np.shape(basis))
+          # print("coeffs shape", np.shape(coeffs))
+          noise = np.dot(basis, coeffs)
+          # print("noise shape", np.shape(noise))
+        else:
+          noise = 0
 
         import copy
         data_synth = copy.deepcopy(self.synthetic_data)

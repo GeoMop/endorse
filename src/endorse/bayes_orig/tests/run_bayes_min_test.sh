@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+# set -x
 
 TESTNAME=bayes_min_test
 

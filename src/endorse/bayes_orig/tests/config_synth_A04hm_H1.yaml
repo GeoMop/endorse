@@ -3,9 +3,12 @@
 # if run by run_all*, it is set automatically
 run_on_metacentrum: True
 metacentrum:
-  chunks: 1
-  ncpus_per_chunk: 4  # max 20 cpus per node(chunk)
-  walltime: "00:05:00"
+  chunks: 2
+  ncpus_per_chunk: 20  # max 20 cpus per node(chunk)
+  walltime: "18:00:00"  # 18:00:00
+  #chunks: 1
+  #ncpus_per_chunk: 4  # max 20 cpus per node(chunk)
+  #walltime: "00:10:00"
   memory: 12gb
   queue: charon
   name: TSX_bayes
@@ -135,24 +138,10 @@ surrDAMH_parameters:
     - H1 # HGT2-4
     #- H2 # HGT2-3
   conductivity_observe_points:
-    # []
     - V01_cond
-    #- V02_cond
+    - V02_cond
     - H01_cond
-    #- H02_cond
-  noise_model:
-    # "time_grid" and "range" defined automatically
-    # pressure observations
-    - corr_length: 30
-      std: 20
-      cov_type: default
-    # conductivity observations
-    - corr_length: 0
-      std: 2.0
-      cov_type: default
-    - corr_length: 0
-      std: 2.1
-      cov_type: default
+    - H02_cond
 
 geometry:
   # base of the mesh file name
@@ -225,7 +214,6 @@ hm_params:
         # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
 
 measured_data_dir: /storage/liberec3-tul/home/pavel_exner/workspace/endorse/tests/test_data/tsx_measured_data
-#measured_data_dir: /home/paulie/Workspace/endorse/tests/test_data/tsx_measured_data
 copy_files:
   - *config_bayes
   - A04_hm_tmpl.yaml
