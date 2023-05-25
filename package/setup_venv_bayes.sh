@@ -16,7 +16,7 @@ pip install --upgrade pip
 pip -V
 
 # already installed in image: numpy
-pip install matplotlib scipy pandas
+pip install matplotlib scipy pandas statsmodels
 # ruamel keeps comments and order when loading and dumping yaml around
 pip install ruamel.yaml
 
