@@ -230,12 +230,14 @@ class endorse_2Dtest():
         arguments = ['env', '-i']
         arguments.extend(config_dict["_aux_flow_path"].copy())
         output_dir = "output_" + fname
+        arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
         config_dict[param_key]["output_dir"] = output_dir
 
         stdout_path = fname + "_stdout"
         stderr_path = fname + "_stderr"
         if all([os.path.isfile(os.path.join(output_dir, f)) for f in result_files]):
             status = True
+            completed = subprocess.CompletedProcess(args=arguments, returncode=0)
         else:
             common.substitute_placeholders(
                 os.path.join(config_dict["common_files_dir"],
@@ -243,7 +245,6 @@ class endorse_2Dtest():
                 fname + '.yaml',
                 params)
 
-            arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
             print("Running: ", " ".join(arguments))
             with open(stdout_path, "w") as stdout:
                 with open(stderr_path, "w") as stderr:
