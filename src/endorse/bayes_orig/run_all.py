@@ -176,8 +176,10 @@ if __name__ == "__main__":
                 'echo $command', 'eval $command', '\n',
                 'command="' + ' '.join([os.path.join(script_dir,'run_visualize.sh'), '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
                 'echo $command', 'eval $command', '\n',
-                'zip -r samples.zip solver_*',
-                'rm -r solver_*',
+                # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
+                'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
+                # 'rm -r solver_*',
+                'find . -name "solver_*" -print0 | xargs -0 rm -r',
                 'command="' + ' '.join([os.path.join(script_dir,'run_set.sh'), output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
                 'echo $command', 'eval $command'
             ]
