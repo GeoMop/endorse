@@ -1,3 +1,6 @@
+# Mirrors sim_b1_20221115b_V1, with constant Yound modulus
+
+
 # true -> work with pbs on metacentrum
 # false -> run locally, no pbs
 # if run by run_all*, it is set automatically
@@ -5,29 +8,23 @@ run_on_metacentrum: True
 metacentrum:
   chunks: 2
   ncpus_per_chunk: 20  # max 20 cpus per node(chunk)
-  walltime: "14:00:00"  # 18:00:00
-  #chunks: 1
-  #ncpus_per_chunk: 4  # max 20 cpus per node(chunk)
-  #walltime: "00:10:00"
-  memory: 12gb
+  walltime: "18:00:00"  # 18:00:00
+  memory: 8gb
   queue: charon
   name: TSX_bayes
   workspace_rel: ../../workspace
   swrap: /storage/liberec3-tul/home/pavel_exner/workspace/swrap/src/swrap/smpiexec.py
   # swrap: /home/paulie/Workspace/swrap/src/swrap/smpiexec.py
 
+
 collect_only: False
 mesh_only: False
 make_plots: True
 
-synthetic_data:
-  corr_length: 20
-  noise_std: 10
-
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: False
 
-run_best_n_accepted: 2
+run_best_n_accepted: 0
 
 # The flow executable and arguments to use.
 local:
@@ -81,11 +78,11 @@ output_times: &output_times
 surrDAMH_parameters:
   config_file: &config_bayes config_mcmc_bayes.yaml
   parameters:
-#    - name: biot_coefficient
-#      type: normal_to_beta
-#      options:
-#        alfa: 50.0
-#        beta: 200.0
+    - name: biot_coefficient
+      type: normal_to_beta
+      options:
+        alfa: 50.0
+        beta: 200.0
     #- name: bulk_conductivity
       #type: normal_to_lognormal
       #options:
@@ -94,60 +91,57 @@ surrDAMH_parameters:
     - name: storativity
       type: normal_to_lognormal
       options:
-        mu: -15.99749073 # -16.434
-        sigma: 2.0 # 3.0 # 4.6
+        mu: -16.434
+        sigma: 2.0
     - name: young_modulus
       type: normal_to_lognormal
       options:
-        mu: 25.5615372 # 24.817
-        sigma: 2.0 # 4.6
+        mu: 24.817
+        sigma: 2.0
     - name: init_stress_x
       type: normal_to_lognormal
       options:
-        mu: 17.89786378 # 17.622
-        sigma: 2.0 # 4.6
-    - name: init_stress_y
-      type: normal_to_lognormal
-      options:
-        mu: 16.2134058307626
-        sigma: 2.0 # 4.6
+        mu: 17.622
+        sigma: 2.0
+    #- name: init_stress_y
+      #type: normal_to_lognormal
+      #options:
+        #mu: 16.2134058307626
+        #sigma: 2.0
     - name: perm_kr
       type: normal_to_lognormal
       options:
-        mu: -48.20508705 # -48.865
-        sigma: 3.0 # 4.6
+        mu: -48.865
+        sigma: 3.0
     - name: perm_km
       type: normal_to_lognormal
       options:
-        mu: -41.19507454 # -37.064
-        sigma: 3.0 # 4.6
+        mu: -37.064
+        sigma: 3.0
     - name: perm_beta
       type: normal_to_lognormal
       options:
-        mu: -14.81288295 # -14.732
-        sigma: 2.0 # 4.6
+        mu: -14.732
+        sigma: 2.0
     - name: perm_gamma
       type: normal_to_lognormal
       options:
-        mu: -14.4425268 # -15.019
-        sigma: 2.0 # 4.6
+        mu: -15.019
+        sigma: 2.0
 
   observe_points:
-    #- V1 # HGT1-5
+    - V1 # HGT1-5
     #- V2 # HGT1-4
-    - H1 # HGT2-4
+    #- H1 # HGT2-4
     #- H2 # HGT2-3
   conductivity_observe_points:
     []
-    #- V01_cond
-    #- V02_cond
-    #- H01_cond
-    #- H02_cond
+
   noise_model:
     # "time_grid" and "range" defined automatically
     # pressure observations
     - corr_length: 0
-      std: 20
+      std: 100
       cov_type: default
 
 geometry:
@@ -188,7 +182,7 @@ hm_params:
     storativity: 7.290792E-08  # S = rho * g * (beta_s + nu * beta_w)
     # permeability k=6e-22 m2, dyn. viscosity mu=0.001 Pa.s, g=9.81 m.s-2
     bulk_conductivity: 5.886E-15  # K = k * rho * g /mu
-    init_pressure: 275 # 3MPa = p = h*rho*g => h = 300 m
+    init_pressure: 300 # 3MPa = p = h*rho*g => h = 300 m
 
     young_modulus: 60e9
     young_modulus_1: 30e9
