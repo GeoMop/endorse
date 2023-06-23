@@ -70,10 +70,9 @@ pickled_observations: false
 #  expensive: false
 #  kernel_type: 1
 #  no_keep: 5000
-
-surrogate_type: poly
-surr_updater_parameters:
-  max_degree: 5
+#surrogate_type: poly
+#surr_updater_parameters:
+#  max_degree: 5
 
 
 # PARAMETERS OF THE BAYESIAN INVERSE PROBLEM:

@@ -71,6 +71,11 @@ def preprocess(config_dict):
     conf["transformations"] = conf_bayes["parameters"]
     conf["observe_points"] = pressure_obs_points
 
+    if "samplers_list" in conf_bayes.keys():
+        conf["samplers_list"] = conf_bayes["samplers_list"]
+    if "surrogate" in conf_bayes.keys():
+        conf.update(conf_bayes["surrogate"])
+
     for i, par in enumerate(conf_bayes["parameters"]):
         if par["type"] is None:
             conf["problem_parameters"]["prior_mean"][i] = par["options"]["mu"]
