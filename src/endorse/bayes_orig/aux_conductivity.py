@@ -81,8 +81,10 @@ def plot_eps_02():
     gamma = 3e-7
 
     # params
-    a = 4*gamma
-    # np.log10(kmax)/np.log10(k0) ~ 7
+    # kf = np.log10(kmax)/np.log10(k0) ~ 7
+    kf = 7
+    a = 4*gamma / kf
+    print(7/(np.log10(np.e)))
     # b = (np.exp(s) + 1) / np.exp(s)
     def nl_func(b):
         # np.log10(1.1) / 7 = np.log(1.1) / (7 / np.log10(np.e))
@@ -97,7 +99,11 @@ def plot_eps_02():
     # b=-7e7
     # print(a,b)
 
-    x = np.arange(start=0.75*sigma_c, stop=1.25*sigma_c, step=5e5)
+    # a = 2.5071296382476096e-07
+    # b = 72748833.3695458
+    # print(a,b)
+
+    x = np.arange(start=0.75*sigma_c, stop=2.25*sigma_c, step=5e5)
 
     # for gt in gamma_T:
     y = eps_func_02(x, a, b)
@@ -112,6 +118,9 @@ def plot_eps_02():
     ax1.legend()
 
     ax1.axvline(x=sigma_c, ymin=0.0, ymax=1.0, color='k', linewidth=0.25)
+    ax1.text(sigma_c*1.01, 2, r"$[\sigma_c,1.1]$", rotation=0)
+    ax1.axvline(x=b, ymin=0.0, ymax=1.0, color='k', linewidth=0.25)
+    ax1.text(b * 1.01, 10**(kf/2), r"$[b,\sqrt{\frac{K_{max}}{K_0}}]$", rotation=0)
 
     ax1.axhline(y=1.1, xmin=0.0, xmax=1.0, color='k', linewidth=0.25)
     ax1.axhline(y=1e7, xmin=0.0, xmax=1.0, color='k', linewidth=0.25)
