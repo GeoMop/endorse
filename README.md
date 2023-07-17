@@ -30,13 +30,16 @@ See [full documentation](doc/main.md) for the details.
 
 ## Acknowledgement
 
-Development of the advanced simulations and stochastic methdos for EDZ safety calculations and implementation of the software
-was suported by:
-
-![[TAČR logo]](./doc/logo_TACR_zakl.pdf "TAČR logo") 
-
-Technological agency of Czech republic
-in the project no. TK02010118 of the funding programme  Theta.
+<div style="display: flex; align-items: center;">
+  <div style="flex-basis: 100px; padding-right: 20px;">
+    <img src="./doc/logo_TACR_zakl.png" height="100px" alt="TACR logo">
+  </div>
+  <div style="flex-grow: 1;">
+Development of the Endorse software was supported by <br>
+Technological agency of Czech republic <br>
+in the project no. TK02010118 of the funding programme Theta.
+  </div>
+</div>
 
 ### Authors
 
@@ -56,7 +59,7 @@ in the project no. TK02010118 of the funding programme  Theta.
 ### Coauthors
 - **David Flanderka** Flow123d, optimizations, technicalities 
 - **Radek Srb** containerization
-- **Michal Béreš** consultation
+- **Michal Béreš** consultation, tests
 
 ## Developers corner
 
