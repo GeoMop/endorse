@@ -58,16 +58,18 @@ in the project no. TK02010118 of the funding programe  Theta.
 - **Jan Březina** coordination, stochastic transport
 - **Jan Stebel** hydro-mechanical model in Flow123d
 - **Pavel Exner** Bayes inversion for the EDZ
-- **David Flanderka** Flow123d, optimizations, technicalities 
 - **Martin Špetlík** [MLMC](https://pypi.org/project/mlmc/) library and homogenization
-- **Radek Srb** containerization
 
 [** Institute of Geonics **](https://www.ugn.cas.cz/?l=en&p=home)
 
 - **Stanislav Sysala** plasticity model
-- **Simona Bérešová, Michal Béreš** core Bayes inversion library [surrDAMH](https://github.com/dom0015/surrDAMH)
+- **Simona Bérešová** core Bayes inversion library [surrDAMH](https://github.com/dom0015/surrDAMH)
 - **David Horák, Jakub Kružík** [PERMON](http://permon.vsb.cz/) library integration for fracture contacts in Flow123d
 
+## Coauthors
+- **David Flanderka** Flow123d, optimizations, technicalities 
+- **Radek Srb** containerization
+- **Michal Béreš** consultation
 
 ## Developers corner
 
