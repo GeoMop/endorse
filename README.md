@@ -33,7 +33,9 @@ See [full documentation](doc/main.md) for the details.
 Development of the advanced simulations and stochastic methdos for EDZ safety calculations and implementation of the software
 was suported by:
 
-![[TAČR logo]](doc/logo_TACR_zakl.pdf) Technological agency of Czech republic
+![[TAČR logo]](./doc/logo_TACR_zakl.pdf "TAČR logo") 
+
+Technological agency of Czech republic
 in the project no. TK02010118 of the funding programme  Theta.
 
 ### Authors
