@@ -226,9 +226,8 @@ class endorse_2Dtest():
         status = False
         params = config_dict[param_key]
         fname = params["in_file"]
-        # arguments = config_dict["_aux_flow_path"].copy()
         arguments = ['env', '-i']
-        arguments.extend(config_dict["_aux_flow_path"].copy())
+        arguments.extend(config_dict["local"]["flow_executable"].copy())
         output_dir = "output_" + fname
         arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
         config_dict[param_key]["output_dir"] = output_dir

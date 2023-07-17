@@ -2,7 +2,7 @@ import os
 import sys
 import csv
 import time
-import yaml
+import ruamel.yaml as yaml
 import numpy as np
 
 import flow_wrapper
@@ -15,9 +15,9 @@ from surrDAMH.modules.raw_data import RawData
 from surrDAMH.modules.analysis import Analysis
 
 
-def just_run_flow123d(measured_data, params_in, output_dir_in, boreholes_in):
+def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in):
 
-    wrap = flow_wrapper.Wrapper(solver_id=0, output_dir=output_dir_in)
+    wrap = flow_wrapper.Wrapper(solver_id=0, output_dir=output_dir_in, config_dict=config_dict)
 
     for idx, pars in enumerate(params_in):
         wrap.set_parameters(data_par=pars)
@@ -26,7 +26,8 @@ def just_run_flow123d(measured_data, params_in, output_dir_in, boreholes_in):
         print("Flow123d res: ", res)
         if res >= 0:
             print(obs_data)
-            measured_data.plot_comparison(obs_data, wrap.sim.sample_dir, boreholes_in)
+            boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
+            measured_data.plot_comparison(obs_data, wrap.sim.sample_dir, boreholes)
 
         print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
@@ -64,6 +65,42 @@ def get_best_accepted_params(config_dict_in, output_dir_in, count):
     return params
 
 
+def add_output_keys(config_dict):
+    fname = config_dict["hm_params"]["in_file"]
+    fname_output = fname + '_vtk'
+    ftemplate = os.path.join(config_dict["common_files_dir"], fname + '_tmpl.yaml')
+    ftemplate_output = os.path.join(config_dict["common_files_dir"], fname_output + '_tmpl.yaml')
+
+    yaml_handler = yaml.YAML()
+    with open(ftemplate, "r") as f:
+        file_content = f.read()
+    template = yaml_handler.load(file_content)
+
+    flow_fields = [
+       {"field": "conductivity", "interpolation": "P1_average"},
+       "piezo_head_p0",
+       "pressure_p0",
+       "velocity_p0",
+       "region_id"
+    ]
+    template["problem"]["flow_equation"]["flow_equation"]["output"]["fields"] = flow_fields
+
+    mech_fields = [
+        {"field": "displacement", "interpolation": "P1_average"},
+        "stress",
+        "displacement_divergence",
+        "mean_stress",
+        "von_mises_stress",
+        "initial_stress",
+        "region_id"
+    ]
+    template["problem"]["flow_equation"]["mechanics_equation"]["output"]["fields"] = mech_fields
+
+    config_dict["hm_params"]["in_file"] = fname_output
+    with open(ftemplate_output, 'w') as f:
+        yaml_handler.dump(template, f)
+
+
 if __name__ == "__main__":
 
     # default parameters
@@ -84,6 +121,8 @@ if __name__ == "__main__":
 
     # setup paths and directories
     config_dict = setup(output_dir, can_overwrite=False, clean=False)
+    if config_dict["vtk_output"]:
+        add_output_keys(config_dict)
 
     # preprocess(config_dict)
 
@@ -106,4 +145,4 @@ if __name__ == "__main__":
 
     print(boreholes)
     # JUST RUN FLOW123D FOR TESTING
-    just_run_flow123d(md, parameters, output_dir, boreholes)
+    just_run_flow123d(config_dict, md, parameters, output_dir)
