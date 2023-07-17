@@ -28,19 +28,12 @@ with little effort on Windows due to containerization.
 
 See [full documentation](doc/main.md) for the details.
 
+
 ## Acknowledgement
 
-<div style="display: flex; align-items: center;">
-  <div style="flex-basis: 100px; padding-right: 20px;">
-    <img src="./doc/logo_TACR_zakl.png" height="100px" alt="TACR logo">
-  </div>
-  <div style="flex-grow: 1;">
-Development of the Endorse software was supported by <br>
-Technological agency of Czech republic <br>
-in the project no. TK02010118 of the funding programme Theta.
-  </div>
-</div>
 
+| <img src="./doc/logo_TACR_zakl.png" alt="TACR logo" height="80px"> |Development of the Endorse software was supported by <br> Technological agency of Czech republic <br>in the project no. TK02010118 of the funding programme Theta.|
+|:---:|:---|
 ### Authors
 
 **[Technical university of Liberec](www.tul.cz)**
