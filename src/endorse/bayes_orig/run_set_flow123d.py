@@ -15,9 +15,9 @@ from surrDAMH.modules.raw_data import RawData
 from surrDAMH.modules.analysis import Analysis
 
 
-def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in):
+def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solver_id):
 
-    wrap = flow_wrapper.Wrapper(solver_id=0, output_dir=output_dir_in, config_dict=config_dict)
+    wrap = flow_wrapper.Wrapper(solver_id=solver_id, output_dir=output_dir_in, config_dict=config_dict)
 
     for idx, pars in enumerate(params_in):
         wrap.set_parameters(data_par=pars)
@@ -57,6 +57,8 @@ def get_best_accepted_params(config_dict_in, output_dir_in, count):
     param_file = os.path.join(output_dir_in, "best_accepted_params.csv")
     params = []
     with open(param_file, 'w') as file:
+        line = ','.join(analysis_pe.par_names)
+        file.write(line + "\n")
         for sample in fits:
             params.append(sample.parameters())
             line = ','.join([str(s) for s in sample.parameters()])
@@ -107,6 +109,8 @@ if __name__ == "__main__":
     output_dir = None
     csv_data = None
     n_best_params = 0
+    sample_subdir = None
+    solver_id = 0
 
     len_argv = len(sys.argv)
     assert len_argv > 2, "Specify output dir and parameters in csv file!"
@@ -118,11 +122,20 @@ if __name__ == "__main__":
             csv_data = os.path.abspath(sys.argv[2])
         else:
             n_best_params = int(sys.argv[2])
+    if len_argv > 3:
+        if os.path.isabs(sys.argv[3]):
+            sample_subdir = sys.argv[3]
+        else:
+            sample_subdir = os.path.join(output_dir, sys.argv[3])
+    if len_argv > 4:
+        solver_id = sys.argv[4]
 
     # setup paths and directories
     config_dict = setup(output_dir, can_overwrite=False, clean=False)
-    if config_dict["vtk_output"]:
+    if "vtk_output" in config_dict and config_dict["vtk_output"]:
         add_output_keys(config_dict)
+    if sample_subdir is not None:
+        config_dict["sample_subdir"] = sample_subdir
 
     # preprocess(config_dict)
 
@@ -145,4 +158,4 @@ if __name__ == "__main__":
 
     print(boreholes)
     # JUST RUN FLOW123D FOR TESTING
-    just_run_flow123d(config_dict, md, parameters, output_dir)
+    just_run_flow123d(config_dict, md, parameters, output_dir, solver_id)

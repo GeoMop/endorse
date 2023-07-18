@@ -17,7 +17,7 @@ debug=false
 clean=""
 
 #obligatory_param=0
-while getopts ":hdt:n:o:p:c" opt; do
+while getopts ":hdt:n:o:p:x:s:c" opt; do
   case $opt in
     h)
       # help
@@ -26,11 +26,11 @@ while getopts ":hdt:n:o:p:c" opt; do
       echo "       - run:       runs the Bayes inversion (sampling, visualization)"
       echo "                    (PBS, inside container)"
       echo "       - visualize: runs visualization (locally, inside container)"
-      echo "                    valid options: all except 'c', 'p'"
+      echo "                    valid options: n, o"
       echo "       - report:    runs outside container, needs Python and LaTeX"
-      echo "                    valid option: OUTPUT_DIR"
+      echo "                    valid option: o"
       echo "       - set:       runs set of Flow123d samples"
-      echo "                    valid option: PARAMS"
+      echo "                    valid option: o, p, x, s"
       echo "-p ... number of best fits (L2) or csv file with parameters"
       echo "-c ... cleans the <OUTPUT_DIR> at first"
       echo "-d ... only print the container command"
@@ -71,6 +71,14 @@ while getopts ":hdt:n:o:p:c" opt; do
       # params for set of Flowd123d samples
       params=$OPTARG
       ;;
+    x)
+      # params for set of Flowd123d samples
+      sample_subbir=$OPTARG
+      ;;
+    s)
+      # params for set of Flowd123d samples
+      solver_id=$OPTARG
+      ;;
     c)
       # output directory
       clean="clean"
@@ -94,6 +102,8 @@ if [ "$debug" == true ]; then
   echo "set = $set"
   echo "clean = $clean"
   echo "params = $params"
+  echo "sample_subbir = $sample_subbir"
+  echo "solver_id = $solver_id"
 fi
 
 #if [[ $obligatory_param -lt 3 ]]; then
@@ -121,7 +131,7 @@ fi
 
 # set of Flow123d samples
 if [ "$set" == true ]; then
-  command="$venv_command && python3 ${ENDORSE_SRC_BAYES}/run_set_flow123d.py $output_dir $params"
+  command="$venv_command && python3 ${ENDORSE_SRC_BAYES}/run_set_flow123d.py $output_dir $params $sample_subbir $solver_id"
 fi
 
 # report

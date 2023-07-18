@@ -37,8 +37,12 @@ class endorse_2Dtest():
 
     def __init__(self, config, clean):
 
-        # TODO: set work dir
-        self.work_dir = config["work_dir"]
+        if "sample_subdir" in config:
+            self.work_dir = config["sample_subdir"]
+            print(config["sample_subdir"])
+        else:
+            self.work_dir = config["work_dir"]
+            config[self.work_dir]
         self.clean = clean
         self._config = config
         self.sample_dir = ""
@@ -72,7 +76,7 @@ class endorse_2Dtest():
 
         # create sample dir
         self.sample_counter = self.sample_counter + 1
-        self.sample_dir = os.path.join(config_dict["work_dir"],
+        self.sample_dir = os.path.join(self.work_dir,
                                        "solver_" + str(config_dict["solver_id"]).zfill(2) +
                                        "_sample_" + str(self.sample_counter).zfill(3))
         os.makedirs(self.sample_dir, mode=0o775, exist_ok=True)
