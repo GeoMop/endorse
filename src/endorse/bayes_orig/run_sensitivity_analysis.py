@@ -50,7 +50,7 @@ def prepare_sets_of_params(config_dict_in, output_dir_in, n_processes, count):
     analysis_pe = Analysis(config=config_bayes, raw_data=raw_data_filtered)
     fits, norms = analysis_pe.find_n_best_fits(observations, count=count, norm="L2")
 
-    bin = np.int(count/n_processes)
+    bin = int(count/n_processes)
     rest_bin = count - n_processes*bin
     bins = []
     for i in range(n_processes):
@@ -80,32 +80,39 @@ def prepare_sets_of_params(config_dict_in, output_dir_in, n_processes, count):
 def prepare_pbs_scripts(sens_config_dict, output_dir, np):
     endorse_root = sens_config_dict["rep_dir"]
     met = sens_config_dict["metacentrum"]
-    common_lines = [
-        '#!/bin/bash',
-        '#PBS -S /bin/bash',
-        '#PBS -l select=' + str(met["chunks"]) + ':ncpus=' + str(met["ncpus_per_chunk"]) + ':mem=' + met["memory"],
-        '#PBS -l place=scatter',
-        '#PBS -l walltime=' + str(met["walltime"]),
-        '#PBS -q ' + met["queue"],
-        '#PBS -N ' + met["name"],
-        '#PBS -o ' + os.path.join(output_dir, met["name"] + '.out'),
-        '#PBS -e ' + os.path.join(output_dir, met["name"] + '.err'),
-        '\n',
-        'set -x',
-        '\n# absolute path to output_dir',
-        'output_dir="' + output_dir + '"',
-        '\n',
-        'sing_script="' + met["swrap"] + '"',
-        '\n',
-        'image="' + os.path.join(endorse_root, 'endorse.sif') + '"',
-        'cd $output_dir'
-    ]
 
+    def create_common_lines(id):
+        name = met["name"] + "_" + id
+        common_lines = [
+            '#!/bin/bash',
+            '#PBS -S /bin/bash',
+            # '#PBS -l select=' + str(met["chunks"]) + ':ncpus=' + str(met["ncpus_per_chunk"]) + ':mem=' + met["memory"],
+            '#PBS -l select=1:ncpus=1:mem=' + met["memory"],
+            # '#PBS -l place=scatter',
+            '#PBS -l walltime=' + str(met["walltime"]),
+            '#PBS -q ' + met["queue"],
+            '#PBS -N ' + name,
+            '#PBS -o ' + os.path.join(output_dir, name + '.out'),
+            '#PBS -e ' + os.path.join(output_dir, name + '.err'),
+            '\n',
+            'set -x',
+            '\n# absolute path to output_dir',
+            'output_dir="' + output_dir + '"',
+            '\n',
+            'sing_script="' + met["swrap"] + '"',
+            '\n',
+            'image="' + os.path.join(endorse_root, 'endorse.sif') + '"',
+            'cd $output_dir'
+        ]
+        return common_lines
+
+    pbs_file_list = []
     for n in range(np):
         id = str(n).zfill(2)
         csv_file = os.path.join(output_dir, "sensitivity", "params_" + id + ".csv")
         sample_subdir = os.path.join(output_dir, "sensitivity", "samples_" + id)
         # prepare PBS script
+        common_lines = create_common_lines(id)
         lines = [
             *common_lines,
             '\n# finally gather the full command',
@@ -116,8 +123,12 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
             # 'find . -name "solver_*" -print0 | xargs -0 rm -r',
             'echo "FINISHED"'
         ]
-        with open(os.path.join(output_dir, "sensitivity", "pbs_job_" + id + ".sh"), 'w') as f:
+        pbs_file = os.path.join(output_dir, "sensitivity", "pbs_job_" + id + ".sh")
+        with open(pbs_file, 'w') as f:
             f.write('\n'.join(lines))
+        pbs_file_list.append(pbs_file)
+
+    return pbs_file_list
 
 
 if __name__ == "__main__":
@@ -149,7 +160,11 @@ if __name__ == "__main__":
 
     prepare_sets_of_params(config_dict, output_dir, n_processes, n_best_params)
 
-    prepare_pbs_scripts(sens_config_dict, output_dir, n_processes)
+    pbs_file_list = prepare_pbs_scripts(sens_config_dict, output_dir, n_processes)
+
+    # for pbs in pbs_file_list:
+    #     os.system("qsub " + pbs)
+
     # if csv_data:
     #     print("Reading parameters from CSV: ", csv_data)
     #     with open(csv_data, newline='') as csvfile:

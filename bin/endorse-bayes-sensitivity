@@ -81,7 +81,7 @@ echo "${final_command}"
 if [ "$debug" == false ]; then
   eval "${final_command}"
 
-#  if [ "$run" == true ]; then
-#    qsub "${output_dir}/sensitivity_pbs_job.sh"
-#  fi
+  cd ${output_dir}
+  find sensitivity -type f -name "pbs_job*" -print0 | xargs -0 -I {} echo "{}"
+  find sensitivity -type f -name "pbs_job*" -print0 | xargs -0 -I {} qsub "{}"
 fi
