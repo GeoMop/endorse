@@ -1,6 +1,7 @@
 import os
 import sys
-import csv
+# import csv
+import pandas as pd
 import time
 import ruamel.yaml as yaml
 import numpy as np
@@ -24,10 +25,10 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         t = time.time()
         res, obs_data = wrap.get_observations()
         print("Flow123d res: ", res)
-        if res >= 0:
-            print(obs_data)
-            boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
-            measured_data.plot_comparison(obs_data, wrap.sim.sample_dir, boreholes)
+        #if res >= 0:
+            #print(obs_data)
+            #boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
+            #measured_data.plot_comparison(obs_data, wrap.sim.sample_dir, boreholes)
 
         print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
@@ -148,14 +149,18 @@ if __name__ == "__main__":
 
     if csv_data:
         print("Reading parameters from CSV: ", csv_data)
-        with open(csv_data, newline='') as csvfile:
-            parameters = list(csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC))
+        pd_samples = pd.read_csv(csv_data, header=0)
+        parameters = np.array(pd_samples.iloc[:,:])
+        #with open(csv_data, newline='') as csvfile:
+            #csvreader = csv.reader(csvfile, delimiter=',', quoting=csv.QUOTE_NONNUMERIC)
+            #next(csvreader)
+            #parameters = list(csvreader)
     else:
         print("Getting " + str(n_best_params) + " best parameters.")
         parameters = get_best_accepted_params(config_dict, output_dir, n_best_params)
 
-    print(parameters)
+    # print(parameters)
 
-    print(boreholes)
+    # print(boreholes)
     # JUST RUN FLOW123D FOR TESTING
     just_run_flow123d(config_dict, md, parameters, output_dir, solver_id)

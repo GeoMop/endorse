@@ -42,7 +42,6 @@ class endorse_2Dtest():
             print(config["sample_subdir"])
         else:
             self.work_dir = config["work_dir"]
-            config[self.work_dir]
         self.clean = clean
         self._config = config
         self.sample_dir = ""

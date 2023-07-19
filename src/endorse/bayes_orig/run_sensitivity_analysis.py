@@ -92,8 +92,8 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
             '#PBS -l walltime=' + str(met["walltime"]),
             '#PBS -q ' + met["queue"],
             '#PBS -N ' + name,
-            '#PBS -o ' + os.path.join(output_dir, name + '.out'),
-            '#PBS -e ' + os.path.join(output_dir, name + '.err'),
+            '#PBS -o ' + os.path.join(output_dir, "sensitivity", name + '.out'),
+            '#PBS -e ' + os.path.join(output_dir, "sensitivity", name + '.err'),
             '\n',
             'set -x',
             '\n# absolute path to output_dir',
@@ -116,7 +116,7 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
         lines = [
             *common_lines,
             '\n# finally gather the full command',
-            '\n.' + os.path.join(endorse_root, "bin", "endorse-bayes") + " "
+            '\n' + os.path.join(endorse_root, "bin", "endorse-bayes") + " "
                 + ' '.join(["-t", "set", "-o", output_dir, "-p", csv_file, "-x", sample_subdir, "-s", id]),
             # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
             # 'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
