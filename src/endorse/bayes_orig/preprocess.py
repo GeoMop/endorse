@@ -71,6 +71,8 @@ def preprocess(config_dict):
     conf["transformations"] = conf_bayes["parameters"]
     conf["observe_points"] = pressure_obs_points
 
+    if "initial_sample_type" in conf_bayes.keys():
+        conf["initial_sample_type"] = conf_bayes["initial_sample_type"]
     if "samplers_list" in conf_bayes.keys():
         conf["samplers_list"] = conf_bayes["samplers_list"]
     if "surrogate" in conf_bayes.keys():
