@@ -30,8 +30,17 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
             #boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
             #measured_data.plot_comparison(obs_data, wrap.sim.sample_dir, boreholes)
 
-        print("LEN:", len(obs_data))
+        # print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
+
+        # write output
+        if config_dict["sample_subdir"] is not None:
+            output_file = os.path.join(config_dict["sample_subdir"], 'output_' + str(solver_id) + '.csv')
+        else:
+            output_file = os.path.join(output_dir_in, 'output_' + str(solver_id) + '.csv')
+        with open(output_file, 'a') as file:
+            line = str(idx) + ',' + ','.join(obs_data)
+            file.write(line + "\n")
         # if idx == 1:
         #     exit(0)
 
