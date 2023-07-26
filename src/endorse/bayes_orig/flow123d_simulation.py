@@ -116,6 +116,16 @@ class endorse_2Dtest():
             # raise Exception("HM model failed.")
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
+            # still try collect results
+            if os.path.join(config_dict["hm_params"]["output_dir"], "flow_observe.yaml"):
+                try:
+                    collected_values = self.collect_results(config_dict)
+                    print("Sample results collected.")
+                    return 3, collected_values  # tag, value_list
+                except:
+                    print("Collecting sample results failed:")
+                    traceback.print_exc()
+                    return -3, []
             return -1, []  # tag, value_list
         print("Running Flow123d - HM...finished")
 
