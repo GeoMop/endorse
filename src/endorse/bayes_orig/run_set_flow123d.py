@@ -39,7 +39,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         else:
             output_file = os.path.join(output_dir_in, 'output_' + str(solver_id) + '.csv')
         with open(output_file, 'a') as file:
-            line = str(idx) + ',' + ','.join(obs_data)
+            line = str(idx) + ',' + ','.join([str(s) for s in obs_data])
             file.write(line + "\n")
         # if idx == 1:
         #     exit(0)
