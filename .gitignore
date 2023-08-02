@@ -56,6 +56,9 @@ experiments/repository-model/tmp/**
 # kate swap
 *.kate-swp
 
+venv
+venv_bayes
+
 tests/test_data/*_fields
 tests/test_data/*_fields.*
 tests/test_data/*_balance.*
@@ -78,3 +81,6 @@ metodika_vypoctu_indikatoru/*.blg
 metodika_vypoctu_indikatoru/*.log
 metodika_vypoctu_indikatoru/*.out
 metodika_vypoctu_indikatoru/main.pdf
+
+endorse.sif
+
