@@ -44,8 +44,9 @@ class endorse_2Dtest():
             self.work_dir = config["work_dir"]
         self.clean = clean
         self._config = config
-        self.sample_dir = ""
         self.sample_counter = -1
+        self.sample_dir = ""
+        self.sample_output_dir = ""
 
     def set_parameters(self, data_par):
         param_list = self._config["surrDAMH_parameters"]["parameters"]
@@ -81,6 +82,9 @@ class endorse_2Dtest():
         os.makedirs(self.sample_dir, mode=0o775, exist_ok=True)
         os.chdir(self.sample_dir)
 
+        param_key = 'hm_params'
+        self.sample_output_dir = "output_" + config_dict[param_key]["in_file"]
+
         print("=========================== RUNNING CALCULATION " +
               "solver {} ".format(config_dict["solver_id"]).zfill(2) +
               "sample {} ===========================".format(self.sample_counter).zfill(3),
@@ -106,7 +110,7 @@ class endorse_2Dtest():
 
         # endorse_2Dtest.prepare_hm_input(config_dict)
         print("Running Flow123d - HM...")
-        hm_succeed = self.call_flow(config_dict, 'hm_params', result_files=["flow_observe.yaml"])
+        hm_succeed = self.call_flow(config_dict, param_key, result_files=["flow_observe.yaml"])
 
         # params = config_dict.tsx_hm_model.hm_params
         # template = os.path.join(flow123d_inputs_path, params.input_template)
@@ -117,7 +121,7 @@ class endorse_2Dtest():
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
             # still try collect results
-            if os.path.join(config_dict["hm_params"]["output_dir"], "flow_observe.yaml"):
+            if os.path.join(self.sample_output_dir, "flow_observe.yaml"):
                 try:
                     collected_values = self.collect_results(config_dict)
                     print("Sample results collected.")
@@ -168,7 +172,6 @@ class endorse_2Dtest():
     #         raise Exception("Data out of given range [max].")
 
     def collect_results(self, config_dict):
-        output_dir = config_dict["hm_params"]["output_dir"]
         pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
         cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
 
@@ -176,7 +179,7 @@ class endorse_2Dtest():
 
         # the times defined in input
         times = np.array(generate_time_axis(config_dict))
-        with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
+        with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
             loaded_yaml = yaml.load(f, yaml.CSafeLoader)
 
             vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
@@ -196,15 +199,15 @@ class endorse_2Dtest():
     def get_from_observe(self, observe_dict, point_names, field_name, select_times=None):
         points = observe_dict['points']
         all_point_names = [p["name"] for p in points]
-        print('all_point_names', all_point_names)
-        print('point_names', point_names)
+        # print('all_point_names', all_point_names)
+        # print('point_names', point_names)
         points2collect_indices = []
         for p2c in point_names:
             tmp = [i for i, pn in enumerate(all_point_names) if pn == p2c]
             assert len(tmp) == 1
             points2collect_indices.append(tmp[0])
 
-        print("Collecting results for observe points: ", point_names)
+        # print("Collecting results for observe points: ", point_names)
         data = observe_dict['data']
         data_values = np.array([d[field_name] for d in data])
         values = data_values[:, points2collect_indices]
@@ -241,13 +244,11 @@ class endorse_2Dtest():
         fname = params["in_file"]
         arguments = ['env', '-i']
         arguments.extend(config_dict["local"]["flow_executable"].copy())
-        output_dir = "output_" + fname
-        arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
-        config_dict[param_key]["output_dir"] = output_dir
+        arguments.extend(['--output_dir', self.sample_output_dir, fname + ".yaml"])
 
         stdout_path = fname + "_stdout"
         stderr_path = fname + "_stderr"
-        if all([os.path.isfile(os.path.join(output_dir, f)) for f in result_files]):
+        if all([os.path.isfile(os.path.join(self.sample_output_dir, f)) for f in result_files]):
             status = True
             completed = subprocess.CompletedProcess(args=arguments, returncode=0)
         else:
@@ -265,7 +266,7 @@ class endorse_2Dtest():
             status = completed.returncode == 0
 
         if status:
-            fo = common.flow_call.FlowOutput(completed, stdout_path, stderr_path, output_dir)
+            fo = common.flow_call.FlowOutput(completed, stdout_path, stderr_path, self.sample_output_dir)
             conv_check = fo.check_conv_reasons()
             print("converged: ", conv_check)
             status = conv_check >= 0
@@ -476,10 +477,9 @@ class endorse_2Dtest():
 
     def observe_time_plot(self, config_dict):
 
-        output_dir = config_dict["hm_params"]["output_dir"]
         pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
 
-        with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
+        with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
             loaded_yaml = yaml.load(f, yaml.CSafeLoader)
             data = loaded_yaml['data']
             times = np.array([d["time"] for d in data]).transpose()
