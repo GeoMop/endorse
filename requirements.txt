@@ -1,3 +1,7 @@
+# specific for endorse-experiment
+salib
+
+# endorse
 pyvista
 pyyaml
 pyyaml-include
