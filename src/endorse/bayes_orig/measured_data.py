@@ -291,6 +291,13 @@ class MeasuredData:
           # Generate uncorrelated random coefficients
           np.random.seed(2)
           coeffs = np.random.normal(size=Nb, scale=std)
+          # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
+          scaled_std = std / np.sqrt(Nb)
+          print("N", N, "Nb", Nb, "std", scaled_std)
+          coeffs = np.random.normal(size=Nb, scale=scaled_std)
+          # coeffs = np.random.normal(loc=0, size=Nb, scale=1)
+          # print("mean", np.mean(coeffs))
+          # print("std", np.sqrt(np.var(coeffs)))
           # print("coeffs", coeffs)
 
           # Compute noise
@@ -300,6 +307,43 @@ class MeasuredData:
           # print("noise shape", np.shape(noise))
         else:
           noise = 0
+        # print("noise", noise)
+
+        if plot:
+            fig, ax1 = plt.subplots()
+            ax1.set_xlabel('time [d]')
+            ax1.set_ylabel('noise [m]')
+            ax1.plot(1 / len(noise) * 365 * np.arange(0, len(noise)), noise, label="noise", linestyle='solid')
+            fig.tight_layout()
+            fig_file = os.path.join(self._config["work_dir"], plotname + ".pdf")
+            plt.savefig(fig_file)
+
+            from scipy.stats import norm
+            fig, ax1 = plt.subplots()
+            ax1.set_xlabel('time [d]')
+            ax1.set_ylabel('noise [m]')
+            ax1.hist(noise, bins=50, density=True, alpha=0.6, color='b')
+            xx = np.linspace(-3*std, 3*std, 100)
+            pp = norm.pdf(xx, 0, std)
+            ax1.plot(xx, pp, 'k', linewidth=2)
+            fig.tight_layout()
+            fig_file = os.path.join(self._config["work_dir"], plotname + "_hist.pdf")
+            plt.savefig(fig_file)
+
+        return noise
+
+    def generate_synthetic_samples(self, boreholes):
+        times = np.array(generate_time_axis(self._config))
+
+        L = 20.0/365     # correlation length
+        noise_std = 20.0 # target std of the synthetic noise
+
+        # noise will be applied at the same time steps as the underlying data
+        N = len(times)
+
+        seed = 2
+        noise = self.generate_noise(N, noise_std, L, seed=seed, plot=True, plotname="noise")
+        self.generate_noise(1000, noise_std, L, seed=seed, plot=True, plotname="noise_fine")
 
         import copy
         data_synth = copy.deepcopy(self.synthetic_data)
@@ -339,6 +383,7 @@ class MeasuredData:
         plt.savefig(fig_file)
 
         values.extend(self.conductivity_measurement(cond_boreholes, times))
+        # exit(0)
         return times, values
 
     def plot_data_set(self, bnames, data, axes, linestyle):

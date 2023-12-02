@@ -19,55 +19,40 @@ with little effort on Windows due to containerization.
 
 ## Quick start
 
-1. Download latest version of the sources as a ZIP package.
-2. Extract to directory of your choice.
-3. Setup the computational container with proper environment, using the `bin/endorse-setup` tool.
-3. Create a work directory on a filesystem shared between computational nodes.
+1. Download the latest version of the sources as a ZIP package.
+2. Extract to the directory of your choice.
+3. Set up the computational container with the proper environment using the `bin/endorse-setup` tool.
+3. Create a working directory on a filesystem shared between computational nodes.
 4. Prepare main configuration files.
-5. Run Bayes inversion (`bin/endorse-bayes`) or stochastic transport (`endorse-mlmc`).
+5. Run Bayes inversion (`bin/endorse-bayes`) or stochastic transport (`bin/endorse-mlmc`).
 
 See [full documentation](doc/main.md) for the details.
 
 
-of thefor the rock properties from the pore pressure measurements during 
-the excavation. excavation damage zone (EDZ) properties and stochastic contaminant transport 
-in order to provide stochastic prediction of EDZ safety indicators. 
-
-The safety indicator is defined as the 95% quantile of the contaminant concentration on the repository model boundary over the whole simulation period. 
-The contaminant is modeled without radioactive decay as a inert tracer. The multilevel Monte Carlo method is 
-used to parform stochastic transport simulation in reasonable time. Random inputs to the transport model 
-include: EDZ parameters, random hidden fractures, (random leakage times for containers), perturbations of the rock properties.
-
-The EDZ properties are obtained from the Bayesian inversion, using data from pore pressure min-by experiment.
-The Bayesian inversion provides posterior joined probability density for the EDZ properties (porosity, permability) as heterogenous fields.
-That means the properties are described as correlated random variables. 
-
-
 ## Acknowledgement
 
-Development of the advanced simulations and stochastic methdos for EDZ safety calculations and implementation of the software
-was suported by:
 
-![[TAČR logo]](logo_TACR_zakl.pdf) Technological agency of Czech republic
-in the project no. TK02010118 of the funding programe  Theta.
-
+| <img src="./doc/logo_TACR_zakl.png" alt="TACR logo" height="80px"> |Development of the Endorse software was supported by <br> Technological agency of Czech republic <br>in the project no. TK02010118 of the funding programme Theta.|
+|:---:|:---|
 ### Authors
 
-[** Technical university of Liberec **](www.tul.cz)
+**[Technical university of Liberec](www.tul.cz)**
 
 - **Jan Březina** coordination, stochastic transport
 - **Jan Stebel** hydro-mechanical model in Flow123d
 - **Pavel Exner** Bayes inversion for the EDZ
-- **David Flanderka** Flow123d, optimizations, technicalities 
 - **Martin Špetlík** [MLMC](https://pypi.org/project/mlmc/) library and homogenization
-- **Radek Srb** containerization
 
-[** Institute of Geonics **](https://www.ugn.cas.cz/?l=en&p=home)
+**[Institute of Geonics](https://www.ugn.cas.cz/?l=en&p=home)**
 
 - **Stanislav Sysala** plasticity model
-- **Simona Bérešová, Michal Béreš** core Bayes inversion library [surrDAMH](https://github.com/dom0015/surrDAMH)
+- **Simona Bérešová** core Bayes inversion library [surrDAMH](https://github.com/dom0015/surrDAMH)
 - **David Horák, Jakub Kružík** [PERMON](http://permon.vsb.cz/) library integration for fracture contacts in Flow123d
 
+### Coauthors
+- **David Flanderka** Flow123d, optimizations, technicalities 
+- **Radek Srb** containerization
+- **Michal Béreš** consultation, tests
 
 ## Developers corner
 
