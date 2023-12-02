@@ -1,4 +1,18 @@
-# Endorse - EDZ safety indicator simulations
+# Endorse - experiment
+
+This repository is work in progress fork for
+work on the Bukov 2 mine-by experiment.
+
+Purpose is to quickly perform sensitivity analysis
+of the HM prediction of pore pressures with respect to 
+main input parameters.
+
+The entrypoints are:
+- tests/Bukov2 ... tests of SALib and other specific tools
+... 
+
+
+## original Endorse readme for reference
 
 The software implements specialized safety calculations for the excavation disturbed zone (EDZ)
 of a deep repository of radioactive waste. It consists of two parts: 
