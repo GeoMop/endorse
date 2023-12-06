@@ -8,7 +8,10 @@ of the HM prediction of pore pressures with respect to
 main input parameters.
 
 The entrypoints are:
+- src/endorse/Bukov2/*
+- src/endorse/sa ... more consistent SA interface
 - tests/Bukov2 ... tests of SALib and other specific tools
+
 ... 
 
 

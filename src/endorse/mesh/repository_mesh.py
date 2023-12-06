@@ -100,7 +100,6 @@ def make_access_tunnels(factory, geom_dict):
         laterals.append(lateral_tunnel_1.copy().translate([0, borehole_distance * i_shift, 0]))
         laterals.append(lateral_tunnel_1.copy().translate([0, -borehole_distance * i_shift, 0]))
 
-
     return main_tunnel_cylinder.fuse(*laterals)
 
 def boreholes_full(factory, geom_dict):
