@@ -1,0 +1,141 @@
+# repository_mesh.py, 22/11/05 22:45
+# about 4M elements at time about 4 minutes
+# Seems to be on the edge of what is tracktable while providing full resolution of EDZ without anisotropic mesh.
+
+# base of the mesh file name
+mesh_name: random_fractures
+
+mesh:
+    # mesh step on fractures
+    fracture_mesh_step: 10
+    # mesh step on outer boundary
+    boundary_mesh_step: 50
+    # mesh step on outer boundary of EDZ (just around boreholes right now)
+    edz_mesh_step: 1
+    # mesh step on inner boreholes
+    boreholes_mesh_step: 0.3   # haxagon boreholes
+    #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+    main_tunnel_mesh_step: 2
+
+geometry:
+  # Coordinate system
+  # X - in direction of storage boreholes
+  # Y - perpendicular horizontal
+  # Z - vertical
+  # origin: floor of the lateral tunnel, center, interface with center borehole.
+
+
+  # depth of the center of the box and of the coordinate system
+  center_depth: 5000
+  # x,y,z dimension
+  box_dimensions: [70, 60, 60]
+  # mesh step on fractures
+  fracture_mesh_step: 10
+  # upper limit on the number of fractures
+  n_frac_limit: 3
+  # mesh step on outer boundary
+  boundary_mesh_step: 30
+  # mesh step on outer boundary of EDZ (just around boreholes right now)
+  edz_mesh_step: 0.4
+  # mesh step on inner boreholes
+  boreholes_mesh_step: 0.6   # haxagon boreholes
+  #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+  main_tunnel_mesh_step: 3
+  # Radious of outer boundary of EDZ (just for mesh step field)
+  edz_radius: 3
+
+  # Main tunnel - main access tunnel
+  main_tunnel:
+      # radius of the ceiling/roof
+      radius: 3.5
+      # height of side walls (tunnel height minus roof)
+      height: 4.5
+      # tunnel width
+      width: 4
+      # tunnel length
+      length: 80
+
+  # Lateral short tunnels perpendicular to the main tunnel
+  # one ofr every storage borehole
+  lateral_tunnel:
+      radius: 3.5
+      height: 4.5
+      width: 4
+      length: 10
+
+  # Storage boreholes
+  borehole:
+      # Total number of side boreoholes (one side) resolved and homogenized.
+      n_sides: 0
+      # Number of explicit side boreholes (addition to the central source borehole)
+      n_explicit: 0
+      # Boreholes radius
+      radius: 1.1
+      # Boreholes length
+      length: 300
+      # Vertical position of the borehole center.
+      z_pos: 1.1
+      # horizontal gaps between boreholes; (2 * n_side_boreholes) * borehole_distance should be < main_tunnel.length
+      # not checked in the code
+      y_spacing: 25
+
+  containers:
+      # length of horizontal container [m]
+      length: 4
+      # distance between containers, empty, backfill [m]
+      spacing: 10
+      # number of containers (automaticaly reduced to fit into 'main_tunnel_length')
+      n_containers: 6
+      # position of the first container from the beginning of the tunnel (interface tunnel-
+      offset: 4
+
+
+  # shifting the mesh to real in-situ coordinates
+  # TODO: do not shift the computation mesh but the input data to the local coordinate system
+  #shift_vec: [ -682421.2022, -1129264.115, 50]
+  shift_vec: [0, 0, 0]
+
+  fracture_stats:
+      # SKB data
+      -   name: NS
+          trend: 292
+          plunge: 1
+          concentration: 17.8
+          power: 2.5
+#          r_min: 0.038
+          r_min: 1
+          r_max: 564
+          p_32: 0.094
+      -   name: NE
+          trend: 326
+          plunge: 2
+          concentration: 14.3
+          power: 2.7
+          r_min: 1
+          r_max: 564
+          p_32: 0.163
+      -   name: NW
+          trend: 60
+          plunge: 6
+          concentration: 12.9
+          power: 3.1
+          r_min: 1
+          r_max: 564
+          p_32: 0.098
+      -   name: EW
+          trend: 15
+          plunge: 2
+          concentration: 14.0
+          power: 3.1
+          r_min: 1
+          r_max: 564
+          p_32: 0.039
+      -   name: HZ
+          trend: 5
+          plunge: 86
+          concentration: 15.2
+          power: 2.38
+          r_min: 1
+          r_max: 564
+          p_32: 0.141
+

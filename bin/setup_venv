@@ -2,6 +2,8 @@
 # This would create a development virtual environment
 # - uses requirements.txt
 # - install endorse-experiment itself in development mode.
+set -x
+
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
@@ -10,6 +12,15 @@ ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
 cd ${ENDORSE_SRC_ROOT}
 rm -r venv
 virtualenv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+venv_pip=${ENDORSE_SRC_ROOT}/venv/bin/pip
+#source venv/bin/activate
+
+
+$venv_pip install -r requirements.txt
+$venv_pip install -e submodules/bgem
+
+# TODO simplyfy dependency and submodules
+# attrs somehow was broken after gmsh explicit installation, must force its reinstalation
+
+$venv_pip install --force-reinstall --upgrade attrs
+$venv_pip install -e .
