@@ -21,7 +21,7 @@ def read_sensitivity_config(work_dir):
     sens_config_file = os.path.join(work_dir, "config_sensitivity.yaml")
 
     if not os.path.exists(sens_config_file):
-        raise Exception("Main configuration file 'config.yaml' not found in workdir.")
+        raise Exception("Main configuration file 'config_sensitivity.yaml' not found in workdir.")
 
     # read config file
     with open(sens_config_file, "r") as f:
@@ -30,6 +30,7 @@ def read_sensitivity_config(work_dir):
     sens_config_dict["script_dir"] = os.path.dirname(os.path.abspath(__file__))
     sens_config_dict["rep_dir"] = os.path.abspath(os.path.join(sens_config_dict["script_dir"], "../../.."))
     return sens_config_dict
+
 
 def prepare_sets_of_params(config_dict_in, output_dir_in, n_processes, n_best_fits):
     no_parameters = len(config_dict_in['surrDAMH_parameters']['parameters'])
@@ -94,6 +95,7 @@ def prepare_sets_of_params(config_dict_in, output_dir_in, n_processes, n_best_fi
                     file.write(line + "\n")
 
         offset = offset + b
+
 
 def prepare_pbs_scripts(sens_config_dict, output_dir, np):
     endorse_root = sens_config_dict["rep_dir"]

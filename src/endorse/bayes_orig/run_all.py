@@ -3,8 +3,8 @@ import sys
 import shutil
 import yaml
 
-import aux_functions
-from preprocess import preprocess
+from endorse.bayes_orig import aux_functions
+from endorse.bayes_orig.preprocess import preprocess
 
 from surrDAMH.configuration import Configuration
 

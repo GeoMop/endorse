@@ -3,9 +3,9 @@ import sys
 import ruamel.yaml as yaml
 import numpy as np
 
-import flow_wrapper
-from measured_data import MeasuredData
-from mesh_factory import MeshFactory
+from endorse.bayes_orig import flow_wrapper
+from endorse.bayes_orig.measured_data import MeasuredData
+from endorse.bayes_orig.mesh_factory import MeshFactory
 
 
 def preprocess(config_dict):
