@@ -12,20 +12,20 @@ source venv_bayes/bin/activate
 python3 --version
 which python
 which pip
-pip install --upgrade pip
+
+pip3 install wheel
+pip3 install --upgrade pip
+python3 -m pip install -r requirements.txt
 pip -V
 
 # already installed in image: numpy
-pip install matplotlib scipy pandas statsmodels
+pip install pandas statsmodels
 # ruamel keeps comments and order when loading and dumping yaml around
 pip install ruamel.yaml
 
 # if not included in docker image
 # pip install mpi4py
-# if we want to install our own git submodules
-# pip install -e bgem
-pip install pybind11 # for bih
-pip install attrs # for bgem
+
 pip install -e submodules/bgem
 pip install -e submodules/surrDAMH
 pip install -e submodules/redis-cache
