@@ -43,13 +43,16 @@ geometry:
   main_tunnel_mesh_step: 3
   # Radious of outer boundary of EDZ (just for mesh step field)
   edz_radius: 3
+  # Center distance of laterlas
+  laterals_distance: 10
 
   # Main tunnel - main access tunnel
   main_tunnel:
+      vertical_side: 2.800
       # radius of the ceiling/roof
-      radius: 3.5
+      #radius: 3.5
       # height of side walls (tunnel height minus roof)
-      height: 4.5
+      height: 4
       # tunnel width
       width: 4
       # tunnel length
@@ -58,8 +61,9 @@ geometry:
   # Lateral short tunnels perpendicular to the main tunnel
   # one ofr every storage borehole
   lateral_tunnel:
-      radius: 3.5
-      height: 4.5
+      vertical_side: 2.800
+      #radius: 3.5
+      height: 4
       width: 4
       length: 10
 
