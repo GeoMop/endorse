@@ -14,6 +14,10 @@ tox
 tox-gh-actions
 importlib-resources
 
+# bayes
+statsmodels
+ruamel.yaml     # ruamel keeps comments and order when loading and dumping yaml around
+
 #numpy==1.21.4
 PyQt5==5.15.6
 #vtk==9.1.0
