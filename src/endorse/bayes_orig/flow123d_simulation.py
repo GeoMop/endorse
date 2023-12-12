@@ -3,6 +3,7 @@ import subprocess
 import time
 
 import numpy as np
+import pyvista as pv
 import itertools
 import collections
 import shutil
@@ -121,7 +122,7 @@ class endorse_2Dtest():
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
             # still try collect results
-            if os.path.join(self.sample_output_dir, "flow_observe.yaml"):
+            if os.path.join(self.sample_output_dir, "flow.pvd"):
                 try:
                     collected_values = self.collect_results(config_dict)
                     print("Sample results collected.")
@@ -171,30 +172,48 @@ class endorse_2Dtest():
     #     if max > maximum:
     #         raise Exception("Data out of given range [max].")
 
+    # def collect_results(self, config_dict):
+    #     pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
+    #     cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
+    #
+    #     values = np.empty((0,))
+    #
+    #     # the times defined in input
+    #     times = np.array(generate_time_axis(config_dict))
+    #     with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
+    #         loaded_yaml = yaml.load(f, yaml.CSafeLoader)
+    #
+    #         vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
+    #         values = np.concatenate((values, vals), axis=None)
+    #
+    #         vals = self.get_from_observe(loaded_yaml, cond_points2collect, 'conductivity', times[-1])
+    #         vals = np.log10(vals)  # consider log10!
+    #         values = np.concatenate((values, vals), axis=None)
+    #
+    #     if config_dict["clean_sample_dir"]:
+    #         shutil.rmtree(self.sample_dir)
+    #
+    #     # flatten to format: [Point0_all_all_times, Point1_all_all_times, Point2_all_all_times, ...]
+    #     res = values.flatten()
+    #     return res
+
     def collect_results(self, config_dict):
-        pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
-        cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
+        # Load the PVD file
+        pvd_file_path = os.path.join(self.sample_output_dir, "flow.pvd")
+        field_name = "pressure_p0"
+        pvd_reader = pv.PVDReader(pvd_file_path)
 
-        values = np.empty((0,))
+        field_data_list = []
+        for time_frame in range(len(pvd_reader.time_values)):
+            pvd_reader.set_active_time_point(time_frame)
+            mesh = pvd_reader.read()[0]  # MultiBlock mesh with only 1 block
 
-        # the times defined in input
-        times = np.array(generate_time_axis(config_dict))
-        with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
-            loaded_yaml = yaml.load(f, yaml.CSafeLoader)
+            field_data = mesh[field_name]
+            field_data_list.append(field_data)
 
-            vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
-            values = np.concatenate((values, vals), axis=None)
-
-            vals = self.get_from_observe(loaded_yaml, cond_points2collect, 'conductivity', times[-1])
-            vals = np.log10(vals)  # consider log10!
-            values = np.concatenate((values, vals), axis=None)
-
-        if config_dict["clean_sample_dir"]:
-            shutil.rmtree(self.sample_dir)
-
-        # flatten to format: [Point0_all_all_times, Point1_all_all_times, Point2_all_all_times, ...]
-        res = values.flatten()
-        return res
+        sample_data = np.stack(field_data_list)
+        sample_data = sample_data.reshape((1, *sample_data.shape))  # axis 0 - sample
+        return sample_data
 
     def get_from_observe(self, observe_dict, point_names, field_name, select_times=None):
         points = observe_dict['points']

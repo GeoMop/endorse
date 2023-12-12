@@ -15,6 +15,8 @@ from preprocess import preprocess
 from surrDAMH.modules.raw_data import RawData
 from surrDAMH.modules.analysis import Analysis
 
+from endorse.Bukov2 import sample_storage
+
 
 def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solver_id):
 
@@ -23,7 +25,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
     for idx, pars in enumerate(params_in):
         wrap.set_parameters(data_par=pars)
         t = time.time()
-        res, obs_data = wrap.get_observations()
+        res, sample_data = wrap.get_observations()
         print("Flow123d res: ", res)
         #if res >= 0:
             #print(obs_data)
@@ -33,14 +35,21 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         # print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
 
-        # write output
-        if config_dict["sample_subdir"] is not None:
-            output_file = os.path.join(config_dict["sample_subdir"], 'output_' + str(solver_id) + '.csv')
-        else:
-            output_file = os.path.join(output_dir_in, 'output_' + str(solver_id) + '.csv')
-        with open(output_file, 'a') as file:
-            line = str(idx) + ',' + ','.join([str(s) for s in obs_data])
-            file.write(line + "\n")
+        # # write output
+        # if config_dict["sample_subdir"] is not None:
+        #     output_file = os.path.join(config_dict["sample_subdir"], 'output_' + str(solver_id) + '.csv')
+        # else:
+        #     output_file = os.path.join(output_dir_in, 'output_' + str(solver_id) + '.csv')
+        # with open(output_file, 'a') as file:
+        #     line = str(idx) + ',' + ','.join([str(s) for s in obs_data])
+        #     file.write(line + "\n")
+
+        output_file = os.path.join(output_dir_in, 'sampled_data.h5')
+        if not os.path.exists(output_file):
+            sample_storage.create_chunked_dataset(output_file, chunk_shape=sample_data.shape)
+
+        sample_storage.append_data(output_file, sample_data)
+
         # if idx == 1:
         #     exit(0)
 
