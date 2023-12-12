@@ -2,9 +2,9 @@
 Functions for preparation of the Bukov2, L5 min-by experiment
 """
 import os,math
-from endorse.common import dotdict, File
+from endorse import common
 from endorse.mesh import mesh_tools, repository_mesh
-from bgem.gmsh import gmsh, options
+from bgem.gmsh import gmsh, options, field as gmsh_field
 
 def tunnel_profile(factory, tunnel_dict):
     radius = tunnel_dict.radius
@@ -44,7 +44,7 @@ def tunnel_smooth(factory, tunnel_dict):
                 .translate([0, -length / 2, vertical_side]))
     #roof = cylinder.intersect(box.copy().translate([0, 0, height]))
     tunnel = fill_box.fuse(cylinder.copy())  #.translate([0,0,+height / 2])
-    center_line = factory.line([0, 0, 0], [0, length, 0]).translate([0,0,height/2])
+    center_line = factory.line([0, 0, 0], [0, length, 0]).translate([0,-length / 2,height/2])
     return tunnel, center_line
 
 def basic_shapes(factory, geom_dict):
@@ -79,7 +79,7 @@ def basic_shapes(factory, geom_dict):
         )
     main_tunnel, main_line = gmsh.translate(main_tunnel, [0, 0, 0])
 
-    lateral_cfg = dotdict(geom_dict.lateral_tunnel)
+    lateral_cfg = common.dotdict(geom_dict.lateral_tunnel)
     lateral_cfg.length = lateral_cfg.length + main_width / 2
     laterals_pos = [
         [(main_width/2 + lateral_length)/2, -laterals_distance/2, 0],
@@ -107,11 +107,11 @@ def basic_shapes(factory, geom_dict):
 
     #tunnels = boreholes.copy().fuse(access_tunnels.copy())
     box_drilled = box.copy().cut(tunnels.copy()).set_region("box")
-    return box_drilled, box, main_tunnel, laterals, lateral_lines, b_laterals
+    return box_drilled, box, tunnels, lateral_lines
 
 
-def l5_xk_gemoetry(factory, cfg_geom:dotdict, cfg_mesh:dotdict):
-    box_drilled, box, access_tunnels, laterals, l_lines, l_bc = basic_shapes(factory, cfg_geom)
+def l5_xk_gemoetry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
+    box_drilled, box, access_tunnels, l_lines = basic_shapes(factory, cfg_geom)
     box_fr = box_drilled
 
     #fractures = create_fractures_rectangles(factory, fractures, outer_box_shift(cfg_geom), factory.rectangle())
@@ -133,12 +133,12 @@ def l5_xk_gemoetry(factory, cfg_geom:dotdict, cfg_mesh:dotdict):
     # select inner boreholes boundary
     boreholes_step = cfg_mesh.boreholes_mesh_step
     # lateral regions
-    marked_laterals = [
-        b_box_fr.select_by_intersect(l)
-            .set_region(f".lateral_{il}")
-            .mesh_step(boreholes_step)
-        for il, l in enumerate(l_bc)
-    ]
+    # marked_laterals = [
+    #     b_box_fr.select_by_intersect(l)
+    #         .set_region(f".lateral_{il}")
+    #         .mesh_step(boreholes_step)
+    #     for il, l in enumerate(l_bc)
+    # ]
     #b_fr_boreholes = b_fractures_fr.select_by_intersect(select)\
     #             .set_region(".fr_boreholes").mesh_step(boreholes_step)
 
@@ -151,15 +151,13 @@ def l5_xk_gemoetry(factory, cfg_geom:dotdict, cfg_mesh:dotdict):
 
 
     boundary = factory.group(b_box,
-                             *marked_laterals,
                              b_box_tunnel)
     bulk_geom = factory.group(box_fr,  boundary)
 
     # distance function scales linearly with number of points
     # therefore having points distributed on the surfaces is prohibitively slow
     # We rather construct lines in centers of lateral tunnels and measure distance from them.
-    refined_lines = [
-        ]
+    refined_lines = l_lines
     #boundary = factory.group(b_box)
 
     # Following makes some mesing issues:
@@ -168,14 +166,14 @@ def l5_xk_gemoetry(factory, cfg_geom:dotdict, cfg_mesh:dotdict):
 
     return bulk_geom, refined_lines
 
-def l5_zk_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
+def l5_zk_mesh(cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
     :param mesh_file:
     :return:
     """
-    mesh_file = "one_borehole.msh2"
+    mesh_file = "Bukov_both.msh2"
     base, ext = os.path.splitext(os.path.basename(mesh_file))
     factory = gmsh.GeometryOCC(base, verbose=True)
     factory.get_logger().start()
@@ -185,8 +183,24 @@ def l5_zk_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     gopt.ToleranceBoolean = 0.001
 
     bulk, refined = l5_xk_gemoetry(factory, cfg_geom, cfg_mesh)
-    factory.set_mesh_step_field(mesh_tools.edz_refinement_field(factory, cfg_geom, cfg_mesh))
+
+    line_fields = (mesh_tools.line_distance_edz(factory, line, cfg_mesh.line_refinement)
+        for line in refined)
+    common_field = gmsh_field.minimum(*line_fields)
+    factory.set_mesh_step_field(common_field)
     mesh_tools.edz_meshing(factory, [bulk], mesh_file)
     # factory.show()
     del factory
-    return File(mesh_file)
+    return common.File(mesh_file)
+
+
+def make_mesh(workdir):
+    conf_file = os.path.join(workdir, "./Bukov2_mesh.yaml")
+    cfg = common.config.load_config(conf_file)
+    mesh_file = l5_zk_mesh(cfg.geometry, cfg.mesh)
+    print("Mesh file: ", mesh_file)
+
+
+script_dir = os.path.dirname(os.path.realpath(__file__))
+if __name__ == '__main__':
+    make_mesh(script_dir)

@@ -17,6 +17,16 @@ mesh:
     #boreholes_mesh_step: 0.3   # EDZ minimal resolution
     main_tunnel_mesh_step: 2
 
+    # refinement around central lines of the laterals
+    line_refinement:
+      r_inner: 2
+      h_inner: 1.5
+      r_outer: 5
+      h_outer: 1.5
+      q_outer: 1
+      r_inf: 30
+      h_inf: 10
+
 geometry:
   # Coordinate system
   # X - in direction of storage boreholes
