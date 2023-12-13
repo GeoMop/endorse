@@ -1,0 +1,87 @@
+#!/bin/bash
+
+set -x
+
+# Development: root of the sources
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
+ENDORSE_SRC_BUKOV="${ENDORSE_SRC_ROOT}/src/endorse/Bukov2"
+ENDORSE_VENV="${ENDORSE_SRC_ROOT}/venv_bayes"
+
+debug=false
+
+#obligatory_param=0
+while getopts ":hd:p:n:o:" opt; do
+  case $opt in
+    h)
+      # help
+      echo "Usage: ./endorse-bukov -p <N_PROCESSES> -n <N_SAMPLES> -o <OUTPUT_DIR> -d"
+      echo "-o ... output dir"
+      echo "-p ... number of parallel processes"
+      echo "-n ... number of samples"
+      echo "-d ... only print the container command"
+      exit 0
+      ;;
+    d)
+      # debug
+      debug=true
+      ;;
+    p)
+      # number of parallel processes
+      np=$OPTARG
+#      ((obligatory_param=obligatory_param+1))
+      ;;
+    n)
+      # number of parallel processes
+      ns=$OPTARG
+#      ((obligatory_param=obligatory_param+1))
+      ;;
+    o)
+      # output directory
+      output_dir=$OPTARG
+#      ((obligatory_param=obligatory_param+1))
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [ "$debug" == true ]; then
+  echo "output_dir = $output_dir"
+  echo "np = $np"
+  echo "ns = $ns"
+fi
+
+#if [[ $obligatory_param -lt 3 ]]; then
+#  echo "Not all obligatory parameters set!"
+#  exit 1
+#fi
+
+
+sif_image="${ENDORSE_SRC_ROOT}/endorse.sif"
+
+# singulairity part
+sing_command="singularity exec -B ${ENDORSE_SRC_ROOT}:${ENDORSE_SRC_ROOT} ${sif_image}"
+venv_command="source ${ENDORSE_VENV}/bin/activate"
+
+# build command
+
+command="$venv_command && python3 ${ENDORSE_SRC_BUKOV}/run_sampling_2D.py ${output_dir} $np $ns"
+
+
+# finalize command
+final_command="${sing_command} bash -c \"${command}\""
+echo "${final_command}"
+eval "${final_command}"
+
+if [ "$debug" == false ]; then
+  cd ${output_dir}
+  find sensitivity -type f -name "pbs_job*" -print0 | xargs -0 -I {} echo "{}"
+  find sensitivity -type f -name "pbs_job*" -print0 | xargs -0 -I {} qsub "{}"
+fi

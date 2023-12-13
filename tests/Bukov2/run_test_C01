@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -x
+
+# Development: root of the sources
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/../.."
+
+# input
+debug=true
+np=5 # processes
+ns=8 # samples
+output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/bukov_2D"
+
+# prepare inputs
+mkdir -p ${output_dir}/common_files
+cp ${SCRIPTPATH}/C01_hm_tmpl.yaml ${output_dir}/common_files
+cp ${SCRIPTPATH}/tunnel2d_fine.geo ${output_dir}/common_files
+cp ${SCRIPTPATH}/config_sim_C01hm.yaml ${output_dir}/config.yaml
+
+# make mesh
+sif_image="${ENDORSE_SRC_ROOT}/endorse.sif"
+sing_command="singularity exec -B ${ENDORSE_SRC_ROOT}:${ENDORSE_SRC_ROOT} ${sif_image}"
+cd ${output_dir}/common_files
+${sing_command} bash -c "gmsh -format=msh2 -2 tunnel2d_fine.geo"
+
+# call main script
+${ENDORSE_SRC_ROOT}/bin/endorse-bukov -p $np -n $ns -o ${output_dir} -d true
