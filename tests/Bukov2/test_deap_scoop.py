@@ -8,16 +8,36 @@ import numpy as np
 from deap import algorithms, tools, creator, base
 import scoop
 
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 def test_deap():
     one_max(100, map)
+
 def test_deap_scoop():
     hostfile=os.path.abspath("deap_scoop_hostfile")
     with open(hostfile, "w") as f:
-        f.write("localhost")
-    script_path = os.path.abspath(__file__)
+        f.write("localhost")    
     cmd = [sys.executable, "-m", "scoop", "--hostfile", hostfile, "-vv", "-n", "4", script_path, "100"]
     subprocess.run(cmd, check=True)
+
+pbs_script = f"""
+#!/bin/bash
+#PBS -j oe
+#PBS -m e
+set -x 
+env | grep PBS_
+echo "===="
+{sys.executable} -m scoop --hostfile $PBS_NODEFILE -vv -n 4 {script_path} 100
+"""
+def pbs_test_deap_scoop():    
+    with open("deap_scoop.pbs", "w") as f:
+        f.write(pbs_script)    
+    cmd = ['qsub', '-q', 'charon_2h', '-l','select=2:ncpus=2', '-l', 'place=scatter', 'deap_scoop.pbs']
+    subprocess.run(cmd, check=True)
+    
+######################
+
 
 def evalOneMax(individual):
     return sum(individual),
@@ -55,13 +75,25 @@ def one_max(l, map_fn):
     return pop, log
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) > 2:
         raise ImportError("Wrong number of program parameters. Give a length of OneMax problem.")
+    
+    if len(sys.argv) == 1:
+        print("Calling metacentrum PBS test.")
+        pbs_test_deap_scoop()
+        return
+    
     one_max_len = int(sys.argv[1])
     pop, log = one_max(one_max_len, scoop.futures.map)
-    with open("deap_scoop_out", "w") as f:
+    
+    out_file = "deap_scoop_out" 
+    out_file = os.path.abspath(out_file)
+    print("Writing results to : ", out_file)
+    with open(out_file, "w") as f:
         f.write(str(pop))
         f.write(str(log))
+
+
 
 if __name__ == '__main__':
     main()
