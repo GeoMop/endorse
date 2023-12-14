@@ -17,7 +17,7 @@ class Analyze:
 
 
 def prepare_pbs_scripts(sens_config_dict, output_dir, np):
-    endorse_root = sens_config_dict["script_dir"]
+    endorse_root = sens_config_dict["rep_dir"]
     met = sens_config_dict["metacentrum"]
 
     def create_common_lines(id):
@@ -114,6 +114,8 @@ if __name__ == "__main__":
     # shutil.copyfile("../test_data/config_sim_A04hm_V1_03.yaml", os.path.join(output_dir, "config.yaml"))
     # setup paths and directories
     config_dict = bayes_run_all.setup(output_dir, can_overwrite=False, clean=False)
+    # add repository dir
+    config_dict["rep_dir"] = os.path.abspath(os.path.join(config_dict["script_dir"], "../../.."))
 
     # Define the problem for SALib
     # Bayes Inversion borehole_V1/sim_A04hm_V1_04_20230713a

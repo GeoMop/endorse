@@ -45,6 +45,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         #     file.write(line + "\n")
 
         output_file = os.path.join(output_dir_in, 'sampled_data.h5')
+        print(output_file)
         if not os.path.exists(output_file):
             sample_storage.create_chunked_dataset(output_file, chunk_shape=sample_data.shape)
 
@@ -159,11 +160,12 @@ if __name__ == "__main__":
     # preprocess(config_dict)
 
     # prepare measured data as observations
-    md = MeasuredData(config_dict)
-    md.initialize()
+    md = None
+    # md = MeasuredData(config_dict)
+    # md.initialize()
 
-    boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
-    times, values = md.generate_measured_samples(boreholes, [])
+    # boreholes = config_dict["surrDAMH_parameters"]["observe_points"]
+    # times, values = md.generate_measured_samples(boreholes, [])
 
     if csv_data:
         print("Reading parameters from CSV: ", csv_data)

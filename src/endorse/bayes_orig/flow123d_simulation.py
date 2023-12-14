@@ -98,7 +98,7 @@ class endorse_2Dtest():
 
         print("Creating mesh...")
         # comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=False)
-        comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=True)
+        comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=False)
 
         mesh_bn = os.path.basename(comp_mesh)
         config_dict["hm_params"]["mesh"] = mesh_bn
@@ -371,8 +371,9 @@ class endorse_2Dtest():
         mesh_name = config_dict["geometry"]["mesh_name"]
         if cut_tunnel:
             mesh_name = mesh_name + "_cut"
-        mesh_file = mesh_name + ".msh"
-        mesh_healed = mesh_name + "_healed.msh"
+        # mesh_file = mesh_name + ".msh"
+        # mesh_healed = mesh_name + "_healed.msh"
+        mesh_healed = mesh_name + ".msh"
 
         # suppose that the mesh was created/copied during preprocess
         assert os.path.isfile(os.path.join(config_dict["common_files_dir"], mesh_healed))
