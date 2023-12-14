@@ -1,6 +1,8 @@
 # specific for endorse-experiment
 salib
 h5py
+scoop       # communication library
+deap
 
 # endorse
 pyvista
