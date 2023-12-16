@@ -17,6 +17,16 @@ mesh:
     #boreholes_mesh_step: 0.3   # EDZ minimal resolution
     main_tunnel_mesh_step: 2
 
+    # refinement around central lines of the laterals
+    line_refinement:
+      r_inner: 2
+      h_inner: 1.5
+      r_outer: 5
+      h_outer: 1.5
+      q_outer: 1
+      r_inf: 30
+      h_inf: 10
+
 geometry:
   # Coordinate system
   # X - in direction of storage boreholes
@@ -43,13 +53,16 @@ geometry:
   main_tunnel_mesh_step: 3
   # Radious of outer boundary of EDZ (just for mesh step field)
   edz_radius: 3
+  # Center distance of laterlas
+  laterals_distance: 10
 
   # Main tunnel - main access tunnel
   main_tunnel:
+      vertical_side: 2.800
       # radius of the ceiling/roof
-      radius: 3.5
+      #radius: 3.5
       # height of side walls (tunnel height minus roof)
-      height: 4.5
+      height: 4
       # tunnel width
       width: 4
       # tunnel length
@@ -58,8 +71,9 @@ geometry:
   # Lateral short tunnels perpendicular to the main tunnel
   # one ofr every storage borehole
   lateral_tunnel:
-      radius: 3.5
-      height: 4.5
+      vertical_side: 2.800
+      #radius: 3.5
+      height: 4
       width: 4
       length: 10
 
