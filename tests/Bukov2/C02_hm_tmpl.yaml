@@ -104,7 +104,8 @@ problem: !Coupling_Sequential
           - region: BULK
             young_modulus: <young_modulus>
             poisson_ratio: <poisson_ratio>
-            initial_stress: [ -sx, -sy, -sz]
+            initial_stress: !FieldFormula
+              value: [ -sx, -sy, -sz]
 
           - region: .outer_boundary
             bc_type: displacement
@@ -120,4 +121,5 @@ problem: !Coupling_Sequential
           - region: .tunnel
             time: <bored_time>
             bc_type: stress
-            bc_stress: [ -sx, -sy, 0] # 1d=86400s
+            bc_stress: !FieldFormula
+              value: [ -sx, -sy, 0] # 1d=86400s

@@ -108,7 +108,7 @@ surrDAMH_parameters:
 
 geometry:
   # base of the mesh file name
-  mesh_name: tunnel_mesh
+  mesh_name: tunnel2d_fine
   # depth of the center of the box and of the coordinate system
   # x,y,z dimension
   box_dimensions: [100, 100]
