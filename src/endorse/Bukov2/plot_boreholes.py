@@ -30,24 +30,27 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     for i in range(bh_set.n_y_angles):
         for j in range(bh_set.n_z_angles):
             iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
-            for bh in bh_set.direction_lookup(i,j):
-                add_bh(plotter, iangle_norm, bh_set, bh)
+            for i_bh in bh_set.angles_table[i][j]:
+                add_bh(plotter, iangle_norm, bh_set, i_bh)
     return plotter
 
-def add_bh(plotter, angle_norm, bh_set, bh):
-    p1 = bh[:3]
-    d1 = bh[3:]
-    p2 = bh_set.transform(p1 + d1)
-    p3 = bh_set.transform(p1 + 3 * d1)
-    p1 = bh_set.transform(p1)
+def add_bh(plotter, angle_norm, bh_set, i_bh):
+    p_w, dir, p_tr = bh_set.bh_list[i_bh]
+    p_w = bh_set.transform(p_w)
+    p_tr = bh_set.transform(p_tr)
+    p_begin, d12 = bh_set.point_lines[i_bh]
+    p_end = p_begin + d12
 
     color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     #print(f"Adding: {bh} col: {color}")
-    line = pv.Line(p1, p3)
-    plotter.add_mesh(line, color=color, line_width=5)
+    line = pv.Line(p_w, p_tr)
+    plotter.add_mesh(line, color='grey', line_width=1)
 
-    sphere = pv.Sphere(0.5, p2)
-    plotter.add_mesh(sphere, color=color, line_width=2)
+    line = pv.Line(p_begin, p_end)
+    plotter.add_mesh(line, color=color, line_width=2)
+
+    sphere = pv.Sphere(0.5, p_tr)
+    plotter.add_mesh(sphere, color=color)
 #
 # # Example usage
 #

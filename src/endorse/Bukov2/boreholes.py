@@ -17,15 +17,8 @@ TODO:
 6. Evalutaion : 
 """
 
-@attrs.define
-class WHZone:
-    """
-    Defines XYZ range of borehole start points
-    + range of horizontal, vertical angles in terms of target points at distance 10m
-    """
-    box: np.ndarray         # shape (2,3) [min/max, XYZ]
-#    directions: np.ndarray  # shape (2,2)  [min/max, YZ]
-
+Point3d = Tuple[float, float, float]
+Box = Tuple[Point3d, Point3d]
 
 @attrs.define(slots=False)
 class BoreholeSet:
@@ -36,18 +29,36 @@ class BoreholeSet:
     """
     transform_matrix: np.ndarray    # Mapping from lateral system to main system
     transform_shift: np.array       # position of the lateral system origin
-    y_angles: np.ndarray            # y boreholes angles to consider
-    z_angles: np.ndarray            # z borehole angles to consider
+    y_angles: List[int]            # y boreholes angles to consider
+    z_angles: List[int]            # z borehole angles to consider
     wh_pos_step: Tuple[float, float, float] # xyz wellhead position step
 
     avoid_cylinder: Tuple[float, float, float]     # Boreholes can not insterset this cylinder (r, length_min, length_max) from origin in X direction
     active_cylinder: Tuple[float, float, float]    # Boreholes must intersect this cylinder (r, length_min, length_max) from origin in X direction
-    wh_zones: List[WHZone]
+    wh_zones: List[Box]
     _y_angle_range = (-80, 80)      # achive 2m from 10m distance
     _z_angle_range = (-60, 60)
 
+    @classmethod
+    def from_cfg(cls, cfg):
+        if cfg.invert_xy:
+            transform_matrix = np.diag([-1, -1, 1])
+        else:
+            transform_matrix = np.eye(3)
+        return BoreholeSet(
+            transform_matrix,
+            np.array(cfg.transform_shift),
+            cfg.y_angles,
+            cfg.z_angles,
+            cfg.wh_pos_step,
+            cfg.avoid_cylinder,
+            cfg.active_cylinder,
+            np.array(cfg.wh_zones))
+
     def transform(self, point):
-        return self.transform_matrix @ point + self.transform_shift
+        point = np.array(point)[..., None]
+        new_point = self.transform_matrix @ point + self.transform_shift
+        return new_point[..., 0]
 
     @cached_property
     def cylinder_line(self):
@@ -123,7 +134,7 @@ class BoreholeSet:
         bh_dir_table = [[[] for j in range(nz)] for i in range(ny)]
         bh_list = []
         for zone in self.wh_zones:
-            ranges = [self.linspace(*zone.box[:, idim], self.wh_pos_step[idim]) for idim in [0, 1, 2]]
+            ranges = [self.linspace(*zone[:, idim], self.wh_pos_step[idim]) for idim in [0, 1, 2]]
             xyz_range = itertools.product(*ranges)
             for pos in xyz_range:
                 for i, j, bh in self._build_position(pos):
@@ -141,17 +152,28 @@ class BoreholeSet:
                 yield (i_phi, j_phi, bh)
 
     def _make_borehole(self, pos, y_phi, z_phi):
-        dir = self.direction(y_phi, z_phi)
-        length, cyl_t, bh_t, cyl_point, bh_point = self.transversal_params(self.cylinder_line, np.array([*pos, *dir]))
-        bh_dir = bh_point - pos
-        # print(f"({y_phi}, {z_phi}) dir: {dir} {bh_t} bh: {bh_dir} dot: {np.dot(dir, bh_dir)}")
+        dir_unit = self.direction(y_phi, z_phi)
+        length, cyl_t, bh_t, cyl_point, bh_point, yz_tangent = self.transversal_params(self.cylinder_line, np.array([*pos, *dir_unit]))
+
         r, l0, l1 = self.avoid_cylinder
         if length < r and l0 < cyl_t < l1:
             return None
+
         r, l0, l1 = self.active_cylinder
-        if length < r and l0 < cyl_t < l1:
-            return np.array([*pos, *bh_dir])
-        return None
+        if not (length < r and l0 < cyl_t < l1):
+            return None
+
+        dot_bh_dir = np.abs(dir_unit @ yz_tangent)
+        r_active = self.active_cylinder[0]
+        t_end_yz = np.sqrt(r_active*r_active - length*length)
+        t_end =  t_end_yz / dot_bh_dir
+        t_l0, t_l1 = np.abs(-l0 / dir_unit[0] - bh_t), np.abs(l1 / dir_unit[0] -bh_t)
+        t_end = min(t_end, t_l1, t_l0)
+        bh_dir = t_end * dir_unit
+
+
+        # print(f"({y_phi}, {z_phi}) dir: {dir} {bh_t} bh: {bh_dir} dot: {np.dot(dir, bh_dir)}")
+        return np.array([pos, bh_dir, bh_point])
 
         #return np.array([*pos, *bh_dir])
 
@@ -167,6 +189,8 @@ class BoreholeSet:
         Returns:
         Numpy array of lengths of the transversals
         """
+        wellhead = slice(0, 3)
+        direction = slice(3, 6)
         # Extract point and direction vector from line1
         a1, d1 = line1[wellhead], line1[direction]
 
@@ -188,13 +212,13 @@ class BoreholeSet:
         a2, d2 = line2[:3], line2[3:]
 
         # Build the orthogonal coordinate system
-        ex = np.cross(d1, d2)
+        ex = np.cross(d1, d2)           # transverzal direction, perpendicular to both lines
         norm_ex = np.linalg.norm(ex)
         if np.isnan(norm_ex):
             return np.inf, np.inf, np.inf, 10 * d1 , 10 * d2
         ex_normalized = ex / norm_ex
-        ey = d1 / np.linalg.norm(d1)
-        ez = np.cross(d1, ex)
+        ey = d1 / np.linalg.norm(d1)    # cylinder direction
+        ez = np.cross(d1, ex)           # tangent to cylinder
         ez_normalized = ez / np.linalg.norm(ez)
 
         diff = a2 - a1
@@ -207,59 +231,30 @@ class BoreholeSet:
         point_1 = a1 + s * d1
 
         length = np.abs(np.dot(diff, ex_normalized))
-        return length, s, t, point_1, point_2
+        return length, s, t, point_1, point_2, ez_normalized
 
+    def project_field(self, opt_cfg, mesh, field):
+        id_matrix = interpolation_slow(mesh, self.point_lines, n_points=opt_cfg.n_line_eval_points)
+        return cum_borehole_array(field, id_matrix)
 
-def BHS_zk_30():
-    return BoreholeSet(
-        transform_matrix=np.eye(3),
-        transform_shift=np.array([0, -5, 1.8]),
-        #dir_angle_step = (5, 5),     # degree
-        #wh_pos_step = (1, 1, 0.5),
-        y_angles = np.linspace(-80, 80, 9),     # degree
-        z_angles = [0, 10, 25, 45, 70],
-        wh_pos_step = (3, 3, 1),
-        avoid_cylinder = (3, 0, 12),        # r, x0, x1
-        active_cylinder = (20, 3, 30),      # r, x0, x1
-        wh_zones=[
-            WHZone(
-                box=np.array([
-                    [-1, -5, -0.4],   # min
-                    [+1, -20, 0.1]   # max
-                ]),
-            ),
-            WHZone(
-                box=np.array([
-                    [-1, 15, -0.4],  # min
-                    [+1, 25, 0.1]  # max
-                ]),
-                # directions=np.array([
-                #     [0, -20],
-                #     [25, +20]
-                # ])
-            )
+    # def make_bh_active_line(self, bh):
+    #     wellhead, dir, transversal_pt = bh
+    #     # create line segment symmetric around the transversal point and extending
+    #     # over active cylinder in Z and X coordinates
+    #     p1 = self.transform(transversal_pt - dir)
+    #     p2 = self.transform(transversal_pt + dir)
+    #     return [p1, (p2-p1)]
 
-        ]
+    @cached_property
+    def point_lines(self):
+        bh_array = np.array(self.bh_list)
+        dir = bh_array[:, 1, :]
+        transversal_pt = bh_array[:, 2, :]
+        p1 = self.transform((transversal_pt - dir))
+        p2 = self.transform((transversal_pt + dir))
+        d12 = p2 - p1
+        return np.stack((p1, d12), axis=1)
 
-    )
-
-
-
-
-
-# Line has 9 coordinates, 3 points:
-# wellhead, direction vector to the endpoint, s - transversal intersection with respect to tunnel center
-# line is given by:
-# "wellhead" which is in fact start of the drilling
-# transversal intersection, which is parametrized by position in the lateral tunnel and angle in XZ plane
-wellhead = slice(0,3)
-direction = slice(3,6)
-transversal_param = slice(6, 6)
-def line_end(line):
-    return line[..., wellhead] + line[..., direction]
-
-def transversal_point(line):
-    return line[..., wellhead] + line[..., transversal_param][0] * line[..., direction]
 
 
 """
@@ -310,15 +305,14 @@ def get_time_field(file_pattern, field_name):
 
 def line_points(lines, n_points):
     """
-
-    :param lines: (n_lines, 6) [*point, *direction]
+    :param lines: (n_lines, 2, 3), single line: [point, direction]
     :param n_points:
     :return: (n_lines, n_points, 3)
     """
-    origin = lines[:, :3]
-    direction = lines[:, 3:]
+    p1 = lines[:, 0, :]
+    dir = lines[:, 1, :]
     params = np.linspace(0, 1, n_points)
-    return direction[:, None, :] * params[:,None] + origin[:, None, :]
+    return dir[:, None, :] * params[:,None] + p1[:, None, :]
 
 def interpolation_slow(mesh, lines, n_points):
     """
@@ -335,20 +329,36 @@ def interpolation_slow(mesh, lines, n_points):
     cell_locator.SetDataSet(mesh)
     cell_locator.BuildLocator()
 
-    interpolation_ids = np.empty([*points.shape[:2]])
+    interpolation_ids = np.empty([*points.shape[:2]], dtype=np.int32)
     for i_line in range(len(lines)):
+        interp_line = interpolation_ids[i_line, :]
         for i_pt in range(n_points):
-            interpolation_ids[i_line, i_pt] = cell_locator.FindCell(points[i_line, i_pt])
+            interp_line[i_pt] = max(0, cell_locator.FindCell(points[i_line, i_pt]))
+        # good_ids = interp_line[interp_line != -1]
+        # n_good = len(good_ids)
+        # if n_good == n_points:
+        #     continue
+        #
+        # # set first good id to first -1 ids, set the last good id to the rest
+        # if len(good_ids) == 0:
+        #     good_ids = [0]
+        # i_subst = 0
+        # for i_pt in range(n_points):
+        #     if interp_line[i_pt] == -1:
+        #         interp_line[i_pt] = good_ids[i_subst]
+        #     else:
+        #         i_subst = -1
     return interpolation_ids
 
-def get_values_on_lines(mesh, values, id_matrix):
+def cum_borehole_array(values, id_matrix):
     """
-    :param mesh:
     :param values: shape(n_samples, n_times, n_cells)
-    :param id_matrix:
+    :param id_matrix: shape(n_boreholes, n_points)
+    return: shape: (n_boreholes, n_samples, n_times, n_points)
     """
     result = values[:, :, id_matrix]
     result = np.moveaxis(result, 2, 0)
+    result = np.cumsum(result, axis=3)  # cumsum along points
     return result
 
 
