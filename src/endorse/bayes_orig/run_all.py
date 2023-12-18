@@ -42,8 +42,8 @@ def setup(output_dir, can_overwrite, clean):
     config_dict["script_dir"] = rep_dir
 
     config_dict["common_files_dir"] = common_files_dir
-    config_dict["bayes_config_file"] = os.path.join(common_files_dir,
-                                                    config_dict["surrDAMH_parameters"]["config_file"])
+    # config_dict["bayes_config_file"] = os.path.join(common_files_dir,
+    #                                                 config_dict["surrDAMH_parameters"]["config_file"])
 
     # copy common files
     for f in config_dict["copy_files"]:

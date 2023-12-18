@@ -62,49 +62,31 @@ output_times: &output_times
   - {begin: *bored_time, step: 1, end: *end_time}
 
 
-surrDAMH_parameters:
-  config_file: &config_bayes config_mcmc_bayes.yaml
-  parameters:
-    - name: storativity
-      type: normal_to_lognormal
-      options:
-        mu: -14.5662279378421
-        sigma: 2.0
-    - name: young_modulus
-      type: normal_to_lognormal
-      options:
-        mu: 23.2670944048714
-        sigma: 2.0
-    - name: init_stress_x
-      type: normal_to_lognormal
-      options:
-        mu: 17.8553760319809
-        sigma: 2.0
-    - name: init_stress_y
-      type: normal_to_lognormal
-      options:
-        mu: 16.2134058307626
-        sigma: 2.0
-    - name: perm_kr
-      type: normal_to_lognormal
-      options:
-        mu: -49.4456937078649
-        sigma: 3.0
-    - name: perm_km
-      type: normal_to_lognormal
-      options:
-        mu: -33.8402223378873
-        sigma: 3.0
-    - name: perm_beta
-      type: normal_to_lognormal
-      options:
-        mu: -13.1451669487322
-        sigma: 2.0
-    - name: perm_gamma
-      type: normal_to_lognormal
-      options:
-        mu: -13.007626024022
-        sigma: 2.0
+parameters:
+  - name: storativity
+    type: lognorm
+    bounds: [-14.5662279378421, 2.0]
+  - name: young_modulus
+    type: lognorm
+    bounds: [23.2670944048714, 2.0]
+  - name: init_stress_x
+    type: lognorm
+    bounds: [ 17.8553760319809, 2.0]
+  - name: init_stress_y
+    type: lognorm
+    bounds: [ 16.2134058307626, 2.0]
+  - name: perm_kr
+    type: lognorm
+    bounds: [ -49.4456937078649, 1.0]
+  - name: perm_km
+    type: lognorm
+    bounds: [ -33.8402223378873, 0.2]
+  - name: perm_beta
+    type: lognorm
+    bounds: [ -13.1451669487322, 0.2]
+  - name: perm_gamma
+    type: lognorm
+    bounds: [ -13.007626024022, 0.2]
 
 geometry:
   # base of the mesh file name

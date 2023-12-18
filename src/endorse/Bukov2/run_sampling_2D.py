@@ -119,24 +119,11 @@ if __name__ == "__main__":
 
     # Define the problem for SALib
     # Bayes Inversion borehole_V1/sim_A04hm_V1_04_20230713a
+    params = config_dict["parameters"]
     problem = {
-        'num_vars': 8,
-        'names': ['storativity',
-                  'young_modulus',
-                  'initial_stress_x',
-                  'initial_stress_y',
-                  'perm_kr',
-                  'perm_km',
-                  'perm_beta',
-                  'perm_gamma'],
-        'dists': ['lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm'],
+        'num_vars': len(params),
+        'names': [p["name"] for p in params],
+        'dists': [p["type"] for p in params],
         # available distributions:
         # unif - interval given by bounds
         # logunif,
@@ -144,14 +131,7 @@ if __name__ == "__main__":
         # norm,  bounds : [mean, std]
         # truncnorm, bounds : [lower_bound, upper_bound, mean, std_dev]
         # lognorm, bounds: [mean, std]  # mean and std of the log(X)
-        'bounds': [[-14.5662279378421, 2.0],
-                   [23.2670944048714, 2.0],
-                   [17.8553760319809, 2.0],
-                   [16.2134058307626, 2.0],
-                   [-49.4456937078649, 3.0],
-                   [-33.8402223378873, 3.0],
-                   [-13.1451669487322, 2.0],
-                   [-13.007626024022, 2.0]]
+        'bounds': [p["bounds"] for p in params]
     }
 
     # Generate Saltelli samples
