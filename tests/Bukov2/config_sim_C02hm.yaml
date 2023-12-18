@@ -61,6 +61,8 @@ output_times: &output_times
   #- {begin: *bored_time, step: 1, end: 100}
   - {begin: *bored_time, step: 1, end: *end_time}
 
+n_samples: 4 # must be power of 2 due to salib
+n_processes: 4
 
 parameters:
   - name: storativity
@@ -91,15 +93,15 @@ parameters:
 geometry:
   # base of the mesh file name
   mesh_name: tunnel2d_fine
-  # depth of the center of the box and of the coordinate system
-  # x,y,z dimension
-  box_dimensions: [100, 100]
-  # tunnel center
-  tunnel_center: [0, 0, 0]
-  tunnel_dimX: &tunnel_dimX 4.375 # X cross-section
-  tunnel_dimY: &tunnel_dimY 3.5 # Y cross-section
-  tunnel_mesh_step: 0.25 # 0.0625 # 0.25 # 0.125 # 0.5
-  max_elem_size: 10 # 5 # 10 # 3.7
+#  # depth of the center of the box and of the coordinate system
+#  # x,y,z dimension
+#  box_dimensions: [100, 100]
+#  # tunnel center
+#  tunnel_center: [0, 0, 0]
+#  tunnel_dimX: &tunnel_dimX 4.375 # X cross-section
+#  tunnel_dimY: &tunnel_dimY 3.5 # Y cross-section
+#  tunnel_mesh_step: 0.25 # 0.0625 # 0.25 # 0.125 # 0.5
+#  max_elem_size: 10 # 5 # 10 # 3.7
 
 # parameters substituted into the HM model template
 hm_params:
@@ -111,8 +113,8 @@ hm_params:
     end_time: *end_time
     bored_time: *bored_time
 
-    tunnel_dimX: *tunnel_dimX
-    tunnel_dimY: *tunnel_dimY
+#    tunnel_dimX: *tunnel_dimX
+#    tunnel_dimY: *tunnel_dimY
 
 # physical parameters of main interest:
     biot_coefficient: 0.2

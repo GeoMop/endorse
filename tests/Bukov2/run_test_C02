@@ -8,8 +8,6 @@ ENDORSE_SRC_ROOT="$SCRIPTPATH/../.."
 
 # input
 # debug=false
-np=4 # processes
-ns=4 # samples
 output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/bukov_2D"
 
 # prepare inputs
@@ -25,4 +23,4 @@ cd ${output_dir}/common_files
 ${sing_command} bash -c "gmsh -format msh2 -2 tunnel2d_fine.geo"
 
 # call main script
-${ENDORSE_SRC_ROOT}/bin/endorse-bukov -p $np -n $ns -o ${output_dir}
+${ENDORSE_SRC_ROOT}/bin/endorse-bukov -o ${output_dir}

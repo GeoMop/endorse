@@ -98,17 +98,11 @@ if __name__ == "__main__":
 
     # default parameters
     output_dir = None
-    n_processes = 1
-    n_samples = 100
 
     len_argv = len(sys.argv)
-    assert len_argv > 3, "Specify output dir & number of processes & number of best fits"
+    assert len_argv > 1, "Specify output dir."
     if len_argv > 1:
         output_dir = os.path.abspath(sys.argv[1])
-    if len_argv > 2:
-        n_processes = int(sys.argv[2])
-    if len_argv > 3:
-        n_samples = int(sys.argv[3])
 
     # aux_functions.force_mkdir(output_dir, force=True)
     # shutil.copyfile("../test_data/config_sim_A04hm_V1_03.yaml", os.path.join(output_dir, "config.yaml"))
@@ -135,7 +129,7 @@ if __name__ == "__main__":
     }
 
     # Generate Saltelli samples
-    param_values = sample.saltelli(problem, n_samples, calc_second_order=True)
+    param_values = sample.saltelli(problem, config_dict["n_samples"], calc_second_order=True)
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
@@ -143,7 +137,7 @@ if __name__ == "__main__":
     aux_functions.force_mkdir(sensitivity_dir, force=True)
 
     # plan sample parameters a prepare them in CSV
-    prepare_sets_of_params(param_values, output_dir, n_processes, problem["names"])
+    prepare_sets_of_params(param_values, output_dir, config_dict["n_processes"], problem["names"])
 
     # plan parallel sampling, prepare PBS jobs
-    pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, n_processes)
+    pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, config_dict["n_processes"])
