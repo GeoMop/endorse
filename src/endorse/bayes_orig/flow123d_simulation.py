@@ -107,7 +107,7 @@ class endorse_2Dtest():
         print("Creating mesh...finished")
 
         if config_dict["mesh_only"]:
-            return -10, []  # tag, value_list
+            return -10, None  # tag, value_list
 
         # endorse_2Dtest.prepare_hm_input(config_dict)
         print("Running Flow123d - HM...")
@@ -122,16 +122,16 @@ class endorse_2Dtest():
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
             # still try collect results
-            if os.path.join(self.sample_output_dir, "flow.pvd"):
-                try:
-                    collected_values = self.collect_results(config_dict)
-                    print("Sample results collected.")
-                    return 3, collected_values  # tag, value_list
-                except:
-                    print("Collecting sample results failed:")
-                    traceback.print_exc()
-                    return -3, []
-            return -1, []  # tag, value_list
+            # if os.path.join(self.sample_output_dir, "flow.pvd"):
+            #    try:
+            #        collected_values = self.collect_results(config_dict)
+            #        print("Sample results collected.")
+            #        return 3, collected_values  # tag, value_list
+            #    except:
+            #        print("Collecting sample results failed:")
+            #        traceback.print_exc()
+            #        return -3, None
+            return -1, None  # tag, value_list
         print("Running Flow123d - HM...finished")
 
         if self._config["make_plots"]:
@@ -140,7 +140,7 @@ class endorse_2Dtest():
             except:
                 print("Making plot of sample results failed:")
                 traceback.print_exc()
-                return -2, []
+                return -2, None
 
         print("Finished computation")
 
@@ -155,7 +155,7 @@ class endorse_2Dtest():
         except:
             print("Collecting sample results failed:")
             traceback.print_exc()
-            return -3, []
+            return -3, None
 
     # def check_data(self, data, minimum, maximum):
     #     n_times = len(endorse_2Dtest.result_format()[0].times)
@@ -374,6 +374,7 @@ class endorse_2Dtest():
         # mesh_file = mesh_name + ".msh"
         # mesh_healed = mesh_name + "_healed.msh"
         mesh_healed = mesh_name + ".msh"
+        print(mesh_healed)
 
         # suppose that the mesh was created/copied during preprocess
         assert os.path.isfile(os.path.join(config_dict["common_files_dir"], mesh_healed))

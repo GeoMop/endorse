@@ -46,9 +46,10 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
 
         output_file = os.path.join(output_dir_in, 'sampled_data.h5')
         print(output_file)
-        if not os.path.exists(output_file):
+        if not os.path.exists(output_file) and sample_data is not None:
             sample_storage.create_chunked_dataset(output_file, chunk_shape=sample_data.shape)
 
+        # if sample_data is not None:
         sample_storage.append_data(output_file, sample_data)
 
         # if idx == 1:

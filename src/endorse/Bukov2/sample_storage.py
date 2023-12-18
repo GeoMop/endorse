@@ -52,14 +52,29 @@ def append_data(file_path, new_data):
         dset = f[dataset_name]
         n_existing = dset.shape[0]  # Current actual size in the N dimension
 
-        # New size after appending the data
-        new_size = n_existing + new_data.shape[0]
+        if new_data is None:
+            # New size after appending the data
+            new_size = n_existing + 1
 
-        # Resize the dataset to accommodate the new data
-        dset.resize(new_size, axis=0)
+            # Resize the dataset to accommodate the new data
+            dset.resize(new_size, axis=0)
 
-        # Append the new data
-        dset[n_existing:new_size, :, :] = new_data
+            # create empty data
+            empty_data = np.empty(dset.shape[1:])
+            empty_data.fill(np.nan)
+
+
+            # Append the new data
+            dset[n_existing:new_size, :, :] = empty_data
+        else:
+            # New size after appending the data
+            new_size = n_existing + new_data.shape[0]
+
+            # Resize the dataset to accommodate the new data
+            dset.resize(new_size, axis=0)
+
+            # Append the new data
+            dset[n_existing:new_size, :, :] = new_data
 
 
 def read_dataset(file_path):
