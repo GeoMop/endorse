@@ -5,7 +5,7 @@
 [submodule "submodule.submodules/bgem.path"]
 	path = submodules/bgem
 	url = ../../GeoMop/bgem.git
-	branch = JB_endorse_fix
+	branch = JB_endorse_experiment
 [submodule "submodule.submodules/bih.path"]
 	path = submodules/bih
 	url = ../../flow123d/bih.git

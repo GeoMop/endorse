@@ -98,17 +98,11 @@ if __name__ == "__main__":
 
     # default parameters
     output_dir = None
-    n_processes = 1
-    n_samples = 100
 
     len_argv = len(sys.argv)
-    assert len_argv > 3, "Specify output dir & number of processes & number of best fits"
+    assert len_argv > 1, "Specify output dir."
     if len_argv > 1:
         output_dir = os.path.abspath(sys.argv[1])
-    if len_argv > 2:
-        n_processes = int(sys.argv[2])
-    if len_argv > 3:
-        n_samples = int(sys.argv[3])
 
     # aux_functions.force_mkdir(output_dir, force=True)
     # shutil.copyfile("../test_data/config_sim_A04hm_V1_03.yaml", os.path.join(output_dir, "config.yaml"))
@@ -119,24 +113,11 @@ if __name__ == "__main__":
 
     # Define the problem for SALib
     # Bayes Inversion borehole_V1/sim_A04hm_V1_04_20230713a
+    params = config_dict["parameters"]
     problem = {
-        'num_vars': 8,
-        'names': ['storativity',
-                  'young_modulus',
-                  'initial_stress_x',
-                  'initial_stress_y',
-                  'perm_kr',
-                  'perm_km',
-                  'perm_beta',
-                  'perm_gamma'],
-        'dists': ['lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm',
-                  'lognorm'],
+        'num_vars': len(params),
+        'names': [p["name"] for p in params],
+        'dists': [p["type"] for p in params],
         # available distributions:
         # unif - interval given by bounds
         # logunif,
@@ -144,18 +125,11 @@ if __name__ == "__main__":
         # norm,  bounds : [mean, std]
         # truncnorm, bounds : [lower_bound, upper_bound, mean, std_dev]
         # lognorm, bounds: [mean, std]  # mean and std of the log(X)
-        'bounds': [[-14.5662279378421, 2.0],
-                   [23.2670944048714, 2.0],
-                   [17.8553760319809, 2.0],
-                   [16.2134058307626, 2.0],
-                   [-49.4456937078649, 3.0],
-                   [-33.8402223378873, 3.0],
-                   [-13.1451669487322, 2.0],
-                   [-13.007626024022, 2.0]]
+        'bounds': [p["bounds"] for p in params]
     }
 
     # Generate Saltelli samples
-    param_values = sample.saltelli(problem, n_samples, calc_second_order=True)
+    param_values = sample.saltelli(problem, config_dict["n_samples"], calc_second_order=True)
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
@@ -163,7 +137,7 @@ if __name__ == "__main__":
     aux_functions.force_mkdir(sensitivity_dir, force=True)
 
     # plan sample parameters a prepare them in CSV
-    prepare_sets_of_params(param_values, output_dir, n_processes, problem["names"])
+    prepare_sets_of_params(param_values, output_dir, config_dict["n_processes"], problem["names"])
 
     # plan parallel sampling, prepare PBS jobs
-    pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, n_processes)
+    pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, config_dict["n_processes"])

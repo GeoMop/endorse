@@ -45,6 +45,21 @@ def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_l
     return fractures
 
 
+def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
+    """
+
+    :param factory:
+    :param line:
+    :param cfg_mesh:
+    :return:
+    """
+    cfg = cfg_mesh
+    line_length = line.get_mass()
+    n_sampling = int(line_length / cfg.r_inner)
+    dist = field.distance(line, sampling = n_sampling)
+    inner = field.geometric(dist, a=(cfg.r_inner, cfg.h_inner), b=(cfg.r_outer, cfg.h_outer))
+    outer = field.polynomial(dist, a=(cfg.r_outer, cfg.h_outer), b=(cfg.r_inf, cfg.h_inf), q=cfg.q_outer)
+    return field.maximum(inner, outer)
 
 
 def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: "dotdict") -> field.Field:
@@ -56,13 +71,12 @@ def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: 
     bx, by, bz = cfg_geom.box_dimensions
     edz_radius = cfg_geom.edz_radius
     center_line = factory.line([0,0,0], [b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+    cfg = dotdict(r_inner=b_cfg.radius, h_inner=cfg_mesh.edz_mesh_step * 0.9,
+               r_outer=edz_radius, h_outer=cfg_mesh.edz_mesh_step, q_outer=1.7,
+               r_inf=by / 2, h_inf=cfg_mesh.boundary_mesh_step)
+    line_distance_edz(factory, center_line, cfg)
 
 
-    n_sampling = int(b_cfg.length / 2)
-    dist = field.distance(center_line, sampling = n_sampling)
-    inner = field.geometric(dist, a=(b_cfg.radius, cfg_mesh.edz_mesh_step * 0.9), b=(edz_radius, cfg_mesh.edz_mesh_step))
-    outer = field.polynomial(dist, a=(edz_radius, cfg_mesh.edz_mesh_step), b=(by / 2, cfg_mesh.boundary_mesh_step), q=1.7)
-    return field.maximum(inner, outer)
 
 
 def edz_meshing(factory, objects, mesh_file):
