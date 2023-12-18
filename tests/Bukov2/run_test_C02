@@ -8,13 +8,13 @@ ENDORSE_SRC_ROOT="$SCRIPTPATH/../.."
 
 # input
 # debug=false
-output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/bukov_2D"
+output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/2d_model_C02"
 
 # prepare inputs
 mkdir -p ${output_dir}/common_files
-cp ${SCRIPTPATH}/C02_hm_tmpl.yaml ${output_dir}/common_files
-cp ${SCRIPTPATH}/tunnel2d_fine.geo ${output_dir}/common_files
-cp ${SCRIPTPATH}/config_sim_C02hm.yaml ${output_dir}/config.yaml
+cp ${SCRIPTPATH}/2d_model/C02_hm_tmpl.yaml ${output_dir}/common_files
+cp ${SCRIPTPATH}/2d_model/tunnel2d_fine.geo ${output_dir}/common_files
+cp ${SCRIPTPATH}/2d_model/config_sim_C02hm.yaml ${output_dir}/config.yaml
 
 # make mesh
 sif_image="${ENDORSE_SRC_ROOT}/endorse.sif"
