@@ -2,8 +2,8 @@ flow123d_version: 3.9.1
 problem: !Coupling_Sequential
   description: Model of tunnel surroundings relaxation after boring.
   mesh:
-    mesh_file: Bukov_both_h100_31k.msh
-#    mesh_file: Bukov_both_h50_150k.msh
+    mesh_file: Bukov_both_h100_31k.msh2
+#    mesh_file: Bukov_both_h50_150k.msh2
   flow_equation: !Coupling_Iterative
     input_fields:
       - region: BULK
@@ -15,7 +15,7 @@ problem: !Coupling_Sequential
       common_time_unit: d
     iteration_parameter: 1 # affects convergence of HM coupling (defaults to 1, lower value sometimes helps)
     a_tol: 0
-    r_tol: 1e-7
+    r_tol: 1e-6
     flow_equation: !Flow_Richards_LMH
         user_fields:
           - name: init_p
@@ -62,16 +62,18 @@ problem: !Coupling_Sequential
             bc_pressure: !FieldFormula
               value: if((-x>2) | (x>2),init_p,0)
             bc_robin_sigma: !FieldFormula
-              value: if((-x>2) | (x>2),0,1)
+              value: if((-x>2) | (x>2),0,1e3)
           - region: .box_tunnel
             time: 100
-            bc_type: dirichlet
+            bc_type: total_flux
             bc_pressure: !FieldFormula
               value: if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),init_p,0)
-          - region: .box_tunnel
-            time: 112
-            bc_type: dirichlet
-            bc_pressure: 0
+            bc_robin_sigma: !FieldFormula
+              value: if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,1e3)
+#          - region: .box_tunnel
+#            time: 112
+#            bc_type: dirichlet
+#            bc_pressure: 0
 
         output:
           times: &output_times [{'begin': 0, 'step': 100, 'end': 100}, {'begin': 100, 'step': 1, 'end': 112}, {'begin': 112, 'step': 1, 'end': 130}]
@@ -102,10 +104,13 @@ problem: !Coupling_Sequential
               value: 117*pi/180
           - name: sx # initial stress in x direction (orthogonal to tunnel axis)
             scalar_field: !FieldFormula
-              value: 42e6*cos(a) + 19e6*sin(a)
+              value: 42e6*cos(a)**2 + 19e6*sin(a)**2
+          - name: sxy
+            scalar_field: !FieldFormula
+              value: cos(a)*sin(a)*(19e6-42e6)
           - name: sy
             scalar_field: !FieldFormula
-              value: 19e6*cos(a) - 42e6*sin(a)
+              value: 19e6*cos(a)**2 + 42e6*sin(a)**2
           - name: sz
             scalar_field: 14e6
 
@@ -134,7 +139,7 @@ problem: !Coupling_Sequential
             young_modulus: 60e9
             poisson_ratio: 0.23
             initial_stress: !FieldFormula
-              value: [ -sx, -sy, -sz ]
+              value: [ [-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz] ]
 
           - region: .box_outer
             bc_type: displacement_n
@@ -143,12 +148,19 @@ problem: !Coupling_Sequential
           # bc_type stress prepocita tenzor napeti na normalovou silu, s normalou orientovanou dovnitr
           # bc_stress * vnitřní normála = bc_traction = síla působící na těleso
           - region: .box_tunnel
+            time: 0
+            bc_type: stress
+            bc_stress: !FieldFormula
+              value: [ ["if((-x>2) | (x>2),0,-sx)", "if((-x>2) | (x>2),0,-sxy)", 0], ["if((-x>2) | (x>2),0,-sxy)", "if((-x>2) | (x>2),0,-sy)", 0], [0, 0, -sz] ]
+          - region: .box_tunnel
             time: 100
             bc_type: stress
             bc_stress: !FieldFormula
-              value: [ "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sx)", "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sy)", -sz ]
-          - region: .box_tunnel
-            time: 112
-            bc_type: stress
-            bc_stress: !FieldFormula
-              value: [ -sx, -sy, -sz]
+              value: [ ["if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sx)", "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sxy)", 0],
+                       ["if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sxy)", "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sy)", 0],
+                       [0, 0, -sz] ]
+#          - region: .box_tunnel
+#            time: 112
+#            bc_type: stress
+#            bc_stress: !FieldFormula
+#              value: [ -sx, -sy, -sz]
