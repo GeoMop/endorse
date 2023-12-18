@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import timeit
 import os
 from endorse import common
 from endorse.Bukov2 import boreholes, plot_boreholes
@@ -49,13 +50,35 @@ def test_transversal_params():
     np.testing.assert_allclose(p2, [14, 0, z2], rtol=1e-6)
 
 
+def test_read_fields():
+    pattern = script_dir / 'flow_reduced' / 'flow_*.vtu'
+    pressure_array, mesh = boreholes.get_time_field(str(pattern), 'pressure_p0')
+    assert pressure_array.shape == (10, 82609)
+
+    # test identification of IDs and value cumsum for two lines
+    lines = np.array(
+        [[-10, 0, 1.5, 1, 1, 0.5],
+         [10, 0, 1.5, -1, -1, 0.5]]
+    )
+    def call():
+        boreholes.interpolation_slow(mesh, lines, 100)
+    print("time: ", timeit.timeit(call, number=1))
+
+    id_matrix = boreholes.interpolation_slow(mesh, lines, 100)
+    cumlines = boreholes.cum_borehole_array(pressure_array, id_matrix)
+
+    np.random() for l in lines:
+
+    #cum_borhole_array = boreholes.cum_borehole_array(pressure_array, id_matrix)                # shape: (n_boreholes, n_times, n_points)
 
 
-#@pytest.mark.skip
+    #point_values = boreholes.get_values_on_lines(mesh, pressure_array, lines, n_points=10)
+    #assert point_values.shape == (2, pressure_array.shape[0], 3)
+
+
+@pytest.mark.skip
 def test_borhole_set():
-    workdir = script_dir
-    conf_file = os.path.join(workdir, "./Bukov2_mesh.yaml")
-    cfg = common.config.load_config(conf_file)
+    cfg = common.config.load_config(script_dir / "Bukov2_mesh.yaml")
     plotter = plot_boreholes.create_scene(cfg.geometry)
 
     bh_set = boreholes.BHS_zk_30()
@@ -64,17 +87,6 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-# def test_read_fields():
-#     pattern = script_dir / 'flow_reduced' / 'flow_*.vtu'
-#     pressure_array, mesh = boreholes.get_time_field(str(pattern), 'pressure_p0')
-#     assert len(pressure_array.shape) == 2
-#
-#     # TODO: create lines
-#     lines = np.array(
-#         [[-10, 0, 1.5, 1, 1, 0.5],
-#          [10, 0, 1.5, -1, -1, 0.5]]
-#     )
-#     boreholes.interpolation(mesh, lines, 100)
+    # Construct test interpolation ID matrix and cumsum on boreholes.
+    boreholes.interpolation_ids(mesh, bh_set, n_points)
 
-    #point_values = boreholes.get_values_on_lines(mesh, pressure_array, lines, n_points=10)
-    #assert point_values.shape == (2, pressure_array.shape[0], 3)

@@ -75,17 +75,18 @@ class BoreholeSet:
         sz, cz = np.sin(z_phi), np.cos(z_phi)
         return np.array([cy * cz, sy * cz, sz])
 
-    @cached_property
+    @property
     def n_boreholes(self):
-        return sum(len(j_bh) for i_lst in self.boreholes_table
-            for j_bh in i_lst)
+        return len(self.bh_list)
 
-    @cached_property
-    def boreholes_table(self):
-        return self._build_boreholes()
+    @property
+    def n_y_angles(self):
+        return len(self.axis_angles(0))
 
-    def direction_lookup(self, idir: Tuple[int, int]):
-        return self.boreholes_table[idir[0]][idir[1]]
+    @property
+    def n_z_angles(self):
+        return len(self.axis_angles(1))
+
 
     @staticmethod
     def linspace(a, b, step):
@@ -96,17 +97,40 @@ class BoreholeSet:
         else:
             return np.linspace(a, b, n + 1)
 
+    @property
+    def angles_table(self):
+        angle_tab, bh_list = self._build_boreholes
+        return angle_tab
+
+    @property
+    def bh_list(self):
+        angle_tab, bh_list = self._build_boreholes
+        return bh_list
+
+
+    def direction_lookup(self, i, j):
+        return [self.bh_list[i] for i in self.angles_table[i][j]]
+
+    def draw_angles(self, n):
+        return np.stack(
+             [np.random.randint(self.n_y_angles, size=n),
+                   np.random.randint(self.n_z_angles, size=n)],
+                   axis=1)
+
+    @cached_property
     def _build_boreholes(self):
         ny, nz = len(self.axis_angles(0)), len(self.axis_angles(1))
         bh_dir_table = [[[] for j in range(nz)] for i in range(ny)]
-
+        bh_list = []
         for zone in self.wh_zones:
             ranges = [self.linspace(*zone.box[:, idim], self.wh_pos_step[idim]) for idim in [0, 1, 2]]
             xyz_range = itertools.product(*ranges)
             for pos in xyz_range:
                 for i, j, bh in self._build_position(pos):
-                    bh_dir_table[i][j].append(bh)
-        return bh_dir_table
+                    bh_dir_table[i][j].append(len(bh_list))
+                    bh_list.append(bh)
+
+        return bh_dir_table, bh_list
 
 
     def _build_position(self, pos):
@@ -186,7 +210,6 @@ class BoreholeSet:
         return length, s, t, point_1, point_2
 
 
-
 def BHS_zk_30():
     return BoreholeSet(
         transform_matrix=np.eye(3),
@@ -219,6 +242,10 @@ def BHS_zk_30():
         ]
 
     )
+
+
+
+
 
 # Line has 9 coordinates, 3 points:
 # wellhead, direction vector to the endpoint, s - transversal intersection with respect to tunnel center
@@ -265,7 +292,9 @@ ZK40: upper/lower, index of direction, 2 indeces from available
 
 def get_time_field(file_pattern, field_name):
     """
-    Return: field array, geometry
+    Read files given by pattern, separate into numpy array and mesh.
+
+    Return: field array, mesh
     - field array of shape (n_times, n_elements)
     - mesh without data fields
     """
@@ -291,12 +320,13 @@ def line_points(lines, n_points):
     params = np.linspace(0, 1, n_points)
     return direction[:, None, :] * params[:,None] + origin[:, None, :]
 
-def interpolation(mesh, lines, n_points):
+def interpolation_slow(mesh, lines, n_points):
     """
+    Construct element_id matrix of shape (n_boreholes, n_points).
+
     Put n_points on every line
     :param mesh:
-    :param lines:
-    :param resolution:
+    :param lines/
     :param n_points:
     :return:
     """
@@ -311,14 +341,15 @@ def interpolation(mesh, lines, n_points):
             interpolation_ids[i_line, i_pt] = cell_locator.FindCell(points[i_line, i_pt])
     return interpolation_ids
 
-def get_values_on_lines(mesh, values, lines, n_points):
-    mesh.cell_data['pressure'] = values
-    # create
-    point_cloud = pv.PolyData(line_points(lines, n_points))
-    mesh_with_point_data = mesh.cell_data_to_point_data()
-    sampled_data = mesh_with_point_data.sample(point_cloud)
-    sampled_values = sampled_data.point_arrays['pressure']
-
+def get_values_on_lines(mesh, values, id_matrix):
+    """
+    :param mesh:
+    :param values: shape(n_samples, n_times, n_cells)
+    :param id_matrix:
+    """
+    result = values[:, :, id_matrix]
+    result = np.moveaxis(result, 2, 0)
+    return result
 
 
 """

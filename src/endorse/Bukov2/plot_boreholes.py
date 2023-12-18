@@ -27,10 +27,10 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
-    for i, i_list in enumerate(bh_set.boreholes_table):
-        for j, bh_list in enumerate(i_list):
-            iangle_norm = (i / len(bh_set.boreholes_table), j / len(i_list))
-            for bh in bh_list:
+    for i in range(bh_set.n_y_angles):
+        for j in range(bh_set.n_z_angles):
+            iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+            for bh in bh_set.direction_lookup(i,j):
                 add_bh(plotter, iangle_norm, bh_set, bh)
     return plotter
 

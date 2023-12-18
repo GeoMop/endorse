@@ -93,63 +93,52 @@ geometry:
       # not checked in the code
       y_spacing: 25
 
-  containers:
-      # length of horizontal container [m]
-      length: 4
-      # distance between containers, empty, backfill [m]
-      spacing: 10
-      # number of containers (automaticaly reduced to fit into 'main_tunnel_length')
-      n_containers: 6
-      # position of the first container from the beginning of the tunnel (interface tunnel-
-      offset: 4
+optimize:
+    n_workers: 4
+    workers_per_node: 4     # for PBS only
 
 
-  # shifting the mesh to real in-situ coordinates
-  # TODO: do not shift the computation mesh but the input data to the local coordinate system
-  #shift_vec: [ -682421.2022, -1129264.115, 50]
-  shift_vec: [0, 0, 0]
-
-  fracture_stats:
-      # SKB data
-      -   name: NS
-          trend: 292
-          plunge: 1
-          concentration: 17.8
-          power: 2.5
+fracture_stats:
+    # SKB data
+    -   name: NS
+        trend: 292
+        plunge: 1
+        concentration: 17.8
+        power: 2.5
 #          r_min: 0.038
-          r_min: 1
-          r_max: 564
-          p_32: 0.094
-      -   name: NE
-          trend: 326
-          plunge: 2
-          concentration: 14.3
-          power: 2.7
-          r_min: 1
-          r_max: 564
-          p_32: 0.163
-      -   name: NW
-          trend: 60
-          plunge: 6
-          concentration: 12.9
-          power: 3.1
-          r_min: 1
-          r_max: 564
-          p_32: 0.098
-      -   name: EW
-          trend: 15
-          plunge: 2
-          concentration: 14.0
-          power: 3.1
-          r_min: 1
-          r_max: 564
-          p_32: 0.039
-      -   name: HZ
-          trend: 5
-          plunge: 86
-          concentration: 15.2
-          power: 2.38
-          r_min: 1
-          r_max: 564
-          p_32: 0.141
+        r_min: 1
+        r_max: 564
+        p_32: 0.094
+    -   name: NE
+        trend: 326
+        plunge: 2
+        concentration: 14.3
+        power: 2.7
+        r_min: 1
+        r_max: 564
+        p_32: 0.163
+    -   name: NW
+        trend: 60
+        plunge: 6
+        concentration: 12.9
+        power: 3.1
+        r_min: 1
+        r_max: 564
+        p_32: 0.098
+    -   name: EW
+        trend: 15
+        plunge: 2
+        concentration: 14.0
+        power: 3.1
+        r_min: 1
+        r_max: 564
+        p_32: 0.039
+    -   name: HZ
+        trend: 5
+        plunge: 86
+        concentration: 15.2
+        power: 2.38
+        r_min: 1
+        r_max: 564
+        p_32: 0.141
 
