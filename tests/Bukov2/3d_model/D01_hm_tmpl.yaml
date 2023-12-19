@@ -17,13 +17,19 @@ problem: !Coupling_Sequential
     r_tol: 1e-7
     flow_equation: !Flow_Richards_LMH
         user_fields:
+          - name: sx
+            scalar_field: <init_stress_x>
+          - name: sy
+            scalar_field: <init_stress_y>
+          - name: sz
+            scalar_field: <init_stress_z>
           - name: init_p
             scalar_field: <init_pressure>
+          - name: k0
+            scalar_field: <perm_k0>
           - name: kr
             scalar_field: <perm_kr>
-          - name: beta1
-            scalar_field: <perm_beta>
-          - name: deltakmax
+          - name: delta
             scalar_field: <perm_km>
           - name: gamma
             scalar_field: <perm_gamma>
