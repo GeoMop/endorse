@@ -36,9 +36,9 @@ problem: !Coupling_Sequential
           - name: stress_threshold
             scalar_field: 55e6
           - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
-            scalar_value: <conductivity_a>
+            scalar_field: <conductivity_a>
           - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
-            scalar_value: <conductivity_b>
+            scalar_field: <conductivity_b>
         nonlinear_solver:
           linear_solver: !Petsc
             a_tol: <flow_solver__a_tol>

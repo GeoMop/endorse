@@ -23,7 +23,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
     wrap = flow_wrapper.Wrapper(solver_id=solver_id, output_dir=output_dir_in, config_dict=config_dict)
 
     for pars in params_in:
-        idx = pars[0]
+        idx = int(pars[0])
         wrap.set_parameters(data_par=pars[1:])
         t = time.time()
         res, sample_data = wrap.get_observations()
