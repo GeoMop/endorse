@@ -13,56 +13,16 @@ metacentrum:
   swrap: /storage/liberec3-tul/home/pavel_exner/workspace/swrap/src/swrap/smpiexec.py
   # swrap: /home/paulie/Workspace/swrap/src/swrap/smpiexec.py
 
+n_samples: 4 # must be power of 2 due to salib
+n_processes: 4
+# 40 x 2418
+sample_shape: [40, 2218]
 
 collect_only: False
 mesh_only: False
 make_plots: False
-
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: True
-
-# The flow executable and arguments to use.
-local:
-  flow_executable:
-    ### this is the simplest case when using inside docker (or singularity) image
-    # running with empty environment (env -i); keep flow123d paths:
-    - LD_LIBRARY_PATH=/opt/flow123d/lib
-    - /opt/flow123d/bin/flow123d
-    ### this is for installed Flow123d package or individual build
-#    - /home/domesova/flow123d_3.1.0/bin/fterm.sh
-#    - /home/paulie/local/flow123d/flow123d_3.1.0/bin/fterm.sh
-#    - /home/paulie/Workspace/flow123d/bin/fterm
-    ### for flow123d individual build (not docker image install)
-#    - --no-term
-#    - rel
-    ### for flow123d (docker image install)
-#    - --version
-#    - "3.1.0"
-#    - --tty
-#    - "false"
-#    - --interactive
-#    - "false"
-    ### this is for both installed Flow123d package or individual build
-#    - run
-    - --no_profiler
-  np: 1
-  gmsh_executable:
-    - /home/paulie/Workspace/Endorse-2Dtest-Bayes/venv/bin/gmsh
-
-# lower smoother
-#smooth_factor:  5e-4 #1e-2 #1e-4 #1e-5 #1e-6 #5e-6
-
-# FULL time axis
-start_time: &start_time 0
-end_time: &end_time 30
-bored_time: &bored_time 1
-output_times: &output_times
-  - {begin: *start_time, step: 0.1, end: *bored_time}
-  #- {begin: *bored_time, step: 1, end: 100}
-  - {begin: *bored_time, step: 1, end: *end_time}
-
-n_samples: 4 # must be power of 2 due to salib
-n_processes: 4
 
 parameters:
   - name: storativity
@@ -89,6 +49,15 @@ parameters:
   - name: perm_gamma
     type: lognorm
     bounds: [ -13.007626024022, 0.2]
+
+# FULL time axis
+start_time: &start_time 0
+end_time: &end_time 30
+bored_time: &bored_time 1
+output_times: &output_times
+  - {begin: *start_time, step: 0.1, end: *bored_time}
+  #- {begin: *bored_time, step: 1, end: 100}
+  - {begin: *bored_time, step: 1, end: *end_time}
 
 geometry:
   # base of the mesh file name
@@ -150,3 +119,31 @@ hm_params:
 
 copy_files: []
   #- C01_hm_tmpl.yaml
+
+# The flow executable and arguments to use.
+local:
+  flow_executable:
+    ### this is the simplest case when using inside docker (or singularity) image
+    # running with empty environment (env -i); keep flow123d paths:
+    - LD_LIBRARY_PATH=/opt/flow123d/lib
+    - /opt/flow123d/bin/flow123d
+    ### this is for installed Flow123d package or individual build
+#    - /home/domesova/flow123d_3.1.0/bin/fterm.sh
+#    - /home/paulie/local/flow123d/flow123d_3.1.0/bin/fterm.sh
+#    - /home/paulie/Workspace/flow123d/bin/fterm
+    ### for flow123d individual build (not docker image install)
+#    - --no-term
+#    - rel
+    ### for flow123d (docker image install)
+#    - --version
+#    - "3.1.0"
+#    - --tty
+#    - "false"
+#    - --interactive
+#    - "false"
+    ### this is for both installed Flow123d package or individual build
+#    - run
+    - --no_profiler
+  np: 1
+  gmsh_executable:
+    - /home/paulie/Workspace/Endorse-2Dtest-Bayes/venv/bin/gmsh
