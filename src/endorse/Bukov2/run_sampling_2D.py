@@ -98,6 +98,33 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     #     print(f"Saved {output_file}")
 
 
+
+def conductivity(k0, kr, delta, gamma, sigma0, sigma_m):
+    sigma_vm = 170/120*np.abs(sigma_m)
+    sigma_tres = 55e6
+    k = kr + delta * np.exp(np.log((k0-kr)/delta) * sigma_m/sigma0)
+    return np.where(sigma_vm < sigma_tres, k, k * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres))
+    # if sigma_vm < sigma_tres:
+    #     return k
+    # else:
+    #     return k * np.exp(gamma*(sigma_vm - sigma_tres))
+
+
+def plot_conductivity(params):
+    import matplotlib.pyplot as plt
+
+    # init_sigma_m = -(42 + 19 + 14)*1e6/3
+    sigma_mean = np.linspace(-120e6,7e6,200)
+    for p in params:
+        init_sigma_m = -(p[1] + p[2] + p[3])/3
+        cond = conductivity(p[4],p[5],p[6],p[7],init_sigma_m,sigma_mean)
+        plt.plot(sigma_mean/1e6, cond)
+        plt.scatter(init_sigma_m/1e6,p[4])
+
+    plt.yscale('log')
+    plt.savefig('conductivity.pdf')
+
+
 if __name__ == "__main__":
 
     # default parameters
@@ -136,6 +163,9 @@ if __name__ == "__main__":
     param_values = sample.saltelli(problem, config_dict["n_samples"], calc_second_order=True)
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
+
+    plot_conductivity(param_values)
+    # exit(0)
 
     sensitivity_dir = os.path.join(output_dir, "sensitivity")
     aux_functions.force_mkdir(sensitivity_dir, force=True)
