@@ -11,6 +11,8 @@ from endorse.bayes_orig import run_all as bayes_run_all
 from endorse.Bukov2.run_sampling_2D import prepare_sets_of_params
 from endorse.Bukov2.run_sampling_2D import prepare_pbs_scripts
 
+import endorse.Bukov2.sample_storage as sample_storage
+
 import numpy as np
 import pyvista as pv
 import matplotlib.pyplot as plt
@@ -212,28 +214,12 @@ def test_vtk_process():
     sample_data = sample_data.reshape((1,*sample_data.shape)) # axis 0 - sample
     print(sample_data.shape)
 
-    file_path = 'test_bukov2.h5'
-    # dataset_name = 'pressure'
-    from endorse.Bukov2 import sample_storage
-
-    n_samples = 10
-    # sample_size = 90000
-    # initial_shape = (K, M, N + extra_space)  # Pre-allocate extra space in the N dimension
-    # chunks = (K, M, chunk_size)  # Define a suitable chunk size
-
-    sample_storage.create_chunked_dataset(file_path, chunk_shape=sample_data.shape)
-
-    # When you have new data to append
-    # new_data = np.random.rand(K, M, n)  # Your new data
-    for i in range(10):
-        sample_storage.append_data(file_path, sample_data)
-
-
 
 
 def test_salib_flow123d_2D():
 
     output_dir = os.path.abspath("../sandbox/salib_test_2D")
+    pvd_file_path = os.path.abspath("JSmodel/output/flow.pvd")
     n_processes = 10
     n_samples = 20
 
@@ -283,6 +269,11 @@ def test_salib_flow123d_2D():
     # Generate Saltelli samples
     param_values = sample.saltelli(problem, 100, calc_second_order=True)
 
+    output_file = os.path.join(output_dir, 'sampled_data.h5')
+    sample_storage.create_chunked_dataset(output_file, shape=(param_values.shape[0], *config_dict["sample_shape"]))
+    sample_storage.append_new_dataset(output_file, "parameters", param_values)
+    # sample_storage.write_new_object(output_file, "salib_problem", problem)
+
     sensitivity_dir = os.path.join(output_dir, "sensitivity")
     aux_functions.force_mkdir(sensitivity_dir, force=True)
 
@@ -291,6 +282,30 @@ def test_salib_flow123d_2D():
 
     # plan parallel sampling, prepare PBS jobs
     pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, n_processes)
+
+    # Load the PVD file
+    field_name = "pressure_p0"
+    pvd_reader = pv.PVDReader(pvd_file_path)
+
+    field_data_list = []
+    for time_frame in range(len(pvd_reader.time_values)):
+        pvd_reader.set_active_time_point(time_frame)
+        mesh = pvd_reader.read()[0]  # MultiBlock mesh with only 1 block
+
+        field_data = mesh[field_name]
+        field_data_list.append(field_data)
+        print(field_data.shape)
+
+    sample_data = np.stack(field_data_list)
+    # sample_data = np.concatenate(field_data_list)
+    sample_data = sample_data.reshape((1, *sample_data.shape))  # axis 0 - sample
+    print(sample_data.shape)
+
+    for i in range(10):
+        sample_storage.set_sample_data(output_file, sample_data, i)
+
+    sample_storage.set_sample_data(output_file, None, 14)
+    sample_storage.set_sample_data(output_file, None, 18)
 
     # print(param_values)
     # X = np.linspace(-1, 1, 1000)
