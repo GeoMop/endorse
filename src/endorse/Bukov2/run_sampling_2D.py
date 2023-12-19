@@ -76,6 +76,7 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     no_samples, no_parameters = np.shape(parameters)
     rows_per_file = no_samples // n_processes + (no_samples % n_processes > 0)
 
+    sample_idx = 0
     for i in range(n_processes):
         start_idx = i * rows_per_file
         end_idx = min((i + 1) * rows_per_file, no_samples)
@@ -84,9 +85,10 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
         param_file = os.path.join(output_dir_in, "sensitivity", "params_" + str(i).zfill(2) + ".csv")
         with open(param_file, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(par_names)
+            writer.writerow(['idx', *par_names])
             for row in subset_matrix:
-                writer.writerow(row)
+                writer.writerow([sample_idx, *row])
+                sample_idx = sample_idx+1
 
     # for i, mat in enumerate(sub_parameters):
     #     output_file = f"parameters_{str(i+1).zfill(2)}.npy"
