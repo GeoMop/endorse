@@ -37,16 +37,21 @@ problem: !Coupling_Sequential
             scalar_value: <conductivity_c>
         nonlinear_solver:
           linear_solver: !Petsc
-            a_tol: 0
-            r_tol: 1e-12
-            options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+            a_tol: <flow_solver__a_tol>
+            r_tol: <flow_solver__r_tol>
+            options: <flow_solver__options>
         input_fields:
           - region: BULK
             conductivity: !FieldFormula
               value: if(von_mises_stress<stress_threshold,
-                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
-                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
-                       )*(1 + a*x/35 + b*y/30 + c*z/30)
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3))),
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3)))
+                * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                )*(1 + a*x/50 + b*z/50)
+#              value: if(von_mises_stress<stress_threshold,
+#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
+#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
+#                       )*(1 + a*x/35 + b*y/30 + c*z/30)
             # https://en.wikipedia.org/wiki/Specific_storage
             storativity: <storativity>
             # S = rho * g * (beta_s + nu * beta_w)
@@ -126,9 +131,9 @@ problem: !Coupling_Sequential
 #            - initial_stress
             - region_id
         solver: !Petsc
-          a_tol: 0
-          r_tol: 1e-12
-          options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+          a_tol: <mechanics_solver__a_tol>
+          r_tol: <mechanics_solver__r_tol>
+          options: <mechanics_solver__options>
         input_fields:
           - region: BULK
             young_modulus: <young_modulus>

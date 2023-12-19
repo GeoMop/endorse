@@ -17,13 +17,19 @@ problem: !Coupling_Sequential
     r_tol: 1e-7
     flow_equation: !Flow_Richards_LMH
         user_fields:
+          - name: sx
+            scalar_field: <init_stress_x>
+          - name: sy
+            scalar_field: <init_stress_y>
+          - name: sz
+            scalar_field: <init_stress_z>
           - name: init_p
             scalar_field: <init_pressure>
+          - name: k0
+            scalar_field: <perm_k0>
           - name: kr
             scalar_field: <perm_kr>
-          - name: beta1
-            scalar_field: <perm_beta>
-          - name: deltakmax
+          - name: delta
             scalar_field: <perm_km>
           - name: gamma
             scalar_field: <perm_gamma>
@@ -42,9 +48,14 @@ problem: !Coupling_Sequential
           - region: BULK
             conductivity: !FieldFormula
               value: if(von_mises_stress<stress_threshold,
-                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
-                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
-                       )*(1 + a*x/50 + b*z/50)
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3))),
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3)))
+                  * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                )*(1 + a*x/50 + b*z/50)
+#              value: if(von_mises_stress<stress_threshold,
+#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
+#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
+#                       )*(1 + a*x/50 + b*z/50)
             # https://en.wikipedia.org/wiki/Specific_storage
             storativity: <storativity> #2.8e-8 #3.28e-7 # S = rho * g * (beta_s + nu * beta_w)
             # !FieldFormula   # S = rho * g * (beta_s + nu * beta_w)

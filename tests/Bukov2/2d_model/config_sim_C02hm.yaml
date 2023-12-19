@@ -39,7 +39,7 @@ parameters:
     bounds: [ 16.7599495371307, 0.3]
   - name: init_stress_z
     type: lognorm
-    bounds: [ 16.4545678875795, 0.3 ]
+    bounds: [ 16.4545678875795, 0.3]
   - name: perm_k0
     type: lognorm
     bounds: [ -41.4465316738928, 1.0]
@@ -109,9 +109,13 @@ hm_params:
     init_stress_z: 14e6
 
     # non-linear permeability
-    perm_kr: 8e-20
-    perm_km: 8e-17
-    perm_beta: 4e-7
+#    perm_kr: 8e-20
+#    perm_km: 8e-17
+#    perm_beta: 4e-7
+#    perm_gamma: 3e-7
+    perm_k0: 8e-20
+    perm_kr: 8e-17
+    perm_delta: 4e-7
     perm_gamma: 3e-7
 
     conductivity_a: 0
