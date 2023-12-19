@@ -36,8 +36,20 @@ class BoreholeSet:
     avoid_cylinder: Tuple[float, float, float]     # Boreholes can not insterset this cylinder (r, length_min, length_max) from origin in X direction
     active_cylinder: Tuple[float, float, float]    # Boreholes must intersect this cylinder (r, length_min, length_max) from origin in X direction
     wh_zones: List[Box]
+    point_step: float
+    n_points: int
+    n_boreholes_to_select: int
     _y_angle_range = (-80, 80)      # achive 2m from 10m distance
     _z_angle_range = (-60, 60)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Optionally remove the cached_property data if not needed
+        #state.pop('expensive_computation', None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
     @classmethod
     def from_cfg(cls, cfg):
@@ -45,6 +57,7 @@ class BoreholeSet:
             transform_matrix = np.diag([-1, -1, 1])
         else:
             transform_matrix = np.eye(3)
+        n_points = 2*int(cfg.n_points_per_bh / 2) + 1
         return BoreholeSet(
             transform_matrix,
             np.array(cfg.transform_shift),
@@ -53,7 +66,10 @@ class BoreholeSet:
             cfg.wh_pos_step,
             cfg.avoid_cylinder,
             cfg.active_cylinder,
-            np.array(cfg.wh_zones))
+            np.array(cfg.wh_zones),
+            cfg.point_step,
+            n_points,
+            cfg.n_boreholes_to_select)
 
     def transform(self, point):
         point = np.array(point)[..., None]
@@ -118,9 +134,21 @@ class BoreholeSet:
         angle_tab, bh_list = self._build_boreholes
         return bh_list
 
+    @cached_property
+    def _angle_ijk(self):
+        table = np.empty((self.n_boreholes, 3), dtype=np.int32)
+        for i in range(self.n_y_angles):
+            for j in range(self.n_z_angles):
+                for k, i_bh in enumerate(self.angles_table[i][j]):
+                    table[i_bh, :] = (i,j,k)
+        return table
+
+
+    def angle_ijk(self, i_bh):
+        return self._angle_ijk[i_bh]
 
     def direction_lookup(self, i, j):
-        return [self.bh_list[i] for i in self.angles_table[i][j]]
+        return [self.bh_list[i_bh] for i_bh in self.angles_table[i][j]]
 
     def draw_angles(self, n):
         return np.stack(
@@ -233,9 +261,24 @@ class BoreholeSet:
         length = np.abs(np.dot(diff, ex_normalized))
         return length, s, t, point_1, point_2, ez_normalized
 
-    def project_field(self, opt_cfg, mesh, field):
-        id_matrix = interpolation_slow(mesh, self.point_lines, n_points=opt_cfg.n_line_eval_points)
-        return cum_borehole_array(field, id_matrix)
+    def project_field(self, mesh, field, cached = False):
+        if cached and hasattr(self, "_bh_field"):
+            return self._bh_field
+        id_matrix = interpolation_slow(mesh, self.point_lines[0])
+        bh_field = cum_borehole_array(field, id_matrix)
+        if cached:
+            self._bh_field = bh_field
+        return bh_field
+
+    @cached_property
+    def point_size(self):
+        """
+        For every borehole the length associated with a single point. (points are nonuniform)
+        :return: array of n_boreholes
+        """
+        interval_size = np.linalg.norm(self.point_lines[:, 1, :], axis=1)
+        point_size = interval_size / self.n_points
+        return point_size
 
     # def make_bh_active_line(self, bh):
     #     wellhead, dir, transversal_pt = bh
@@ -245,15 +288,31 @@ class BoreholeSet:
     #     p2 = self.transform(transversal_pt + dir)
     #     return [p1, (p2-p1)]
 
+    @property
+    def line_bounds(self):
+        return self.point_lines[1]
+
+
     @cached_property
     def point_lines(self):
         bh_array = np.array(self.bh_list)
         dir = bh_array[:, 1, :]
         transversal_pt = bh_array[:, 2, :]
-        p1 = self.transform((transversal_pt - dir))
-        p2 = self.transform((transversal_pt + dir))
-        d12 = p2 - p1
-        return np.stack((p1, d12), axis=1)
+        #p1 = self.transform((transversal_pt - dir))
+        #p2 = self.transform((transversal_pt + dir))
+        half_points = int((self.n_points - 1) / 2)
+        i_pt = np.arange(-half_points, half_points + 1, 1, dtype=int)
+        dir_length = np.linalg.norm(dir, axis=1)
+        pt_step = (dir / dir_length[:, None]) * self.point_step
+        points = transversal_pt[:, None, :] + pt_step[:, None, :] * i_pt[None, :, None]
+        assert len(points[0,:,0]) == self.n_points
+        #max_ax = np.argmax(np.abs(dir), axis=1)
+        max_bound = (dir_length / self.point_step).astype(int)
+        min_bound = np.maximum(0, half_points - max_bound)
+        max_bound = np.minimum(self.n_points - 1, half_points + max_bound)
+        assert np.all(max_bound < self.n_points)
+        line_bounds = np.stack((min_bound, max_bound), axis=1)
+        return points, line_bounds
 
 
 
@@ -314,7 +373,7 @@ def line_points(lines, n_points):
     params = np.linspace(0, 1, n_points)
     return dir[:, None, :] * params[:,None] + p1[:, None, :]
 
-def interpolation_slow(mesh, lines, n_points):
+def interpolation_slow(mesh,  points):
     """
     Construct element_id matrix of shape (n_boreholes, n_points).
 
@@ -324,13 +383,13 @@ def interpolation_slow(mesh, lines, n_points):
     :param n_points:
     :return:
     """
-    points = line_points(lines, n_points)
     cell_locator = vtkCellLocator()
     cell_locator.SetDataSet(mesh)
     cell_locator.BuildLocator()
-
+    n_lines, n_points, dim = points.shape
+    assert dim == 3
     interpolation_ids = np.empty([*points.shape[:2]], dtype=np.int32)
-    for i_line in range(len(lines)):
+    for i_line in range(n_lines):
         interp_line = interpolation_ids[i_line, :]
         for i_pt in range(n_points):
             interp_line[i_pt] = max(0, cell_locator.FindCell(points[i_line, i_pt]))
@@ -354,11 +413,11 @@ def cum_borehole_array(values, id_matrix):
     """
     :param values: shape(n_samples, n_times, n_cells)
     :param id_matrix: shape(n_boreholes, n_points)
-    return: shape: (n_boreholes, n_samples, n_times, n_points)
+    return: shape: (n_boreholes, n_points, n_times, n_samples)
     """
     result = values[:, :, id_matrix]
-    result = np.moveaxis(result, 2, 0)
-    result = np.cumsum(result, axis=3)  # cumsum along points
+    result = np.transpose(result, axes=(2, 3, 1, 0))
+    result = np.cumsum(result, axis=1)  # cumsum along points
     return result
 
 

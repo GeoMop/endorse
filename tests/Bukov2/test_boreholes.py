@@ -5,6 +5,8 @@ import os
 from endorse import common
 from endorse.Bukov2 import boreholes, plot_boreholes
 from  pathlib import Path
+import pickle
+
 script_dir = Path(__file__).absolute().parent
 
 def test_length_of_transversals():
@@ -62,13 +64,15 @@ def test_read_fields():
         [[[-10, 0, 1.5], [1, 1, 0.5]],
          [[10, 0, 1.5], [-1, -1, 0.5]]]
     )
+
+    points = boreholes.line_points(lines, 100)
     def call():
-        boreholes.interpolation_slow(mesh, lines, 100)
+        boreholes.interpolation_slow(mesh, points)
     print("time: ", timeit.timeit(call, number=1))
 
-    id_matrix = boreholes.interpolation_slow(mesh, lines, 100)
+    id_matrix = boreholes.interpolation_slow(mesh, points)
     cumlines = boreholes.cum_borehole_array(pressure_array[None, :, :], id_matrix)
-    assert cumlines.shape == (2, 1, 10, 100)  # n_lines, n_samples, n_times, n_points
+    assert cumlines.shape == (2, 100, 10, 1)  # n_lines, n_samples, n_times, n_points
 
     #point_values = boreholes.get_values_on_lines(mesh, pressure_array, lines, n_points=10)
     #assert point_values.shape == (2, pressure_array.shape[0], 3)
@@ -88,5 +92,10 @@ def test_borhole_set():
     # Construct test interpolation ID matrix and cumsum on boreholes.
     pattern = script_dir / 'flow_reduced' / 'flow_*.vtu'
     pressure_array, mesh = boreholes.get_time_field(str(pattern), 'pressure_p0')
-    field_on_lines = bh_set.project_field(cfg.optimize, mesh, pressure_array[None, :, :])
+    ref_field_on_lines = bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
 
+    # Test serialization
+    serialized = pickle.dumps(bh_set)
+    new_bh_set = pickle.loads(serialized)
+    new_field_on_lines = new_bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
+    np.testing.assert_allclose(ref_field_on_lines, new_field_on_lines, rtol=1e-6)

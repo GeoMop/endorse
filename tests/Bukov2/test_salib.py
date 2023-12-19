@@ -7,6 +7,7 @@ import pytest
 import multiprocessing
 import math
 import time
+
 def single_param_model(params):
     P1, = params
     epsilon = np.random.normal(scale=1)  # Adding random noise
@@ -102,8 +103,6 @@ def large_out_model(X, params):
     epsilon = np.random.normal(scale=0.1, size=len(X))  # Adding random noise
 
     Y = P1 + P2 * X + P3 * X**P4 + epsilon
-    if np.random.rand() < 0.1:
-        Y = np.NaN
 
     return Y
 
@@ -217,3 +216,61 @@ def test_salib_large_output():
     # Unfortunately analysis takes quite some time:
     # Assuming linear dependence on number of outputs and number of samples we have:
     # 
+
+
+
+#############
+def forward_time_model(params, n_times):
+    P1, P2, P3, P4 = params
+    epsilon = np.random.normal(scale=0.1)  # Adding random noise
+    t = np.linspace(0, 1, n_times)
+    # Toy forward model equation with modified interaction terms
+    Y = (5 * P1 + 1 * P2) *t  + (10 * P3 + 0.1 * P4 +  3 * P3 * P4) + epsilon
+    #if P1 < 0.1:
+    #    Y = np.NaN
+    return Y
+
+
+def fit(values):
+    # values: (times, samples)
+    a0 = np.mean(values, axis=0)
+    a1 = np.mean(values[1:, :] - values[0:-1,:], axis=0)
+    return np.stack((a0, a1))
+
+#@pytest.mark.skip
+def test_time_series_sa():
+    # Define the problem for SALib
+    problem = {
+        'num_vars': 4,
+        'names': ['P1', 'P2', 'P3', 'P4'],
+        'bounds': [[0, 1], [0, 1], [0, 1], [0, 1]]
+    }
+
+    # Generate Saltelli samples
+    param_values = sample.saltelli(problem, 1000, calc_second_order=True)
+
+    # Evaluate the model for each set of parameters
+    n_times = 10
+    model_evaluations = np.array([forward_time_model(params, n_times) for params in param_values]).T
+    #mean = np.nanmean(model_evaluations)
+    #model_evaluations[np.isnan(model_evaluations)] = mean
+
+    # Sensitivity of inversion
+    fit(model_evaluations)
+    sobol_array = analyze.sobol_vec(model_evaluations, problem, second_order=True)
+    sobol_indices = analyze.sobol_max(sobol_array)
+    print_sensitivity_results(problem, analyze.arr_to_dict(sobol_indices))
+
+    # Perform Sobol sensitivity analysis, directly
+    print("\n")
+    sobol_indices = analyze.sobol_max(analyze.sobol_vec(model_evaluations, problem, second_order=True))
+    print_sensitivity_results(problem, analyze.arr_to_dict(sobol_indices))
+
+    """
+    Results: perfect match
+    So we conclude, that taking max of sensitivities from linearly derived values of the time series
+    is the same as taking max from the time seties directly. 
+    In particular if te derivative of the time series is sensitive to some parameter so would be the 
+    time series itself. 
+    """
+

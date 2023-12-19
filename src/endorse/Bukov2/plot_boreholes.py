@@ -38,8 +38,9 @@ def add_bh(plotter, angle_norm, bh_set, i_bh):
     p_w, dir, p_tr = bh_set.bh_list[i_bh]
     p_w = bh_set.transform(p_w)
     p_tr = bh_set.transform(p_tr)
-    p_begin, d12 = bh_set.point_lines[i_bh]
-    p_end = p_begin + d12
+    points, bounds = bh_set.point_lines
+    p_begin = points[i_bh, bounds[i_bh][0], :]
+    p_end = points[i_bh, bounds[i_bh][1], :]
 
     color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     #print(f"Adding: {bh} col: {color}")
@@ -49,8 +50,14 @@ def add_bh(plotter, angle_norm, bh_set, i_bh):
     line = pv.Line(p_begin, p_end)
     plotter.add_mesh(line, color=color, line_width=2)
 
+    # Transversal point
     sphere = pv.Sphere(0.5, p_tr)
     plotter.add_mesh(sphere, color=color)
+
+    # for pt in points[i_bh, : bounds[i_bh][1]]:
+    #     sphere = pv.Sphere(0.3, pt)
+    #     plotter.add_mesh(sphere, color=color)
+
 #
 # # Example usage
 #
