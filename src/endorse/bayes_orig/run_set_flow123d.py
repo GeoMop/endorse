@@ -22,10 +22,12 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
 
     wrap = flow_wrapper.Wrapper(solver_id=solver_id, output_dir=output_dir_in, config_dict=config_dict)
 
-    for idx, pars in enumerate(params_in):
-        wrap.set_parameters(data_par=pars)
+    for pars in params_in:
+        idx = pars[0]
+        wrap.set_parameters(data_par=pars[1:])
         t = time.time()
         res, sample_data = wrap.get_observations()
+
         print("Flow123d res: ", res)
         #if res >= 0:
             #print(obs_data)
@@ -45,12 +47,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         #     file.write(line + "\n")
 
         output_file = os.path.join(output_dir_in, 'sampled_data.h5')
-        print(output_file)
-        if not os.path.exists(output_file) and sample_data is not None:
-            sample_storage.create_chunked_dataset(output_file, chunk_shape=sample_data.shape)
-
-        # if sample_data is not None:
-        sample_storage.append_data(output_file, sample_data)
+        sample_storage.set_sample_data(output_file, sample_data, idx)
 
         # if idx == 1:
         #     exit(0)
