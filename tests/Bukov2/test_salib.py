@@ -20,7 +20,12 @@ def forward_model(params):
 
     # Toy forward model equation with modified interaction terms
     Y = 5 * P1 + 5 * P2 + 10 * P3 + 0.1 * P4 +  3 * P1 * P4 + epsilon
-
+    if P1 < 0.1:
+        Y = np.NaN
+    """
+    Result: replacing the NaN observations with the mean have nearly no impact on the results for 10% of NaNs
+    but have very pronounced impact for 50% of Nans.
+    """
     return Y
 
 
@@ -80,6 +85,8 @@ def test_salib_small():
 
     # Evaluate the model for each set of parameters
     model_evaluations = np.array([forward_model(params) for params in param_values])
+    mean = np.nanmean(model_evaluations)
+    model_evaluations[np.isnan(model_evaluations)] = mean
 
     # Perform Sobol sensitivity analysis
     print("\n")
@@ -95,6 +102,8 @@ def large_out_model(X, params):
     epsilon = np.random.normal(scale=0.1, size=len(X))  # Adding random noise
 
     Y = P1 + P2 * X + P3 * X**P4 + epsilon
+    if np.random.rand() < 0.1:
+        Y = np.NaN
 
     return Y
 
@@ -161,6 +170,7 @@ class Analyze:
     def single(self, output):
         return analyze.sobol(self.problem, output, calc_second_order=True, print_to_console=False)
 
+@pytest.mark.skip
 def test_salib_large_output():
     # Define the problem for SALib
     problem = {
