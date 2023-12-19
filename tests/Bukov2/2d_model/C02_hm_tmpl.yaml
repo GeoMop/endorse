@@ -29,6 +29,10 @@ problem: !Coupling_Sequential
             scalar_field: <perm_gamma>
           - name: stress_threshold
             scalar_field: 55e6
+          - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            scalar_value: <conductivity_a>
+          - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            scalar_value: <conductivity_b>
         nonlinear_solver:
           linear_solver: !Petsc
             a_tol: <flow_solver__a_tol>
@@ -40,12 +44,14 @@ problem: !Coupling_Sequential
               value: if(von_mises_stress<stress_threshold,
                         1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
                         1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
-                       )
+                       )*(1 + a*x/50 + b*z/50)
             # https://en.wikipedia.org/wiki/Specific_storage
             storativity: <storativity> #2.8e-8 #3.28e-7 # S = rho * g * (beta_s + nu * beta_w)
+            # !FieldFormula   # S = rho * g * (beta_s + nu * beta_w)
+            # value: 9.81e3 * (3*(1-2*0.23)/60e9 + 0.007*5.1e-10)
             # bulk compressibility beta_s=1/K = (3(1-2pr)/E)
             # porosity nu=0.007
-            # water compressibility beta_w=0 1/Pa
+            # water compressibility beta_w=5.1 1/Pa
             init_pressure: !FieldFormula
               value: init_p
 

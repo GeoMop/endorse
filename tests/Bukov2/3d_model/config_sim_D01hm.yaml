@@ -25,9 +25,9 @@ make_plots: False
 clean_sample_dir: True
 
 parameters:
-  - name: storativity
-    type: lognorm
-    bounds: [-14.5662279378421, 2.0]
+#  - name: storativity
+#    type: lognorm
+#    bounds: [-14.5662279378421, 2.0]
   - name: young_modulus
     type: lognorm
     bounds: [23.2670944048714, 2.0]
@@ -49,6 +49,15 @@ parameters:
   - name: perm_gamma
     type: lognorm
     bounds: [ -13.007626024022, 0.2]
+  - name: conductivity_a
+    type: unif
+    bounds: [ -1, 1 ]
+  - name: conductivity_b
+    type: unif
+    bounds: [ -1, 1 ]
+  - name: conductivity_c
+    type: unif
+    bounds: [ -1, 1 ]
 
 # FULL time axis
 start_time: &start_time 0
@@ -92,7 +101,7 @@ hm_params:
 # physical parameters of main interest:
     biot_coefficient: 0.2
     # porosity nu=0.007, beta_w=4e-10 Pa-1, beta_s = (biot-nu)*(1-biot)/bulk_modulus
-    storativity: 7.290792E-08  # S = rho * g * (beta_s + nu * beta_w)
+    storativity: 2.998917e-07  # S = rho * g * (beta_s + nu * beta_w)
     # permeability k=6e-22 m2, dyn. viscosity mu=0.001 Pa.s, g=9.81 m.s-2
     bulk_conductivity: 5.886E-15  # K = k * rho * g /mu
     init_pressure: 20 # 3MPa = p = h*rho*g => h = 300 m
@@ -108,6 +117,10 @@ hm_params:
     perm_km: 8e-17
     perm_beta: 4e-7
     perm_gamma: 3e-7
+
+    conductivity_a: 0
+    conductivity_b: 0
+    conductivity_c: 0
 
 # solver's settings
     mechanics_solver__a_tol: 0
