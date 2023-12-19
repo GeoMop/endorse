@@ -8,7 +8,7 @@ metacentrum:
   walltime: "20:00:00"  # 18:00:00
   memory: 4gb
   queue: charon
-  name: bukov_sens_2D
+  name: bukov_sens_3D
   workspace_rel: ../../workspace
   swrap: /storage/liberec3-tul/home/pavel_exner/workspace/swrap/src/swrap/smpiexec.py
   # swrap: /home/paulie/Workspace/swrap/src/swrap/smpiexec.py
@@ -110,7 +110,7 @@ geometry:
 # parameters substituted into the HM model template
 hm_params:
     mesh: tunnel_mesh.msh # healed mesh is used at the end (programmatically replaced)
-    in_file: C02_hm
+    in_file: D01_hm
 
     output_times: *output_times
     start_time: *start_time

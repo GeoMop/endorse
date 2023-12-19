@@ -50,7 +50,7 @@ class endorse_2Dtest():
         self.sample_output_dir = ""
 
     def set_parameters(self, data_par):
-        param_list = self._config["surrDAMH_parameters"]["parameters"]
+        param_list = self._config["parameters"]
         assert(len(data_par) == len(param_list))
 
         for idx, param in enumerate(param_list):
