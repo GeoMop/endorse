@@ -3,6 +3,19 @@
 # Seems to be on the edge of what is tracktable while providing full resolution of EDZ without anisotropic mesh.
 
 # base of the mesh file name
+
+simulation:
+    cfg:  "3d_model/config_sim_C02hm.yaml"
+    mesh: "3d_model/simulation_mesh.vtu" 
+    hdf:  "3d_model/sampled_data.h5"
+
+pbs:
+    n_workers: 100
+    queue: charon
+
+local:
+    n_workers: 4
+
 mesh_name: random_fractures
 
 mesh:
@@ -114,10 +127,12 @@ boreholes:
 
 optimize:
     # Borehole sampling points
-    borohole_length_rel: 2
+    #borohole_length_rel: 2
 
     # Optimization space
-    n_packers: 4  # meaning 3 chambers
+    packer_size: 2        # Size of packer in terms of points
+    min_chamber_size: 2   # Size in terms of points
+    n_packers: 4          # meaning 3 chambers
 
     # Algorithm params
     population_size: 100

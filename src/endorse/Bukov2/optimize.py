@@ -65,18 +65,20 @@ class OptSpace:
         self.bhs_size = self.bhs.n_boreholes
         self.n_boreholes = self.bhs.n_boreholes_to_select
         self.n_packers = cfg.n_packers
-        self.packer_resolution = 1000
+        self.packer_size = cfg.packer_size
+        self.min_packer_distance = cfg.packer_size + cfg.min_chamber_size
+        #self.packer_resolution = 1000
 
     def project_decorator(self, func):
         def wrapper(*args, **kwargs):
-            offspring = (None)
+            offspring = (None,)
             while any(ind is None for ind in offspring):
                 offspring = func(*args, **kwargs)
                 offspring = (self.project_individual(ind) for ind in offspring)
             return offspring
         return wrapper
 
-    def _project(self, individual:Individual):
+    def project_individual(self, individual:Individual):
         """
         Project an individual to canonical reprezentation.
         - return None if the individual is invalid (should not happen frequently)
@@ -99,10 +101,9 @@ class OptSpace:
         for bh_cfg in ind_bh:
             i_bh = bh_cfg[0]
             bh_cfg[1:].sort()
-            f_packers = self.float_packers(bh_cfg[1:])
-            for pa, pb in zip(f_packers[0:-1], f_packers[1:]):
-                assert pb > pa
-                if (pb - pa) < self.min_packer_diff(i_bh):
+            i_packers = bh_cfg[1:]
+            for pa, pb in zip(i_packers[0:-1], i_packers[1:]):
+                if (pb - pa) < self.min_packer_distance:
                     return None
 
 
@@ -115,23 +116,20 @@ class OptSpace:
         ind_bh[0, 0] = k0
         return ind_bh.ravel().tolist()
 
-    def int_packers(self, float_packers):
-        return (np.maximum(-1.0, np.minimum(1.0, float_packers)) * self.packer_resolution).astype(int).tolist()
-
-    def float_packers(self, int_packers):
-        return np.array(int_packers).astype(float) / self.packer_resolution
+    # def int_packers(self, float_packers):
+    #     return (np.maximum(-1.0, np.minimum(1.0, float_packers)) * self.packer_resolution).astype(int).tolist()
+    #
+    # def float_packers(self, int_packers):
+    #     return np.array(int_packers).astype(float) / self.packer_resolution
 
     def random_bh(self):
-        return np.random.randint(0, self.bhs_size)
+        i_bh = np.random.randint(0, self.bhs_size)
+        lower, upper = self.bhs.line_bounds[i_bh]
+        i_packers = np.random.randint(lower, upper, self.n_packers)
+        return (i_bh, *i_packers)
 
-    def random_packers(self):
-        return self.int_packers(np.random.randn(self.n_packers) / 3.0)
-
-    def make_individual(self) -> Individual:
-        ind = None
-        while ind is None:
-            ind = [(self.random_bh(), *self.random_packers())  for i in self.n_boreholes]
-            ind = self.project(ind)
+    def make_individual(self) -> Tuple[Individual]:
+        ind = [self.random_bh()  for i in range(self.n_boreholes)]
         return creator.Individual(ind),
 
 
