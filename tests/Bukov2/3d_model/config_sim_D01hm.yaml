@@ -13,16 +13,18 @@ metacentrum:
   swrap: /storage/liberec3-tul/home/pavel_exner/workspace/swrap/src/swrap/smpiexec.py
   # swrap: /home/paulie/Workspace/swrap/src/swrap/smpiexec.py
 
-n_samples: 128 # must be power of 2 due to salib
-n_processes: 360
-# 31 x 31186
-sample_shape: [31, 31186]
+#n_samples: 128 # must be power of 2 due to salib
+#n_processes: 360
+n_samples: 2 # must be power of 2 due to salib
+n_processes: 2
+# 32 x 31186
+sample_shape: [32, 31186]
 
 collect_only: False
 mesh_only: False
 make_plots: False
 # if True, it removes sample dir right after the sample is collected
-clean_sample_dir: True
+clean_sample_dir: False
 
 parameters:
 #  - name: storativity

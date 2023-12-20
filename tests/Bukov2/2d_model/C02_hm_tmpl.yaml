@@ -30,7 +30,7 @@ problem: !Coupling_Sequential
           - name: kr
             scalar_field: <perm_kr>
           - name: delta
-            scalar_field: <perm_km>
+            scalar_field: <perm_delta>
           - name: gamma
             scalar_field: <perm_gamma>
           - name: stress_threshold
