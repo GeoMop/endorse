@@ -122,16 +122,15 @@ class endorse_2Dtest():
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
             # still try collect results
-            # if os.path.join(self.sample_output_dir, "flow.pvd"):
-            #    try:
-            #        collected_values = self.collect_results(config_dict)
-            #        print("Sample results collected.")
-            #        return 3, collected_values  # tag, value_list
-            #    except:
-            #        print("Collecting sample results failed:")
-            #        traceback.print_exc()
-            #        return -3, None
-            return -1, None  # tag, value_list
+            try:
+                collected_values = self.collect_results(config_dict)
+                print("Sample results collected.")
+                return 3, collected_values  # tag, value_list
+            except:
+                print("Collecting sample results failed:")
+                traceback.print_exc()
+                return -3, None
+            # return -1, None  # tag, value_list
         print("Running Flow123d - HM...finished")
 
         if self._config["make_plots"]:
@@ -213,6 +212,10 @@ class endorse_2Dtest():
 
         sample_data = np.stack(field_data_list)
         sample_data = sample_data.reshape((1, *sample_data.shape))  # axis 0 - sample
+
+        if config_dict["clean_sample_dir"]:
+            shutil.rmtree(self.sample_dir)
+
         return sample_data
 
     def get_from_observe(self, observe_dict, point_names, field_name, select_times=None):
