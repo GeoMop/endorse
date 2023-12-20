@@ -99,11 +99,16 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
 
 
 
-def conductivity(k0, kr, delta, gamma, sigma0, sigma_m):
+def conductivity(k0, eps, delta, gamma, sigma0, a, b, c, sigma_m):
     sigma_vm = 170/120*np.abs(sigma_m)
     sigma_tres = 55e6
-    k = kr + delta * np.exp(np.log((k0-kr)/delta) * sigma_m/sigma0)
-    return np.where(sigma_vm < sigma_tres, k, k * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres))
+    x = 0
+    y = 30
+    z = 30
+    lin = (1 + 0.1*(a * x / 35 + b * y / 30 + c * z / 30))
+    kr = 1/eps *k0
+    k = kr + delta * np.exp(np.log((k0 - kr) / delta) * sigma_m / sigma0)
+    return np.where(sigma_vm < sigma_tres, k, k * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres)) * lin
     # if sigma_vm < sigma_tres:
     #     return k
     # else:
@@ -116,13 +121,20 @@ def plot_conductivity(params):
     # init_sigma_m = -(42 + 19 + 14)*1e6/3
     sigma_mean = np.linspace(-120e6,7e6,200)
     for p in params:
+        # if p[4] >= p[5]:
+        #     continue
+        # p[[4,5]] = p[[5,4]]
         init_sigma_m = -(p[1] + p[2] + p[3])/3
-        cond = conductivity(p[4],p[5],p[6],p[7],init_sigma_m,sigma_mean)
+        cond = conductivity(p[4],p[5],p[6],p[7],init_sigma_m,p[8],p[9],p[10],sigma_mean)
         plt.plot(sigma_mean/1e6, cond)
         plt.scatter(init_sigma_m/1e6,p[4])
 
     plt.yscale('log')
     plt.savefig('conductivity.pdf')
+    plt.close()
+
+    plt.scatter(range(params.shape[0]), params[:,5])
+    plt.savefig('eps.pdf')
 
 
 if __name__ == "__main__":
