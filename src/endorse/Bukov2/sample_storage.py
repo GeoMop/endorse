@@ -39,14 +39,21 @@ def read_dataset(file_path):
         data = dset[...]
         return data
 
+
+
+def get_hdf5_field(hdf_file):
+    with h5py.File(hdf_file, 'r') as f:
+        return f[dataset_name]
+
+
 # Example usage
-file_path = 'your_file.h5'
-dataset_name = 'your_dataset'
-initial_shape = (K, M, N + extra_space)  # Pre-allocate extra space in the N dimension
-chunks = (K, M, chunk_size)  # Define a suitable chunk size
-
-create_chunked_dataset(file_path, dataset_name, initial_shape, max_shape, chunks)
-
-# When you have new data to append
-new_data = np.random.rand(K, M, n)  # Your new data
-append_data(file_path, dataset_name, new_data)
+# file_path = 'your_file.h5'
+# dataset_name = 'your_dataset'
+# initial_shape = (K, M, N + extra_space)  # Pre-allocate extra space in the N dimension
+# chunks = (K, M, chunk_size)  # Define a suitable chunk size
+#
+# create_chunked_dataset(file_path, dataset_name, initial_shape, max_shape, chunks)
+#
+# # When you have new data to append
+# new_data = np.random.rand(K, M, n)  # Your new data
+# append_data(file_path, dataset_name, new_data)

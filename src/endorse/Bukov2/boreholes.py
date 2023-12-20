@@ -262,6 +262,9 @@ class BoreholeSet:
         return length, s, t, point_1, point_2, ez_normalized
 
     def project_field(self, mesh, field, cached = False):
+        """
+        Return array (n_boreholes, n_points, n_times, n_samples)
+        """
         if cached and hasattr(self, "_bh_field"):
             return self._bh_field
         id_matrix = interpolation_slow(mesh, self.point_lines[0])
@@ -343,6 +346,10 @@ ZK40: upper/lower, index of direction, 2 indeces from available
 
 
 
+def get_clear_mesh(mesh_file):
+    mesh = pv.read(mesh_file)
+    mesh.clear_data()
+    return mesh
 
 def get_time_field(file_pattern, field_name):
     """
