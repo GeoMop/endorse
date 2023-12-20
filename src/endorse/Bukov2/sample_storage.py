@@ -74,14 +74,14 @@ def set_sample_data(file_path, new_data, idx):
         with FileSafe(file_path, mode='a', timeout=60) as f:
 
             if new_data is None:
-                set_failed_sample(f[failed_ids_name])
+                set_failed_sample(f[failed_ids_name], idx)
             else:
                 dset = f[dataset_name]
-                if dset.shape[1:] == new_data.shape:
+                if dset.shape[1:] == new_data.shape[1:]:
                     dset[idx, :, :] = new_data
                 else:
                     print("Save sample data failed - wrong shape {}, idx {}.".format(new_data.shape, idx))
-                    set_failed_sample(f[failed_ids_name])
+                    set_failed_sample(f[failed_ids_name], idx)
     except:
         print("Save sample data failed. idx ", idx)
         traceback.print_exc()
