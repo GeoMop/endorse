@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 import time
+import traceback
 
 dataset_name="pressure"
 failed_ids_name="failed_samples"
@@ -69,16 +70,27 @@ def append_new_dataset(file_path, name, data):
 
 
 def set_sample_data(file_path, new_data, idx):
-    with FileSafe(file_path, mode='a', timeout=60) as f:
+    try:
+        with FileSafe(file_path, mode='a', timeout=60) as f:
 
-        if new_data is None:
-            dset = f[failed_ids_name]
-            n_existing = dset.shape[0]  # Current actual size in the N dimension
-            dset.resize(n_existing+1, axis=0)
-            dset[n_existing] = idx
-        else:
-            dset = f[dataset_name]
-            dset[idx, :, :] = new_data
+            if new_data is None:
+                set_failed_sample(f[failed_ids_name])
+            else:
+                dset = f[dataset_name]
+                if dset.shape[1:] == new_data.shape:
+                    dset[idx, :, :] = new_data
+                else:
+                    print("Save sample data failed - wrong shape {}, idx {}.".format(new_data.shape, idx))
+                    set_failed_sample(f[failed_ids_name])
+    except:
+        print("Save sample data failed. idx ", idx)
+        traceback.print_exc()
+
+
+def set_failed_sample(dset, idx):
+    n_existing = dset.shape[0]  # Current actual size in the N dimension
+    dset.resize(n_existing + 1, axis=0)
+    dset[n_existing] = idx
 
 
 # def append_data(file_path, new_data):
