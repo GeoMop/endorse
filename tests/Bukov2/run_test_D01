@@ -8,7 +8,7 @@ ENDORSE_SRC_ROOT="$SCRIPTPATH/../.."
 
 # input
 # debug=false
-output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/3d_model_D01"
+output_dir="$ENDORSE_SRC_ROOT/tests/sandbox/$(date +'%Y%m%d%H%M%S')_3d_model_D01"
 
 # prepare inputs
 mkdir -p ${output_dir}/common_files
