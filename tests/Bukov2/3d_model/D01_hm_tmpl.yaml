@@ -30,7 +30,7 @@ problem: !Coupling_Sequential
           - name: kr
             scalar_field: <perm_kr>
           - name: delta
-            scalar_field: <perm_km>
+            scalar_field: <perm_delta>
           - name: gamma
             scalar_field: <perm_gamma>
           - name: stress_threshold
@@ -53,7 +53,7 @@ problem: !Coupling_Sequential
                 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3))),
                 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3)))
                 * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
-                )*(1 + a*x/50 + b*z/50)
+                )*(1 + a*x/35 + b*y/30 + c*z/30)
 #              value: if(von_mises_stress<stress_threshold,
 #                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
 #                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
