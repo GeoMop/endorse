@@ -12,7 +12,7 @@ from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
 
-from endorse.Bukov2 import boreholes, sa_problem, sample_storage
+from endorse.Bukov2 import boreholes, sa_problem, sample_storage, optimize
 from endorse.sa import analyze
 from endorse import common
 
@@ -224,7 +224,7 @@ def eval_individual(ind : Individual, bh_data_file: Path) -> Tuple[float, Any]:
 
     return total_sensitivity, sensitivity_info
 
-def optimize(cfg, bh_set, map_fn, checkpoint=None):
+def _optimize(cfg, bh_set, map_fn, checkpoint=None):
     """
     Main optimization routine.
     :return:
@@ -349,8 +349,8 @@ def borehole_set(workdir, cfg):
     bh_set = optimize.get_bh_set(bh_set_file)
     if force or bh_set is None:
         bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-        mesh = boreholes.get_clear_mesh(workdir / cfg.sim.mesh)
-        field_samples = sample_storage.get_hdf5_field(workdir / cfg.sim.hdf)
+        mesh = boreholes.get_clear_mesh(workdir / cfg.simulation.mesh)
+        field_samples = sample_storage.get_hdf5_field(workdir / cfg.simulation.hdf)
         bh_set.project_field(mesh, field_samples, cached=True)
     optimize.save_bh_data(workdir / "bh_set.pickle", bh_set)
     return bh_set

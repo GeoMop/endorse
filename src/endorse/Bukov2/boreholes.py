@@ -6,6 +6,7 @@ import itertools
 import numpy as np
 import pyvista as pv
 from vtk import vtkCellLocator
+
 """
 TODO:
 1. Test problem genetic algorithm on cluster.
@@ -350,6 +351,9 @@ def get_clear_mesh(mesh_file):
     mesh = pv.read(mesh_file)
     mesh.clear_data()
     return mesh
+
+
+
 
 def get_time_field(file_pattern, field_name):
     """
