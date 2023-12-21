@@ -5,6 +5,7 @@ import traceback
 
 dataset_name="pressure"
 failed_ids_name="failed_samples"
+done_ids_name="done_samples"
 
 class FileSafe(h5py.File):
     """
@@ -62,6 +63,7 @@ def create_chunked_dataset(file_path, shape):
         # f.create_dataset(dataset_name, data=np.zeros(shape), chunks=True, dtype='float64')
         f.create_dataset(dataset_name, shape=shape, chunks=True, dtype='float64')
         f.create_dataset(failed_ids_name, shape=(0,1), maxshape=(shape[0],1), dtype='int')
+        f.create_dataset(done_ids_name, shape=(0, 1), maxshape=(shape[0], 1), dtype='int')
 
 
 def append_new_dataset(file_path, name, data):
@@ -71,23 +73,24 @@ def append_new_dataset(file_path, name, data):
 
 def set_sample_data(file_path, new_data, idx):
     try:
-        with FileSafe(file_path, mode='a', timeout=60) as f:
-
+        # with FileSafe(file_path, mode='a', timeout=60) as f:
+        with h5py.File(file_path, 'a') as f:
             if new_data is None:
-                set_failed_sample(f[failed_ids_name], idx)
+                set_status_sample(f[failed_ids_name], idx)
             else:
                 dset = f[dataset_name]
                 if dset.shape[1:] == new_data.shape[1:]:
                     dset[idx, :, :] = new_data
+                    set_status_sample(f[done_ids_name], idx)
                 else:
                     print("Save sample data failed - wrong shape {}, idx {}.".format(new_data.shape, idx))
-                    set_failed_sample(f[failed_ids_name], idx)
+                    set_status_sample(f[failed_ids_name], idx)
     except:
         print("Save sample data failed. idx ", idx)
         traceback.print_exc()
 
 
-def set_failed_sample(dset, idx):
+def set_status_sample(dset, idx):
     n_existing = dset.shape[0]  # Current actual size in the N dimension
     dset.resize(n_existing + 1, axis=0)
     dset[n_existing] = idx

@@ -46,7 +46,7 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         #     line = str(idx) + ',' + ','.join([str(s) for s in obs_data])
         #     file.write(line + "\n")
 
-        output_file = os.path.join(output_dir_in, 'sampled_data.h5')
+        output_file = os.path.join(output_dir_in, 'sampled_data_' + str(solver_id) + '.h5')
         sample_storage.set_sample_data(output_file, sample_data, idx)
 
         # if idx == 1:
