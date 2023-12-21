@@ -29,6 +29,11 @@ class PackerConfig:
 
     @property
     def param_values(self):
+        # Deprecated
+        return self.chamber_sensitivity
+
+    @property
+    def chamber_sensitivity(self):
         """
         For each chamber and parameter provides total sensitivity Sobol index
         of the chamber pressure with respect to the parameter.
@@ -36,6 +41,12 @@ class PackerConfig:
         """
         return self.sobol_indices[:,:, 0]   # Total sensitivity index
 
+    @property
+    def param_sensitivity(self):
+        return self.sobol_indices[:,:,0].max(axis=0)
+
+    def __str__(self):
+        return f"Packers{self.packers.tolist()} = sens {self.param_sensitivity.tolist()}"
 Individual = List[int]
 
 @attrs.define(slots=False)

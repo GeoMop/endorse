@@ -59,6 +59,7 @@ def test_optimize_packer():
     assert type(borhole_opt_config) is list
     assert type(borhole_opt_config[0]) is opt_pack.PackerConfig
 
+    print(borhole_opt_config)
     # write mock result file
     bh_mock_results = [borhole_opt_config for _ in range(bh_set.n_boreholes)]
     opt_pack.write_optimization_results(workdir, bh_mock_results)
@@ -67,10 +68,11 @@ def test_optimize_packer():
     for ref_bh, new_bh in zip(bh_mock_results, bh_mock_results_1):
         for ref, new in zip(ref_bh, new_bh):
             assert np.allclose(ref.packers, new.packers)
-            inf_mask1 = np.isinf(ref.sobol_indices)
-            inf_mask2 = np.isinf(new.sobol_indices)
-            mask = ~inf_mask1 & ~inf_mask2
-            assert np.allclose(ref.sobol_indices[mask], new.sobol_indices[mask], equal_nan=True)
+            #inf_mask1 = np.isinf(ref.sobol_indices)
+            #inf_mask2 = np.isinf(new.sobol_indices)
+            #mask = ~inf_mask1 & ~inf_mask2
+            #assert np.allclose(ref.sobol_indices[mask], new.sobol_indices[mask], equal_nan=True)
+            assert np.allclose(ref.sobol_indices, new.sobol_indices)
             # Have to fix Nans and Infs yet.
 
 @pytest.mark.skip

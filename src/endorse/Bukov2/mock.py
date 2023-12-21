@@ -16,10 +16,10 @@ def mock_hdf5(cfg_file):
     # Fictious model
     sa_dict = sa_problem.sa_dict(common.config.load_config(workdir / cfg.simulation.cfg))
     param_samples = sample.saltelli(sa_dict, 16, sa_dict['second_order'])
-
-    sigma_x = param_samples[:, 1] / 1e6  # about 48
-    sigma_y = param_samples[:, 2] / 1e6  # about 19
-    sum_other = np.sum(param_samples, axis=1)
+    params_norm = param_samples / param_samples.std(axis=0)
+    sigma_x = params_norm[:, 1]
+    sigma_y = params_norm[:, 2]
+    sum_other = np.sum(params_norm, axis=1)
 
     field_samples = sigma_x[:, None, None] * pressure_array[None, :, :] + \
                     (pressure_array[None, :, :] ** 2) / sigma_y[:, None, None] + sum_other[:, None, None]
