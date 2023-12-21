@@ -99,7 +99,7 @@ problem: !Coupling_Sequential
           fields:
 #            - { field: conductivity, interpolation: P1_average }
 #            - piezo_head_p0
-            - conductivity
+            #- conductivity
             - pressure_p0
             #- velocity_p0
             #- region_id
@@ -129,15 +129,15 @@ problem: !Coupling_Sequential
           format: !vtk
         output:
           times: <output_times>
-          fields:
+          fields: []
 #            - { field: displacement, interpolation: P1_average }
-            - displacement
-            - stress
 #            - displacement_divergence
-            - mean_stress
-            - von_mises_stress
-            - initial_stress
-            - region_id
+            #- displacement
+            #- stress
+            #- mean_stress
+            #- von_mises_stress
+            #- initial_stress
+            #- region_id
         solver: !Petsc
           a_tol: <mechanics_solver__a_tol>
           r_tol: <mechanics_solver__r_tol>
