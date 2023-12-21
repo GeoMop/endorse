@@ -5,6 +5,7 @@ import traceback
 
 dataset_name="pressure"
 failed_ids_name="failed_samples"
+done_ids_name="done_samples"
 
 class FileSafe(h5py.File):
     """

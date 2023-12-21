@@ -28,6 +28,10 @@ class PackerConfig:
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
     @property
+    def n_param(self):
+        return self.sobol_indices.shape[1]
+
+    @property
     def param_values(self):
         # Deprecated
         return self.chamber_sensitivity
