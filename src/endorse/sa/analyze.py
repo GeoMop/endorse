@@ -36,7 +36,7 @@ def sobol_indices_array_1(sobol_dict):
     indices_list.append(sobol_dict['S1_conf'])
     return np.stack(indices_list, axis=1)
 
-def sobol_vec(array, problem, second_order=False):
+def sobol_vec(array, problem):
     """
     from (..., n_samples) -> (..., n_params, n_indices)
     :param array:
@@ -44,6 +44,7 @@ def sobol_vec(array, problem, second_order=False):
     :param second_order:
     :return:
     """
+    second_order = problem['second_order']
     #if second_order:
     #    sobol_vec = lambda sobol_dict : np.array(concatenate()
     if second_order:

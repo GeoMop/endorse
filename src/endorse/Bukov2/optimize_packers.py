@@ -22,6 +22,116 @@ Genetic optimization:
 
 """
 
+from scipy.stats import norm
+
+def separate_output_values(Y, D, N):
+    AB = np.zeros((N, D))
+    BA =  None
+    step =  D + 2
+    YY = Y.reshape((*Y.shape[:-1], N, -1))
+    A = YY[..., 0]      #Y[0 : Y.size : step]
+    B = YY[..., step-1] #Y[(step - 1) : Y.size : step]
+    AB = YY[..., 1:D+1]
+    # for j in range(D):
+    #     AB[:, j] = Y[(j + 1) : Y.size : step]
+    #     if calc_second_order:
+    #         BA[:, j] = Y[(j + 1 + D) : Y.size : step]
+    return A, B, AB, BA
+
+def first_order(A, AB, B):
+    """
+    First order estimator following Saltelli et al. 2010 CPC, normalized by
+    sample variance
+    """
+    y = np.r_[A, B]
+    #if y.ptp() == 0:
+    #    warn(CONST_RESULT_MSG)
+    #    return np.array([0.0])
+
+    return np.mean(B * (AB - A), axis=0) / np.var(y, axis=0)
+
+
+def total_order(A, AB, B):
+    """
+    Total order estimator following Saltelli et al. 2010 CPC, normalized by
+    sample variance
+    """
+    y = np.r_[A, B]
+    #if y.ptp() == 0:
+    #    warn(CONST_RESULT_MSG)
+    #    return np.array([0.0])
+
+    return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(y, axis=0)
+
+def _vec_sobol_total_only(Y, n_params, n_samples,
+                         num_resamples=100, conf_level=0.95):
+    """
+    array shape (..., n_samples)
+    :param array:
+    :param problem:
+    :return:
+    """
+    # def analyze(
+    #         problem,
+    #         Y,
+    #         print_to_console=False,
+    #         parallel=False,
+    #         n_processors=None,
+    #         keep_resamples=False,
+    # ):
+    rng = np.random.randint
+
+    # determining if groups are defined and adjusting the number
+    # of rows in the cross-sampled matrix accordingly
+    D = n_params
+    N = n_samples
+
+    YY = Y.reshape((*Y.shape[:-1], N, -1))
+    s1_samples = list(range(D+2))
+    s1_samples[D+1] = 2*(D+1) - 1
+    Y = YY[...,s1_samples].ravel()
+    # Normalize the model output.
+    # Estimates of the Sobol' indices can be biased for non-centered outputs
+    # so we center here by normalizing with the standard deviation.
+    # Other approaches opt to subtract the mean.
+    mean_Y = Y.mean(axis=-1)
+    std_Y = Y.std(axis=-1)
+    Y = (Y - mean_Y[..., None]) / std_Y[..., None]
+
+    A, B, AB, BA = separate_output_values(Y, D, N)
+    r = rng(N, size=(N, num_resamples))
+    Z = norm.ppf(0.5 + conf_level / 2)
+
+    #    S = create_Si_dict(D, num_resamples, keep_resamples, calc_second_order)
+
+    S_tot = np.empty(Y.shape[:-1] + (D, 1))
+    for j in range(D):
+        # S["S1"][j] = first_order(A, AB[:, j], B)
+        # S1_conf_j = first_order(A[r], AB[r, j], B[r])
+        #
+        # if keep_resamples:
+        #     S["S1_conf_all"][:, j] = S1_conf_j
+        #
+        # var_diff = np.r_[A[r], B[r]].ptp()
+        # if var_diff != 0.0:
+        #     S["S1_conf"][j] = Z * S1_conf_j.std(ddof=1)
+        # else:
+        #     S["S1_conf"][j] = 0.0
+
+        S_tot[..., j, 0] = total_order(A, AB[:, j], B)
+
+    return S_tot
+
+def vec_sobol_total_only(array, problem):
+    n_params = problem['num_vars']
+    n_nested =  2 * (n_params + 1) if problem['second_order'] else n_params + 2
+
+    sobol_fn = lambda x: _vec_sobol_total_only(x, n_samples=int(array.shape[-1] / n_nested), n_params=n_params)
+    variant_samples = array.reshape((-1, array.shape[-1]))
+    variant_sobols = np.stack([sobol_fn(row) for row in variant_samples])
+    return variant_sobols.reshape(*array.shape[:-1], *variant_sobols.shape[-2:])
+
+
 @attrs.define
 class PackerConfig:
     packers: np.ndarray     # (n_packers,) int
@@ -87,6 +197,7 @@ class PackerOptSpace:
         min_packer_distance = cfg_opt.packer_size + cfg_opt.min_chamber_size
         sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
         problem = sa_problem.sa_dict(sim_cfg)
+
         return PackerOptSpace(
             cfg_opt,
             min_packer_distance,
@@ -201,6 +312,9 @@ class PackerOptSpace:
         #offspring = [toolbox.clone(ind) for ind in population]
 
 
+
+
+
     def eval_from_chambers_sa(self, chamber_data):
         # chamber_data (n_params_ind, n_chambers, n_times, n_samples)
 
@@ -210,7 +324,7 @@ class PackerOptSpace:
         assert n_samples == 20 * 16
 
         ch_data = chamber_data.reshape(-1, n_samples)
-        sobol_array = analyze.sobol_vec(ch_data, self.sa_problem, self.sa_problem['second_order'])
+        sobol_array = self.sobol_fn(ch_data, self.sa_problem)
         sobol_array = sobol_array.reshape(n_params, n_chambers, n_times, n_params, -1)# n_chambers
         max_sobol = analyze.sobol_max(sobol_array, axis = 2)  # max over total indices, result shape: (
         fittness = max_sobol[...,0].max(axis=1)    # max over chambers, ST
@@ -245,12 +359,16 @@ class PackerOptSpace:
 
         return fittness, sensitivity_info
 
-    def optimize(self, checkpoint=None):
+
+
+    def optimize(self, sobol_fn = analyze.sobol_vec, checkpoint=None):
         """
         Main optimization routine.
         :return:
         """
+        self.sobol_fn = sobol_fn
         checkpoint_freq = 10
+
 
         creator.create("FitnessMax", base.Fitness, weights=(1.0,)) # Maximize result of individual evaluation.
         creator.create("Individual", list, fitness=creator.FitnessMax)
@@ -260,7 +378,6 @@ class PackerOptSpace:
         # We can easily reassamle better N groups  at the very end.
         # more over we introduce a kind of mixing in the custom selection step.
         # on the other hand the srossover only works on pairs of configurations for a single parameter.
-
 
 
         toolbox = base.Toolbox()
@@ -383,9 +500,9 @@ class PackerOptSpace:
 
 
 
-def optimize_borehole(workdir, cfg, bh_set, i_bh):
+def optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=analyze.sobol_vec):
     opt_space = PackerOptSpace.from_bh_set(workdir, cfg, bh_set, i_bh)
-    population, hof, logbook = opt_space.optimize()
+    population, hof, logbook = opt_space.optimize(sobol_fn=sobol_fn)
     best_cfg = opt_space.get_best_configs(population, k_best=cfg.optimize.n_best_packer_conf)
     # TODO: exctract suitable candidates from the population
     with open(workdir / "logbook.txt", 'w') as f:
