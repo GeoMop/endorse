@@ -74,10 +74,12 @@ def arr_to_dict(sobol_array):
         base['S2_conf'] = sobol_array[:, 4 + n_params:4 + 2 * n_params]
     return base
 
-def sobol_max(array, index = 0):
-    n_variants, n_param, n_indices = array.shape
+def sobol_max(array, axis=0, index = 0):
+    #n_variants, n_param, n_indices = array.shape
     # return max over n_variants in given index
     # default is ST
-    i_variants =  np.argmax(array[:, :, index], axis=0)
-    return array[i_variants, np.arange(n_param), :]
+    i_variants =  np.argmax(array[..., index], axis=axis, keepdims=True)
+    i_variants = i_variants[..., None]
+    amax_array = np.take_along_axis(array,i_variants, axis=axis).squeeze(axis=axis)
+    return amax_array
 

@@ -26,3 +26,6 @@
 	path = submodules/surrDAMH
 	url = ../../dom0015/surrDAMH.git
 	branch = PE_endorse
+[submodule "submodules/salib"]
+	path = submodules/salib
+	url = git@github.com:GeoMop/SALib.git

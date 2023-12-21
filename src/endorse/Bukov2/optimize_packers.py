@@ -25,8 +25,16 @@ Genetic optimization:
 @attrs.define
 class PackerConfig:
     packers: np.ndarray     # (n_packers,) int
-    param_values: np.ndarray  # (n_chambers, n_params,) float
+    sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
+    @property
+    def param_values(self):
+        """
+        For each chamber and parameter provides total sensitivity Sobol index
+        of the chamber pressure with respect to the parameter.
+        shape: (n_chambers, n_params)
+        """
+        return self.sobol_indices[:,:, 0]   # Total sensitivity index
 
 Individual = List[int]
 
@@ -51,36 +59,53 @@ class PackerOptSpace:
 
 
     """
-    n_packers: int
-    packer_size: int
+    cfg: common.config.dotdict      # cfg.optimize
     min_packer_distance: int
     line_bounds: Tuple[int, int]    # packer index must be in this range: min <= i < max
-    line_data: np.ndarray
+    line_data: np.ndarray           # (n_points, n_times, n_samples)
+    sa_problem: Dict[str, Any]
 
     @staticmethod
-    def from_bh_set(cfg, bh_set:boreholes.BoreholeSet, i_bh):
+    def from_bh_set(workdir, cfg, bh_set:boreholes.BoreholeSet, i_bh):
+        cfg_opt = cfg.optimize
         bh_field = bh_set.project_field(None, None, cached=True)
-        min_packer_distance = cfg.packer_size + cfg.min_chamber_size
-        PackerOptSpace(
-            cfg.n_packers,
-            cfg.packer_size,
+        min_packer_distance = cfg_opt.packer_size + cfg_opt.min_chamber_size
+        sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
+        problem = sa_problem.sa_dict(sim_cfg)
+        return PackerOptSpace(
+            cfg_opt,
             min_packer_distance,
             bh_set.line_bounds[i_bh],
-            bh_field[i_bh]
+            bh_field[i_bh],
+            problem
         )
 
+    @property
+    def population_size(self):
+        return self.cfg.population_size
 
+    @property
+    def n_packers(self):
+        return self.cfg.n_packers
+
+    @property
+    def packer_size(self):
+        return self.cfg.packer_size
+
+    @property
+    def n_params(self):
+        return self.sa_problem['num_vars']
 
     def project_decorator(self, func):
         def wrapper(*args, **kwargs):
             offspring = (None,)
             while any(ind is None for ind in offspring):
                 offspring = func(*args, **kwargs)
-                offspring = (self.project_individual(ind) for ind in offspring)
+                offspring = [self.project_individual(ind) for ind in offspring]
             return offspring
         return wrapper
 
-    def project_individual(self, ind:Individual):
+    def project_individual(self, packers):
         """
         Project an individual to canonical reprezentation.
         - return None if the individual is invalid (should not happen frequently)
@@ -95,19 +120,25 @@ class PackerOptSpace:
         invariants
         """
         # sort and check distance of packers
-        ind.sort()
-        if ind[0] < self.line_bounds[0] or ind[-1] >= self.line_bounds[1]:
+        packers.sort()
+        if packers[0] < self.line_bounds[0] or packers[-1] >= self.line_bounds[1]:
             return None
-        for pa, pb in zip(ind[0:-1], ind[1:]):
+        for pa, pb in zip(packers[0:-1], packers[1:]):
             if (pb - pa) < self.min_packer_distance:
                 return None
+        return packers
+
+    def _make_packers(self) -> Tuple[Individual]:
+        ind = None
+        while ind is None:
+            ind = self.project_individual(np.random.randint(*self.line_bounds, self.n_packers))
         return ind
 
-    def make_individual(self) -> Tuple[Individual]:
-        ind = np.random.randint(*self.line_bounds, self.n_packers)
-        # TODO: Apply projection manually as we expect to aviod projection
-        return creator.Individual(ind),
-
+    def make_individual(self) -> Individual:
+        ind = []
+        for _ in range(self.n_params):
+            ind.extend(self._make_packers())
+        return creator.Individual(ind)
 
     def cross_over(self, ind1:Individual, ind2:Individual) -> Tuple[Individual, Individual]:
         """
@@ -120,10 +151,7 @@ class PackerOptSpace:
         - exachange whole BH only:
           - would preserve BH - packer compatibility
         """
-        ind1, ind2 = tools.cxTwoPoint(ind1, ind2)
-        # keep first two boreholes with the same direction and configuration
-        ind1[BHConf.size:2*BHConf.size - 1] = ind1[0:BHConf.size - 1]
-        ind2[BHConf.size:2*BHConf.size - 1] = ind2[0:BHConf.size - 1]
+        #ind1, ind2 = tools.cxTwoPoint(ind1, ind2)
 
         # TODO:
         # cross over of
@@ -133,182 +161,203 @@ class PackerOptSpace:
     def mutate(self, ind: Individual) -> Individual:
         """
         Ideas:
-        - mutate packer positions, randomly by single step (would be better for uniform points)
-        - mutate every bh index with some propability
+        - mutate packer positions, by a normal distr within bounds.
+        """
+        # for i in range(self.n_params):
+        #     # move single packer in every param configuration
+        #     i_pack = np.random.randint(0,4)
+        #     pack_pos = ind[i * self.n_packers + i_pack]
+        #     pack_pos + np.random.randn()
+        #
+        # ind2 = toolbox.clone(ind)
 
-        Would be good to have a popoulation of packers for every bh ID. So the optimization would be
-        two staged: keeping population of packers for every BH separately
+        return ind,
 
-        Or we must improve crossover to by applied to any pair with common BH
-        must be parformed by a special population global step.
-        Would exchange packers between same BH.
-        Other crossover would just exchange bh cfg between individuals.
+    def select(self, population, new_size, toolbox):
+        """
+        Select `new_size` individual groups from population.
 
-        :param ind:
+        Since we have different n_param fittness functions. We with individual config grouping.
+
+        :param pop:
         :return:
         """
-        ind2 = toolbox.clone(ind)
-
-        return tools.mutFlipBit(ind, indpb=0.05)
-
-
-# def make_individual(cfg, bh_set:boreholes.BoreholeSet):
-#     angles = bh_set.draw_angles(cfg.n_boreholes - 1)
-#     angles = [angles[0], *angles]
-#     return [
-#         make_bh_cfg(a)
-#         for a in angle
-#     ]
-#     common_angle = (np.random.randint(bh_set.n_y_angles), np.random.randint(bh_set.n_z_angles)
-#     bh_set.direction_lookup(common_angle)
+        return population
+        #offspring = [toolbox.clone(ind) for ind in population]
 
 
+    def eval_from_chambers_sa(self, chamber_data):
+        # chamber_data (n_params_ind, n_chambers, n_times, n_samples)
+
+        n_params, n_chambers, n_times, n_samples = chamber_data.shape
+        assert n_chambers==3
+        assert n_times == 10
+        assert n_samples == 20 * 16
+
+        ch_data = chamber_data.reshape(-1, n_samples)
+        sobol_array = analyze.sobol_vec(ch_data, self.sa_problem, self.sa_problem['second_order'])
+        sobol_array = sobol_array.reshape(n_params, n_chambers, n_times, n_params, -1)# n_chambers
+        max_sobol = analyze.sobol_max(sobol_array, axis = 2)  # max over total indices, result shape: (
+        fittness = max_sobol[...,0].max(axis=1)    # max over chambers, ST
+        # shape (n_param, n_param)
+        fittness = np.min(np.diag(fittness))
+
+        return fittness, max_sobol
+
+    def to_array(self, ind):
+        return np.array(ind).reshape(self.n_params, self.n_packers)
+
+    def to_individual(self, ind_array):
+        return creator.Individual(ind_array.ravel().tolist())
+
+    def eval_individual(self, ind : Individual) -> np.ndarray:
+        # We interpret the packer positions as the points directly.
+        # The packer size would be fixed with respect to point size.
+        packers = self.to_array(ind)   # Packer positions
 
 
-_bh_set = None
-def get_bh_set(f_path):
-    global _bh_set
-    if _bh_set is None:
-        try:
-            with open(f_path, "rb") as f:
-                _bh_set = pickle.load(f)
-        except FileNotFoundError:
-            pass
-    return _bh_set
-
-def save_bh_data(f_path, bh_set):
-    with open(f_path, 'wb') as f:
-        pickle.dump(bh_set, f)
-
-
-
-
-
-def eval_from_chambers_sa(chamber_data, problem):
-    # chamber_data (n_chambers, n_times, n_samples)
-
-    n_chambers, n_times, n_samples = chamber_data.shape
-    assert n_chambers==3*6
-    assert n_times == 10
-    assert n_samples == 20 * 16
-
-    ch_data = chamber_data.reshape(-1, n_samples)
-    sobol_array = analyze.sobol_vec(ch_data, problem, problem['second_order'])
-    max_sobol = analyze.sobol_max(sobol_array)  # max over total indices
-    return np.sum(max_sobol[:, 0]), max_sobol
-
-
-
-def eval_individual(ind : Individual, bh_data_file: Path) -> Tuple[float, Any]:
-    bh_set = get_bh_set(bh_data_file)  #
-    bh_field = bh_set._bh_field                  # Bit of hack.
-    individual_shape = bh_set._individual_shape  # bigger heck, must be injected by OptSpace
-    problem = bh_set._sa_problem
-
-    # We interpret the packer positions as the points directly.
-    # The packer size would be fixed with respect to point size.
-    packer_size = bh_set.packer_size
-
-    chamber_means = []
-    for bh in np.array(ind).reshape(individual_shape):
-        i_bh = bh[0]
-        packers = bh[1:]
-        for begin, end in zip(packers[0:-1],packers[1:]):
-            mean_value = (bh_field[i_bh, end] - bh_field[i_bh, begin + packer_size]) / (end - begin - packer_size)
+        chamber_means = []
+        # Loop over chamber extends
+        for begin, end in zip(packers[:, 0:-1].T, packers[:, 1:].T):
+            chamber_begin = begin + self.packer_size
+            mean_value = (self.line_data[end,:,:] - self.line_data[chamber_begin,:,:]) / (end - chamber_begin)[:, None, None]
             chamber_means.append(mean_value)
 
-    chamber_means = np.array(chamber_means)
+        chamber_means = np.stack(chamber_means).transpose(1, 0, 2, 3) # (n_param_ind, n_chamber, n_times, n_samples)
 
-    # Final evaluation
-    total_sensitivity, sensitivity_info = eval_from_chambers_sa(chamber_means, problem)
+        # Evaluate chamber sensitivities
+        fittness, sensitivity_info = self.eval_from_chambers_sa(chamber_means)
 
-    return total_sensitivity, sensitivity_info
+        return fittness, sensitivity_info
 
-def _optimize(cfg, bh_set, map_fn, checkpoint=None):
-    """
-    Main optimization routine.
-    :return:
-    """
-    opt_space = OptSpace(cfg, bh_set)
-    bh_data_file = script_path.parent / "bh_set.pickle"
-    get_bh_set(bh_data_file)
-    bh_set._individual_shape = (opt_space.n_boreholes, opt_space.n_packers + 1)
-    bh_set._sa_problem = sa_problem.sa_dict(cfg.problem)
-    save_bh_data(bh_data_file, bh_set)
+    def optimize(self, checkpoint=None):
+        """
+        Main optimization routine.
+        :return:
+        """
+        checkpoint_freq = 10
+
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,)) # Maximize result of individual evaluation.
+        creator.create("Individual", list, fitness=creator.FitnessMax)
+        # Individual is n_params * packer_configuration, i.e. n_params * n_packers  ints
+        # These groups are only weakly coupled in order to evaluate the Fitness as a single value
+        # and facilitate usage with Hall of Fame and statistics
+        # We can easily reassamle better N groups  at the very end.
+        # more over we introduce a kind of mixing in the custom selection step.
+        # on the other hand the srossover only works on pairs of configurations for a single parameter.
 
 
-    checkpoint_freq = 10
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,)) # Maximize result of individual evaluation.
-    creator.create("Individual", list, fitness=creator.FitnessMax)
+        toolbox = base.Toolbox()
 
-    toolbox = base.Toolbox()
+        # Attribute generator
+        #toolbox.register("attr_bool", np.random.randint, 0, 1)
 
-    # Attribute generator
-    #toolbox.register("attr_bool", np.random.randint, 0, 1)
+        # Structure initializers
+        toolbox.register("individual", self.make_individual)
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    # Structure initializers
-    toolbox.register("individual", opt_space.make_individual)
-    toolbox.decorate("individual", opt_space.project_decorator)
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("evaluate", self.eval_individual)
+        toolbox.register("mate", self.cross_over)
+        #toolbox.decorate("mate", self.project_decorator)
+        toolbox.register("mutate", self.mutate)
+        #toolbox.decorate("mutate", self.project_decorator)
 
-    toolbox.register("evaluate", eval_individual)
-    toolbox.register("mate", opt_space.cross_over)
-    toolbox.decorate("mate", opt_space.project_decorator)
-    toolbox.register("mutate", opt_space.mutate)
-    toolbox.decorate("mutate", opt_space.project_decorator)
+        toolbox.register("select", self.select, toolbox=toolbox)
+        toolbox.register("map", map)
 
-    toolbox.register("select", tools.selTournament, tournsize=3) # ?? is it a good choice
-    toolbox.register("map", map_fn)
+        if checkpoint:
+            # A file name has been given, then load the data from the file
+            with open(checkpoint, "rb") as cp_file:
+                cp = pickle.load(cp_file)
+            population = cp["population"]
+            start_gen = cp["generation"]
+            hof = cp["halloffame"]
+            logbook = cp["logbook"]
+            np.random.set_state(cp["rndstate"])
+        else:
+            # Start a new evolution
+            population = toolbox.population(n=self.population_size)
+            start_gen = 0
+            hof = tools.HallOfFame(maxsize= 10 * self.population_size)
+            logbook = tools.Logbook()
 
-    if checkpoint:
-        # A file name has been given, then load the data from the file
-        with open(checkpoint, "rb") as cp_file:
-            cp = pickle.load(cp_file)
-        population = cp["population"]
-        start_gen = cp["generation"]
-        hof = cp["halloffame"]
-        logbook = cp["logbook"]
-        np.random.setstate(cp["rndstate"])
-    else:
-        # Start a new evolution
-        population = toolbox.population(n=cfg.population_size)
-        start_gen = 0
-        hof = tools.HallOfFame(maxsize= 10 * cfg.population_size)
-        logbook = tools.Logbook()
+        stats = tools.Statistics(lambda ind: ind.fitness.values)
+        stats.register("avg", np.mean)
+        stats.register("std", np.std)
+        stats.register("min", np.min)
+        stats.register("max", np.max)
 
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
-    stats.register("avg", np.mean)
-    stats.register("std", np.std)
-    stats.register("min", np.min)
-    stats.register("max", np.max)
+        for gen in range(start_gen, self.cfg.n_generations):
+            population = algorithms.varAnd(population, toolbox,
+                                           cxpb=self.cfg.crossover_probability, mutpb=self.cfg.mutation_probability)
 
-    for gen in range(start_gen, cfg.n_generations):
-        population = algorithms.varAnd(population, toolbox,
-                                       cxpb=cfg.crossover_probability, mutpb=cfg.mutation_probability)
+            # Evaluate the individuals with an invalid fitness
+            invalid_ind = [ind for ind in population if not ind.fitness.valid]
+            outcome = toolbox.map(toolbox.evaluate, invalid_ind)
+            for ind, eval_out in zip(invalid_ind, outcome):
+                fitness, eval_info = eval_out
+                ind.fitness.values = fitness,
+                ind.eval_info = eval_info
 
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in population if not ind.fitness.valid]
-        outcome = toolbox.map(toolbox.evaluate, invalid_ind, bh_data_file)
-        for ind, eval_out in zip(invalid_ind, outcome):
-            fitness, eval_info = eval_out
-            ind.fitness.values = fitness,
-            ind.eval_info = eval_info
+            hof.update(population)
+            record = stats.compile(population)
+            logbook.record(gen=gen, evals=len(invalid_ind), **record)
 
-        hof.update(population)
-        record = stats.compile(population)
-        logbook.record(gen=gen, evals=len(invalid_ind), **record)
+            population = toolbox.select(population, len(population))
 
-        population = toolbox.select(population, k=len(population))
+            if gen % checkpoint_freq == 0:
+                # Fill the dictionary using the dict(key=value[, ...]) constructor
+                cp = dict(population=population, generation=gen, halloffame=hof,
+                          logbook=logbook, rndstate=np.random.get_state())
+                with open("checkpoint_name.pkl", "wb") as cp_file:
+                    pickle.dump(cp, cp_file)
+        return population, hof, logbook
 
-        if gen % checkpoint_freq == 0:
-            # Fill the dictionary using the dict(key=value[, ...]) constructor
-            cp = dict(population=population, generation=gen, halloffame=halloffame,
-                      logbook=logbook, rndstate=np.random.getstate())
-            with open("checkpoint_name.pkl", "wb") as cp_file:
-                pickle.dump(cp, cp_file)
-    return pop, log
 
+
+    def get_best_configs(self, pop, k_best):
+        cfg_array = np.stack([np.array(ind).reshape(self.n_params, -1) for ind in pop])  # (n_pop, n_param_ind, n_packers)
+        # (n_pop, n_param_configs, n_packers)
+        chamber_fitness_array = np.stack([ind.eval_info for ind in pop])  # (n_pop, n_param_sens, n_param_ind, n_chamber, SobolIndices)
+        n_pop, n_param_configs, n_chambers, n_params_sens, n_sobol = chamber_fitness_array.shape
+        assert n_param_configs == self.n_params
+        assert n_params_sens == self.n_params
+
+        # to compare we need fittness of every config, that is n_pop * n_param_configs; wit respect to every param sensitivity
+        # fittness is max over chambers, taking i_sobol = 0 ... total sensitivity
+        fitness_array = chamber_fitness_array[...,0].max(axis=2)
+        # (n_pop, n_param_configs, n_params_sens)
+        best_array = []
+        for i_param in range(self.n_params):
+            i_sorted = np.argsort(fitness_array[:, :, i_param].ravel())[-k_best:]
+            cfg_best = cfg_array.reshape(-1, self.n_packers)[i_sorted, :]
+            sobol_indices_best = chamber_fitness_array.reshape(-1, n_chambers, self.n_params, n_sobol)
+            sobol_indices_best = sobol_indices_best[i_sorted, ...]
+            for idx in range(k_best):
+                best_array.append(PackerConfig(cfg_best[idx], sobol_indices_best[idx]))
+        return best_array
+
+    def get_best_k_groups(self, pop, k_best):
+        """
+
+        :param pop:
+        :param k_best:
+        :return:
+        """
+        cfg_array = np.stack([np.array(ind).reshape(self.n_params, -1) for ind in pop])  # (n_pop, n_param_ind, n_packers)
+        chamber_fitness_array = np.stack([ind.eval_info for ind in pop])  # (n_pop, n_param_sens, n_param_ind, n_chamber)
+        chamber_fitness_array = chamber_fitness_array.transpose(1, 0, 2, 3)
+        fitness_array = chamber_fitness_array.max(axis=3)
+        best_array = []
+        for i_param in range(self.n_params):
+
+            i_sorted = np.argsort(fitness_array[i_param,:, :].ravel())[-k_best:]
+            for idx in i_sorted:
+                packers = cfg_array.reshape(-1, self.n_packers)[idx]
+                param_values = chamber_fitness_array.reshape(self.n_params, -1, self.n_packers - 1)[:, idx, :]
+                best_array.appand(PackerConfig(packers, param_values))
+        return best_array
 
 # def test_deap_scoop():
 #     hostfile = os.path.abspath("deap_scoop_hostfile")
@@ -320,16 +369,30 @@ def _optimize(cfg, bh_set, map_fn, checkpoint=None):
 
 
 def optimize_borehole(workdir, cfg, bh_set, i_bh):
-    opt_space = PackerOptSpace.from_bh_set(cfg, bh_set, i_bh)
-
+    opt_space = PackerOptSpace.from_bh_set(workdir, cfg, bh_set, i_bh)
+    population, hof, logbook = opt_space.optimize()
+    best_cfg = opt_space.get_best_configs(population, k_best=cfg.optimize.n_best_packer_conf)
+    # TODO: exctract suitable candidates from the population
+    with open(workdir / "logbook.txt", 'w') as f:
+        f.write(str(logbook))
+    with open(workdir / "hof.txt", 'w') as f:
+        f.write(str(hof))
+    return best_cfg
 
 
 ######################
 
+def write_optimization_results(workdir, borehole_optim_configs):
+    with open(workdir / "borhole_optim_configurations.pkl", 'wb') as f:
+        pickle.dump(borehole_optim_configs, f)
 
-def evalOneMax(individual):
-    return sum(individual),
-
+def read_optimization_results(workdir):
+    try:
+        with open(workdir / "borhole_optim_configurations.pkl", 'rb') as f:
+            opt_results = pickle.load(f)
+    except FileNotFoundError:
+        pass
+    return opt_results
 
 def load(cfg_file):
     workdir = cfg_file.parent

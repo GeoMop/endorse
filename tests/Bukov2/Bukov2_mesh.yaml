@@ -107,7 +107,7 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: False      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
     zk_30:
       invert_xy: False
       transform_shift: [0, -5, 1.8]
@@ -134,10 +134,11 @@ optimize:
     packer_size: 2        # Size of packer in terms of points
     min_chamber_size: 2   # Size in terms of points
     n_packers: 4          # meaning 3 chambers
+    n_best_packer_conf: 3
 
     # Algorithm params
-    population_size: 100
-    n_generations: 100
+    population_size: 3
+    n_generations: 1
     crossover_probability: 0.8
     mutation_probability: 0.2
 

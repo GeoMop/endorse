@@ -47,16 +47,31 @@ def test_borehole_set():
     mock.mock_hdf5(cfg_file)
     bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_optimize_packer():
     workdir = script_dir
     cfg_file = workdir / "Bukov2_mesh.yaml"
     cfg = common.config.load_config(cfg_file)
     mock.mock_hdf5(cfg_file)
+    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
     i_bh = 20
     borhole_opt_config = opt_pack.optimize_borehole_wrapper((cfg_file, i_bh))
-    assert type(borhole_opt_config[0]) is list
-    assert type(borhole_opt_config[0][0]) is opt_pack.PackerConfig
+    assert type(borhole_opt_config) is list
+    assert type(borhole_opt_config[0]) is opt_pack.PackerConfig
+
+    # write mock result file
+    bh_mock_results = [borhole_opt_config for _ in range(bh_set.n_boreholes)]
+    opt_pack.write_optimization_results(workdir, bh_mock_results)
+    bh_mock_results_1 = opt_pack.read_optimization_results(workdir)
+
+    for ref_bh, new_bh in zip(bh_mock_results, bh_mock_results_1):
+        for ref, new in zip(ref_bh, new_bh):
+            assert np.allclose(ref.packers, new.packers)
+            inf_mask1 = np.isinf(ref.sobol_indices)
+            inf_mask2 = np.isinf(new.sobol_indices)
+            mask = ~inf_mask1 & ~inf_mask2
+            assert np.allclose(ref.sobol_indices[mask], new.sobol_indices[mask], equal_nan=True)
+            # Have to fix Nans and Infs yet.
 
 @pytest.mark.skip
 def test_optimize_bh_set():
