@@ -80,13 +80,20 @@ def solver_id(i):
 
 def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     no_samples, no_parameters = np.shape(parameters)
-    rows_per_file = no_samples // n_processes + (no_samples % n_processes > 0)
+    rows_per_file = no_samples // n_processes
+    rem = no_samples % n_processes
 
     sample_idx = 0
+    off_start = 0
+    off_end = 0
     for i in range(n_processes):
-        start_idx = i * rows_per_file
-        end_idx = min((i + 1) * rows_per_file, no_samples)
-        subset_matrix = parameters[start_idx:end_idx, :]
+        off_start = off_end
+        off_end = off_end + rows_per_file
+        # add sample while there is still remainder after rows_per_file dividion
+        if rem > 0:
+            off_end = off_end + 1
+            rem = rem - 1
+        subset_matrix = parameters[off_start:off_end, :]
 
         param_file = os.path.join(output_dir_in, "sensitivity", "params_" + solver_id(i) + ".csv")
         with open(param_file, 'w', newline='') as csvfile:
