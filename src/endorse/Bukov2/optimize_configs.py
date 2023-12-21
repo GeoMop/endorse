@@ -11,9 +11,13 @@ from pathlib import Path
 from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
+workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2')
+bh_data_file = workdir / "bh_set.pickle"
 
 from endorse.Bukov2 import boreholes, sa_problem
+from endorse import common
 from endorse.sa import analyze
+import endorse.Bukov2.optimize_packers as opt_pack
 
 """
 Genetic optimization:
@@ -61,15 +65,15 @@ class OptSpace:
 
     """
 
-    def __init__(self, cfg, bh_set:boreholes.BoreholeSet):
+    def __init__(self, cfg, bh_set:boreholes.BoreholeSet, bh_opt):
         self.cfg = cfg
         self.bhs = bh_set
         self.bhs_size = self.bhs.n_boreholes
-        self.n_boreholes = self.bhs.n_boreholes_to_select
-        self.n_packers = cfg.n_packers
-        self.packer_size = cfg.packer_size
-        self.min_packer_distance = cfg.packer_size + cfg.min_chamber_size
-        #self.packer_resolution = 1000
+        self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
+        self.n_configs = len(bh_opt[0])
+        self.n_chambers = cfg.optimize.n_packers-1
+        self.n_params = bh_opt[0][0].param_values.shape[1]
+        self._individual_shape = (self.n_boreholes, 2)
 
     def project_decorator(self, func):
         def wrapper(*args, **kwargs):
@@ -126,13 +130,13 @@ class OptSpace:
 
     def random_bh(self):
         i_bh = np.random.randint(0, self.bhs_size)
-        lower, upper = self.bhs.line_bounds[i_bh]
-        i_packers = np.random.randint(lower, upper, self.n_packers)
-        return (i_bh, *i_packers)
+        i_cfg = np.random.randint(0, self.n_configs)
+        return i_bh, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
         ind = [self.random_bh()  for i in range(self.n_boreholes)]
-        return creator.Individual(ind),
+        print(creator.Individual(ind))
+        return creator.Individual(ind)
 
 
     def cross_over(self, ind1:Individual, ind2:Individual) -> Tuple[Individual, Individual]:
@@ -146,10 +150,10 @@ class OptSpace:
         - exachange whole BH only:
           - would preserve BH - packer compatibility
         """
-        ind1, ind2 = tools.cxTwoPoint(ind1, ind2)
-        # keep first two boreholes with the same direction and configuration
-        ind1[BHConf.size:2*BHConf.size - 1] = ind1[0:BHConf.size - 1]
-        ind2[BHConf.size:2*BHConf.size - 1] = ind2[0:BHConf.size - 1]
+        # ind1, ind2 = tools.cxTwoPoint(ind1, ind2)
+        # # keep first two boreholes with the same direction and configuration
+        # ind1[BHConf.size:2*BHConf.size - 1] = ind1[0:BHConf.size - 1]
+        # ind2[BHConf.size:2*BHConf.size - 1] = ind2[0:BHConf.size - 1]
 
         # TODO:
         # cross over of
@@ -173,9 +177,12 @@ class OptSpace:
         :param ind:
         :return:
         """
-        ind2 = toolbox.clone(ind)
+        # ind2 = toolbox.clone(ind)
 
-        return tools.mutFlipBit(ind, indpb=0.05)
+        # return tools.mutFlipBit(ind, indpb=0.05)
+        i = np.random.randint(self.n_boreholes)
+        ind[i] = self.random_bh()
+        return ind,
 
 
 # def make_individual(cfg, bh_set:boreholes.BoreholeSet):
@@ -192,6 +199,8 @@ class OptSpace:
 
 
 _bh_set = None
+
+
 def get_bh_set(f_path):
     global _bh_set
     if _bh_set is None:
@@ -201,6 +210,33 @@ def get_bh_set(f_path):
         except FileNotFoundError:
             pass
     return _bh_set
+
+
+_bhs_opt_config = None
+
+def get_opt_results(f_path):
+    global _bhs_opt_config
+    if _bhs_opt_config is None:
+        try:
+            _bhs_opt_config = opt_pack.read_optimization_results(f_path)
+        except FileNotFoundError:
+            pass
+    return _bhs_opt_config
+
+
+_opt_space = None
+
+def get_opt_space():
+    global _opt_space
+    if _opt_space is None:
+        try:
+            cfg_file = workdir / "Bukov2_mesh.yaml"
+            cfg = common.config.load_config(cfg_file)
+            _opt_space = OptSpace(cfg, _bh_set, _bhs_opt_config)
+        except FileNotFoundError:
+            pass
+    return _opt_space
+
 
 def save_bh_data(f_path, bh_set):
     with open(f_path, 'wb') as f:
@@ -224,37 +260,51 @@ def eval_from_chambers_sa(chamber_data, problem):
     return np.sum(max_sobol[:, 0]), max_sobol
 
 
+# def get_bhs_opt_config():
+#     cfg = np.empty((10,2), dtype=opt_pack.PackerConfig)
+#     for i in range(10):
+#         for j in range(2):
+#             pkrs = np.arange(4)
+#             vals = np.arange(8).reshape(4,2) #+ i*2+j
+#             pc = opt_pack.PackerConfig(pkrs, vals)
 
-def eval_individual(ind : Individual) -> Tuple[float, Any]:
-    bhs_opt_config = get_bhs_opt_config()  # dummy getter of sensitivity data as 2d array of packerConfig's
+# bhs_opt_config = get_bhs_opt_config()  # dummy getter of sensitivity data as 2d array of packerConfig's
+def eval_individual(ind:Individual) -> Tuple[float, Any]:
+
+    get_bh_set(bh_data_file)
+    get_opt_results(workdir)
+    get_opt_space()
 
     # constants below should be replaced from elsewhere
-    N_bhs = 6  # number of boreholes in Individual
-    N_packers = 4 # number of packers in config
-    N_params = len(bhs_opt_config[0][0].params) # number of sensitivity parameters
+    N_bhs = _opt_space.n_boreholes  # number of boreholes in Individual
+    # N_params = bhs_opt_config[0][0].sobol_indices.shape[1] # number of sensitivity parameters
+    N_params = _opt_space.n_params  # number of sensitivity parameters
 
-    param_max = np.array(N_params, N_bhs)
+    param_max = np.zeros((N_params, N_bhs))
+    i = 0
     for bh in np.array(ind).reshape(N_bhs,2):
         i_bh = bh[0]
         i_cfg = bh[1]
-        cfg = bhs_opt_config[i_bh][i_cfg]
-        param_max[:,i_bh] = np.max(cfg.param_values, axis=1) # axis=1 fixes param and maximizes over chambers
+        cfg = _bhs_opt_config[i_bh][i_cfg]
+        # print(cfg.param_values)
+        param_max[:,i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        i = i + 1
 
-    return np.min( np.max(param_max, axis=0) ) # axis=0 fixes param and maximizes over borehole maximums
+    return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
 
 
-def optimize(cfg, bh_set, map_fn, checkpoint=None):
+def optimize(cfg, map_fn, checkpoint=None):
     """
     Main optimization routine.
     :return:
     """
-    opt_space = OptSpace(cfg, bh_set)
-    bh_data_file = script_path.parent / "bh_set.pickle"
-    get_bh_set(bh_data_file)
-    bh_set._individual_shape = (opt_space.n_boreholes, opt_space.n_packers + 1)
-    bh_set._sa_problem = sa_problem.sa_dict(cfg.problem)
-    save_bh_data(bh_data_file, bh_set)
 
+    get_bh_set(bh_data_file)
+    get_opt_results(workdir)
+    get_opt_space()
+
+    # _bh_set._sa_problem = sa_problem.sa_dict(cfg.problem)
+    # save_bh_data(bh_data_file, bh_set)
 
     checkpoint_freq = 10
 
@@ -267,15 +317,15 @@ def optimize(cfg, bh_set, map_fn, checkpoint=None):
     #toolbox.register("attr_bool", np.random.randint, 0, 1)
 
     # Structure initializers
-    toolbox.register("individual", opt_space.make_individual)
-    toolbox.decorate("individual", opt_space.project_decorator)
+    toolbox.register("individual", _opt_space.make_individual)
+    # toolbox.decorate("individual", opt_space.project_decorator)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     toolbox.register("evaluate", eval_individual)
-    toolbox.register("mate", opt_space.cross_over)
-    toolbox.decorate("mate", opt_space.project_decorator)
-    toolbox.register("mutate", opt_space.mutate)
-    toolbox.decorate("mutate", opt_space.project_decorator)
+    toolbox.register("mate", _opt_space.cross_over)
+    # toolbox.decorate("mate", opt_space.project_decorator)
+    toolbox.register("mutate", _opt_space.mutate)
+    # toolbox.decorate("mutate", opt_space.project_decorator)
 
     toolbox.register("select", tools.selTournament, tournsize=3) # ?? is it a good choice
     toolbox.register("map", map_fn)
@@ -291,9 +341,9 @@ def optimize(cfg, bh_set, map_fn, checkpoint=None):
         np.random.setstate(cp["rndstate"])
     else:
         # Start a new evolution
-        population = toolbox.population(n=cfg.population_size)
+        population = toolbox.population(n=cfg.optimize.population_size)
         start_gen = 0
-        hof = tools.HallOfFame(maxsize= 10 * cfg.population_size)
+        hof = tools.HallOfFame(maxsize= 10 * cfg.optimize.population_size)
         logbook = tools.Logbook()
 
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -302,17 +352,17 @@ def optimize(cfg, bh_set, map_fn, checkpoint=None):
     stats.register("min", np.min)
     stats.register("max", np.max)
 
-    for gen in range(start_gen, cfg.n_generations):
+    for gen in range(start_gen, cfg.optimize.n_generations):
         population = algorithms.varAnd(population, toolbox,
-                                       cxpb=cfg.crossover_probability, mutpb=cfg.mutation_probability)
+                                       cxpb=cfg.optimize.crossover_probability, mutpb=cfg.optimize.mutation_probability)
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in population if not ind.fitness.valid]
-        outcome = toolbox.map(toolbox.evaluate, invalid_ind, bh_data_file)
+        outcome = toolbox.map(toolbox.evaluate, invalid_ind)
         for ind, eval_out in zip(invalid_ind, outcome):
-            fitness, eval_info = eval_out
-            ind.fitness.values = fitness,
-            ind.eval_info = eval_info
+        #     fitness, eval_info = eval_out
+            ind.fitness.values = eval_out,
+        #     ind.eval_info = eval_info
 
         hof.update(population)
         record = stats.compile(population)
@@ -322,11 +372,12 @@ def optimize(cfg, bh_set, map_fn, checkpoint=None):
 
         if gen % checkpoint_freq == 0:
             # Fill the dictionary using the dict(key=value[, ...]) constructor
-            cp = dict(population=population, generation=gen, halloffame=halloffame,
-                      logbook=logbook, rndstate=np.random.getstate())
+            cp = dict(population=population, generation=gen, halloffame=hof,
+                      logbook=logbook, rndstate=np.random.get_state())
             with open("checkpoint_name.pkl", "wb") as cp_file:
                 pickle.dump(cp, cp_file)
-    return pop, log
+    print(cp)
+    return #pop, log
 
 
 # def test_deap_scoop():
@@ -362,32 +413,23 @@ def pbs_submit(queue, n_workers):
 ######################
 
 
-def evalOneMax(individual):
-    return sum(individual),
-
-
-
-
 
 
 def main():
-    if len(sys.argv) > 2:
-        raise ImportError("Wrong number of program parameters. Give a length of OneMax problem.")
+    if len(sys.argv) > 1:
+        raise ImportError("Wrong number of program parameters.")
 
-    if len(sys.argv) == 1:
-        print("Create Calling metacentrum PBS test.")
-        pbs_test_deap_scoop()
-        return
+    cfg_file = workdir / "Bukov2_mesh.yaml"
+    cfg = common.config.load_config(cfg_file)
 
-    one_max_len = int(sys.argv[1])
-    pop, log = one_max(one_max_len, scoop.futures.map)
+    optimize(cfg, map)
 
-    out_file = "deap_scoop_out"
-    out_file = os.path.abspath(out_file)
-    print("Writing results to : ", out_file)
-    with open(out_file, "w") as f:
-        f.write(str(pop))
-        f.write(str(log))
+    # out_file = "deap_scoop_out"
+    # out_file = os.path.abspath(out_file)
+    # print("Writing results to : ", out_file)
+    # with open(out_file, "w") as f:
+    #     f.write(str(pop))
+    #     f.write(str(log))
 
 
 if __name__ == '__main__':
