@@ -106,7 +106,7 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
         # Prepare HDF, write parameters
         output_file = os.path.join(output_dir, 'sampled_data_' + solver_id(i) + '.h5')
         sample_storage.create_chunked_dataset(output_file,
-                                              shape=(subset_matrix.shape[0], *config_dict["sample_shape"]))
+                                              shape=(parameters.shape[0], *config_dict["sample_shape"]))
         sample_storage.append_new_dataset(output_file, "parameters", subset_matrix)
 
     # for i, mat in enumerate(sub_parameters):
