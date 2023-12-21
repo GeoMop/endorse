@@ -62,8 +62,8 @@ def create_chunked_dataset(file_path, shape):
         # chunks=True ... automatic chunk size
         # f.create_dataset(dataset_name, data=np.zeros(shape), chunks=True, dtype='float64')
         f.create_dataset(dataset_name, shape=shape, chunks=True, dtype='float64')
-        f.create_dataset(failed_ids_name, shape=(0,1), maxshape=(shape[0],1), dtype='int')
-        f.create_dataset(done_ids_name, shape=(0, 1), maxshape=(shape[0], 1), dtype='int')
+        f.create_dataset(failed_ids_name, shape=(0,), maxshape=(shape[0],), dtype='int')
+        f.create_dataset(done_ids_name, shape=(0,), maxshape=(shape[0],), dtype='int')
 
 
 def append_new_dataset(file_path, name, data):
