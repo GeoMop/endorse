@@ -3,6 +3,7 @@ from endorse.sa import analyze, sample
 from endorse import common
 import numpy as np
 import h5py
+import json
 
 def mock_hdf5(cfg_file):
     workdir, cfg = optimize_packers.load(cfg_file)
@@ -31,4 +32,8 @@ def mock_hdf5(cfg_file):
         dset = f.create_dataset(sample_storage.dataset_name, shape=field_samples.shape, chunks=True, dtype='float64')
         f.create_dataset(sample_storage.failed_ids_name, shape=(0, 1), maxshape=(shape[0], 1), dtype='int')
         dset[...] = field_samples[...]
+
+    times = [0] + list(range(100, 109))
+    with open(workdir / "output_times.json", "w") as f:
+        json.dump(times, f)
     return hdf_path

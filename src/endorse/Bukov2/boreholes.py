@@ -5,6 +5,8 @@ from functools import cached_property
 import itertools
 import numpy as np
 import pyvista as pv
+import json
+from endorse.Bukov2 import sample_storage
 from vtk import vtkCellLocator
 
 """
@@ -262,6 +264,24 @@ class BoreholeSet:
         length = np.abs(np.dot(diff, ex_normalized))
         return length, s, t, point_1, point_2, ez_normalized
 
+
+    def load_data(self, workdir, cfg):
+        """
+        Todo: Separate class taking BHSet as pure geometric data and adding the projected field.
+        :return:
+        """
+        mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
+        field_samples = sample_storage.get_hdf5_field(workdir / cfg.simulation.hdf)
+        field = self.project_field(mesh, field_samples, cached=True)
+        with open(workdir / "output_times.json") as f:
+            times = json.load(f)
+        self.times = times
+        return times, self.point_lines[0], field
+
+    @property
+    def projected_data(self):
+        return self.times, self.point_lines[0], self._bh_field
+
     def project_field(self, mesh, field, cached = False):
         """
         Return array (n_boreholes, n_points, n_times, n_samples)
@@ -299,6 +319,12 @@ class BoreholeSet:
 
     @cached_property
     def point_lines(self):
+        """
+        Returns:
+        points - shape (n_boreholes, n_points, coords)
+        line_bounds - shape (n_boreholes, [min, max])
+        :return:
+        """
         bh_array = np.array(self.bh_list)
         dir = bh_array[:, 1, :]
         transversal_pt = bh_array[:, 2, :]

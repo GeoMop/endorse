@@ -283,13 +283,27 @@ class PackerOptSpace:
 
     def select(self, population, new_size, toolbox):
         """
-        Select `new_size` individual groups from population.
-
-        Since we have different n_param fittness functions. We with individual config grouping.
-
+        Consider population of P individuals of size N configurations for N parameters
+        as a single population of size N * P. For every parameter:
+        1. random N-groups
+        2. select the best in every group
+        3. use in P individual of the new population
         :param pop:
         :return:
         """
+        # Pairs: (config, fittnes vector)
+        # ind.eval_inf shape: (n_params_ind, n_params_sens)
+        pairs = [(cfg, cfg_fit) for ind in population for cfg, cfg_fit in zip(ind, ind.eval_info)]
+        configs, fit = zip(pairs)
+
+        permutation = np.arange(len(configs))
+        np.random.shuffle(permutation)
+        configs = configs[permutation]
+        fit = configs[permutation]
+        fit = fit.reshape(self.n_params, -1, self.n_params)
+        ind_max = np.argmax(fit, axis=0)
+        configs = np.array(configs, dtype=np.int32).rehape(self.n_params, -1, self.n_packers)
+        np.take_along_axis(configs, ind_max) # TODO finish
         return population
         #offspring = [toolbox.clone(ind) for ind in population]
 
@@ -337,9 +351,10 @@ class PackerOptSpace:
         chamber_means = np.stack(chamber_means).transpose(1, 0, 2, 3) # (n_param_ind, n_chamber, n_times, n_samples)
 
         # Evaluate chamber sensitivities
-        fittness, sensitivity_info = self.eval_from_chambers_sa(chamber_means)
-
-        return fittness, sensitivity_info
+        fittness, sens_info = self.eval_from_chambers_sa(chamber_means)
+                  # (n_arams, n_chambers, n_params, 1)
+        sens_info = sens_info[..., 0].max(axis=1)
+        return fittness, sens_info
 
 
 
@@ -526,9 +541,8 @@ def borehole_set(workdir, cfg):
     bh_set = optimize.get_bh_set(bh_set_file)
     if force or bh_set is None:
         bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-        mesh = boreholes.get_clear_mesh(workdir / cfg.simulation.mesh)
-        field_samples = sample_storage.get_hdf5_field(workdir / cfg.simulation.hdf)
-        bh_set.project_field(mesh, field_samples, cached=True)
+        bh_set.load_data(workdir, cfg)
+
     optimize.save_bh_data(workdir / "bh_set.pickle", bh_set)
     return bh_set
 

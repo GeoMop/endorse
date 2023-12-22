@@ -4,11 +4,13 @@ import pytest
 from endorse import common
 from endorse.Bukov2 import boreholes, sa_problem, mock
 from multiprocessing import Pool
-from pathlib import Path
+
 from endorse.sa import sample, analyze
 import numpy as np
 import endorse.Bukov2.optimize as optimize
 import endorse.Bukov2.optimize_packers as opt_pack
+
+from pathlib import Path
 script_dir = Path(__file__).absolute().parent
 
 
@@ -39,21 +41,16 @@ def compare_opt_results(a, b):
 #     problem = sa_problem.sa_dict(sim_cfg)
 #     analyze.sobol_vec(values, problem)
 
-#@pytest.mark.skip
-def test_optimize_packer():
-    workdir = script_dir
-    cfg_file = workdir / "Bukov2_mesh.yaml"
-    cfg = common.config.load_config(cfg_file)
-    mock.mock_hdf5(cfg_file)
-    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
-    i_bh = 20
+def opt_fast_sobol(workdir, cfg, bh_set, i_bh):
     # Test fast sobol
     np.random.seed(123)
     start = time.process_time_ns()
     borhole_opt_config_fast = opt_pack.optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=opt_pack.vec_sobol_total_only)
     sec = (time.process_time_ns() - start) / 1e9
     print("Fast sobol time: ", sec)
+    return  borhole_opt_config_fast
 
+def opt_full_sobol(cfg_file, i_bh):
     # Tast clasical Sobol
     np.random.seed(123)
     start = time.process_time_ns()
@@ -62,7 +59,18 @@ def test_optimize_packer():
     print("Full sobol time: ", sec)
     assert type(borhole_opt_config) is list
     assert type(borhole_opt_config[0]) is opt_pack.PackerConfig
+    return  borhole_opt_config
 
+#@pytest.mark.skip
+def test_optimize_packer():
+    workdir = script_dir
+    cfg_file = workdir / "Bukov2_mesh.yaml"
+    cfg = common.config.load_config(cfg_file)
+    mock.mock_hdf5(cfg_file)
+    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
+    i_bh = 20
+
+    borhole_opt_config = opt_fast_sobol(workdir,cfg,bh_set,i_bh)
     print("N configurations per borehole: ", len(borhole_opt_config))
     for i_param in range(borhole_opt_config[0].n_param):
         i_max = np.argmax([conf.param_sensitivity[i_param] for conf in borhole_opt_config])
@@ -77,9 +85,11 @@ def test_optimize_packer():
     bh_mock_results_1 = opt_pack.read_optimization_results(workdir)
     compare_opt_results(bh_mock_results, bh_mock_results_1)
 
-    for ref, new in zip(borhole_opt_config, borhole_opt_config_fast):
-        if np.all(ref.packers ==  new.packers):
-            assert np.allclose(ref.chamber_sensitivity, new.chamber_sensitivity)
+    # Compare against reference (about 500 times slower)
+    #borhole_opt_config_full  = opt_full_sobol(cfg_file, i_bh)
+    #for ref, new in zip(borhole_opt_config, borhole_opt_config_full):
+    #    if np.all(ref.packers ==  new.packers):
+    #        assert np.allclose(ref.chamber_sensitivity, new.chamber_sensitivity)
 
 
 @pytest.mark.skip

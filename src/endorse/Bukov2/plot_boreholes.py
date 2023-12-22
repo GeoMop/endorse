@@ -1,5 +1,9 @@
 import numpy as np
 import pyvista as pv
+from vtk.util.numpy_support import numpy_to_vtk
+import vtk
+import os
+from xml.etree import ElementTree as ET
 
 
 def create_scene(cfg_geometry):
@@ -58,11 +62,144 @@ def add_bh(plotter, angle_norm, bh_set, i_bh):
     #     sphere = pv.Sphere(0.3, pt)
     #     plotter.add_mesh(sphere, color=color)
 
+
+#######################################################################
+
+
+from xml.dom import minidom
+
+def write_pvd_file(files, output_name):
+    """
+    Write a PVD file for a given sequence of files with line breaks, indentation, and XML declaration.
+
+    :param files: List of tuples (file_path, time_step).
+    :param output_name: Full path for the output PVD file.
+    """
+    # Prepare the root of the PVD file
+    pvd_root = ET.Element("VTKFile")
+    pvd_root.set("type", "Collection")
+    pvd_root.set("version", "0.1")
+    pvd_root.set("byte_order", "LittleEndian")
+    collection = ET.SubElement(pvd_root, "Collection")
+
+    for file_path, time_step in files:
+        # Add dataset entry to PVD file
+        dataset = ET.SubElement(collection, "DataSet")
+        dataset.set("timestep", str(time_step))
+        dataset.set("part", "0")
+        dataset.set("file", str(file_path))
+
+    # Convert to string with indentation
+    rough_string = ET.tostring(pvd_root, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    pretty_string = reparsed.toprettyxml(indent="    ")
+
+    # Ensure XML declaration is included
+    #xml_declaration = '<?xml version="1.0"?>\n'
+    formatted_xml = pretty_string
+
+    # Write the formatted XML to file
+    with open(output_name, 'w') as output_file:
+        output_file.write(formatted_xml)
+
+
+def PVD_point_fields(workdir, output_name, times, points, fields_dict):
+    """
+    Create a sequence of VTU files from 3D points and multiple scalar fields over time, and write a PVD file.
+
+    :param workdir: Directory to save the VTU and PVD files.
+    :param output_name: Base name for output files.
+    :param times: Array of time labels.
+    :param points: Array of 3D coordinates for N points (size N x 3).
+    :param fields_dict: Dictionary of scalar fields, each field is a NumPy array of size N x K.
+    """
+    # Ensure the output directory exists
+    os.makedirs(workdir / output_name, exist_ok=True)
+
+    # Convert numpy array of points to VTK points
+    vtk_points = vtk.vtkPoints()
+    vtk_points.SetData(numpy_to_vtk(points))
+
+    # Create a VTK PolyData object
+    #polydata = vtk.vtkPolyData()
+    polydata = vtk.vtkUnstructuredGrid()
+    polydata.SetPoints(vtk_points)
+
+    # List to store file paths and time steps for PVD file
+    files = []
+
+    for k, time_step in enumerate(times):
+        # Update polydata for the current time step
+        for field_name, field_data in fields_dict.items():
+            vtk_array = numpy_to_vtk(field_data[:, k])
+            vtk_array.SetName(field_name)
+            polydata.GetPointData().AddArray(vtk_array)
+
+        # Set up the VTU file writer
+        writer = vtk.vtkXMLUnstructuredGridWriter()
+        vtu_file_name = f"{output_name}/{output_name}_{k}.vtu"
+        writer.SetFileName(str(workdir / vtu_file_name))
+
+        # Set input data and write the file
+        writer.SetInputData(polydata)
+        success = writer.Write()
+        assert success == 1
+        # Append file info for PVD file
+        files.append((vtu_file_name, time_step))
+
+    # Write the PVD file
+    pvd_output_path = workdir / f"{output_name}.pvd"
+    write_pvd_file(files, pvd_output_path)
 #
-# # Example usage
 #
+# def PVD_point_fields(workdir, output_name, times, points, fields_dict):
+#     """
+#     Create a sequence of VTU files and a PVD file from 3D points and scalar fields over time.
 #
-# plotter = create_scene()
+#     :param points: Array of 3D coordinates for N points (size N x 3).
+#     :param x_field: NumPy array representing the X scalar field (size N x K).
+#     :param y_field: NumPy array representing the Y scalar field (size N x K).
+#     :param time_labels: Array of K time labels.
+#     :param output_dir: Directory to save the VTU and PVD files.
+#     """
+#     # Ensure the output directory exists
+#     os.makedirs(workdir / output_name, exist_ok=True)
 #
-# add_line_segment(plotter, [0, 0, 0], [5, 5, 5])
-# plotter.show()
+#     # Create a list to store file paths and time steps
+#     files = []
+#
+#     for it, time  in enumerate(times):
+#         # Create a PolyData object
+#         mesh = pv.PolyData(points)
+#         # Add scalar fields for the current time step
+#         for name, data in fields_dict.items():
+#             mesh.point_data[name] = data[:, it]
+#
+#         # Save as VTU file
+#         file_path = workdir / output_name / f"step_{it}.vtk"
+#         mesh.save(file_path)
+#         files.append((file_path, time))
+#
+#     # Create a PVD file
+#     write_pvd_file(files, workdir / f"{output_name}.pvd")
+
+
+def PVD_eval_field(workdir, times, points, field):
+    field_dict = dict(
+        pressure_mean=field.mean(axis=-1),
+        pressure_std=field.std(axis=-1),
+        pressure_min=field.min(axis=-1),
+        pressure_max=field.max(axis=-1),
+        pressure_q1=np.quantile(field, 0.25, axis=-1),
+        pressure_med=np.quantile(field, 0.5, axis=-1),
+        pressure_q2=np.quantile(field, 0.75, axis=-1),
+    )
+    PVD_point_fields(workdir, 'eval_field', times, points, field_dict)
+
+def PVD_data_on_bhset(workdir, bh_set):
+    times, points, field = bh_set.projected_data
+    points = points.reshape(-1, 3)
+    field = field.reshape(-1, *field.shape[2:])
+    assert field.shape[0] == points.shape[0]
+    assert field.shape[1] == len(times)
+    PVD_eval_field(workdir, times, points, field)
