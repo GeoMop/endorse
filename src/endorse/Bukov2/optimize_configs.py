@@ -19,12 +19,20 @@ from endorse.Bukov2 import boreholes, sa_problem
 from endorse import common
 from endorse.sa import analyze
 import endorse.Bukov2.optimize_packers as opt_pack
+from copy import deepcopy
 
 """
 Genetic optimization:
-Find set of N(=6) boreholes with given packer configurations that maximize the objective function, which is given as
+Find set of N(=6) boreholes with given packer configurations that maximize the objective function.
 
-    min_i max_j (sensitivity of i-th parameter in j-th chamber).
+The following variants of objective function are provided:
+* eval_individual_max: min_p max_b max_c (sensitivity of p-th parameter in c-th chamber of b-th boreholes).
+    This function prefers individuals, where all parameters have the highest possible sensitivity in some chamber
+     of some borehole. It does not detect individuals with low-sensitivity configs.
+    
+* eval_individual_l1: sum_b min_p max_c ( sensitivity of p-th parameter in c-th chamber of b-th boreholes).
+    This function sums over boreholes the maximal parameter sensitivities, thus prefering individuals with all configs
+    highly sensitive.
 
 """
 
@@ -70,8 +78,10 @@ class OptSpace:
                 if type(offspring) is tuple:
                     for o in offspring:
                         o.sort()
+                        o = self.rm_duplicate_bhs(o)
                 else:
-                    offspring.sort() #(self.project_individual(ind) for ind in offspring)
+                    offspring.sort()
+                    offspring = self.rm_duplicate_bhs(offspring)
             return offspring
         return wrapper
 
@@ -126,9 +136,26 @@ class OptSpace:
         return i_bh, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
-        ind = [self.random_bh()  for i in range(self.n_boreholes)]
-        # print(creator.Individual(ind))
+        ind = [] #[self.random_bh()  for i in range(self.n_boreholes)]
+        seen = set()
+        for i in range(self.n_boreholes):
+            t = self.random_bh()
+            while t[0] in seen:
+                t = self.random_bh()
+            seen.add(t[0])
+            ind.append(t)
         return creator.Individual(ind)
+
+    def rm_duplicate_bhs(self, ind:Individual) -> Tuple[Individual]:
+        seen = set()
+        i = 0
+        for t in ind:
+            while t[0] in seen:
+                t = self.random_bh()
+            ind[i] = t
+            seen.add(t[0])
+            i = i + 1
+        return ind
 
 
     def cross_over(self, ind1:Individual, ind2:Individual) -> Tuple[Individual, Individual]:
@@ -212,15 +239,20 @@ def get_opt_results(f_path, randomize=False):
         try:
             _bhs_opt_config = opt_pack.read_optimization_results(f_path)
             if randomize:
-                # for bh in _bhs_opt_config:
-                #     for cfg in bh:
-                #         cfg.sobol_indices[:,:,0] = np.random.random(cfg.sobol_indices[:,:,0].size).reshape(cfg.sobol_indices[:,:,0].shape)
-                for i in range(1):
-                    i_bh = np.random.randint(len(_bhs_opt_config))
-                    i_cfg = np.random.randint(len(_bhs_opt_config[0]))
-                    print("randomizing config ", (i_bh, i_cfg))
-                    cfg = _bhs_opt_config[i_bh][i_cfg]
-                    cfg.sobol_indices[:, :, 0] = 100 * np.ones(cfg.sobol_indices[:, :, 0].shape)
+                i = 0
+                for bh in _bhs_opt_config:
+                    _bhs_opt_config[i] = deepcopy(bh)
+                    bh = _bhs_opt_config[i]
+                    for cfg in bh:
+                        cfg.sobol_indices[:,:,0] = np.random.random(cfg.sobol_indices[:,:,0].size).reshape(cfg.sobol_indices[:,:,0].shape)
+                    i = i + 1
+                # for i in range(1):
+                #     i_bh = np.random.randint(len(_bhs_opt_config))
+                #     i_cfg = np.random.randint(len(_bhs_opt_config[0]))
+                #     print("randomizing config ", (i_bh, i_cfg))
+                #     _bhs_opt_config[i_bh] = deepcopy( _bhs_opt_config[i_bh] )
+                #     cfg = _bhs_opt_config[i_bh][i_cfg]
+                #     cfg.sobol_indices[:, :, 0] = 100 * np.ones(cfg.sobol_indices[:, :, 0].shape)
         except FileNotFoundError:
             pass
     return _bhs_opt_config
@@ -239,30 +271,8 @@ def get_opt_space():
     return _opt_space
 
 
-# def save_bh_data(f_path, bh_set):
-#     with open(f_path, 'wb') as f:
-#         pickle.dump(bh_set, f)
 
-
-
-
-
-# def eval_from_chambers_sa(chamber_data, problem):
-#     # chamber_data (n_chambers, n_times, n_samples)
-#
-#     n_chambers, n_times, n_samples = chamber_data.shape
-#     assert n_chambers==3*6
-#     assert n_times == 10
-#     assert n_samples == 20 * 16
-#
-#     ch_data = chamber_data.reshape(-1, n_samples)
-#     sobol_array = analyze.sobol_vec(ch_data, problem, problem['second_order'])
-#     max_sobol = analyze.sobol_max(sobol_array)  # max over total indices
-#     return np.sum(max_sobol[:, 0]), max_sobol
-
-
-
-def eval_individual(ind:Individual) -> Tuple[float, Any]:
+def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
 
     get_bh_set(bh_data_file)
     get_opt_results(workdir)
@@ -282,7 +292,27 @@ def eval_individual(ind:Individual) -> Tuple[float, Any]:
     return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
 
 
-def optimize(cfg, map_fn, checkpoint=None):
+def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
+
+    get_bh_set(bh_data_file)
+    get_opt_results(workdir)
+    get_opt_space()
+
+    N_bhs = _opt_space.n_boreholes  # number of boreholes in Individual
+    N_params = _opt_space.n_params  # number of sensitivity parameters
+
+    param_max = np.zeros((N_params, N_bhs))
+    i = 0
+    for bh in np.array(ind):
+        i_bh = bh[0]
+        i_cfg = bh[1]
+        cfg = _bhs_opt_config[i_bh][i_cfg]
+        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        i = i + 1
+    return np.sum( np.min(param_max, axis=0) ) # axis=0 fixes borehole and minimizes over params
+
+
+def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     """
     Main optimization routine.
     :return:
@@ -291,9 +321,6 @@ def optimize(cfg, map_fn, checkpoint=None):
     get_bh_set(bh_data_file)
     get_opt_results(workdir, randomize=True) # True means generate random sensitivities
     get_opt_space()
-
-    # _bh_set._sa_problem = sa_problem.sa_dict(cfg.problem)
-    # save_bh_data(bh_data_file, bh_set)
 
     checkpoint_freq = 10
 
@@ -310,7 +337,7 @@ def optimize(cfg, map_fn, checkpoint=None):
     toolbox.decorate("individual", _opt_space.project_decorator)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    toolbox.register("evaluate", eval_individual)
+    toolbox.register("evaluate", eval_fn)
     toolbox.register("mate", _opt_space.cross_over)
     toolbox.decorate("mate", _opt_space.project_decorator)
     toolbox.register("mutate", _opt_space.mutate)
@@ -364,8 +391,24 @@ def optimize(cfg, map_fn, checkpoint=None):
             with open("checkpoint_name.pkl", "wb") as cp_file:
                 pickle.dump(cp, cp_file)
 
+    print('Hall of fame:')
     for ind in hof:
-        print(eval_individual(ind), ind)
+        print(toolbox.evaluate(ind), ind)
+
+    # list of borehole configs sorted by sum of evaluations
+    print('Most popular configs:')
+    ranks = dict()
+    for ind in hof:
+        e = toolbox.evaluate(ind)
+        for t in ind:
+            if not t in ranks:
+                ranks[t] = 0
+            ranks[t] = ranks[t] + e
+    print(sorted(ranks.items(), key=lambda item: -item[1])[:6])
+
+    del creator.FitnessMax
+    del creator.Individual
+
     return #pop, log
 
 
@@ -410,7 +453,8 @@ def main():
 
     cfg = common.config.load_config(cfg_file)
 
-    optimize(cfg, map)
+    optimize(cfg, map, eval_individual_max)
+    optimize(cfg, map, eval_individual_l1)
 
     # out_file = "deap_scoop_out"
     # out_file = os.path.abspath(out_file)
