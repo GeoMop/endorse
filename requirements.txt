@@ -2,6 +2,7 @@
 h5py
 scoop       # communication library
 deap
+salib
 
 # endorse
 pyvista
