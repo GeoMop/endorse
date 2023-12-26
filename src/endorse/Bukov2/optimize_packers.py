@@ -12,7 +12,7 @@ from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
 
-from endorse.Bukov2 import boreholes, sa_problem, sample_storage, optimize
+from endorse.Bukov2 import boreholes, sa_problem, sample_storage, optimize, bh_chambers
 from endorse.sa import analyze
 from endorse import common
 
@@ -24,94 +24,7 @@ Genetic optimization:
 
 from scipy.stats import norm
 
-def separate_output_values(Y, D, N):
-    #AB = np.zeros((N, D))
-    #BA =  None
-    #step =  D + 2
-    YY = Y.reshape((*Y.shape[:-1], N, -1))
-    A = YY[..., 0]      #Y[0 : Y.size : step]
-    B = YY[..., D+1] #Y[(step - 1) : Y.size : step]
-    AB = YY[..., 1:D+1]
-    # for j in range(D):
-    #     AB[:, j] = Y[(j + 1) : Y.size : step]
-    #     if calc_second_order:
-    #         BA[:, j] = Y[(j + 1 + D) : Y.size : step]
-    return A, B, AB
 
-def first_order(A, AB, B):
-    """
-    First order estimator following Saltelli et al. 2010 CPC, normalized by
-    sample variance
-    """
-    y = np.r_[A, B]
-    #if y.ptp() == 0:
-    #    warn(CONST_RESULT_MSG)
-    #    return np.array([0.0])
-
-    return np.mean(B * (AB - A), axis=0) / np.var(y, axis=0)
-
-
-def total_order(A, AB, B):
-    """
-    Total order estimator following Saltelli et al. 2010 CPC, normalized by
-    sample variance
-    """
-    y = np.r_[A, B]
-    return 0.5 * np.mean((A - AB) ** 2, axis=0) / np.var(y, axis=0)
-
-
-def _vec_sobol_total_only(Y, n_params, n_samples,
-                         num_resamples=100, conf_level=0.95):
-    """
-    array shape (..., n_samples)
-    :param array:
-    :param problem:
-    :return:
-    """
-
-    # determining if groups are defined and adjusting the number
-    # of rows in the cross-sampled matrix accordingly
-    D = n_params
-    N = n_samples
-
-    YY = Y.reshape((*Y.shape[:-1], N, -1))
-    s1_samples = list(range(D+2))
-    s1_samples[D+1] = 2*(D+1) - 1
-    YY = YY[...,s1_samples]
-    # Normalize the model output.
-    # Estimates of the Sobol' indices can be biased for non-centered outputs
-    # so we center here by normalizing with the standard deviation.
-    # Other approaches opt to subtract the mean.
-    mean_Y = YY.mean(axis=(-1, -2))
-    std_Y = YY.std(axis=(-1, -2))
-    YY = (YY - mean_Y[..., None, None]) / std_Y[..., None,None]
-    A = YY[..., 0]
-    B = YY[..., D+1]
-    AB = YY[..., 1:D+1]
-
-    y_con = np.concatenate((A, B), axis=-1)
-    var_y = np.var(y_con, axis=-1)
-
-    # Preliminary part of efficient S1 calculation
-    #AB_diff = (AB[..., :, :] - A[..., :, None])
-    #S_tot = B[..., None, :] @ AB_diff
-    #S_tot = (S_tot.squeeze(axis=-2)) / n_samples / var_y
-
-    # Total index
-    S_tot = 0.5 * np.mean((AB[...,:,:] - A[...,:, None]) ** 2, axis=-2) / var_y[..., None]
-    return S_tot[..., None]
-
-
-def vec_sobol_total_only(array, problem):
-    n_params = problem['num_vars']
-    n_nested =  2 * (n_params + 1) if problem['second_order'] else n_params + 2
-
-    sobol_fn = lambda x: _vec_sobol_total_only(x, n_samples=int(array.shape[-1] / n_nested), n_params=n_params)
-    variant_samples = array.reshape((-1, array.shape[-1]))
-    #variant_sobols = np.stack([sobol_fn(row) for row in variant_samples])
-    variant_sobols = sobol_fn(variant_samples)
-
-    return variant_sobols.reshape(*array.shape[:-1], *variant_sobols.shape[-2:])
 
 
 @attrs.define
@@ -171,9 +84,10 @@ class PackerOptSpace:
     line_bounds: Tuple[int, int]    # packer index must be in this range: min <= i < max
     line_data: np.ndarray           # (n_points, n_times, n_samples)
     sa_problem: Dict[str, Any]
+    chambers: bh_chambers.Chambers
 
     @staticmethod
-    def from_bh_set(workdir, cfg, bh_set:boreholes.BoreholeSet, i_bh):
+    def from_bh_set(workdir, cfg, chambers, bh_set:boreholes.BoreholeSet, i_bh):
         cfg_opt = cfg.optimize
         bh_field = bh_set.project_field(None, None, cached=True)
         min_packer_distance = cfg_opt.packer_size + cfg_opt.min_chamber_size
@@ -315,10 +229,6 @@ class PackerOptSpace:
         # chamber_data (n_params_ind, n_chambers, n_times, n_samples)
 
         n_params, n_chambers, n_times, n_samples = chamber_data.shape
-        assert n_chambers==3
-        assert n_times == 10
-        assert n_samples == 20 * 16
-
         ch_data = chamber_data.reshape(-1, n_samples)
         sobol_array = self.sobol_fn(ch_data, self.sa_problem)
         sobol_array = sobol_array.reshape(n_params, n_chambers, n_times, n_params, -1)# n_chambers
@@ -339,21 +249,13 @@ class PackerOptSpace:
         # We interpret the packer positions as the points directly.
         # The packer size would be fixed with respect to point size.
         packers = self.to_array(ind)   # Packer positions
-
-
-        chamber_means = []
-        # Loop over chamber extends
-        for begin, end in zip(packers[:, 0:-1].T, packers[:, 1:].T):
-            chamber_begin = begin + self.packer_size
-            mean_value = (self.line_data[end,:,:] - self.line_data[chamber_begin,:,:]) / (end - chamber_begin)[:, None, None]
-            chamber_means.append(mean_value)
-
-        chamber_means = np.stack(chamber_means).transpose(1, 0, 2, 3) # (n_param_ind, n_chamber, n_times, n_samples)
-
         # Evaluate chamber sensitivities
-        fittness, sens_info = self.eval_from_chambers_sa(chamber_means)
-                  # (n_arams, n_chambers, n_params, 1)
-        sens_info = sens_info[..., 0].max(axis=1)
+        chambers = zip(packers[:, 0:-1].T, packers[:, 1:].T)
+        sens_info = self.chambers.eval_chambers(chambers)
+        fittness = sens_info[...,0].max(axis=1)    # max over chambers, ST
+        # shape (n_param, n_param)
+        fittness = np.min(np.diag(fittness))
+
         return fittness, sens_info
 
 
@@ -511,17 +413,44 @@ def optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=analyze.sobol_vec):
 
 ######################
 
+def pkl_write(workdir, data, name):
+    with open(workdir / name, 'wb') as f:
+        pickle.dump(data, f)
+
+def pkl_read(workdir, name):
+    try:
+        with open(workdir / name, 'rb') as f:
+            opt_results = pickle.load(f)
+    except Exception:
+        opt_results = None
+    return opt_results
+
+def memoize(func):
+    def wrapper(workdir, *args, **kwargs):
+        fname = f"{func.__name__}.pkl"
+        val = pkl_read(workdir, fname)
+        if val is None:
+            val = func(args, kwargs)
+            pkl_write(workdir, val, fname)
+        return val
+    return wrapper
+
+
 def write_optimization_results(workdir, borehole_optim_configs):
-    with open(workdir / "borhole_optim_configurations.pkl", 'wb') as f:
-        pickle.dump(borehole_optim_configs, f)
+    pkl_write(workdir, borehole_optim_configs, "borhole_optim_configurations.pkl")
 
 def read_optimization_results(workdir):
-    try:
-        with open(workdir / "borhole_optim_configurations.pkl", 'rb') as f:
-            opt_results = pickle.load(f)
-    except FileNotFoundError:
-        pass
-    return opt_results
+    pkl_read(workdir, "borhole_optim_configurations.pkl")
+
+# def precompute_bh_configurations(item):
+#     cfg_file, i_bh = item
+#     wc = load(cfg_file)
+#     evals = pkl_read(wc, f"eval_b_configs_{i_bh:3d}.pkl")
+#     if evals is None:
+#
+#     return evals
+#     bh_set = borehole_set(*wc)
+
 
 def load(cfg_file):
     workdir = cfg_file.parent

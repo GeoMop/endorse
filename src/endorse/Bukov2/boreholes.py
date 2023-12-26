@@ -280,6 +280,10 @@ class BoreholeSet:
 
     @property
     def projected_data(self):
+        """
+        bh_field shape: (n_boreholes, n_points, n_times, n_samples)
+        :return:
+        """
         return self.times, self.point_lines[0], self._bh_field
 
     def project_field(self, mesh, field, cached = False):

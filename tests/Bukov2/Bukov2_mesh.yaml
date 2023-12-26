@@ -107,7 +107,8 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: False      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    #force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: False
     zk_30:
       invert_xy: False
       transform_shift: [0, -5, 1.8]
@@ -124,17 +125,20 @@ boreholes:
       n_points_per_bh: 41         # borehole at most 20m active section
       n_boreholes_to_select: 6
 
+chambers: # Parameters of Chamber sensitivity precalculation
+    packer_size: 2          # Size of packer in terms of points
+    min_chamber_size: 2     # Size in terms of points
 
+chambers_optimize:
+    todo: False
 
 optimize:
     # Borehole sampling points
     #borohole_length_rel: 2
 
     # Optimization space
-    packer_size: 2        # Size of packer in terms of points
-    min_chamber_size: 2   # Size in terms of points
-    n_packers: 4          # meaning 3 chambers
-    n_best_packer_conf: 3
+    n_packers: 4            # meaning 3 chambers
+    n_best_packer_conf: 3   # How many best configurations preselect: per borehole  and per parameter
 
     # Algorithm params
     population_size: 3

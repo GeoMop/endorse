@@ -1,6 +1,7 @@
 import numpy as np
 import pyvista as pv
 from vtk.util.numpy_support import numpy_to_vtk
+import matplotlib.pyplot as plt
 import vtk
 import os
 from xml.etree import ElementTree as ET
@@ -203,3 +204,50 @@ def PVD_data_on_bhset(workdir, bh_set):
     assert field.shape[0] == points.shape[0]
     assert field.shape[1] == len(times)
     PVD_eval_field(workdir, times, points, field)
+
+
+
+
+
+
+def plot_chamber_data(chambers, param_labels):
+    n_params = len(param_labels)
+    n_points = chambers.n_points
+    sizes = [2, 4, 8]
+
+    fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
+    color_values = []
+    for i_param, label in enumerate(param_labels):
+        ax = axes[i_param]
+
+        for i_size, size in enumerate(sizes):
+            for i_begin in range(0, n_points - size):
+                # Calculate the color based on the chamber values
+                i_end = min(i_begin + size, n_points)
+                i_pos = (i_begin + i_end) // 2
+                chamber_data = chambers.chamber(i_begin, i_end)
+                if chamber_data is None:
+                    continue
+
+                value = chamber_data[i_param]
+                color_values.append(value)
+                # Add a horizontal stripe to the plot
+                ax.broken_barh([(i_pos, 1)], (i_size+0.1, 0.8), facecolors=plt.cm.viridis(value))
+
+
+        ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
+        ax.set_yticks([0.5, 1.5, 2.5])
+        ax.set_yticklabels(['2', '4', '8'])
+
+
+    axes[0].set_title("Size", pad=-20)  # Title above the first axis
+
+    # Create a common colorbar for all subplots
+    sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
+                               norm=plt.Normalize(vmin=min(color_values), vmax=max(color_values)))
+    sm.set_array([])
+    cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
+    fig.colorbar(sm, cax=cbar_ax)
+
+    #plt.tight_layout()
+    plt.show()

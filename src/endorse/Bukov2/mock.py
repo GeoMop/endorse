@@ -20,10 +20,13 @@ def mock_hdf5(cfg_file):
     params_norm = param_samples / param_samples.std(axis=0)
     sigma_x = params_norm[:, 1]
     sigma_y = params_norm[:, 2]
-    sum_other = np.sum(params_norm, axis=1)
+    n_params = param_samples.shape[1]
+    scale = (np.arange(n_params) + 1) / n_params * 2
+    sum_other = np.sum(params_norm * scale[None, :], axis=1)
 
-    field_samples = sigma_x[:, None, None] * pressure_array[None, :, :] + \
-                    (pressure_array[None, :, :] ** 2) / sigma_y[:, None, None] + sum_other[:, None, None]
+    # field_samples = sigma_x[:, None, None] * pressure_array[None, :, :] + \
+    #                 (pressure_array[None, :, :] ** 2) / sigma_y[:, None, None] + sum_other[:, None, None]
+    field_samples = pressure_array[None, :, :] + sum_other[:, None, None]
 
     shape = field_samples.shape
     with h5py.File(hdf_path, 'w') as f:
