@@ -39,31 +39,35 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
             'set -x',
             '\n# absolute path to output_dir',
             'output_dir="' + output_dir + '"',
+            'workdir=$SCRATCHDIR',
             '\n',
             'sing_script="' + met["swrap"] + '"',
-            '\n',
-            'image="' + os.path.join(endorse_root, 'endorse.sif') + '"',
-            'cd $output_dir'
+            'image="' + os.path.join(endorse_root, 'endorse.sif') + '"'
         ]
         return common_lines
 
     pbs_file_list = []
     for n in range(np):
-        id = str(n).zfill(2)
-        csv_file = os.path.join(output_dir, "sensitivity", "params_" + id + ".csv")
-        sample_subdir = os.path.join(output_dir, "sensitivity", "samples_" + id)
+        id = solver_id(n)
+        csv_file = os.path.join("$workdir", "sensitivity", "params_" + id + ".csv")
+        sample_subdir = os.path.join("$workdir", "sensitivity", "samples_" + id)
+        sampled_data_out = os.path.join("$workdir", sampled_data_hdf(n))
         # prepare PBS script
         common_lines = create_common_lines(id)
         lines = [
             *common_lines,
+            '\n',
+            'rsync -av --include ' + sampled_data_hdf(n) + ' --exclude *.h5 --exclude *.pdf --exclude sensitivity/pbs* $output_dir $workdir',
+            'cd $workdir',
             '\n# finally gather the full command',
             os.path.join(endorse_root, "bin", "endorse-bayes") + " "
-                + ' '.join(["-t", "set", "-o", output_dir, "-p", csv_file, "-x", sample_subdir, "-s", id]),
+                + ' '.join(["-t", "set", "-o", "$workdir", "-p", csv_file, "-x", sample_subdir, "-s", id]),
             # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
             # 'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
             # 'find . -name "solver_*" -print0 | xargs -0 rm -r',
             # '\n' + ' '.join(['tar', '-zcvf', 'samples_' + id + '.tar.gz', sample_subdir]),
             # ' '.join(['rm', '-r', sample_subdir]),
+            'cp ' + sampled_data_out + ' $output_dir',
             'echo "FINISHED"'
         ]
         pbs_file = os.path.join(output_dir, "sensitivity", "pbs_job_" + id + ".sh")
@@ -78,6 +82,10 @@ def solver_id(i):
     return str(i).zfill(2)
 
 
+def sampled_data_hdf(i):
+    return 'sampled_data_' + solver_id(i) + '.h5'
+
+
 def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     no_samples, no_parameters = np.shape(parameters)
     rows_per_file = no_samples // n_processes
@@ -89,7 +97,7 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     for i in range(n_processes):
         off_start = off_end
         off_end = off_end + rows_per_file
-        # add sample while there is still remainder after rows_per_file dividion
+        # add sample while there is still remainder after rows_per_file division
         if rem > 0:
             off_end = off_end + 1
             rem = rem - 1
@@ -104,7 +112,7 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
                 sample_idx = sample_idx+1
 
         # Prepare HDF, write parameters
-        output_file = os.path.join(output_dir, 'sampled_data_' + solver_id(i) + '.h5')
+        output_file = os.path.join(output_dir, sampled_data_hdf(i))
         sample_storage.create_chunked_dataset(output_file,
                                               shape=(parameters.shape[0], *config_dict["sample_shape"]))
         sample_storage.append_new_dataset(output_file, "parameters", subset_matrix)
@@ -193,7 +201,7 @@ if __name__ == "__main__":
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
-    plot_conductivity(param_values)
+    # plot_conductivity(param_values)
     # exit(0)
 
     sensitivity_dir = os.path.join(output_dir, "sensitivity")
@@ -201,6 +209,7 @@ if __name__ == "__main__":
 
     # plan sample parameters a prepare them in CSV
     prepare_sets_of_params(param_values, output_dir, config_dict["n_processes"], problem["names"])
+    # exit(0)
 
     # plan parallel sampling, prepare PBS jobs
     pbs_file_list = prepare_pbs_scripts(config_dict, output_dir, config_dict["n_processes"])
