@@ -209,13 +209,13 @@ class BoreholeSet:
         if not (length < r and l0 < abs_cyl_t < l1):
                 return None
 
-        dot_bh_dir = np.abs(dir_unit @ yz_tangent)
-        r_active = self.active_cylinder[0]
-        t_end_yz = np.sqrt(r_active*r_active - length*length)
-        t_end =  t_end_yz / dot_bh_dir
-        t_l0, t_l1 = np.abs(-l0 / dir_unit[0] - bh_t), np.abs(l1 / dir_unit[0] -bh_t)
-        t_end = min(t_end, t_l1, t_l0)
-        bh_dir = t_end * dir_unit
+        #dot_bh_dir = np.abs(dir_unit @ yz_tangent)
+        #r_active = self.active_cylinder[0]
+        #t_end_yz = np.sqrt(r_active*r_active - length*length)
+        #t_end =  t_end_yz / dot_bh_dir
+        #t_l0, t_l1 = np.abs(-l0 / dir_unit[0] - bh_t), np.abs(l1 / dir_unit[0] -bh_t)
+        #t_end = min(t_end, t_l1, t_l0)
+        bh_dir = dir_unit
 
 
         # print(f"({y_phi}, {z_phi}) dir: {dir} {bh_t} bh: {bh_dir} dot: {np.dot(dir, bh_dir)}")
