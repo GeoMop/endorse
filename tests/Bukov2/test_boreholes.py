@@ -56,6 +56,15 @@ def test_transversal_params():
     np.testing.assert_allclose(p2, [14, 0, z2], rtol=1e-6)
     np.testing.assert_allclose(yz_tangent, [0, -1, 0], rtol=1e-6)
 
+    z0 = 0
+    z2 = -2
+    line1 = np.array([0, 0, z0, 1, 0, 0])
+    line2 = np.array([0, 1, z2, 4, 0, 1])
+    l, t1, t2, p1, p2, yz_tangent = boreholes.BoreholeSet.transversal_params(line1, line2)
+    assert l == 1.0
+    np.testing.assert_allclose(p1, [8, 0, 0], rtol=1e-6)
+    np.testing.assert_allclose(p2, [8, 1, 0], rtol=1e-6)
+    np.testing.assert_allclose(yz_tangent, [0, 0, -1], rtol=1e-6)
 
 def test_read_fields():
     pattern = script_dir / 'flow_reduced' / 'flow_*.vtu'
@@ -92,7 +101,7 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.

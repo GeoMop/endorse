@@ -94,7 +94,8 @@ class BoreholeSet:
 
     @cached_property
     def cylinder_line(self):
-        return np.array([0,0,0,1,0,0])
+        cyl_max_l = self.avoid_cylinder[2]
+        return np.array([0,0,0,cyl_max_l,0,0])
 
     @staticmethod
     def _angle_array(lst):
@@ -199,13 +200,14 @@ class BoreholeSet:
         dir_unit = self.direction(y_phi, z_phi)
         length, cyl_t, bh_t, cyl_point, bh_point, yz_tangent = self.transversal_params(self.cylinder_line, np.array([*pos, *dir_unit]))
 
+        abs_cyl_t = cyl_t * np.linalg.norm(self.cylinder_line[3:])
         r, l0, l1 = self.avoid_cylinder
-        if length < r and l0 < cyl_t < l1:
+        if length < r and l0 < abs_cyl_t < l1:
             return None
 
         r, l0, l1 = self.active_cylinder
-        if not (length < r and l0 < cyl_t < l1):
-            return None
+        if not (length < r and l0 < abs_cyl_t < l1):
+                return None
 
         dot_bh_dir = np.abs(dir_unit @ yz_tangent)
         r_active = self.active_cylinder[0]
@@ -253,25 +255,41 @@ class BoreholeSet:
     @staticmethod
     def transversal_params(line1, line2):
         a1, d1 = line1[:3], line1[3:]
-        a2, d2 = line2[:3], line2[3:]
+        a2, d2 = np.array(line2[:3]), np.array(line2[3:])
 
         # Build the orthogonal coordinate system
+        ey = d1 / np.linalg.norm(d1)    # cylinder direction
         ex = np.cross(d1, d2)           # transverzal direction, perpendicular to both lines
         norm_ex = np.linalg.norm(ex)
-        if np.isnan(norm_ex):
-            return np.inf, np.inf, np.inf, 10 * d1 , 10 * d2
+        assert not np.isnan(norm_ex)
+        if norm_ex < 1e-12:
+            # parallel borehole, skew slightly in Z direction, prescribe transversal point in the cylinder middle
+            adiff_ey = np.dot((a2 - a1), ey)
+            # adiff perpendicular to cylinder line1
+            tmp_ex = a2 - a1 - adiff_ey * ey
+            tmp_ez = np.cross(tmp_ex, ey)
+            tmp_norm_ez = tmp_ez / np.linalg.norm(tmp_ez)
+            mid_point = a2 + 0.5 * d1
+            a2 -= 0.1 * tmp_norm_ez
+            # t param according to mid_point X coordinate
+            d2 = mid_point - a2
+
+            ex = np.cross(d1, d2)  # transverzal direction, perpendicular to both lines
+            norm_ex = np.linalg.norm(ex)
+            assert norm_ex > 1e-12
+
         ex_normalized = ex / norm_ex
-        ey = d1 / np.linalg.norm(d1)    # cylinder direction
         ez = np.cross(d1, ex)           # tangent to cylinder
         ez_normalized = ez / np.linalg.norm(ez)
 
         diff = a2 - a1
         # Project (a2 - a1) onto ez to find t
-        t = np.dot(diff, ez_normalized)
+        t = -np.dot(diff, ez_normalized) / np.dot(d2, ez_normalized)
+        #ty = np.dot(diff, ey)
         point_2 = a2 + t * d2
 
         # Calculate s
-        s = np.dot(point_2 - a1, ey)
+        s = np.dot(point_2 - a1, ey) / np.dot(d1, ey)
         point_1 = a1 + s * d1
 
         length = np.abs(np.dot(diff, ex_normalized))
@@ -401,13 +419,24 @@ class BoreholeSet:
         dir_length = np.linalg.norm(dir, axis=1)
         pt_step = (dir / dir_length[:, None]) * self.point_step
         points = transversal_pt[:, None, :] + pt_step[:, None, :] * i_pt[None, :, None]
+
+        # Bounds given by active cylinder
+        r, l0, l1 = self.active_cylinder
+        mask = (points[:, :, 0] > l0)
+        min_bound = np.argmax(mask, axis=1)
+        mask = (points[:, :, 0] < l1)
+        min_bound_flipped = np.argmax(np.flip(mask, axis=1), axis=1)
+        max_bound = mask.shape[1] - min_bound_flipped
         assert len(points[0,:,0]) == self.n_points
         #max_ax = np.argmax(np.abs(dir), axis=1)
-        max_bound = (dir_length / self.point_step).astype(int)
-        min_bound = np.maximum(0, half_points - max_bound)
-        max_bound = np.minimum(self.n_points - 1, half_points + max_bound)
-        assert np.all(max_bound < self.n_points)
+        #max_bound = (dir_length / self.point_step).astype(int)
+        min_bound = np.maximum(0, min_bound)
+        max_bound = np.minimum(self.n_points, max_bound)
+        assert np.all(min_bound <= max_bound)
+        assert np.all(max_bound <= self.n_points)
         line_bounds = np.stack((min_bound, max_bound), axis=1)
+
+        points = self.transform(points)
         return points, line_bounds
 
 def interpolation_slow(mesh, points):

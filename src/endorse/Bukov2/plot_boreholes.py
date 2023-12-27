@@ -37,6 +37,12 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
             iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
             for i_bh in bh_set.angles_table[i][j]:
                 add_bh(plotter, iangle_norm, bh_set, i_bh)
+
+    # i,j = 1, 2
+    # iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+    # for i_bh in bh_set.angles_table[i][j]:
+    #     add_bh(plotter, iangle_norm, bh_set, i_bh)
+
     return plotter
 
 def add_bh(plotter, angle_norm, bh_set, i_bh):
@@ -45,7 +51,7 @@ def add_bh(plotter, angle_norm, bh_set, i_bh):
     p_tr = bh_set.transform(p_tr)
     points, bounds = bh_set.point_lines
     p_begin = points[i_bh, bounds[i_bh][0], :]
-    p_end = points[i_bh, bounds[i_bh][1], :]
+    p_end = points[i_bh, bounds[i_bh][1] - 1, :]
 
     color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     #print(f"Adding: {bh} col: {color}")
