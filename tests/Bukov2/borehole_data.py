@@ -19,10 +19,8 @@ from endorse.Bukov2 import sa_problem, boreholes
 from endorse.Bukov2.bukov_common import memoize, file_result
 params_name="parameters"
 from pathlib import Path
-script_dir = Path(__file__).absolute().parent
 
 def main(workdir, bh_range):
-    workdir = script_dir
     cfg_file = workdir / "Bukov2_mesh.yaml"
     cfg = load_config(cfg_file)
     #mock.mock_hdf5(cfg_file)
@@ -33,7 +31,9 @@ def main(workdir, bh_range):
     print("Updated: ", updated_files_dict)
 
 if __name__ == '__main__':
-    input_file = "sampled_fixed.h5"
     workdir = Path(sys.argv[1]).absolute()
-    bh_range = int(sys.argv[2]), int(sys.argv[3])
+    if len(sys.argv) > 2:
+        bh_range = int(sys.argv[2]), int(sys.argv[3])
+    else:
+        bh_range = None
     main(workdir, bh_range)
