@@ -323,6 +323,7 @@ class BoreholeSet:
 
         # borehole extraction matrix
         mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
+        n_el_mesh = mesh.n_cells
         active_bh_points = self.point_lines[0][list(bh_dict.keys())]
         id_matrix = interpolation_slow(mesh, active_bh_points)
 
@@ -330,7 +331,8 @@ class BoreholeSet:
         field_file = workdir / cfg.simulation.hdf
         with h5py.File(field_file, 'r') as input_file:
             input_dataset = input_file[dset_name]
-
+            n_samples, n_times, n_el = input_dataset.shape
+            assert n_el == n_el_mesh
             # Open the output HDF file
             with bcommon.HDF5Files(list(bh_dict.values()), 'w') as out_files:
                 # Create the new dataset with the specified shape and chunking
