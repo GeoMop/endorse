@@ -89,7 +89,7 @@ class BoreholeSet:
 
     def transform(self, point):
         point = np.array(point)[..., None]
-        new_point = self.transform_matrix @ point + self.transform_shift
+        new_point = self.transform_matrix @ point + self.transform_shift[:,None]
         return new_point[..., 0]
 
     @cached_property

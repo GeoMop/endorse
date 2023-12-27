@@ -80,7 +80,7 @@ def test_read_fields():
     #assert point_values.shape == (2, pressure_array.shape[0], 3)
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_borhole_set():
     cfg = common.config.load_config(script_dir / "Bukov2_mesh.yaml")
 
@@ -92,7 +92,7 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-
+#@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
