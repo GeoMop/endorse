@@ -160,7 +160,7 @@ def _get_completed(out_f, in_f, mean, mask):
     # It is faster and works without error if the dataset is resized as the samples are added.
     new_shape = [len(done_groups) * n_params + 1, *in_dset.shape[1:]]
     max_shape = list(new_shape)
-    new_shape[0] = 1
+    new_shape[0] = 0
     chunks = (1, 1, in_dset.shape[2]) 
     out_dset = out_f.create_dataset(dataset_name, new_shape, chunks=chunks, maxshape=in_dset.shape, dtype='float64')
     print("    New dataset: ", new_shape)
