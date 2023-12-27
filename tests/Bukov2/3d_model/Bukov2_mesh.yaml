@@ -1,0 +1,206 @@
+# repository_mesh.py, 22/11/05 22:45
+# about 4M elements at time about 4 minutes
+# Seems to be on the edge of what is tracktable while providing full resolution of EDZ without anisotropic mesh.
+
+# base of the mesh file name
+
+simulation:
+    cfg:  "config_sim_C02hm.yaml"
+    mesh: "simulation_mesh.vtu" 
+    hdf:  "sampled_reduced.h5"
+
+pbs:
+    n_workers: 100
+    queue: charon
+
+local:
+    n_workers: 4
+
+mesh_name: random_fractures
+
+mesh:
+    # mesh step on fractures
+    fracture_mesh_step: 10
+    # mesh step on outer boundary
+    boundary_mesh_step: 50
+    # mesh step on outer boundary of EDZ (just around boreholes right now)
+    edz_mesh_step: 1
+    # mesh step on inner boreholes
+    boreholes_mesh_step: 0.3   # haxagon boreholes
+    #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+    main_tunnel_mesh_step: 2
+
+    # refinement around central lines of the laterals
+    line_refinement:
+      r_inner: 2
+      h_inner: 1.5
+      r_outer: 5
+      h_outer: 1.5
+      q_outer: 1
+      r_inf: 30
+      h_inf: 10
+
+geometry:
+  # Coordinate system
+  # X - in direction of storage boreholes
+  # Y - perpendicular horizontal
+  # Z - vertical
+  # origin: floor of the lateral tunnel, center, interface with center borehole.
+
+
+  # depth of the center of the box and of the coordinate system
+  center_depth: 5000
+  # x,y,z dimension
+  box_dimensions: [70, 60, 60]
+  # mesh step on fractures
+  fracture_mesh_step: 10
+  # upper limit on the number of fractures
+  n_frac_limit: 3
+  # mesh step on outer boundary
+  boundary_mesh_step: 30
+  # mesh step on outer boundary of EDZ (just around boreholes right now)
+  edz_mesh_step: 0.4
+  # mesh step on inner boreholes
+  boreholes_mesh_step: 0.6   # haxagon boreholes
+  #boreholes_mesh_step: 0.3   # EDZ minimal resolution
+  main_tunnel_mesh_step: 3
+  # Radious of outer boundary of EDZ (just for mesh step field)
+  edz_radius: 3
+  # Center distance of laterlas
+  laterals_distance: 10
+
+  # Main tunnel - main access tunnel
+  main_tunnel:
+      vertical_side: 2.800
+      # radius of the ceiling/roof
+      #radius: 3.5
+      # height of side walls (tunnel height minus roof)
+      height: 4
+      # tunnel width
+      width: 4
+      # tunnel length
+      length: 80
+
+  # Lateral short tunnels perpendicular to the main tunnel
+  # one ofr every storage borehole
+  lateral_tunnel:
+      vertical_side: 2.800
+      #radius: 3.5
+      height: 4
+      width: 4
+      length: 10
+
+  # Storage boreholes
+  borehole:
+      # Total number of side boreoholes (one side) resolved and homogenized.
+      n_sides: 0
+      # Number of explicit side boreholes (addition to the central source borehole)
+      n_explicit: 0
+      # Boreholes radius
+      radius: 1.1
+      # Boreholes length
+      length: 300
+      # Vertical position of the borehole center.
+      z_pos: 1.1
+      # horizontal gaps between boreholes; (2 * n_side_boreholes) * borehole_distance should be < main_tunnel.length
+      # not checked in the code
+      y_spacing: 25
+
+boreholes:
+    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    #force: False
+    zk_30:
+      invert_xy: False
+      transform_shift: [0, -5, 1.8]
+
+      # degree, if starts from 0, completed symmetricaly to negative angles
+      # small case, about 157 boreholes
+      y_angles: [0, 20, 40, 60, 80]
+      z_angles: [0, 10, 25, 45, 70]
+
+      # large case, about 431 active boreholes
+      #y_angles: [0, 10, 20, 30, 40, 50, 60, 80]
+      #z_angles: [0, 5, 10, 15, 25, 45, 70]
+
+      wh_pos_step: [3, 3, 1]
+      avoid_cylinder: [3, 0, 12]        # r, x0, x1
+      active_cylinder: [20, 3, 30]      # r, x0, x1
+      wh_zones:
+        #   Each zoe is a box given by mina nd max corners
+        - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
+        - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
+
+
+      point_step: 0.5             # absolute step of evaluation points (in meters)
+      n_points_per_bh: 41         # borehole at most 20m active section
+      n_boreholes_to_select: 6
+
+chambers: # Parameters of Chamber sensitivity precalculation
+    packer_size: 2          # Size of packer in terms of points
+    min_chamber_size: 2     # Size in terms of points
+
+chambers_optimize:
+    todo: False
+
+optimize:
+    # Borehole sampling points
+    #borohole_length_rel: 2
+
+    # Optimization space
+    n_packers: 4            # meaning 3 chambers
+    n_best_packer_conf: 3   # How many best configurations preselect: per borehole  and per parameter
+
+    # Algorithm params
+    population_size: 3
+    n_generations: 1
+    crossover_probability: 0.8
+    mutation_probability: 0.2
+
+    # evaluation params
+    n_workers: 4
+    #workers_per_node: 4     # for PBS only
+
+fracture_stats:
+    # SKB data
+    -   name: NS
+        trend: 292
+        plunge: 1
+        concentration: 17.8
+        power: 2.5
+#          r_min: 0.038
+        r_min: 1
+        r_max: 564
+        p_32: 0.094
+    -   name: NE
+        trend: 326
+        plunge: 2
+        concentration: 14.3
+        power: 2.7
+        r_min: 1
+        r_max: 564
+        p_32: 0.163
+    -   name: NW
+        trend: 60
+        plunge: 6
+        concentration: 12.9
+        power: 3.1
+        r_min: 1
+        r_max: 564
+        p_32: 0.098
+    -   name: EW
+        trend: 15
+        plunge: 2
+        concentration: 14.0
+        power: 3.1
+        r_min: 1
+        r_max: 564
+        p_32: 0.039
+    -   name: HZ
+        trend: 5
+        plunge: 86
+        concentration: 15.2
+        power: 2.38
+        r_min: 1
+        r_max: 564
+        p_32: 0.141
+

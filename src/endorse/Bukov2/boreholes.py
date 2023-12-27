@@ -355,7 +355,8 @@ class BoreholeSet:
             with bcommon.HDF5Files(list(bh_dict.values()), 'w') as out_files:
                 # Create the new dataset with the specified shape and chunking
                 output_shape = (self.n_points, input_dataset.shape[1], input_dataset.shape[0])
-                chunk_shape = (self.n_points, input_dataset.shape[1], 4 * samples_chunk_size)
+                out_chunk_size = min(output_shape[2], 4 * samples_chunk_size)
+                chunk_shape = (self.n_points, input_dataset.shape[1], out_chunk_size)
                 out_dsets = []
                 for f in out_files:
                     dsets = f.create_dataset(dset_name, shape=output_shape, chunks=chunk_shape)

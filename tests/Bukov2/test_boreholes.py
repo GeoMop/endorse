@@ -91,7 +91,7 @@ def test_read_fields():
 
 #@pytest.mark.skip
 def test_borhole_set():
-    cfg = common.config.load_config(script_dir / "Bukov2_mesh.yaml")
+    workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
 
     bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
     print("N boreholes:", bh_set.n_boreholes)
@@ -101,7 +101,7 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
@@ -109,26 +109,24 @@ def test_field_projection():
     - shape of output field in the file
     :return:
     """
-    workdir = script_dir
-    cfg_file = workdir / "Bukov2_mesh.yaml"
-    workdir, cfg = bcommon.load_cfg(cfg_file)
+    workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
     #mock.mock_hdf5(cfg_file)
     #sim_cfg = load_config(workdir / cfg.simulation.cfg)
     #problem = sa_problem.sa_dict(sim_cfg)
     bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-    input_hdf, field_shape = mock.mock_hdf5(cfg_file)
-    cfg.simulation.hdf = input_hdf
+    #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
+    #cfg.simulation.hdf = input_hdf
 
     bh_range = (10, 30)
-    updated_files_dict = bh_set.project_field(workdir, cfg, bh_range)
-    print("Updated: ", updated_files_dict)
+    updated_files = bh_set.project_field(workdir, cfg, bh_range)
+    print("Updated: ", updated_files)
 
-    for f in updated_files_dict.values():
+    for f in updated_files:
         with h5py.File(f, mode='r') as f:
             dset = f['pressure']
             n_points = bh_set.n_points
-            n_times = field_shape[1]
-            n_samples = field_shape[0]
+            n_times = 5
+            n_samples = 96
             assert dset.shape == (n_points, n_times, n_samples)
     #ref_field_on_lines = bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
 
