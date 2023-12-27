@@ -7,6 +7,7 @@ import os
 import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
 from endorse.Bukov2 import boreholes, plot_boreholes, mock
+import shutil
 from  pathlib import Path
 import pickle
 
@@ -109,7 +110,9 @@ def test_field_projection():
     - shape of output field in the file
     :return:
     """
+
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
+    shutil.rmtree((workdir / "borehole_data"))
     #mock.mock_hdf5(cfg_file)
     #sim_cfg = load_config(workdir / cfg.simulation.cfg)
     #problem = sa_problem.sa_dict(sim_cfg)

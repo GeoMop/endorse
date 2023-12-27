@@ -296,30 +296,30 @@ class BoreholeSet:
         return length, s, t, point_1, point_2, ez_normalized
 
 
-    def load_data(self, workdir, cfg):
-        """
-        Todo: Separate class taking BHSet as pure geometric data and adding the projected field.
-
-        Call projection of the HDF to the boreholes, output
-        provide times and line points
-        :return:
-        """
-
-        bh_samples_file = workdir / "bhset_samples.h5"
-        if cfg.boreholes.force or not bh_samples_file.exists():
-            bh_samples_file = self.project_field(bh_samples_file, mesh, field_file)
-        with open(workdir / "output_times.json") as f:
-            times = json.load(f)
-        self.times = times
-        return times, self.point_lines[0], bh_samples_file
-
-    @property
-    def projected_data(self):
-        """
-        bh_field shape: (n_boreholes, n_points, n_times, n_samples)
-        :return:
-        """
-        return self.times, self.point_lines[0], self._bh_field
+    # def load_data(self, workdir, cfg):
+    #     """
+    #     Todo: Separate class taking BHSet as pure geometric data and adding the projected field.
+    #
+    #     Call projection of the HDF to the boreholes, output
+    #     provide times and line points
+    #     :return:
+    #     """
+    #
+    #     bh_samples_file = workdir / "bhset_samples.h5"
+    #     if cfg.boreholes.force or not bh_samples_file.exists():
+    #         bh_samples_file = self.project_field(bh_samples_file, mesh, field_file)
+    #     with open(workdir / "output_times.json") as f:
+    #         times = json.load(f)
+    #     self.times = times
+    #     return times, self.point_lines[0], bh_samples_file
+    #
+    # @property
+    # def projected_data(self):
+    #     """
+    #     bh_field shape: (n_boreholes, n_points, n_times, n_samples)
+    #     :return:
+    #     """
+    #     return self.times, self.point_lines[0], self._bh_field
 
     def project_field(self, workdir, cfg, bh_range=None):
         """
@@ -333,7 +333,7 @@ class BoreholeSet:
 
         # get nonexisting borehole files within the range.
         (workdir / "borehole_data").mkdir(parents=True, exist_ok=True)
-        bh_files = [workdir / "borehole_data" / f"bh_{i_bh}.h5" for i_bh in range(*bh_range) ]
+        bh_files = [workdir / "borehole_data" / f"bh_{i_bh:03d}.h5" for i_bh in range(*bh_range) ]
         bh_dict = {i_bh: bh_files[i] for i, i_bh in enumerate(range(*bh_range)) if force or not bh_files[i].exists()}
         # skip processing if all files exists (and not forced)
         if not bh_dict:
