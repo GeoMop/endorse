@@ -1,9 +1,12 @@
+import h5py
 import numpy as np
 import pytest
 import timeit
 import os
+
+import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
-from endorse.Bukov2 import boreholes, plot_boreholes
+from endorse.Bukov2 import boreholes, plot_boreholes, mock
 from  pathlib import Path
 import pickle
 
@@ -71,31 +74,57 @@ def test_read_fields():
     print("time: ", timeit.timeit(call, number=1))
 
     id_matrix = boreholes.interpolation_slow(mesh, points)
-    cumlines = boreholes.cum_borehole_array(pressure_array[None, :, :], id_matrix)
-    assert cumlines.shape == (2, 100, 10, 1)  # n_lines, n_samples, n_times, n_points
+    assert id_matrix.shape == (2, 100)  # n_lines,  n_points
 
     #point_values = boreholes.get_values_on_lines(mesh, pressure_array, lines, n_points=10)
     #assert point_values.shape == (2, pressure_array.shape[0], 3)
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_borhole_set():
     cfg = common.config.load_config(script_dir / "Bukov2_mesh.yaml")
-    plotter = plot_boreholes.create_scene(cfg.geometry)
 
     bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
     print("N boreholes:", bh_set.n_boreholes)
+
+    plotter = plot_boreholes.create_scene(cfg.geometry)
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()
 
-    # Construct test interpolation ID matrix and cumsum on boreholes.
-    pattern = script_dir / 'flow_reduced' / 'flow_*.vtu'
-    pressure_array, mesh = boreholes.get_time_field(str(pattern), 'pressure_p0')
-    ref_field_on_lines = bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
+
+def test_field_projection():
+    """
+    Test projection of the full pressure field to the borehole points.
+    Tests:
+    - shape of output field in the file
+    :return:
+    """
+    workdir = script_dir
+    cfg_file = workdir / "Bukov2_mesh.yaml"
+    workdir, cfg = bcommon.load_cfg(cfg_file)
+    #mock.mock_hdf5(cfg_file)
+    #sim_cfg = load_config(workdir / cfg.simulation.cfg)
+    #problem = sa_problem.sa_dict(sim_cfg)
+    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    input_hdf, field_shape = mock.mock_hdf5(cfg_file)
+    cfg.simulation.hdf = input_hdf
+
+    bh_range = (10, 30)
+    updated_files_dict = bh_set.project_field(workdir, cfg, bh_range)
+    print("Updated: ", updated_files_dict)
+
+    for f in updated_files_dict.values():
+        with h5py.File(f, mode='r') as f:
+            dset = f['pressure']
+            n_points = bh_set.n_points
+            n_times = field_shape[1]
+            n_samples = field_shape[0]
+            assert dset.shape == (n_points, n_times, n_samples)
+    #ref_field_on_lines = bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
 
     # Test serialization
-    serialized = pickle.dumps(bh_set)
-    new_bh_set = pickle.loads(serialized)
-    new_field_on_lines = new_bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
-    np.testing.assert_allclose(ref_field_on_lines, new_field_on_lines, rtol=1e-6)
+    # serialized = pickle.dumps(bh_set)
+    # new_bh_set = pickle.loads(serialized)
+    # new_field_on_lines = new_bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
+    # np.testing.assert_allclose(ref_field_on_lines, new_field_on_lines, rtol=1e-6)

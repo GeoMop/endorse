@@ -1,8 +1,10 @@
 import time
 
 import pytest
+
+import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
-from endorse.Bukov2 import boreholes, sa_problem, mock
+from endorse.Bukov2 import boreholes, sa_problem, mock, sobol_fast
 from multiprocessing import Pool
 
 from endorse.sa import sample, analyze
@@ -18,9 +20,11 @@ def test_borehole_set():
     workdir = script_dir
     cfg_file = workdir / "Bukov2_mesh.yaml"
     cfg = common.config.load_config(cfg_file)
-    mock.mock_hdf5(cfg_file)
-    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
-
+    field_file, field_shape = mock.mock_hdf5(cfg_file)
+    bh_set = opt_pack.borehole_set(*bcommon.load_cfg(cfg_file))
+    bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, 20)
+    n_samples, n_times, n_el = field_shape
+    assert bh_data.shape == (bh_set.n_points, n_times, n_samples)
 
 def compare_opt_results(a, b):
     for ref_bh, new_bh in zip(a, b):
@@ -45,7 +49,8 @@ def opt_fast_sobol(workdir, cfg, bh_set, i_bh):
     # Test fast sobol
     np.random.seed(123)
     start = time.process_time_ns()
-    borhole_opt_config_fast = opt_pack.optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=opt_pack.vec_sobol_total_only)
+    borhole_opt_config_fast = opt_pack.optimize_borehole(workdir, cfg, bh_set, i_bh,
+                                                         sobol_fn=sobol_fast.vec_sobol_total_only)
     sec = (time.process_time_ns() - start) / 1e9
     print("Fast sobol time: ", sec)
     return  borhole_opt_config_fast
@@ -67,7 +72,7 @@ def test_optimize_packer():
     cfg_file = workdir / "Bukov2_mesh.yaml"
     cfg = common.config.load_config(cfg_file)
     mock.mock_hdf5(cfg_file)
-    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
+    bh_set = opt_pack.borehole_set(*bcommon.load_cfg(cfg_file))
     i_bh = 20
 
     borhole_opt_config = opt_fast_sobol(workdir,cfg,bh_set,i_bh)
@@ -96,7 +101,7 @@ def test_optimize_packer():
 def test_optimize_bh_set():
     workdir = script_dir
     cfg_file = workdir / "Bukov2_mesh.yaml"
-    bh_set = opt_pack.borehole_set(*opt_pack.load(cfg_file))
+    bh_set = opt_pack.borehole_set(*bcommon.load_cfg(cfg_file))
     bhs_opt_config = opt_pack.optimize_bh_set(cfg_file, map)
     assert type(bhs_opt_config) is list
     assert len(bhs_opt_config) == bh_set.n_boreholes

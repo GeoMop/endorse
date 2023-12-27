@@ -3,16 +3,16 @@ import attrs
 import numpy as np
 from deap import algorithms, tools, creator, base
 import scoop
-import os
 import sys
 import subprocess
 import pickle
 from pathlib import Path
-from functools import cached_property
-import pyvista as pv
+
+from endorse.Bukov2.bukov_common import load_cfg, pkl_write, pkl_read
+from endorse.Bukov2 import bh_chambers
 script_path = Path(__file__).absolute()
 
-from endorse.Bukov2 import boreholes, sa_problem, sample_storage, optimize, bh_chambers
+from endorse.Bukov2 import boreholes, sa_problem, optimize, bh_chambers
 from endorse.sa import analyze
 from endorse import common
 
@@ -21,10 +21,6 @@ Genetic optimization:
 
 
 """
-
-from scipy.stats import norm
-
-
 
 
 @attrs.define
@@ -87,9 +83,9 @@ class PackerOptSpace:
     chambers: bh_chambers.Chambers
 
     @staticmethod
-    def from_bh_set(workdir, cfg, chambers, bh_set:boreholes.BoreholeSet, i_bh):
+    def from_bh_set(workdir, cfg, chambers, i_bh):
         cfg_opt = cfg.optimize
-        bh_field = bh_set.project_field(None, None, cached=True)
+        #bh_field, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
         min_packer_distance = cfg_opt.packer_size + cfg_opt.min_chamber_size
         sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
         problem = sa_problem.sa_dict(sim_cfg)
@@ -97,8 +93,8 @@ class PackerOptSpace:
         return PackerOptSpace(
             cfg_opt,
             min_packer_distance,
-            bh_set.line_bounds[i_bh],
-            bh_field[i_bh],
+            bh_bounds,
+            bh_field,
             problem
         )
 
@@ -399,9 +395,9 @@ class PackerOptSpace:
 
 
 
-def optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=analyze.sobol_vec):
-    opt_space = PackerOptSpace.from_bh_set(workdir, cfg, bh_set, i_bh)
-    population, hof, logbook = opt_space.optimize(sobol_fn=sobol_fn)
+def optimize_borehole(workdir, cfg, chambers):
+    opt_space = PackerOptSpace.from_bh_set(workdir, cfg, chambers)
+    population, hof, logbook = opt_space.optimize()
     best_cfg = opt_space.get_best_configs(population, k_best=cfg.optimize.n_best_packer_conf)
     # TODO: exctract suitable candidates from the population
     with open(workdir / "logbook.txt", 'w') as f:
@@ -412,28 +408,6 @@ def optimize_borehole(workdir, cfg, bh_set, i_bh, sobol_fn=analyze.sobol_vec):
 
 
 ######################
-
-def pkl_write(workdir, data, name):
-    with open(workdir / name, 'wb') as f:
-        pickle.dump(data, f)
-
-def pkl_read(workdir, name):
-    try:
-        with open(workdir / name, 'rb') as f:
-            opt_results = pickle.load(f)
-    except Exception:
-        opt_results = None
-    return opt_results
-
-def memoize(func):
-    def wrapper(workdir, *args, **kwargs):
-        fname = f"{func.__name__}.pkl"
-        val = pkl_read(workdir, fname)
-        if val is None:
-            val = func(args, kwargs)
-            pkl_write(workdir, val, fname)
-        return val
-    return wrapper
 
 
 def write_optimization_results(workdir, borehole_optim_configs):
@@ -452,28 +426,11 @@ def read_optimization_results(workdir):
 #     bh_set = borehole_set(*wc)
 
 
-def load(cfg_file):
-    workdir = cfg_file.parent
-    cfg = common.config.load_config(cfg_file)
-    return workdir, cfg
-
 def optimize_borehole_wrapper(item):
     cfg_file, i_bh = item
-    wc = load(cfg_file)
-    bh_set = borehole_set(*wc)
-    return optimize_borehole(*wc, bh_set, i_bh)
-
-def borehole_set(workdir, cfg):
-    # Prepare BoreholeSet with simulation data loaded
-    force = cfg.boreholes.force
-    bh_set_file = workdir / "bh_set.pickle"
-    bh_set = optimize.get_bh_set(bh_set_file)
-    if force or bh_set is None:
-        bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-        bh_set.load_data(workdir, cfg)
-
-    optimize.save_bh_data(workdir / "bh_set.pickle", bh_set)
-    return bh_set
+    wc = load_cfg(cfg_file)
+    chmb = bh_chambers.make_chambers(*wc, i_bh)
+    return optimize_borehole(*wc, chmb)
 
 
 def optimize_bh_set(cfg_file, map_fn):
@@ -484,7 +441,7 @@ def optimize_bh_set(cfg_file, map_fn):
     """
 
     # prepare and serialize BH with dataset
-    bh_set = borehole_set(*load(cfg_file))
+    bh_set = boreholes.make_borehole_set(*load_cfg(cfg_file))
     data = [(cfg_file, i_bh) for i_bh in range(bh_set.n_boreholes)]
     opt_bh_packers = map_fn(optimize_borehole_wrapper, data) # (n_boreholes, n_prameters, n_varaints)
     return opt_bh_packers

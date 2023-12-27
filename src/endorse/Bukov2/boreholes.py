@@ -3,10 +3,13 @@ import glob
 import attrs
 from functools import cached_property
 import itertools
+
+import h5py
 import numpy as np
 import pyvista as pv
 import json
 from endorse.Bukov2 import sample_storage
+from endorse.Bukov2 import bukov_common as bcommon
 from vtk import vtkCellLocator
 
 """
@@ -22,6 +25,16 @@ TODO:
 
 Point3d = Tuple[float, float, float]
 Box = Tuple[Point3d, Point3d]
+
+@bcommon.memoize
+def _make_borehole_set(workdir, cfg):
+    # Prepare BoreholeSet with simulation data loaded
+    bh_set = BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    return bh_set
+
+def make_borehole_set(workdir, cfg):
+    return _make_borehole_set(workdir, cfg, force=cfg.boreholes.force)
+
 
 @attrs.define(slots=False)
 class BoreholeSet:
@@ -268,15 +281,19 @@ class BoreholeSet:
     def load_data(self, workdir, cfg):
         """
         Todo: Separate class taking BHSet as pure geometric data and adding the projected field.
+
+        Call projection of the HDF to the boreholes, output
+        provide times and line points
         :return:
         """
-        mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
-        field_samples = sample_storage.get_hdf5_field(workdir / cfg.simulation.hdf)
-        field = self.project_field(mesh, field_samples, cached=True)
+
+        bh_samples_file = workdir / "bhset_samples.h5"
+        if cfg.boreholes.force or not bh_samples_file.exists():
+            bh_samples_file = self.project_field(bh_samples_file, mesh, field_file)
         with open(workdir / "output_times.json") as f:
             times = json.load(f)
         self.times = times
-        return times, self.point_lines[0], field
+        return times, self.point_lines[0], bh_samples_file
 
     @property
     def projected_data(self):
@@ -286,17 +303,60 @@ class BoreholeSet:
         """
         return self.times, self.point_lines[0], self._bh_field
 
-    def project_field(self, mesh, field, cached = False):
+    def project_field(self, workdir, cfg, bh_range=None):
         """
         Return array (n_boreholes, n_points, n_times, n_samples)
         """
-        if cached and hasattr(self, "_bh_field"):
-            return self._bh_field
-        id_matrix = interpolation_slow(mesh, self.point_lines[0])
-        bh_field = cum_borehole_array(field, id_matrix)
-        if cached:
-            self._bh_field = bh_field
-        return bh_field
+        if bh_range is None:
+            bh_range = (0, self.n_boreholes)
+        dset_name = "pressure"
+        samples_chunk_size = 32
+        force = cfg.boreholes.force
+
+        # get nonexisting borehole files within the range.
+        (workdir / "borehole_data").mkdir(parents=True, exist_ok=True)
+        bh_files = [workdir / "borehole_data" / f"bh_{i_bh}.h5" for i_bh in range(*bh_range) ]
+        bh_dict = {i_bh: bh_files[i] for i, i_bh in enumerate(range(*bh_range)) if force or not bh_files[i].exists()}
+        # skip processing if all files exists (and not forced)
+        if not bh_dict:
+            return bh_files
+
+        # borehole extraction matrix
+        mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
+        active_bh_points = self.point_lines[0][list(bh_dict.keys())]
+        id_matrix = interpolation_slow(mesh, active_bh_points)
+
+        # Open the input HDF file
+        field_file = workdir / cfg.simulation.hdf
+        with h5py.File(field_file, 'r') as input_file:
+            input_dataset = input_file[dset_name]
+
+            # Open the output HDF file
+            with bcommon.HDF5Files(list(bh_dict.values()), 'w') as out_files:
+                # Create the new dataset with the specified shape and chunking
+                output_shape = (self.n_points, input_dataset.shape[1], input_dataset.shape[0])
+                chunk_shape = (self.n_points, input_dataset.shape[1], samples_chunk_size)
+                out_dsets = []
+                for f in out_files:
+                    dsets = f.create_dataset(dset_name, shape=output_shape, chunks=chunk_shape)
+                    out_dsets.append(dsets)
+
+                # Iterate through chunks of the input dataset
+                for i_sample in range(0, input_dataset.shape[0], 4 * samples_chunk_size):
+                    print(f"Chunk: {i_sample} : {i_sample+samples_chunk_size}")
+                    sample_slice = slice(i_sample,i_sample+samples_chunk_size)
+                    input_chunk = np.array(input_dataset[sample_slice, :, :])
+                    transformed_chunk = input_chunk[:, :, id_matrix].transpose(2, 3, 1, 0)
+                    cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
+                    for i, dset in enumerate(out_dsets):
+                        dset[:, :, sample_slice] = cumul_chunk[i]
+        return bh_files
+
+    def borohole_data(self, workdir, cfg, i_bh):
+        times, points, bh_samples_file = self.load_data(workdir, cfg)
+        with h5py.File(bh_samples_file, mode='r') as f:
+            bh_samples = np.array(f['pressure'][i_bh])
+        return bh_samples, self.line_bounds[i_bh]
 
     @cached_property
     def point_size(self):
@@ -348,6 +408,41 @@ class BoreholeSet:
         line_bounds = np.stack((min_bound, max_bound), axis=1)
         return points, line_bounds
 
+def interpolation_slow(mesh, points):
+    """
+    Construct element_id matrix of shape (n_boreholes, n_points).
+
+    Put n_points on every line
+    :param mesh:
+    :param lines/
+    :param n_points:
+    :return:
+    """
+    cell_locator = vtkCellLocator()
+    cell_locator.SetDataSet(mesh)
+    cell_locator.BuildLocator()
+    n_lines, n_points, dim = points.shape
+    assert dim == 3
+    interpolation_ids = np.empty([*points.shape[:2]], dtype=np.int32)
+    for i_line in range(n_lines):
+        interp_line = interpolation_ids[i_line, :]
+        for i_pt in range(n_points):
+            interp_line[i_pt] = max(0, cell_locator.FindCell(points[i_line, i_pt]))
+        # good_ids = interp_line[interp_line != -1]
+        # n_good = len(good_ids)
+        # if n_good == n_points:
+        #     continue
+        #
+        # # set first good id to first -1 ids, set the last good id to the rest
+        # if len(good_ids) == 0:
+        #     good_ids = [0]
+        # i_subst = 0
+        # for i_pt in range(n_points):
+        #     if interp_line[i_pt] == -1:
+        #         interp_line[i_pt] = good_ids[i_subst]
+        #     else:
+        #         i_subst = -1
+    return interpolation_ids
 
 
 """
@@ -414,52 +509,8 @@ def line_points(lines, n_points):
     params = np.linspace(0, 1, n_points)
     return dir[:, None, :] * params[:,None] + p1[:, None, :]
 
-def interpolation_slow(mesh,  points):
-    """
-    Construct element_id matrix of shape (n_boreholes, n_points).
 
-    Put n_points on every line
-    :param mesh:
-    :param lines/
-    :param n_points:
-    :return:
-    """
-    cell_locator = vtkCellLocator()
-    cell_locator.SetDataSet(mesh)
-    cell_locator.BuildLocator()
-    n_lines, n_points, dim = points.shape
-    assert dim == 3
-    interpolation_ids = np.empty([*points.shape[:2]], dtype=np.int32)
-    for i_line in range(n_lines):
-        interp_line = interpolation_ids[i_line, :]
-        for i_pt in range(n_points):
-            interp_line[i_pt] = max(0, cell_locator.FindCell(points[i_line, i_pt]))
-        # good_ids = interp_line[interp_line != -1]
-        # n_good = len(good_ids)
-        # if n_good == n_points:
-        #     continue
-        #
-        # # set first good id to first -1 ids, set the last good id to the rest
-        # if len(good_ids) == 0:
-        #     good_ids = [0]
-        # i_subst = 0
-        # for i_pt in range(n_points):
-        #     if interp_line[i_pt] == -1:
-        #         interp_line[i_pt] = good_ids[i_subst]
-        #     else:
-        #         i_subst = -1
-    return interpolation_ids
 
-def cum_borehole_array(values, id_matrix):
-    """
-    :param values: shape(n_samples, n_times, n_cells)
-    :param id_matrix: shape(n_boreholes, n_points)
-    return: shape: (n_boreholes, n_points, n_times, n_samples)
-    """
-    result = values[:, :, id_matrix]
-    result = np.transpose(result, axes=(2, 3, 1, 0))
-    result = np.cumsum(result, axis=1)  # cumsum along points
-    return result
 
 
 """

@@ -9,72 +9,17 @@ e.g.
 python collect_hdf.py   workdir/sampled_data_*.h5
 """
 import sys
-import time
-import pickle
 import logging
 
 import h5py
 import numpy as np
 from pathlib import Path
 from endorse.Bukov2.sample_storage import dataset_name, failed_ids_name, done_ids_name
+from endorse.Bukov2.bukov_common import memoize, file_result
 params_name="parameters"
 
 
-def pkl_write(workdir, data, name):
-    with open(workdir / name, 'wb') as f:
-        pickle.dump(data, f)
 
-def pkl_read(workdir, name):
-    try:
-        with open(workdir / name, 'rb') as f:
-            opt_results = pickle.load(f)
-    except Exception:
-        opt_results = None
-    return opt_results
-
-
-
-
-def memoize(func):
-    def wrapper(workdir, *args, **kwargs):
-        fname = f"{func.__name__}.pkl"
-        val = pkl_read(workdir, fname)
-        if val is None:
-            print(f"Execute {func.__name__}  ...", end='')
-            start = time.process_time_ns()
-            val = func(*args, **kwargs)
-            sec = (time.process_time_ns() - start) / 1e9
-            print(f"[{sec}] s.")
-
-            pkl_write(workdir, val, fname)
-        else:
-            print(f"Skip {func.__name__}.")
-        return val
-    return wrapper
-
-
-def file_result(filename):
-    """
-    Reuse the file result.
-    :param func:
-    :return:
-    """
-    def decorator(func):
-        def wrapper(workdir, *args, **kwargs):
-            fname = workdir / filename
-            if not fname.exists():
-                print(f"Execute {filename} = {func.__name__}  ...", end='')
-                start = time.process_time_ns()
-                val = func(workdir, filename, *args, **kwargs)
-                sec = (time.process_time_ns() - start) / 1e9
-                print(f"[{sec}] s.")
-            else:
-                val = filename
-                print(f"Skip {filename} = {func.__name__}.")
-            return val
-
-        return wrapper
-    return decorator
 
 #####################################š
 
@@ -87,7 +32,7 @@ def detect_done_ids(dset):
     return np.arange(dset.shape[0], dtype=np.int32)[nonzero_mask > 0]
 
 def merge_ids(out_f, ids_name, max_size, in_ids):
-    out_ids = out_f.require_dataset(ids_name, shape=(1,), maxshape=(max_size,), dtype=np.int32)
+    out_ids = out_f.require_dataset(ids_name, shape=(0,), maxshape=(max_size,), dtype=np.int32)
     #out_failed_mask |= failed_mask
     merged = np.concatenate((out_ids, in_ids))
     merged = np.sort(np.unique(merged))
@@ -143,7 +88,7 @@ def collect(workdir, out_file):
 
 ############################################
 @memoize
-def chunked_mean(dataset, axis, mask):
+def chunked_mean(workdir, dataset, axis, mask):
     # Ensure the mask length matches the size of the dataset along the specified axis
     if mask.shape[0] != dataset.shape[axis]:
         raise ValueError("Length of mask must match size of dataset along specified axis")

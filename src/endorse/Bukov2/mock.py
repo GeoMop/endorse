@@ -1,3 +1,4 @@
+import endorse.Bukov2.bukov_common as bcommon
 from endorse.Bukov2 import sa_problem, boreholes, optimize_packers, sample_storage
 from endorse.sa import analyze, sample
 from endorse import common
@@ -6,10 +7,11 @@ import h5py
 import json
 
 def mock_hdf5(cfg_file):
-    workdir, cfg = optimize_packers.load(cfg_file)
+    workdir, cfg = bcommon.load_cfg(cfg_file)
     hdf_path = workdir / cfg.simulation.hdf
     if not cfg.boreholes.force and hdf_path.exists():
-        return hdf_path
+        with h5py.File(hdf_path, 'r') as f:
+            return hdf_path, f[sample_storage.dataset_name].shape
 
     pattern = workdir / 'flow_reduced' / 'flow_*.vtu'
     pressure_array, mesh = boreholes.get_time_field(str(pattern), 'pressure_p0')
@@ -39,4 +41,4 @@ def mock_hdf5(cfg_file):
     times = [0] + list(range(100, 109))
     with open(workdir / "output_times.json", "w") as f:
         json.dump(times, f)
-    return hdf_path
+    return hdf_path, shape

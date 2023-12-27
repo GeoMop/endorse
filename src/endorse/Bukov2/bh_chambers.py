@@ -18,12 +18,12 @@ class Chambers:
 
 
     @classmethod
-    def from_bh_set(cls, cfg, sa_problem, i_bh:int, sobol_fn, bh_set:boreholes.BoreholeSet):
-        times, points, bh_data = bh_set.projected_data
+    def from_bh_set(cls, workdir, cfg, sa_problem, i_bh:int, sobol_fn, bh_set:boreholes.BoreholeSet):
+        bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
 
         return cls(
             sa_problem,
-            bh_data[i_bh],
+            bh_data,
             sobol_fn = sobol_fn,
             **cfg.chambers)
 
