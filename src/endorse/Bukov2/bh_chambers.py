@@ -123,7 +123,7 @@ class Chambers:
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
         return PackerConfig(packers, full_sobol)
 
-@attrs.define
+@attrs.define(slots=False)
 class PackerConfig:
     packers: np.ndarray       # (n_packers,) int ; positions of the ends of the packers,
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float

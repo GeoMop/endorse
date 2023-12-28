@@ -154,7 +154,7 @@ def _get_completed(out_f, in_f, mean, mask):
     orig_ids = orig_ids[done_groups, :].ravel()
     print(f"    Imputing {sum(orig_ids == -1)} from {len(orig_ids)}")
 
-    growth_size = 32
+    growth_size = group_size
 
     # For unknown, we get error on file closing if the dataset is created at its final size.
     # It is faster and works without error if the dataset is resized as the samples are added.
@@ -189,8 +189,23 @@ def get_completed_groups(workdir, out_file, in_file):
 
         with h5py.File(workdir / out_file, mode='w') as out_f:
             _get_completed(out_f, in_f, mean, mask)
+    return out_file
 
 
+@file_result("sampled_reduced.h5")
+def reduced_dataset(workdir, out_file, in_file):
+    with h5py.File(workdir / in_file, mode='r') as in_f:
+        dset = in_f[dataset_name] 
+        print("Input dset shape: ", dset.shape)
+        out_shape = list(dset.shape)
+        out_shape[0] = 96
+        out_shape[1] = 5 
+        print("Output dset shape: ", out_shape)
+            
+        # extract smaller subset
+        with h5py.File(workdir / out_file, mode='w') as out_f:
+            out_dset = out_f.create_dataset(dataset_name, shape=out_shape)
+            out_dset[...] = dset[0:out_shape[0], 0:2*out_shape[1]:2, :]    
 
 #
 # def impute_nans_by_mean(hdf_file):
@@ -211,8 +226,8 @@ def get_completed_groups(workdir, out_file, in_file):
 
 def main(workdir):
     collected_hdf5 = collect(workdir)
-    get_completed_groups(workdir, collected_hdf5)
-    
+    fixed = get_completed_groups(workdir, collected_hdf5)
+    reduced_dataset(workdir, fixed)
 
 
 if __name__ == '__main__':
