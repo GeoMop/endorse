@@ -12,9 +12,52 @@ The entrypoints are:
 - src/endorse/sa ... more consistent SA interface
 - tests/Bukov2 ... tests of SALib and other specific tools
 
-... 
+## How to compute
+1. setup environment:
+    ```
+    bin/setup_venv
+    ```
+    That would recreate virtual environment from the scratch.
+    On Charon, you need a Python module and you need the same module 
+    on computing nodes. The simples way to deal with this entry constrain is to  
+    add it into `.bashrc`:
+    ```
+    source /cvmfs/software.metacentrum.cz/modulefiles/5.1.0/loadmodules
+    module load python/3.9.12-gcc-10.2.1-rg2lpmk
+    ```
 
+2. Plan and compute raw samples. (TBD by Paulie)
+3. Collect samples. 
+    ```
+    cd tests/Bukov2
+    ./ptyhon collect_hdf.py <dir_with_hdfs>
+    ```
+    This would merge HDFs into single file and in the second phase 
+    the complete sample groups are extracted. Few missing values are imputted 
+    by the mean. Reduced dataset is formed for testing and debugging.
+4. Extract borehole data.
+    ```
+    cd tests/Bukov2
+    ./ptyhon borehole_data.py <dir_with_hdfs>
+    ```
+    Workdir `<dir_with_hdfs>` must contain the cofig file `Bukov2_mesh.yaml`.
+    For every borehole the sample data in discrete points are extracted. 
+    Boreholes are in separate files under `workdir/borehole_data` in oredr to 
+    simplify parallel processing.  
 
+5. Borehole calculations.
+   ```
+    cd tests/Bukov2
+    ./ptyhon process_boreholes.py <dir_with_hdfs> [i_bh]
+   ```
+   If `i_bh` is given:
+   Borehole precalculation. 
+   Borehole summary plot.
+   Borehole packer optimization.
+   
+    Otherwise start PBS parallel processing of all boreholes.
+
+6. Global measurement optimization.
 ## original Endorse readme for reference
 
 The software implements specialized safety calculations for the excavation disturbed zone (EDZ)

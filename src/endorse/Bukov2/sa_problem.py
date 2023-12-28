@@ -18,7 +18,7 @@ def sa_dict(cfg_sim):
         # norm,  bounds : [mean, std]
         # truncnorm, bounds : [lower_bound, upper_bound, mean, std_dev]
         # lognorm, bounds: [mean, std]  # mean and std of the log(X)
-        'bounds': [log_bounds(p["bounds"]) for p in params],
-        'second_order': cfg_sim.get('second_order_sa', False)    # Interpreted by endorse optimize.eval_from_chambers_sa
+        #'bounds': [log_bounds(p["bounds"]) for p in params],
+        'second_order': cfg_sim.get('second_order_sa', True)    # Interpreted by endorse optimize.eval_from_chambers_sa
     }
     return problem

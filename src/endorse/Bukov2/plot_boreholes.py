@@ -277,8 +277,8 @@ class PlotCfg:
                     i_end = min(i_begin + size, n_points)
                     i_pos = (i_begin + i_end) // 2
                     chamber_data = self.chambers.chamber(i_begin, i_end)
-                    if chamber_data is None:
-                        continue
+                    #if chamber_data is None:
+                    #    continue
 
                     value = chamber_data[i_param]
                     color_values.append(value)

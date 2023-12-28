@@ -5,7 +5,7 @@
 # base of the mesh file name
 
 simulation:
-    cfg:  "config_sim_C02hm.yaml"
+    cfg:  "config_sim.yaml"
     mesh: "simulation_mesh.vtu" 
     hdf:  "sampled_reduced.h5"
 
@@ -107,8 +107,8 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
-    #force: False
+    #force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: False
     zk_30:
       invert_xy: False
       transform_shift: [0, -5, 1.8]
@@ -148,7 +148,9 @@ optimize:
 
     # Optimization space
     n_packers: 4            # meaning 3 chambers
-    n_best_packer_conf: 3   # How many best configurations preselect: per borehole  and per parameter
+    n_best_packer_conf: 5   # How many best configurations preselect: per borehole  and per parameter
+    weights: [1.0, 0.1]     # weights of Linf and L1 norm; Linf = np.max(values), L1 = np.mean(np.abs(values))
+                            # See e.g. src/endorse/Bukov2/bh_chambers.py: packers_eval()
 
     # Algorithm params
     population_size: 3
