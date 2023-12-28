@@ -1,8 +1,52 @@
+from typing import *
 import pickle
 
 from endorse import common
 import time
 import h5py
+
+import PyPDF2
+import img2pdf
+import os
+from pathlib import Path
+
+def create_combined_pdf(file_list, output_filename):
+    """
+    Create a combined PDF file from a list of PDF and PNG files.
+
+    Args:
+    file_list (list): A list of file paths (PDF and PNG, as Path objects or strings).
+    output_filename (str): The filename for the output combined PDF.
+    """
+    pdf_writer = PyPDF2.PdfWriter()
+
+    for file_path in file_list:
+        file_path = Path(file_path)  # Ensure file_path is a Path object
+
+        if file_path.suffix == '.png':
+            # Convert PNG to PDF
+            pdf_path = file_path.with_suffix('.pdf')
+            with open(file_path, "rb") as img_file, open(pdf_path, "wb") as pdf_file:
+                pdf_file.write(img2pdf.convert(img_file.read()))
+
+            file_path = pdf_path  # Update file_path to the new PDF file
+
+        # Add the PDF file to the combined PDF
+        with open(file_path, "rb") as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            for page_num in range(len(pdf_reader.pages)):
+                pdf_writer.add_page(pdf_reader.pages[page_num])
+
+    # Write out the combined PDF
+    with open(output_filename, 'wb') as out:
+        pdf_writer.write(out)
+
+    # Optionally, clean up temporary PDF files created from PNGs
+    for file_path in file_list:
+        file_path = Path(file_path)  # Ensure file_path is a Path object
+        if file_path.suffix == '.png':
+            os.remove(file_path.with_suffix('.pdf'))
+
 
 def load_cfg(cfg_file):
     workdir = cfg_file.parent

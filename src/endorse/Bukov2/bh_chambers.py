@@ -18,7 +18,7 @@ class Chambers:
 
 
     @classmethod
-    def from_bh_set(cls, workdir, cfg, sa_problem, i_bh:int, sobol_fn, bh_set:boreholes.BoreholeSet):
+    def from_bh_set(cls, workdir, cfg, bh_set:boreholes.BoreholeSet,  i_bh:int, sa_problem:Dict[str, Any], sobol_fn) -> 'Chambers':
         bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
 
         return cls(
@@ -29,7 +29,7 @@ class Chambers:
 
     @property
     def n_points(self):
-        return self.bh_data.shape[1]
+        return self.bh_data.shape[0]
 
     @property
     def n_params(self):
@@ -63,6 +63,7 @@ class Chambers:
         n_chambers, n_times, n_samples = chamber_data.shape
         ch_data = chamber_data.reshape(-1, n_samples)
         sobol_array = self.sobol_fn(ch_data, self.sa_problem)
+        sobol_array = np.nan_to_num(sobol_array, nan=0.0)
         sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params, -1)# n_chambers
 
         # Compute maximum over times

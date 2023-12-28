@@ -1,16 +1,21 @@
+from typing import *
 import numpy as np
 import pyvista as pv
 from vtk.util.numpy_support import numpy_to_vtk
 import matplotlib.pyplot as plt
+from matplotlib.cm import ScalarMappable
 import vtk
 import os
 from xml.etree import ElementTree as ET
+import attrs
+from pathlib import Path
+from endorse.Bukov2 import bukov_common as bcommon
 
 
-def create_scene(cfg_geometry):
+def create_scene(plotter, cfg_geometry):
     cfg = cfg_geometry.main_tunnel
     # Create a plotting object
-    plotter = pv.Plotter()
+
     # L5
     x_half = cfg.width / 2
     y_half = cfg.length / 2
@@ -22,7 +27,7 @@ def create_scene(cfg_geometry):
     plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
-def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
+def add_cylinders(plotter, bh_set: 'BoreholeSet'):
     # Create a horizontal cylinder
     r, l0, l1 = bh_set.avoid_cylinder
     avoid_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
@@ -32,11 +37,12 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
+
+def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     for i in range(bh_set.n_y_angles):
         for j in range(bh_set.n_z_angles):
-            iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
             for i_bh in bh_set.angles_table[i][j]:
-                add_bh(plotter, iangle_norm, bh_set, i_bh)
+                add_bh(plotter, bh_set, i_bh)
 
     # i,j = 1, 2
     # iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
@@ -45,13 +51,18 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
 
     return plotter
 
-def add_bh(plotter, angle_norm, bh_set, i_bh):
+
+
+def add_bh(plotter, bh_set, i_bh):
     p_w, dir, p_tr = bh_set.bh_list[i_bh]
     p_w = bh_set.transform(p_w)
     p_tr = bh_set.transform(p_tr)
     points, bounds = bh_set.point_lines
     p_begin = points[i_bh, bounds[i_bh][0], :]
     p_end = points[i_bh, bounds[i_bh][1] - 1, :]
+
+    i, j, k = bh_set.angle_ijk(i_bh)
+    angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
 
     color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     #print(f"Adding: {bh} col: {color}")
@@ -212,48 +223,164 @@ def PVD_data_on_bhset(workdir, bh_set):
     PVD_eval_field(workdir, times, points, field)
 
 
+@attrs.define
+class PlotCfg:
+    workdir : Path
+    cfg : 'dotdict'
+    bh_set : 'BoreholeSet'
+    chambers : 'Chambers'
+    i_bh: int
+    param_names : List[str]
+    show: bool
 
 
+    def plot_borehole_position(self):
+        plotter = pv.Plotter(off_screen=True)
+        plotter = create_scene(plotter, self.cfg.geometry)
+        add_cylinders(plotter, self.bh_set)
+        add_bh(plotter, self.bh_set, self.i_bh)
+
+        camera_positions = [
+            ([-60, 0, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, -60, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, 0, 60], [0, 0, 0], [0, 1, 0])
+        ]
+        resolution = (1920, 1080)
+
+        out_files = []
+        for axis in range(3):
+            plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
+            plotter.camera.parallel_projection = True
+            f_name = self.workdir / f"bh_shot_{axis}.png"
+            plotter.screenshot(f_name, window_size=resolution)
+            out_files.append(f_name)
+
+        if self.show:
+            plotter.show()
+
+        return out_files
 
 
-def plot_chamber_data(chambers, param_labels):
-    n_params = len(param_labels)
-    n_points = chambers.n_points
-    sizes = [2, 4, 8]
+    def plot_chamber_data(self):
+        n_params = len(self.param_names)
+        n_points = self.chambers.n_points
+        sizes = [2, 4, 8]
 
-    fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
-    color_values = []
-    for i_param, label in enumerate(param_labels):
-        ax = axes[i_param]
+        fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
+        color_values = []
+        for i_param, label in enumerate(self.param_names):
+            ax = axes[i_param]
 
-        for i_size, size in enumerate(sizes):
-            for i_begin in range(0, n_points - size):
-                # Calculate the color based on the chamber values
-                i_end = min(i_begin + size, n_points)
-                i_pos = (i_begin + i_end) // 2
-                chamber_data = chambers.chamber(i_begin, i_end)
-                if chamber_data is None:
-                    continue
+            for i_size, size in enumerate(sizes):
+                for i_begin in range(0, n_points - size):
+                    # Calculate the color based on the chamber values
+                    i_end = min(i_begin + size, n_points)
+                    i_pos = (i_begin + i_end) // 2
+                    chamber_data = self.chambers.chamber(i_begin, i_end)
+                    if chamber_data is None:
+                        continue
 
-                value = chamber_data[i_param]
-                color_values.append(value)
-                # Add a horizontal stripe to the plot
-                ax.broken_barh([(i_pos, 1)], (i_size+0.1, 0.8), facecolors=plt.cm.viridis(value))
-
-
-        ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
-        ax.set_yticks([0.5, 1.5, 2.5])
-        ax.set_yticklabels(['2', '4', '8'])
+                    value = chamber_data[i_param]
+                    color_values.append(value)
+                    # Add a horizontal stripe to the plot
+                    ax.broken_barh([(i_pos, 1)], (i_size+0.1, 0.8), facecolors=plt.cm.viridis(value))
 
 
-    axes[0].set_title("Size", pad=-20)  # Title above the first axis
+            ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
+            ax.set_yticks([0.5, 1.5, 2.5])
+            ax.set_yticklabels(['2', '4', '8'])
 
-    # Create a common colorbar for all subplots
-    sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
-                               norm=plt.Normalize(vmin=min(color_values), vmax=max(color_values)))
-    sm.set_array([])
-    cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
-    fig.colorbar(sm, cax=cbar_ax)
 
-    #plt.tight_layout()
-    plt.show()
+        axes[0].set_title("Size", pad=-20)  # Title above the first axis
+
+        # Create a common colorbar for all subplots
+        sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
+                                   norm=plt.Normalize(vmin=min(color_values), vmax=max(color_values)))
+        sm.set_array([])
+        cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
+        fig.colorbar(sm, cax=cbar_ax)
+
+        #plt.tight_layout()
+        fname = self.workdir / "chambers_sa.pdf"
+        fig.savefig(fname)
+        if self.show:
+            plt.show()
+        return fname
+
+    def plot_mean_time_fun(self):
+        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
+
+        # Calculate the mean over the last dimension (samples)
+        mean_pressures = np.mean(pressures, axis=2)
+        selected_pressures = mean_pressures[::4]
+
+        # Create a colormap
+        cmap = plt.cm.viridis
+        colors = cmap(np.linspace(0, 1, selected_pressures.shape[0]))
+
+        # Plotting
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for i, pressure in enumerate(selected_pressures):
+            ax.plot(pressure, color=colors[i], label=f'Point {4*i}')
+
+        # Create a ScalarMappable for the color bar
+        sm = ScalarMappable(cmap=cmap, norm=plt.Normalize(0, selected_pressures.shape[0]))
+        sm.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
+
+        # Add a color bar associated with the axis
+        cbar = fig.colorbar(sm, ax=ax, ticks=range(0, selected_pressures.shape[0]))
+        cbar.ax.set_yticklabels([f'Point {4*i}' for i in range(selected_pressures.shape[0])])
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Mean Pressure')
+        ax.set_title('Mean Pressure Over Time for Every 4th Point')
+
+        fname = self.workdir / "mean_time_fun.pdf"
+        fig.savefig(fname)
+        if self.show:
+            plt.show()
+        return fname
+
+    def plot_relative_residual(self):
+        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
+        # Calculate the relative residual
+        mean_pressures = pressures.mean(axis=2)
+        std_pressures = pressures.std(axis=2)
+        relative_residual = (pressures - mean_pressures[:, :, np.newaxis]) / std_pressures[:, :, np.newaxis]
+
+        # Number of points and times
+        n_points, n_times, _ = pressures.shape
+
+        # Set up the color map for different times
+        colors = plt.cm.rainbow(np.linspace(0, 1, n_times))
+
+        # Create the figure object
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Plotting
+        for i in range(n_points):
+            for j in range(n_times):
+                # Deterministic jitter in x-coordinates based on time index
+                y = relative_residual[i, j, :]
+                x = np.full_like(y, i + 0.1 * (j - n_times / 2))
+
+                ax.scatter(x, y, color=colors[j], label=f'Time {j}' if i == 0 else "")
+
+        ax.set_xlabel('Point')
+        ax.set_ylabel('Relative Residual')
+        ax.set_title('Grouped Scatter Plot of Relative Residuals')
+        ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_xticks(range(n_points))
+        ax.grid(True)
+        fig.tight_layout()
+        fname = self.workdir / "residual.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def all(self):
+        plots = [
+            *self.plot_borehole_position(),
+            self.plot_chamber_data(),
+            self.plot_mean_time_fun(),
+            self.plot_relative_residual()]
+        bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")

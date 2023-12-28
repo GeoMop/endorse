@@ -374,9 +374,10 @@ class BoreholeSet:
         return bh_files
 
     def borohole_data(self, workdir, cfg, i_bh):
-        times, points, bh_samples_file = self.load_data(workdir, cfg)
-        with h5py.File(bh_samples_file, mode='r') as f:
-            bh_samples = np.array(f['pressure'][i_bh])
+        bh_samples_files = self.project_field(workdir, cfg, (i_bh, i_bh+1))
+        assert len(bh_samples_files) == 1
+        with h5py.File(bh_samples_files[0], mode='r') as f:
+            bh_samples = np.array(f['pressure'])
         return bh_samples, self.line_bounds[i_bh]
 
     @cached_property

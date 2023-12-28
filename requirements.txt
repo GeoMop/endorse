@@ -3,6 +3,8 @@ h5py
 scoop       # communication library
 deap
 salib
+PyPDF2
+img2pdf
 
 # endorse
 pyvista
