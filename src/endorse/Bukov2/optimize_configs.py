@@ -19,6 +19,7 @@ from endorse.Bukov2 import boreholes, sa_problem
 from endorse import common
 from endorse.sa import analyze
 import endorse.Bukov2.optimize_packers as opt_pack
+from endorse.Bukov2.bukov_common import pkl_read
 from copy import deepcopy
 
 """
@@ -63,11 +64,11 @@ class OptSpace:
     def __init__(self, cfg, bh_set:boreholes.BoreholeSet, bh_opt):
         self.cfg = cfg
         self.bhs = bh_set
-        self.bhs_size = self.bhs.n_boreholes
+        self.bhs_size = len(bh_opt) # self.bhs.n_boreholes
         self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
-        self.n_configs = len(bh_opt[0])
+        self.n_configs = len(bh_opt[0][0])
         self.n_chambers = cfg.optimize.n_packers-1
-        self.n_params = bh_opt[0][0].param_values.shape[1]
+        self.n_params = len(bh_opt[0]) # bh_opt[0][0].param_values.shape[1]
         self._individual_shape = (self.n_boreholes, 2)
 
     def project_decorator(self, func):
@@ -132,8 +133,9 @@ class OptSpace:
 
     def random_bh(self):
         i_bh = np.random.randint(0, self.bhs_size)
+        i_prm = np.random.randint(0, self.n_params)
         i_cfg = np.random.randint(0, self.n_configs)
-        return i_bh, i_cfg
+        return i_bh, i_prm, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
         ind = [] #[self.random_bh()  for i in range(self.n_boreholes)]
@@ -193,13 +195,15 @@ class OptSpace:
 
         # replace a random borehole or configuration by another random one
         i = np.random.randint(self.n_boreholes)
-        j = np.random.randint(2)
-        bh, cfg = ind[i]
+        j = np.random.randint(3)
+        bh, prm, cfg = ind[i]
         if j == 0:
             bh = np.random.randint(self.bhs_size)
+        elif j == 1:
+            prm = np.random.randint(self.n_params)
         else:
             cfg = np.random.randint(self.n_configs)
-        ind[i] = (bh,cfg)
+        ind[i] = (bh,prm,cfg)
         return ind,
 
 
@@ -237,7 +241,7 @@ def get_opt_results(f_path, randomize=False):
     global _bhs_opt_config
     if _bhs_opt_config is None:
         try:
-            _bhs_opt_config = opt_pack.read_optimization_results(f_path)
+            _bhs_opt_config = pkl_read(f_path, "all_bh_configs_save.pkl") #opt_pack.read_optimization_results(f_path)
             if randomize:
                 i = 0
                 for bh in _bhs_opt_config:
@@ -285,8 +289,9 @@ def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
     i = 0
     for bh in np.array(ind):
         i_bh = bh[0]
-        i_cfg = bh[1]
-        cfg = _bhs_opt_config[i_bh][i_cfg]
+        i_prm = bh[1]
+        i_cfg = bh[2]
+        cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
         param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
@@ -305,8 +310,9 @@ def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
     i = 0
     for bh in np.array(ind):
         i_bh = bh[0]
-        i_cfg = bh[1]
-        cfg = _bhs_opt_config[i_bh][i_cfg]
+        i_prm = bh[1]
+        i_cfg = bh[2]
+        cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
         param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.sum( np.min(param_max, axis=0) ) # axis=0 fixes borehole and minimizes over params
@@ -319,7 +325,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     """
 
     get_bh_set(bh_data_file)
-    get_opt_results(workdir, randomize=True) # True means generate random sensitivities
+    get_opt_results(workdir) #, randomize=True) # True means generate random sensitivities
     get_opt_space()
 
     checkpoint_freq = 10
