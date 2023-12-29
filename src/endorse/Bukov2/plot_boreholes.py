@@ -235,6 +235,7 @@ class PlotCfg:
 
 
     def plot_borehole_position(self):
+        pv.start_xvfb()
         plotter = pv.Plotter(off_screen=True)
         plotter = create_scene(plotter, self.cfg.geometry)
         add_cylinders(plotter, self.bh_set)
