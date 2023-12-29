@@ -18,6 +18,7 @@ venv_pip=${ENDORSE_SRC_ROOT}/venv/bin/pip
 
 $venv_pip install -r requirements.txt
 $venv_pip install -e submodules/bgem
+#$venv_pip install -e submodules/salib
 
 # TODO simplyfy dependency and submodules
 # attrs somehow was broken after gmsh explicit installation, must force its reinstalation

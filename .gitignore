@@ -84,3 +84,8 @@ metodika_vypoctu_indikatoru/main.pdf
 
 endorse.sif
 
+# Bukov2
+tests/Bukov2/3d_model/borehole_data
+tests/Bukov2/3d_pressure_results
+tests/Bukov2/borehole_data
+tests/Bukov2/borehole_data_tst

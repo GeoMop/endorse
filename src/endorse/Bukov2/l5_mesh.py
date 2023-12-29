@@ -194,13 +194,10 @@ def l5_zk_mesh(cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     return common.File(mesh_file)
 
 
-def make_mesh(workdir):
-    conf_file = os.path.join(workdir, "./Bukov2_mesh.yaml")
+def make_mesh(workdir, cfg_file):
+    conf_file = os.path.join(workdir, cfg_file)
     cfg = common.config.load_config(conf_file)
     mesh_file = l5_zk_mesh(cfg.geometry, cfg.mesh)
     print("Mesh file: ", mesh_file)
 
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
-if __name__ == '__main__':
-    make_mesh(script_dir)
