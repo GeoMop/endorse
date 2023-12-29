@@ -10,7 +10,8 @@ simulation:
     hdf:  "sampled_reduced.h5"
 
 pbs:
-    n_workers: 100
+    # for proecess_boreholes.py
+    n_workers: 12
     queue: charon
 
 local:
