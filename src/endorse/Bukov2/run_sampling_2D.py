@@ -22,27 +22,36 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
     endorse_root = sens_config_dict["rep_dir"]
     met = sens_config_dict["metacentrum"]
 
+
     def create_common_lines(id):
         name = met["name"] + "_" + id
         common_lines = [
             '#!/bin/bash',
             '#PBS -S /bin/bash',
             # '#PBS -l select=' + str(met["chunks"]) + ':ncpus=' + str(met["ncpus_per_chunk"]) + ':mem=' + met["memory"],
-            '#PBS -l select=1:ncpus=1:mem=' + met["memory"],
+            # scratch: charon ssd: 346/20 = 17,3 GB
+            '#PBS -l select=1:ncpus=1:mem=' + met["memory"] + ":scratch_local=17gb",
             # '#PBS -l place=scatter',
             '#PBS -l walltime=' + str(met["walltime"]),
             '#PBS -q ' + met["queue"],
             '#PBS -N ' + name,
+            '#PBS -j oe',
             '#PBS -o ' + os.path.join(output_dir, "sensitivity", name + '.out'),
-            '#PBS -e ' + os.path.join(output_dir, "sensitivity", name + '.err'),
+            #'#PBS -e ' + os.path.join(output_dir, "sensitivity", name + '.err'),
             '\n',
             'set -x',
+            'export TMPDIR=$SCRATCHDIR',
             '\n# absolute path to output_dir',
             'output_dir="' + output_dir + '"',
-            'workdir=$SCRATCHDIR',
-            '\n',
-            'sing_script="' + met["swrap"] + '"',
-            'image="' + os.path.join(endorse_root, 'endorse.sif') + '"'
+            'workdir=$SCRATCHDIR'
+            #'\n',
+            #'SWRAP="' + met["swrap"] + '"',
+            #'IMG_MPIEXEC="/usr/local/mpich_4.0.3/bin/mpirun"',
+            #'SING_IMAGE="' + os.path.join(endorse_root, 'endorse.sif') + '"',
+            #'\n',
+            #'cd $output_dir',
+            #'SCRATCH_COPY=$output_dir',
+            #'python3 $SWRAP/smpiexec_prepare.py -i $SING_IMAGE -s $SCRATCH_COPY -m $IMG_MPIEXEC'
         ]
         return common_lines
 
@@ -57,8 +66,10 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
         lines = [
             *common_lines,
             '\n',
-            'rsync -av --include ' + sampled_data_hdf(n) + ' --exclude *.h5 --exclude *.pdf --exclude sensitivity/pbs* $output_dir $workdir',
+            'rsync -av --include ' + sampled_data_hdf(n) + ' --exclude *.h5 --exclude *.pdf --exclude sensitivity/pbs* $output_dir' +'/'+ ' $workdir',
             'cd $workdir',
+            'pwd',
+            'ls -la',
             '\n# finally gather the full command',
             os.path.join(endorse_root, "bin", "endorse-bayes") + " "
                 + ' '.join(["-t", "set", "-o", "$workdir", "-p", csv_file, "-x", sample_subdir, "-s", id]),
@@ -67,7 +78,11 @@ def prepare_pbs_scripts(sens_config_dict, output_dir, np):
             # 'find . -name "solver_*" -print0 | xargs -0 rm -r',
             # '\n' + ' '.join(['tar', '-zcvf', 'samples_' + id + '.tar.gz', sample_subdir]),
             # ' '.join(['rm', '-r', sample_subdir]),
-            'cp ' + sampled_data_out + ' $output_dir',
+            'ls -la',
+            'mkdir -p $output_dir/sampled_data',
+            'cp ' + sampled_data_out + ' $output_dir/sampled_data',
+            'cp -r sensitivity $output_dir',
+            'clean_scratch',
             'echo "FINISHED"'
         ]
         pbs_file = os.path.join(output_dir, "sensitivity", "pbs_job_" + id + ".sh")
@@ -115,7 +130,7 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
         output_file = os.path.join(output_dir, sampled_data_hdf(i))
         sample_storage.create_chunked_dataset(output_file,
                                               shape=(parameters.shape[0], *config_dict["sample_shape"]))
-        sample_storage.append_new_dataset(output_file, "parameters", subset_matrix)
+        sample_storage.append_new_dataset(output_file, "parameters", parameters)
 
     # for i, mat in enumerate(sub_parameters):
     #     output_file = f"parameters_{str(i+1).zfill(2)}.npy"
