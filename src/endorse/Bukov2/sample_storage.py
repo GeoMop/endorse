@@ -50,18 +50,19 @@ class FileSafe(h5py.File):
 #         # chunks=True ... automatic chunk size
 #         f.create_dataset(dataset_name, shape=init_shape, maxshape=max_shape, chunks=True, dtype='float64')
 
-def create_chunked_dataset(file_path, shape):
+def create_chunked_dataset(file_path, shape, chunks):
     """
 
     :param file_path:
-    :param chunk_shape:
+    :param shape:
+    :param chunks:
     :return:
     """
     # Recomended Chuk size 10kB up to 1MB
     with h5py.File(file_path, 'w') as f:
         # chunks=True ... automatic chunk size
         # f.create_dataset(dataset_name, data=np.zeros(shape), chunks=True, dtype='float64')
-        f.create_dataset(dataset_name, shape=shape, chunks=True, dtype='float64')
+        f.create_dataset(dataset_name, shape=shape, chunks=chunks, dtype='float64')
         f.create_dataset(failed_ids_name, shape=(0,), maxshape=(shape[0],), dtype='int')
         f.create_dataset(done_ids_name, shape=(0,), maxshape=(shape[0],), dtype='int')
 

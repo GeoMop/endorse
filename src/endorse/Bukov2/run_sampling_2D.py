@@ -128,8 +128,12 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
 
         # Prepare HDF, write parameters
         output_file = os.path.join(output_dir, sampled_data_hdf(i))
+        n_params = parameters.shape[0]
+        n_times = config_dict["sample_shape"][0]
+        n_elements = config_dict["sample_shape"][1]
         sample_storage.create_chunked_dataset(output_file,
-                                              shape=(parameters.shape[0], *config_dict["sample_shape"]))
+                                              shape=(n_params, n_times, n_elements),
+                                              chunks=(1, 1, n_elements))
         sample_storage.append_new_dataset(output_file, "parameters", parameters)
 
     # for i, mat in enumerate(sub_parameters):
@@ -212,7 +216,7 @@ if __name__ == "__main__":
     }
 
     # Generate Saltelli samples
-    param_values = sample.saltelli(problem, config_dict["n_samples"], calc_second_order=True)
+    param_values = sample.saltelli(problem, config_dict["n_samples"], calc_second_order=config_dict["second_order_sa"])
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
