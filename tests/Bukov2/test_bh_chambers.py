@@ -13,7 +13,7 @@ def test_bh_chamebres():
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     bh_set = boreholes.make_borehole_set(workdir, cfg)
-    i_bh = 9
+    i_bh = 8
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_set, i_bh, problem, sobol_fn)
     all_chambers = chambers.all_chambers

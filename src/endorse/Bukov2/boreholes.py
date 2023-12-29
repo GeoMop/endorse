@@ -306,7 +306,7 @@ class BoreholeSet:
         pos_str =f"[{pos[0]:4.1f}, {pos[1]:4.1f}, {pos[2]:4.1f}]"
         angle_str = f"({int(y_angle):4d}\N{DEGREE SIGN}, {int(z_angle):4d}\N{DEGREE SIGN})"
         range_str = f"range: {tuple(self.line_bounds[i_bh])}"
-        return f"{pos_str} -> {angle_str}; {range_str}"
+        return f"#{i_bh} {pos_str} -> {angle_str}; {range_str}"
 
     # def load_data(self, workdir, cfg):
     #     """
@@ -380,9 +380,9 @@ class BoreholeSet:
                     sample_slice = slice(i_sample,i_sample+samples_chunk_size)
                     input_chunk = np.array(input_dataset[sample_slice, :, :])
                     transformed_chunk = input_chunk[:, :, id_matrix].transpose(2, 3, 1, 0)
-                    cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
+                    #cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
                     for i, dset in enumerate(out_dsets):
-                        dset[:, :, sample_slice] = cumul_chunk[i]
+                        dset[:, :, sample_slice] = transformed_chunk[i]
         return bh_files
 
     def borohole_data(self, workdir, cfg, i_bh):

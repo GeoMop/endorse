@@ -264,6 +264,10 @@ class PlotCfg:
 
 
     def plot_chamber_data(self):
+        """
+        Plot some precomputed chamber data for selected chamber sizes.
+        :return:
+        """
         n_params = len(self.param_names)
         n_points = self.chambers.n_points
         sizes = [2, 4, 8]
@@ -314,14 +318,14 @@ class PlotCfg:
         Goal: check projected pressures on the borehole
         :return:
         """
-        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
+        pressures = self.chambers.bh_data
         # (n_points - 1, n_times, n_samples)
         # Calculate the mean over the last dimension (samples)
         mean_pressures = np.mean(pressures, axis=2)
         selected_pressures = mean_pressures[::4]
 
         # Create a colormap
-        cmap = plt.cm.viridis
+        cmap = plt.cm.jet   # better discriminatino of points then viridis
         colors = cmap(np.linspace(0, 1, selected_pressures.shape[0]))
 
         # Plotting
@@ -348,44 +352,98 @@ class PlotCfg:
         return fname
 
     def plot_relative_residual(self):
-        """
-        Goal: check projected pressures on the borehole
-        :return:
-        """
-        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
-        # Calculate the relative residual
-        mean_pressures = pressures.mean(axis=2)
-        std_pressures = pressures.std(axis=2)
-        relative_residual = (pressures - mean_pressures[:, :, np.newaxis]) / std_pressures[:, :, np.newaxis]
+        arr_copy = self.chambers.bh_data
+        orig_arr = self.chambers.orig_bh_data
+        outlier_mask = self.chambers.outlier_mask
+        # Compute the time mean on arr_copy
+        time_mean_copy = np.nanmean(arr_copy, axis=1, keepdims=True)
 
-        # Number of points and times
-        n_points, n_times, _ = pressures.shape
+        # Normalize orig_arr and arr_copy by dividing by the time mean of arr_copy
+        normalized_orig_arr = orig_arr / time_mean_copy
+        normalized_arr_copy = arr_copy / time_mean_copy
 
-        # Set up the color map for different times
-        colors = plt.cm.rainbow(np.linspace(0, 1, n_times))
+        # Calculating medians, quartiles, min, and max over times for the normalized copy
+        min_values, Q1, median, Q3,  max_values = [
+            np.nanpercentile(normalized_arr_copy, q, axis=(1,2))
+            for q in [0, 25, 50, 75, 100]
+            ]
 
-        # Create the figure object
-        fig, ax = plt.subplots(figsize=(12, 6))
+        n_points, n_times, _ = orig_arr.shape
+        colors = plt.cm.rainbow(np.linspace(0, 1, n_times))  # Different colors for each time
 
-        # Plotting
+        # Create plots
+        fig, (ax1, ax2)  = plt.subplots(2,1, figsize=(12, 12))
         for i in range(n_points):
             for j in range(n_times):
-                # Deterministic jitter in x-coordinates based on time index
-                y = relative_residual[i, j, :]
-                x = np.full_like(y, i + 0.1 * (j - n_times / 2))
+                # Scatter plot of outliers
+                outlier_data = normalized_orig_arr[i, j, outlier_mask[i, j]]
+                ax2.scatter([i + 0.028 * j] * len(outlier_data), outlier_data, color=colors[j], alpha=0.5, s=1)
 
-                ax.scatter(x, y, color=colors[j], label=f'Time {j}' if i == 0 else "")
+            # Plot min and max values as thin vertical lines
+            ax1.bar(i, max_values[i] - min_values[i], width=0.1, bottom=min_values[i], color='black', align='center')
+            ax1.bar(i, Q3[i] - Q1[i], width=0.5, bottom=Q1[i], color='blue', align='center')
+            ax1.bar(i, 0.01, width=0.6, bottom=median[i]-0.005, color='red', align='center')
 
-        ax.set_xlabel('Point')
-        ax.set_ylabel('Relative Residual')
-        ax.set_title('Grouped Scatter Plot of Relative Residuals')
-        ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.set_xticks(range(n_points))
-        ax.grid(True)
+        for ax in [ax1, ax2]:
+            ax.set_yscale('log')
+            ax.set_xlabel('Point')
+            ax.set_ylabel('Log of (p / p.mean)')
+            #ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax.set_xticks(range(n_points))
+            #ax.grid(True)
+        ax1.set_title('Relative Residuals - data range')
+        ax2.set_title('Relative Residuals - outliers')
         fig.tight_layout()
         fname = self.workdir / "residual.pdf"
         fig.savefig(fname)
         return fname
+
+    # Example usage
+    # plot_boxplot_style_changes(orig_arr, arr_copy, outlier_mask)
+
+    # def plot_relative_residual(self):
+    #     """
+    #     Goal: check projected pressures on the borehole
+    #     :return:
+    #     """
+    #     pressures = self.chambers.bh_data
+    #     # Calculate the relative residual with respect to mean over samples and points
+    #     #
+    #     mean_pressures = pressures.mean(axis=(0,2))
+    #     #std_pressures = pressures.std(axis=2)
+    #     relative_pressure = pressures / mean_pressures[np.newaxis, :, np.newaxis]
+    #     rel_p_time_mean = relative_pressure.mean(axis=1)
+    #     rel_p_time_std = relative_pressure.mean(axis=1)
+    #     rel_p_time_mean_QX = [rel_p_time_mean.percentile(p, axis=2)
+    #
+    #     # Number of points and times
+    #     n_points, n_times, _ = pressures.shape
+    #
+    #     # Set up the color map for different times
+    #     colors = plt.cm.rainbow(np.linspace(0, 1, n_times))
+    #
+    #     # Create the figure object
+    #     fig, ax = plt.subplots(figsize=(12, 6))
+    #
+    #     # Plotting
+    #     for i in range(n_points):
+    #         for j in range(n_times):
+    #             # Deterministic jitter in x-coordinates based on time index
+    #             y = relative_residual[i, j, :]
+    #             x = np.full_like(y, i + 0.1 * (j - n_times / 2))
+    #
+    #             ax.scatter(x, y, color=colors[j], label=f'Time {j}' if i == 0 else "")
+    #
+    #     ax.set_xlabel('Point')
+    #     ax.set_ylabel('Relative Residual')
+    #     ax.set_title('Grouped Scatter Plot of Relative Residuals')
+    #     ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+    #     ax.set_xticks(range(n_points))
+    #     ax.grid(True)
+    #     fig.tight_layout()
+    #     fname = self.workdir / "residual.pdf"
+    #     fig.savefig(fname)
+    #     return fname
 
     def all(self):
         plots = [

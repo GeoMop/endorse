@@ -11,7 +11,7 @@ from functools import cached_property
 @attrs.define(slots=False)
 class Chambers:
     sa_problem : Dict[str, Any]
-    bh_data : np.ndarray
+    orig_bh_data : np.ndarray
     bounds: Tuple[int, int]
     packer_size : int
     min_chamber_size : int
@@ -53,6 +53,51 @@ class Chambers:
         amax_array = np.take_along_axis(array, i_variants, axis=axis).squeeze(axis=axis)
         return amax_array
 
+    @cached_property
+    def _detect_outlayers(self):
+        arr = self.orig_bh_data
+        # Create a mask for NaNs and Infs
+        nan_inf_mask = np.isnan(arr) | np.isinf(arr)
+
+        # Create a copy of the array for further processing
+        arr_copy = arr.copy()
+
+        # Replace Infs with NaNs in the copy
+        arr_copy[nan_inf_mask] = np.nan
+
+        # Calculate quartiles and IQR across the last axis, ignoring NaNs
+        Q1 = np.nanpercentile(arr_copy, 25, axis=2, keepdims=True)
+        Q3 = np.nanpercentile(arr_copy, 75, axis=2, keepdims=True)
+        IQR = Q3 - Q1
+
+        # Determine outlier criteria
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Detect outliers on the copy
+        outlier_mask = (arr_copy < lower_bound) | (arr_copy > upper_bound)
+
+        # Calculate mean of non-outliers, ignoring NaNs
+        non_outlier_mean = np.nanmean(arr_copy, axis=2, keepdims=True)
+
+        # Replace outliers in the original array with the mean of non-outliers
+        np.putmask(arr_copy, outlier_mask, non_outlier_mean)
+        assert arr_copy.shape == arr.shape
+
+        return outlier_mask, arr_copy
+
+    @property
+    def outlier_mask(self):
+        return self._detect_outlayers[0]
+
+    @property
+    def bh_data(self):
+        return self._detect_outlayers[1]
+
+    @cached_property
+    def cumul_bh_data(self):
+        return np.cumsum(self.bh_data, axis=0)
+
     def eval_from_chambers_sa(self, chamber_data, sobol_fn):
         """
         chamber_data (n_chambers, n_times, n_samples)
@@ -82,7 +127,7 @@ class Chambers:
         for begin, end in chambers:
                 chamber_begin = begin
                 chamber_size = (end - chamber_begin)
-                mean_value = (self.bh_data[end, :, :] - self.bh_data[chamber_begin, :, :]) / chamber_size
+                mean_value = (self.cumul_bh_data[end, :, :] - self.cumul_bh_data[chamber_begin, :, :]) / chamber_size
                 chamber_means.append(mean_value)
 
         chamber_means = np.stack(chamber_means)
