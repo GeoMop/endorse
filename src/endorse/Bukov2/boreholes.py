@@ -295,6 +295,18 @@ class BoreholeSet:
         length = np.abs(np.dot(diff, ex_normalized))
         return length, s, t, point_1, point_2, ez_normalized
 
+    def bh_description(self, i_bh):
+        pos, dir, transversal = self.bh_list[i_bh]
+        i,j,k = self.angle_ijk(i_bh)
+        y_angles = self.axis_angles(0)
+        z_angles = self.axis_angles(1)
+        y_angle = y_angles[i]
+        z_angle = z_angles[j]
+
+        pos_str =f"[{pos[0]:4.1f}, {pos[1]:4.1f}, {pos[2]:4.1f}]"
+        angle_str = f"({int(y_angle):4d}\N{DEGREE SIGN}, {int(z_angle):4d}\N{DEGREE SIGN})"
+        range_str = f"range: {tuple(self.line_bounds[i_bh])}"
+        return f"{pos_str} -> {angle_str}; {range_str}"
 
     # def load_data(self, workdir, cfg):
     #     """
@@ -400,6 +412,10 @@ class BoreholeSet:
 
     @property
     def line_bounds(self):
+        """
+        Range of valid point indices on the borehole.
+        :return: (n_boreholes, 2)
+        """
         return self.point_lines[1]
 
 

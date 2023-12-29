@@ -235,15 +235,17 @@ class PlotCfg:
 
 
     def plot_borehole_position(self):
+        pv.start_xvfb()
         plotter = pv.Plotter(off_screen=True)
         plotter = create_scene(plotter, self.cfg.geometry)
         add_cylinders(plotter, self.bh_set)
         add_bh(plotter, self.bh_set, self.i_bh)
+        plotter.add_text(self.bh_set.bh_description(self.i_bh))
 
         camera_positions = [
-            ([-60, 0, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, -60, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, 0, 60], [0, 0, 0], [0, 1, 0])
+            ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, 0, 50], [0, 0, 0], [0, 1, 0])
         ]
         resolution = (1920, 1080)
 
@@ -308,8 +310,12 @@ class PlotCfg:
         return fname
 
     def plot_mean_time_fun(self):
+        """
+        Goal: check projected pressures on the borehole
+        :return:
+        """
         pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
-
+        # (n_points - 1, n_times, n_samples)
         # Calculate the mean over the last dimension (samples)
         mean_pressures = np.mean(pressures, axis=2)
         selected_pressures = mean_pressures[::4]
@@ -342,6 +348,10 @@ class PlotCfg:
         return fname
 
     def plot_relative_residual(self):
+        """
+        Goal: check projected pressures on the borehole
+        :return:
+        """
         pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
         # Calculate the relative residual
         mean_pressures = pressures.mean(axis=2)
@@ -384,3 +394,7 @@ class PlotCfg:
             self.plot_mean_time_fun(),
             self.plot_relative_residual()]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
+
+
+def plot_best_packers():
+    pass

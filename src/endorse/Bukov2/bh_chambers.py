@@ -12,6 +12,7 @@ from functools import cached_property
 class Chambers:
     sa_problem : Dict[str, Any]
     bh_data : np.ndarray
+    bounds: Tuple[int, int]
     packer_size : int
     min_chamber_size : int
     sobol_fn : Any = sobol_fast.vec_sobol_total_only                 # = analyze.sobol_vec
@@ -21,10 +22,11 @@ class Chambers:
     @classmethod
     def from_bh_set(cls, workdir, cfg, bh_set:boreholes.BoreholeSet,  i_bh:int, sa_problem:Dict[str, Any], sobol_fn) -> 'Chambers':
         bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
-
+        bounds = bh_set.line_bounds[i_bh]
         return cls(
             sa_problem,
             bh_data,
+            bounds,
             sobol_fn = sobol_fn,
             **cfg.chambers)
 
@@ -96,10 +98,11 @@ class Chambers:
         (n_chamber_variants, n_params)
         :return:
         """
+        min_idx, max_idx = self.bounds
         chambers = [
             (begin, end)
-            for begin in range(self.n_points - self.min_chamber_size)
-                for end in range(begin + self.min_chamber_size, self.n_points)
+            for begin in range(min_idx, max_idx - self.min_chamber_size)
+                for end in range(begin + self.min_chamber_size, max_idx)
             ]
         index = np.full((self.n_points, self.n_points), -1, dtype=np.int32)
         for i_chamber, (begin, end) in enumerate(chambers):
@@ -112,7 +115,7 @@ class Chambers:
         if i_chamber > 0:
             return data[i_chamber, :]
         else:
-            return np.zeros(self.n_params)
+            return np.full(self.n_params, np.nan)
     #
     # @property
     # def index(self):
@@ -166,6 +169,7 @@ class PackerConfig:
 def packers_eval(chambers_obj, packers, weights):
     chambers = zip(packers[:-1], packers[1:])
     sensitivites = np.array([chambers_obj.chamber(i, j - chambers_obj.packer_size) for i, j in chambers])
+    sensitivites = sensitivites[ ~sensitivites.isnan()]
     # shape: (n_chamberes = 3, n_params)
     return weights[0] * np.max(sensitivites, axis=0) + weights[1] * np.mean(sensitivites, axis=0)
 

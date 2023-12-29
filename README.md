@@ -48,15 +48,21 @@ The entrypoints are:
 5. Borehole calculations.
    ```
     cd tests/Bukov2
-    ./ptyhon process_boreholes.py <dir_with_hdfs> [i_bh]
+    ./ptyhon process_boreholes.py <dir_with_hdfs> [submit] [i_bh]
    ```
-   If `i_bh` is given:
+   If `i_bh` is given, single borehole calculation:
    Borehole precalculation. 
    Borehole summary plot.
    Borehole packer optimization.
    
-    Otherwise start PBS parallel processing of all boreholes.
+   If `submit` is given, submit PBS job for processing all boreholes.
+   
+   If only workdir is provided, run processing of all boreholes localy.
+   
+   Every borehole is processed in `<workdir>/process_bh_<i_bh>`
+   The packer configuration results are stored there together with generated plots.
 
+   Optimization of all boreholes writes the resulting list into 
 6. Global measurement optimization.
 ## original Endorse readme for reference
 

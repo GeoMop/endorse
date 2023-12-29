@@ -6,7 +6,7 @@ from endorse.Bukov2 import plot_boreholes, boreholes
 from pathlib import Path
 script_dir = Path(__file__).absolute().parent
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_bh_chamebres():
 
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
@@ -26,6 +26,7 @@ def test_bh_chamebres():
         i_bh, param_names, show=False)
     plots.all()
 
+@pytest.mark.skip
 def test_optimize_packers():
 
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
