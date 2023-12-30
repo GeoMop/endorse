@@ -4,6 +4,7 @@ import itertools
 from endorse.Bukov2 import boreholes
 from endorse.sa import analyze
 from endorse.Bukov2 import sobol_fast
+from endorse import common
 import numpy as np
 from endorse.sa.analyze import sobol_vec
 from functools import cached_property
@@ -54,7 +55,7 @@ class Chambers:
         return amax_array
 
     @cached_property
-    def _detect_outlayers(self):
+    def _detect_outliers(self):
         arr = self.orig_bh_data
         # Create a mask for NaNs and Infs
         nan_inf_mask = np.isnan(arr) | np.isinf(arr)
@@ -76,6 +77,7 @@ class Chambers:
 
         # Detect outliers on the copy
         outlier_mask = (arr_copy < lower_bound) | (arr_copy > upper_bound)
+        outlier_mask = nan_inf_mask
 
         # Calculate mean of non-outliers, ignoring NaNs
         non_outlier_mean = np.nanmean(arr_copy, axis=2, keepdims=True)
@@ -88,11 +90,11 @@ class Chambers:
 
     @property
     def outlier_mask(self):
-        return self._detect_outlayers[0]
+        return self._detect_outliers[0]
 
     @property
     def bh_data(self):
-        return self._detect_outlayers[1]
+        return self._detect_outliers[1]
 
     @cached_property
     def cumul_bh_data(self):

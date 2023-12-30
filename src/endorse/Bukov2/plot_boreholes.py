@@ -358,6 +358,8 @@ class PlotCfg:
         arr_copy = self.chambers.bh_data
         orig_arr = self.chambers.orig_bh_data
         outlier_mask = self.chambers.outlier_mask
+
+        arr_copy = np.maximum(arr_copy, 0.1)
         # Compute the time mean on arr_copy
         time_mean_copy = np.nanmean(arr_copy, axis=1, keepdims=True)
 
@@ -388,7 +390,7 @@ class PlotCfg:
             ax1.bar(i, 0.01, width=0.6, bottom=median[i]-0.005, color='red', align='center')
 
         for ax in [ax1, ax2]:
-            ax.set_yscale('log')
+            #ax.set_yscale('log')
             ax.set_xlabel('Point')
             ax.set_ylabel('Log of (p / p.mean)')
             #ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -396,7 +398,7 @@ class PlotCfg:
             #ax.grid(True)
         ax1.set_title('Relative Residuals - data range')
         ax2.set_title('Relative Residuals - outliers')
-        fig.tight_layout()
+        #fig.tight_layout()
         fname = self.workdir / "residual.pdf"
         fig.savefig(fname)
         return fname
