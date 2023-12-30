@@ -235,7 +235,7 @@ def optimize_packers(cfg, chambers: Chambers):
     total_items = n_points - (n_packers - 1) * chambers.min_packer_distance + n_packers - 1
     combinations = list(itertools.combinations(range(total_items), n_packers))
     packers = np.array([combination_to_packers(chambers, comb) for comb in combinations], dtype=np.int32)
-    packers = np.random.shuffle(packers)    # to avoid prior preferences in position
+    np.random.shuffle(packers)    # to avoid prior preferences in position
     values = [packers_eval(chambers, p, weights) for p in packers]
     # shape (n_combinations, n_params)
     indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
