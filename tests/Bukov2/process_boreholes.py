@@ -27,15 +27,15 @@ def _single_borehole(bh_workdir, i_bh):
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_set, i_bh, problem, sobol_fn)
 
-    #best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)
+    best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)
     
     # shuld not be necessary as the whole funcion result is memoized
-    #bcommon.pkl_write(bh_workdir, best_packer_configs, "best_packer_configs.pkl")
+    bcommon.pkl_write(bh_workdir, best_packer_configs, "best_packer_configs.pkl")
 
     param_names = list(problem['names'])
     plots = plot_boreholes.PlotCfg(
         bh_workdir, cfg, bh_set, chambers,
-        i_bh, param_names, show=False)
+        i_bh, best_packer_configs, param_names, show=False)
     plots.all()
     
     return best_packer_configs
@@ -48,8 +48,8 @@ def borehole_dir(workdir, i_bh):
 def all_boreholes(workdir):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     bh_set = boreholes.make_borehole_set(workdir, cfg)
-    n_boreholes = (0,50,5)
-    #n_boreholes = (bh_set.n_boreholes,)
+    #n_boreholes = (0,50,5)
+    n_boreholes = (bh_set.n_boreholes,)
     bh_args = [(borehole_dir(workdir, i_bh), i_bh) for i_bh in range(*n_boreholes)]
 
     results = list(futures.map(single_borehole, bh_args))
@@ -62,8 +62,8 @@ pbs_script_template = """
 set -x 
 env | grep PBS_
 echo "===="
-#{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} {workdir} 
-{python} {script_path} {workdir} 23
+{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} {workdir} 
+#{python} {script_path} {workdir} 23
 """
 def submit_pbs(workdir):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
