@@ -197,6 +197,7 @@ class BoreholeSet:
                 yield (i_phi, j_phi, bh)
 
     def _make_borehole(self, pos, y_phi, z_phi):
+        pos = np.array(pos)
         dir_unit = self.direction(y_phi, z_phi)
         length, cyl_t, bh_t, cyl_point, bh_point, yz_tangent = self.transversal_params(self.cylinder_line, np.array([*pos, *dir_unit]))
 
@@ -217,6 +218,22 @@ class BoreholeSet:
         #t_end = min(t_end, t_l1, t_l0)
         bh_dir = dir_unit
 
+        # For abs_cyl_t > l1, the thransversal intersection bh_point is not
+        # the closest point. The closest point between cylinder edge and the line
+        # is dicussed e.g. https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwj-i4rR1reDAxW5gP0HHYJjC5cQFnoECBMQAQ&url=https%3A%2F%2Fwww.geometrictools.com%2FDocumentation%2FDistanceToCircle3.pdf&usg=AOvVaw3YIpkGekJxKxm48hxja-CV&opi=89978449
+        # Finally it is just a quadratic equation, but as we are in hurry
+        # we use just approximation using the projection to the XY plane
+        # the line must have quite small vertical angle so it almost lies in that plane.
+
+        r, l0, l1 = self.avoid_cylinder
+        if abs_cyl_t > l1:
+            dir_unit = dir_unit / np.linalg.norm(dir_unit)
+            cylinder_corner = np.array([[l1, -r, 0], [l1, r, 0]])
+            #xy_dir = dir_unit[:2] / np.linalg.norm(dir_unit[:2])
+            t1, t2 = (cylinder_corner - pos[None, :]) @ dir_unit[:]
+            t = min(t1, t2)
+            #t = - pos[1] * xy_dir[0] / xy_dir[1]
+            bh_point = pos + dir_unit * t
 
         # print(f"({y_phi}, {z_phi}) dir: {dir} {bh_t} bh: {bh_dir} dot: {np.dot(dir, bh_dir)}")
         return np.array([pos, bh_dir, bh_point])
@@ -294,6 +311,26 @@ class BoreholeSet:
 
         length = np.abs(np.dot(diff, ex_normalized))
         return length, s, t, point_1, point_2, ez_normalized
+
+    def _distance(self,cyl, line):
+        points = np.linspace(line[0], line[1], 10)
+        line_polydata = pv.PolyData(points)
+        distances = line_polydata.compute_implicit_distance(cyl, inplace=False)['implicit_distance']
+        return np.min(distances)
+
+    def boreholes_print_sorted(self):
+        """
+        Sort boreholes by estimated distance from cylinder.
+        Print distance - borehole ID pairs.
+        :return:
+        """
+        r, l0, l1 = self.avoid_cylinder
+        cylinder = pv.Cylinder(center=self.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+        distances = np.abs([self._distance(cylinder, (p_w, p_tr)) for p_w, dir, p_tr in self.bh_list])
+        indices = np.argsort(distances)
+        for i in indices:
+            print(f"{distances[i]} | {self.bh_description(i)}")
+
 
     def bh_description(self, i_bh):
         pos, dir, transversal = self.bh_list[i_bh]
