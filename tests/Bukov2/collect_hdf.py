@@ -81,12 +81,12 @@ def collect(workdir, out_file):
     pattern = "sampled_data_*.h5"
     #print(list(workdir.glob(pattern)))
     with h5py.File(workdir / out_file, mode='a') as out_f:
-        in_files = list(workdir.glob(pattern))
+        in_files = list((workdir / "sampled_data").glob(pattern))
         for f_name in sorted(in_files):
             print(f"  {f_name.name}")
             with h5py.File(f_name, mode='r') as in_f:
-                n_params = fill_single_hdf(out_f, in_f)
-    return out_file, n_params
+                fill_single_hdf(out_f, in_f)
+    return out_file
 
 ############################################
 @memoize
@@ -195,11 +195,13 @@ def get_completed_groups(workdir, out_file, in_file):
 
 
 @file_result("sampled_reduced.h5")
-def reduced_dataset(workdir, out_file, in_file, n_params):
+def reduced_dataset(workdir, out_file, in_file):
     with h5py.File(workdir / in_file, mode='r') as in_f:
         dset = in_f[dataset_name] 
         print("Input dset shape: ", dset.shape)
         out_shape = list(dset.shape)
+        
+        n_params = 11
         group_size = 2*(n_params+1)
         out_shape[0] = group_size * reduced_sample_groups
         out_shape[1] = len(reduced_times)
@@ -228,9 +230,9 @@ def reduced_dataset(workdir, out_file, in_file, n_params):
 
 
 def main(workdir):
-    collected_hdf5, n_params = collect(workdir)
+    collected_hdf5 = collect(workdir)
     fixed = get_completed_groups(workdir, collected_hdf5)
-    reduced_dataset(workdir, fixed, n_params)
+    reduced_dataset(workdir, fixed)
 
 
 if __name__ == '__main__':
