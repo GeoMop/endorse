@@ -16,14 +16,16 @@ def test_bh_chamebres():
     i_bh = 8
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_set, i_bh, problem, sobol_fn)
-    all_chambers = chambers.all_chambers
+
+    # Optimize
+    best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)
 
     param_names = list(problem['names'])
     bh_workdir = workdir / f"plot_bh_{i_bh:03d}"
     bh_workdir.mkdir(parents=True, exist_ok=True)
     plots = plot_boreholes.PlotCfg(
         bh_workdir, cfg, bh_set, chambers,
-        i_bh, param_names, show=False)
+        i_bh, best_packer_configs, param_names, show=False)
     plots.all()
 
 @pytest.mark.skip

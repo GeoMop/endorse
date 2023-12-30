@@ -4,12 +4,14 @@ import pyvista as pv
 from vtk.util.numpy_support import numpy_to_vtk
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
+import matplotlib.colors as mcolors
 import vtk
 import os
 from xml.etree import ElementTree as ET
 import attrs
 from pathlib import Path
 from endorse.Bukov2 import bukov_common as bcommon
+from endorse.Bukov2 import bh_chambers
 
 
 def create_scene(plotter, cfg_geometry):
@@ -230,6 +232,7 @@ class PlotCfg:
     bh_set : 'BoreholeSet'
     chambers : 'Chambers'
     i_bh: int
+    opt_packers: List[List[bh_chambers.PackerConfig]]
     param_names : List[str]
     show: bool
 
@@ -445,14 +448,167 @@ class PlotCfg:
     #     fig.savefig(fname)
     #     return fname
 
+    def plot_stacked_barplot(self, ax, data_array, packers, cmap):
+        """
+        Plot a stacked bar plot for the given data.
+
+        Args:
+        ax (matplotlib.axes.Axes): Axis object to plot on.
+        data_array (numpy.array): Array of shape (n_chambers, n_params).
+        packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
+        """
+        n_chambers, n_params = data_array.shape
+        for i in range(n_params):
+            for j in range(n_chambers):
+                width = packers[j + 1] - packers[j]
+                color = cmap.to_rgba(data_array[j, i])
+                ax.barh(i, width, left=packers[j], color=color)
+
+        #ax.set_yticks([])
+
+        #ax.set_xlabel('Chamber Length')
+
+    def plot_best_packers(self):
+        """
+        Goal: show the packer positions of the bes variants, compare indices
+        """
+        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
+        packers = [[p.packers for p in l] for l in self.opt_packers]
+        n_params = self.chambers.n_params
+        n_variants = len(data_array[0])
+        max_sobol = np.max(data_array)
+        print("Max sobol: ", max_sobol)
+        sm = combined_mapper(max_sobol)
+
+        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 15),  sharex='col', sharey='row')
+                                #constrained_layout=True,)
+
+        for i in range(n_variants):
+            for j in range(n_params):
+        # for i in range(1):
+        #     for j in range(1):
+                ax = axs[i, j] #if n_variants > 1 else axs[j]
+                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm)
+
+                if i == 0:
+                    # Set column labels (parameter names) for the top row
+                    ax.set_title(self.param_names[j])
+
+                if j == 0:
+                    # Set row labels (variant indices) for the first column
+                    ax.set_ylabel(f'Variant {i + 1}')
+                    ax.set_yticks(range(n_params))
+                    ax.set_yticklabels(self.param_names)
+
+        ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, max_sobol]
+        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.03, pad=0.05,
+                            ticks=ticks)
+
+        #fig.tight_layout()
+        fname = self.workdir / "optim_packers.pdf"
+        fig.savefig(fname)
+        return fname
+
     def all(self):
         plots = [
             *self.plot_borehole_position(),
             self.plot_chamber_data(),
             self.plot_mean_time_fun(),
-            self.plot_relative_residual()]
+            self.plot_relative_residual(),
+            self.plot_best_packers()
+        ]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
 
 
-def plot_best_packers():
-    pass
+# def create_custom_colormap(max_value=2.0, threshold=1e-4, n_points=20):
+#     """
+#     Create a custom colormap with a logarithmic transition from threshold to 1.0.
+#
+#     Args:
+#     threshold (float): Threshold value up to which the color is white.
+#     max_value (float): Maximum value for the transition to green.
+#     n_points (int): Number of points to approximate the logarithmic transition.
+#
+#     Returns:
+#     LinearSegmentedColormap: The custom colormap.
+#     """
+#     # Ensure the threshold and max_value are within a valid range
+#     threshold = min(max(threshold, 1e-10), max_value)  # Avoid division by zero in log
+#
+#     # Generate points for logarithmic transition
+#     log_min = np.log(threshold)
+#     log_max = np.log(1)
+#     log_points = np.exp(np.linspace(log_min, log_max, n_points))
+#
+#     # Create the colormap data
+#     cdict = {'red': [], 'green': [], 'blue': []}
+#     last_val = 0
+#     for val in log_points:
+#         norm_val = val / max_value
+#         r = min(val, 1)
+#         g = min(max(val - 1, 0), 1)
+#         cdict['red'].append((norm_val, r, r))
+#         cdict['green'].append((norm_val, g, g))
+#         cdict['blue'].append((norm_val, 0, 0))
+#         last_val = norm_val
+#
+#     # Add final point for max_value
+#     cdict['red'].append((1.0, 0.0, 0.0))
+#     cdict['green'].append((1.0, 1.0, 1.0))
+#     cdict['blue'].append((1.0, 0.0, 0.0))
+#
+#     # Create the colormap
+#     custom_cmap = LinearSegmentedColormap('custom_colormap', cdict)
+#     return custom_cmap
+
+
+def create_value_mapper(threshold=1e-3, max_value=1.0):
+    """
+    Create a value mapping function for the custom colormap.
+
+    Args:
+    threshold (float): Threshold value for the logarithmic transition.
+    max_value (float): Maximum value of the data.
+
+    Returns:
+    function: A function that maps input values to the normalized range (0, 1).
+    """
+    T = threshold
+    M = max_value
+    # Calculate constants a, b, and c
+    b = (T + M - 2) / (1 - T)
+    a = 1 / np.log((T + M - 1) ** 2)
+    c = 1 - b * T
+
+    # Define the function
+    def func(x):
+        return a * np.log(b * x + c)
+
+    def inv(y):
+        return (np.exp(y / a) - c) / b
+
+    return func, inv
+
+def create_custom_colormap():
+    """
+    Create a custom colormap for the transformed value range.
+
+    Returns:
+    LinearSegmentedColormap: The custom colormap.
+    """
+    cdict = {
+        'red':   ((0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)),
+        'green': ((0.0, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 1.0, 1.0)),
+        'blue':  ((0.0, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0))
+    }
+    return mcolors.LinearSegmentedColormap('custom_colormap', cdict)
+
+def combined_mapper(max_value, threshold=1e-3):
+    _forward, _inverse = create_value_mapper(threshold, max_value)
+    value_mapper = mcolors.FuncNorm((_forward, _inverse), vmin=0, vmax=max_value)
+
+    custom_cmap = create_custom_colormap()
+    #norm = mcolors.Normalize(vmin=0, vmax=max_value)
+    #cmapper = lambda x : custom_cmap(value_mapper(norm.inverse(x)))
+    sm = plt.cm.ScalarMappable(norm=value_mapper, cmap=custom_cmap)
+    return sm

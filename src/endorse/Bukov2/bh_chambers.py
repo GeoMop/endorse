@@ -160,7 +160,8 @@ class Chambers:
         if i_chamber > 0:
             return data[i_chamber, :]
         else:
-            return np.full(self.n_params, np.nan)
+            #return np.full(self.n_params, np.nan)
+            return np.zeros(self.n_params)
     #
     # @property
     # def index(self):
@@ -214,7 +215,7 @@ class PackerConfig:
 def packers_eval(chambers_obj, packers, weights):
     chambers = zip(packers[:-1], packers[1:])
     sensitivites = np.array([chambers_obj.chamber(i, j - chambers_obj.packer_size) for i, j in chambers])
-    sensitivites = sensitivites[ ~sensitivites.isnan()]
+    #sensitivites = np.nan_to_num(sensitivites, nan=0.0)
     # shape: (n_chamberes = 3, n_params)
     return weights[0] * np.max(sensitivites, axis=0) + weights[1] * np.mean(sensitivites, axis=0)
 
@@ -234,6 +235,7 @@ def optimize_packers(cfg, chambers: Chambers):
     total_items = n_points - (n_packers - 1) * chambers.min_packer_distance + n_packers - 1
     combinations = list(itertools.combinations(range(total_items), n_packers))
     packers = np.array([combination_to_packers(chambers, comb) for comb in combinations], dtype=np.int32)
+    packers = np.random.shuffle(packers)    # to avoid prior preferences in position
     values = [packers_eval(chambers, p, weights) for p in packers]
     # shape (n_combinations, n_params)
     indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
