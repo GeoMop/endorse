@@ -15,14 +15,14 @@ def single_borehole(args):
 #     bh_dir.mkdir(parents=True, exist_ok=True)
 #     return bh_dir
 
-def all_boreholes(workdir):
+def all_boreholes(workdir, map_fn):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     #n_boreholes = (0,50,5)
     n_boreholes = (bh_set.n_boreholes,)
     bh_args = [(workdir, i_bh) for i_bh in range(*n_boreholes)]
 
-    results = list(futures.map(single_borehole, bh_args))
+    results = list(map_fn(single_borehole, bh_args))
     bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
     
 pbs_script_template = """
@@ -60,8 +60,10 @@ if __name__ == '__main__':
     workdir = Path(sys.argv[1]).absolute()
     if len(sys.argv) > 2 and (sys.argv[2] == 'submit'):
         submit_pbs(workdir)
+    elif len(sys.argv) > 2 and (sys.argv[2] == 'local'):
+        all_boreholes(workdir, map_fn = map)
     elif len(sys.argv) > 2:
         i_bh = int(sys.argv[2])
-        single_borehole( (borehole_dir(workdir, i_bh), i_bh) )
+        single_borehole( (workdir, i_bh) )
     else:
-        all_boreholes(workdir)
+        all_boreholes(workdir, map_fn=futures.map)

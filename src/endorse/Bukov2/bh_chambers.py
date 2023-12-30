@@ -26,7 +26,7 @@ class Chambers:
         bounds = bh_set.line_bounds[i_bh]
         return cls(
             sa_problem,
-            bh_data,
+            bh_data[:, 1:,:],   # remove zero time, as it has zero variance
             bounds,
             sobol_fn = sobol_fn,
             **cfg.chambers)
@@ -94,6 +94,10 @@ class Chambers:
 
     @property
     def bh_data(self):
+        """
+        (n_points, n_times, n_samples)
+        :return:
+        """
         return self._detect_outliers[1]
 
     @cached_property

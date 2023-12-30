@@ -450,7 +450,7 @@ class PlotCfg:
     #     fig.savefig(fname)
     #     return fname
 
-    def plot_stacked_barplot(self, ax, data_array, packers, cmap):
+    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col):
         """
         Plot a stacked bar plot for the given data.
 
@@ -459,12 +459,19 @@ class PlotCfg:
         data_array (numpy.array): Array of shape (n_chambers, n_params).
         packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
         """
+        # Invert the y-axis
+        ax.invert_yaxis()
         n_chambers, n_params = data_array.shape
         for i in range(n_params):
             for j in range(n_chambers):
                 width = packers[j + 1] - packers[j]
                 color = cmap.to_rgba(data_array[j, i])
                 ax.barh(i, width, left=packers[j], color=color)
+                ax.axvline(x=packers[j], color='black', linewidth=0.5, ymin=i / n_params,
+                           ymax=(i + 1) / n_params)
+                if col == 0:
+                    ax.set_yticks(range(n_params))
+                    ax.set_yticklabels(self.param_names)
 
         #ax.set_yticks([])
 
@@ -478,11 +485,18 @@ class PlotCfg:
         packers = [[p.packers for p in l] for l in self.opt_packers]
         n_params = self.chambers.n_params
         n_variants = len(data_array[0])
+        threshold = 1e-3
+        data_array = np.maximum(data_array, threshold)
         max_sobol = np.max(data_array)
         print("Max sobol: ", max_sobol)
-        sm = combined_mapper(max_sobol)
 
-        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 15),  sharex='col', sharey='row')
+        cmap = plt.cm.jet   # better discriminatino of points then viridis
+        sm = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(threshold, max_sobol))
+        sm.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
+
+        #sm = combined_mapper(max_sobol, threshold)
+
+        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 10),  sharex='col', sharey='row')
                                 #constrained_layout=True,)
 
         for i in range(n_variants):
@@ -490,7 +504,7 @@ class PlotCfg:
         # for i in range(1):
         #     for j in range(1):
                 ax = axs[i, j] #if n_variants > 1 else axs[j]
-                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm)
+                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j)
 
                 if i == 0:
                     # Set column labels (parameter names) for the top row
@@ -499,11 +513,9 @@ class PlotCfg:
                 if j == 0:
                     # Set row labels (variant indices) for the first column
                     ax.set_ylabel(f'Variant {i + 1}')
-                    ax.set_yticks(range(n_params))
-                    ax.set_yticklabels(self.param_names)
 
         ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, max_sobol]
-        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.03, pad=0.05,
+        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.015, pad=0.05,
                             ticks=ticks)
 
         #fig.tight_layout()
@@ -584,7 +596,8 @@ def create_value_mapper(threshold=1e-3, max_value=1.0):
 
     # Define the function
     def func(x):
-        return a * np.log(b * x + c)
+        log_arg = b * x + c
+        return a * np.log(log_arg)
 
     def inv(y):
         return (np.exp(y / a) - c) / b
