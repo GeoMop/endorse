@@ -33,7 +33,7 @@ def add_cylinders(plotter, bh_set: 'BoreholeSet'):
     # Create a horizontal cylinder
     r, l0, l1 = bh_set.avoid_cylinder
     avoid_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-    plotter.add_mesh(avoid_cylinder, color='red')
+    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.8)
 
     r, l0, l1 = bh_set.active_cylinder
     active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)

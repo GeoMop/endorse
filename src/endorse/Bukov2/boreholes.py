@@ -203,7 +203,9 @@ class BoreholeSet:
 
         abs_cyl_t = cyl_t * np.linalg.norm(self.cylinder_line[3:])
         r, l0, l1 = self.avoid_cylinder
-        if length < r and l0 < abs_cyl_t < l1:
+        dir_unit_yz = np.linalg.norm(dir_unit[1:])
+        #if not (length > r or  length > (abs_cyl_t - l1) / dir_unit[0] * dir_unit_yz or  abs_cyl_t > l1 + r) :
+        if not (length >  r or abs_cyl_t > l1 + r):
             return None
 
         r, l0, l1 = self.active_cylinder
@@ -310,6 +312,8 @@ class BoreholeSet:
         point_1 = a1 + s * d1
 
         length = np.abs(np.dot(diff, ex_normalized))
+        point_dist = np.linalg.norm(point_1 - point_2)
+        assert np.abs(length - point_dist) < 1e-5
         return length, s, t, point_1, point_2, ez_normalized
 
     def _distance(self,cyl, line):
