@@ -54,8 +54,18 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     return plotter
 
 
+def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
+    values, ids = zip(*bh_tuples)
+    values = np.array(values)
+    normalized_values = (values - values.min()) / (values.max() - values.min())
+    cmap = plt.cm.get_cmap("viridis")
+    colors = cmap(normalized_values)
+    for bh_id, col in zip(ids, colors):
+        add_bh(plotter, bh_set, int(bh_id), color=col)
 
-def add_bh(plotter, bh_set, i_bh):
+
+
+def add_bh(plotter, bh_set, i_bh, color=None, label=False):
     p_w, dir, p_tr = bh_set.bh_list[i_bh]
     p_w = bh_set.transform(p_w)
     p_tr = bh_set.transform(p_tr)
@@ -66,7 +76,13 @@ def add_bh(plotter, bh_set, i_bh):
     i, j, k = bh_set.angle_ijk(i_bh)
     angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
 
-    color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
+    if color is None:
+        color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
+    if label:
+        plotter.add_point_labels([p_end], [str(i_bh)], text_color=color,
+            font_size = 50, point_size = 50,
+            render_points_as_spheres = True, always_visible = True, shadow = True
+        )
     #print(f"Adding: {bh} col: {color}")
     line = pv.Line(p_w, p_tr)
     plotter.add_mesh(line, color='grey', line_width=1)

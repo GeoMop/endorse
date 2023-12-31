@@ -205,7 +205,9 @@ class BoreholeSet:
         r, l0, l1 = self.avoid_cylinder
         dir_unit_yz = np.linalg.norm(dir_unit[1:])
         #if not (length > r or  length > (abs_cyl_t - l1) / dir_unit[0] * dir_unit_yz or  abs_cyl_t > l1 + r) :
-        if not (length >  r or abs_cyl_t > l1 + r):
+        #if not (length >  r or abs_cyl_t > l1 + r):
+        #if not (length >= r or l0 >= abs_cyl_t >= l1):
+        if length < r and l0 < abs_cyl_t < l1:
             return None
 
         r, l0, l1 = self.active_cylinder
