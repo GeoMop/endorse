@@ -22,14 +22,19 @@ params_name="parameters"
 
 #####################################š
 
-def chracterize_samples(in_dset):
+@memoize
+def chracterize_samples(workdir, in_dset):
     n_samples, n_times, n_els = in_dset.shape
     s_max = np.empty(n_samples)
     s_min = np.empty(n_samples)
-    for i_sample in range(n_samples):
-        sample = np.array(in_dset[i_sample, :, :])
-        s_max[i_sample] = np.max(sample)
-        s_min[i_sample] = np.min(sample)
+    stride = 8
+    for i_sample in range(0, n_samples, stride):
+        print("  i_sample: ", i_sample)
+        step = min(stride, n_samples - i_sample)
+        frame = slice(i_sample, i_sample + step)
+        sample = np.array(in_dset[frame, :, :])
+        s_max[frame] = np.max(sample, axis=(1,2))
+        s_min[frame] = np.min(sample, axis=(1,2))
     return s_max, s_min
 
 @file_result("mesh_sobol_st.h5")
@@ -47,14 +52,22 @@ def mesh_sobol_st(workdir, out_file, in_file):
             out_std = out_f.create_dataset('std', (n_times, n_els), dtype='float64')
             out_max_sample = out_f.create_dataset('max_sample', (n_times, n_els), dtype='float64')
             out_med_sample = out_f.create_dataset('med_sample', (n_times, n_els), dtype='float64')
-            s_max, s_min = chracterize_samples(in_dset)
+            
+            print("Characterize ...")
+            s_max, s_min = chracterize_samples(workdir, in_dset)
             samples_sorted = np.argsort(s_max - s_min)
             out_max_sample[:,:]  = in_dset[samples_sorted[-1], :, :]
             out_med_sample[:, :] = in_dset[samples_sorted[n_samples//2], :, :]
             for i_time in range(n_times):
-                time_frame = np.array(in_dset[:, i_time, :])
+                print("  sobol time: ", i_time)
+                
+                time_frame = np.empty((in_dset.shape[0], in_dset.shape[2]))
+                time_frame[:, :] = in_dset[:, i_time, :]
+                print("time frame: ", time_frame.shape)
                 sobol_samples = time_frame.transpose([1,0])
-                out_sobol_t[i_time, :, :] = sobol_fast.vec_sobol_total_only(sobol_samples, problem)
+                sobol = sobol_fast.vec_sobol_total_only(sobol_samples, problem)
+                print("sobol: ", sobol.shape)
+                out_sobol_t[i_time, :, :] = sobol
                 out_mean[i_time, :] = np.mean(time_frame, axis=0)
                 out_std[i_time, :] = np.std(time_frame, axis=0)
         return out_file
