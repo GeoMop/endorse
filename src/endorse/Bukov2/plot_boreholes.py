@@ -275,25 +275,27 @@ class PlotCfg:
         n_points = self.chambers.n_points
         sizes = [2, 4, 8]
 
+        chamber_data = [[self.chambers.chamber(i_begin, min(i_begin + size, n_points))
+                         for i_begin in range(0, n_points - size)]
+                            for i_size, size in enumerate(sizes)]
+        chamber_array = [i  for l in chamber_data for i in l]
+
+        sm = plt.cm.ScalarMappable(cmap=plt.cm.jet,
+                                   norm=plt.Normalize(vmin=np.min(chamber_array), vmax=np.max(chamber_array)))
+        sm.set_array([])
+
         fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
         color_values = []
         for i_param, label in enumerate(self.param_names):
             ax = axes[i_param]
-
             for i_size, size in enumerate(sizes):
-                for i_begin in range(0, n_points - size):
-                    # Calculate the color based on the chamber values
-                    i_end = min(i_begin + size, n_points)
-                    i_pos = (i_begin + i_end) // 2
-                    chamber_data = self.chambers.chamber(i_begin, i_end)
-                    #if chamber_data is None:
-                    #    continue
+                values = [l[i_param] for l in chamber_data[i_size]]
 
-                    value = chamber_data[i_param]
-                    color_values.append(value)
-                    # Add a horizontal stripe to the plot
-                    ax.broken_barh([(i_pos, 1)], (i_size+0.1, 0.8), facecolors=plt.cm.viridis(value))
-
+                x_pos = size // 2 + np.arange(0, n_points - size)
+                colors = sm.to_rgba(np.array(values))
+                assert len(x_pos) == len(colors)
+                width = np.ones(len(x_pos))
+                ax.broken_barh(list(zip(x_pos, width)), (i_size+0.1, 0.8), facecolors=colors)
 
             ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
             ax.set_yticks([0.5, 1.5, 2.5])
@@ -303,9 +305,6 @@ class PlotCfg:
         axes[0].set_title("Size", pad=-20)  # Title above the first axis
 
         # Create a common colorbar for all subplots
-        sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
-                                   norm=plt.Normalize(vmin=min(color_values), vmax=max(color_values)))
-        sm.set_array([])
         cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
         fig.colorbar(sm, cax=cbar_ax)
 
@@ -377,29 +376,26 @@ class PlotCfg:
         colors = plt.cm.rainbow(np.linspace(0, 1, n_times))  # Different colors for each time
 
         # Create plots
-        fig, (ax1, ax2)  = plt.subplots(2,1, figsize=(12, 12))
+        fig, ax1  = plt.subplots(1,1, figsize=(12, 12))
         for i in range(n_points):
-            for j in range(n_times):
-                # Scatter plot of outliers
-                outlier_data = normalized_orig_arr[i, j, outlier_mask[i, j]]
-                ax2.scatter([i + 0.028 * j] * len(outlier_data), outlier_data, color=colors[j], alpha=0.5, s=1)
+            #for j in range(n_times):
 
             # Plot min and max values as thin vertical lines
             ax1.bar(i, max_values[i] - min_values[i], width=0.1, bottom=min_values[i], color='black', align='center')
             ax1.bar(i, Q3[i] - Q1[i], width=0.5, bottom=Q1[i], color='blue', align='center')
             ax1.bar(i, 0.01, width=0.6, bottom=median[i]-0.005, color='red', align='center')
 
-        for ax in [ax1, ax2]:
-            #ax.set_yscale('log')
-            ax.set_xlabel('Point')
-            ax.set_ylabel('Log of (p / p.mean)')
-            #ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
-            ax.set_xticks(range(n_points))
-            #ax.grid(True)
-        ax1.set_title('Relative Residuals - data range')
-        ax2.set_title('Relative Residuals - outliers')
+        ax = ax1
+        #ax.set_yscale('log')
+        ax.set_xlabel('Point')
+        ax.set_ylabel('Log of (p / p.mean)')
+        #ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_xticks(range(n_points))
+        #ax.grid(True)
+        ax.set_title('Relative Residuals - box plot over times and samples')
+        #ax2.set_title('Relative Residuals - box plot over samples of time sequence variance')
         #fig.tight_layout()
-        fname = self.workdir / "residual.pdf"
+        fname = self.workdir / "residual_range.pdf"
         fig.savefig(fname)
         return fname
 
@@ -477,12 +473,26 @@ class PlotCfg:
 
         #ax.set_xlabel('Chamber Length')
 
-    def plot_best_packers(self):
+    def plot_best_packers_st(self):
+        data_array = [[p.st_values[:,:]  for p in l] for l in self.opt_packers]
+        packers = [[p.packers for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers)
+        fname = self.workdir / "optim_packers_st.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def plot_best_packers_full(self):
+        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
+        packers = [[p.packers for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers)
+        fname = self.workdir / "optim_packers_full.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def _plot_best_packers(self, data_array, packers):
         """
         Goal: show the packer positions of the bes variants, compare indices
         """
-        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
-        packers = [[p.packers for p in l] for l in self.opt_packers]
         n_params = self.chambers.n_params
         n_variants = len(data_array[0])
         threshold = 1e-3
@@ -519,9 +529,7 @@ class PlotCfg:
                             ticks=ticks)
 
         #fig.tight_layout()
-        fname = self.workdir / "optim_packers.pdf"
-        fig.savefig(fname)
-        return fname
+        return  fig
 
     def all(self):
         plots = [
@@ -529,7 +537,8 @@ class PlotCfg:
             self.plot_chamber_data(),
             self.plot_mean_time_fun(),
             self.plot_relative_residual(),
-            self.plot_best_packers()
+            self.plot_best_packers_st(),
+            self.plot_best_packers_full()
         ]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
 

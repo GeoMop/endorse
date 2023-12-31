@@ -16,6 +16,7 @@ class Chambers:
     bounds: Tuple[int, int]
     packer_size : int
     min_chamber_size : int
+    noise: float
     sobol_fn : Any = sobol_fast.vec_sobol_total_only                 # = analyze.sobol_vec
 
 
@@ -116,9 +117,12 @@ class Chambers:
 
         n_chambers, n_times, n_samples = chamber_data.shape
         ch_data = chamber_data.reshape(-1, n_samples)
-        sobol_array = sobol_fn(ch_data, self.sa_problem)
+        sobol_array = sobol_fn(ch_data, self.sa_problem)    # (:, n_indices)
         sobol_array = np.nan_to_num(sobol_array, nan=0.0)
         sobol_array[np.isinf(sobol_array)] = 0
+        var = np.var(ch_data, axis=1)
+        noise_scale = var / (var + self.noise**2)
+        sobol_array[:, :, :] *= noise_scale[:, None, None]
         sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params, -1)# n_chambers
 
         # Compute maximum over times
@@ -173,14 +177,17 @@ class Chambers:
     # def index(self):
     #     return self.all_chambers[0]
 
-    def packer_config(self, packers):
-        chambers = zip(packers[:-1], packers[1:])
+    def packer_config(self, packers, st_values):
+        chambers = list(zip(packers[:-1], packers[1:] - self.packer_size))
+        sensitivites = np.array([self.chamber(i, j) for i, j in chambers])
+
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
-        return PackerConfig(packers, full_sobol)
+        return PackerConfig(packers, sensitivites, full_sobol)
 
 @attrs.define(slots=False)
 class PackerConfig:
     packers: np.ndarray       # (n_packers,) int ; positions of the ends of the packers,
+    st_values: np.ndarray
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
     def __getstate__(self):
@@ -245,7 +252,7 @@ def optimize_packers(cfg, chambers: Chambers):
     values = [packers_eval(chambers, p, weights) for p in packers]
     # shape (n_combinations, n_params)
     indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
-    opt_packer_configs = [[chambers.packer_config(packers[indices[i_best, i_param]]) for i_best in range(n_largest)]
+    opt_packer_configs = [[chambers.packer_config(packers[indices[i_best, i_param]], values[indices[i_best, i_param]]) for i_best in range(n_largest)]
         for i_param in range(n_params)]
 
     return opt_packer_configs
