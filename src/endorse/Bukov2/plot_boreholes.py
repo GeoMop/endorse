@@ -456,7 +456,6 @@ class PlotCfg:
         packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
         """
         # Invert the y-axis
-        ax.invert_yaxis()
         n_chambers, n_params = data_array.shape
         for i in range(n_params):
             for j in range(n_chambers):
@@ -521,6 +520,7 @@ class PlotCfg:
                     ax.set_title(self.param_names[j])
 
                 if j == 0:
+                    ax.invert_yaxis()
                     # Set row labels (variant indices) for the first column
                     ax.set_ylabel(f'Variant {i + 1}')
 

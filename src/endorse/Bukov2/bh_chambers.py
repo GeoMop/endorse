@@ -105,6 +105,18 @@ class Chambers:
     def cumul_bh_data(self):
         return np.cumsum(self.bh_data, axis=0)
 
+    @property
+    def n_groups(self):
+        n_params = self.n_params
+        group_size = 2 * (n_params + 1)
+        return self.bh_data.shape[-1] // group_size
+
+    @cached_property
+    def noise_vectors(self):
+        a_noise = self.noise * np.random.randn(self.n_groups)
+        b_noise = self.noise * np.random.randn(self.n_groups)
+        return a_noise, b_noise
+
     def eval_from_chambers_sa(self, chamber_data, sobol_fn):
         """
         chamber_data (n_chambers, n_times, n_samples)
@@ -116,14 +128,39 @@ class Chambers:
         """
 
         n_chambers, n_times, n_samples = chamber_data.shape
-        ch_data = chamber_data.reshape(-1, n_samples)
-        sobol_array = sobol_fn(ch_data, self.sa_problem)    # (:, n_indices)
+        n_params = self.n_params
+        group_size = 2 * (n_params + 1)
+        n_groups = n_samples // group_size
+
+        ch_data = chamber_data.reshape(-1, n_groups, group_size)
+        a_noise, b_noise = self.noise_vectors
+
+        group_size = 2 * (n_params + 1) + 2
+        ch_data_with_noise = np.empty((ch_data.shape[0], n_groups, group_size))
+        # A matrix eval
+        ch_data_with_noise[:, :, 0] = ch_data[:,:,0] + a_noise
+        # AB matrix eval
+        ch_data_with_noise[:, :, 1:n_params + 1] = ch_data[:, :, 1:n_params + 1] + a_noise[None, :, None]
+        ch_data_with_noise[:, :, n_params + 1] = ch_data[:, :, 0] + b_noise
+        # BA matrix eval
+        ch_data_with_noise[:, :, n_params+2:2*n_params + 2] = ch_data[:, :, n_params + 1:2*n_params+1] + b_noise[None, :, None]
+        ch_data_with_noise[:, :, 2*n_params + 2] = ch_data[:, :, 2*n_params+1] + a_noise
+        # B matrix eval
+        ch_data_with_noise[:, :, 2 * n_params + 3] = ch_data[:,:, 2*n_params+1] + b_noise
+
+        problem = dict(self.sa_problem)
+        problem['num_vars'] += 1
+
+        sobol_array = sobol_fn(ch_data_with_noise.reshape(ch_data.shape[0], -1), problem)    # (:, n_indices)
         sobol_array = np.nan_to_num(sobol_array, nan=0.0)
         sobol_array[np.isinf(sobol_array)] = 0
-        var = np.var(ch_data, axis=1)
-        noise_scale = var / (var + self.noise**2)
-        sobol_array[:, :, :] *= noise_scale[:, None, None]
-        sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params, -1)# n_chambers
+        #var = np.var(ch_data, axis=1)
+        #noise_scale = var / (var + self.noise**2)
+        #sobol_array[:, :, :] *= noise_scale[:, None, None]
+        sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params+1, -1)
+
+        # remove noise indices
+        sobol_array = sobol_array[:, :, :-1, :]
 
         # Compute maximum over times
         max_sobol = self.sobol_max(sobol_array, axis = 1)  # max over times with respect to total indices
