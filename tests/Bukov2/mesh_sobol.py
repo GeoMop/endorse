@@ -71,6 +71,12 @@ def mesh_sobol_st(workdir, out_file, in_file):
         in_dset = in_f[dataset_name]
         n_samples, n_times, n_els = in_dset.shape
 
+        group_size = 2 * (n_params + 1)
+        n_groups = n_samples // group_size
+        noise = cfg.chambers.noise
+        a_noise = noise * np.random.randn(n_groups)
+        b_noise = noise * np.random.randn(n_groups)
+
     with h5py.File(workdir / out_file, mode='w') as out_f:
         out_sobol_t = out_f.create_dataset('sobol_indices', (n_times, n_els, n_params), dtype='float64')
         out_mean = out_f.create_dataset('mean', (n_times, n_els), dtype='float64')
@@ -84,19 +90,37 @@ def mesh_sobol_st(workdir, out_file, in_file):
             out_max_sample[:,:]  = in_dset[samples_sorted[-1], :, :]
             out_med_sample[:, :] = in_dset[samples_sorted[n_samples//2], :, :]
 
-
     for i_time in range(n_times):
         print("  sobol time: ", i_time)
         time_frame = read_time_frame(workdir, in_file, i_time)
         sobol_samples = time_frame.transpose([1,0])
-        
-        
-        sobol = sobol_fast.vec_sobol_total_only(sobol_samples, problem)
+        ch_data = sobol_samples.reshape(-1, n_groups, group_size)
+        group_size_new = 2 * (n_params + 1) + 2
+        ch_data_with_noise = np.empty((ch_data.shape[0], n_groups, group_size_new))
+        # A matrix eval
+        ch_data_with_noise[:, :, 0] = ch_data[:, :, 0] + a_noise
+        # AB matrix eval
+        ch_data_with_noise[:, :, 1:n_params + 1] = ch_data[:, :, 1:n_params + 1] + a_noise[None, :, None]
+        ch_data_with_noise[:, :, n_params + 1] = ch_data[:, :, 0] + b_noise
+        # BA matrix eval
+        ch_data_with_noise[:, :, n_params + 2:2 * n_params + 2] = ch_data[:, :,
+                                                                  n_params + 1:2 * n_params + 1] + b_noise[None,
+                                                                                                   :, None]
+        ch_data_with_noise[:, :, 2 * n_params + 2] = ch_data[:, :, 2 * n_params + 1] + a_noise
+        # B matrix eval
+        ch_data_with_noise[:, :, 2 * n_params + 3] = ch_data[:, :, 2 * n_params + 1] + b_noise
+
+        problem_loc = dict(problem)
+        problem_loc['num_vars'] += 1
+
+        sobol = sobol_fast.vec_sobol_total_only(ch_data_with_noise.reshape(n_els, -1), problem_loc)
+
         print("sobol: ", sobol.shape)
-        sobol = sobol[:,:,0]
+        sobol = sobol[:,:-1,0]
         write(workdir, out_file, i_time, sobol, np.mean(time_frame, axis=0), np.std(time_frame, axis=0))
        
     return out_file
+                
 
 
 
