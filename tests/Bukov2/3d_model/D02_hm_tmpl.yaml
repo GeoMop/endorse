@@ -52,8 +52,8 @@ problem: !Coupling_Sequential
           - region: BULK
             conductivity: !FieldFormula
               value: if(von_mises_stress<stress_threshold,
-                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3))),
-                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/((sx+sy+sz)/3)))
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3))),
+                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
                 * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
                 )* (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
 #              value: if(von_mises_stress<stress_threshold,
