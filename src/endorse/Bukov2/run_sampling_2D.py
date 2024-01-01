@@ -179,7 +179,8 @@ def conductivity(k0, eps, delta, gamma, sigma0, a, b, c, sigma_m):
     lin = (1 + 0.1*(a * x / 35 + b * y / 30 + c * z / 30))
     kr = 1/eps *k0
     k = kr + delta * np.exp(np.log((k0 - kr) / delta) * sigma_m / sigma0)
-    return np.where(sigma_vm < sigma_tres, k, k * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres)) * lin
+    cond = 1000*9.81/0.001 * k
+    return np.where(sigma_vm < sigma_tres, cond, cond * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres)) * lin
     # if sigma_vm < sigma_tres:
     #     return k
     # else:
@@ -198,7 +199,7 @@ def plot_conductivity(params):
         init_sigma_m = -(p[1] + p[2] + p[3])/3
         cond = conductivity(p[4],p[5],p[6],p[7],init_sigma_m,p[8],p[9],p[10],sigma_mean)
         plt.plot(sigma_mean/1e6, cond)
-        plt.scatter(init_sigma_m/1e6,p[4])
+        plt.scatter(init_sigma_m/1e6, 1000*9.81/0.001*p[4])
 
     plt.yscale('log')
     plt.savefig('conductivity.pdf')
@@ -249,8 +250,7 @@ if __name__ == "__main__":
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
-    # plot_conductivity(param_values)
-    # exit(0)
+    plot_conductivity(param_values)
 
     sensitivity_dir = os.path.join(output_dir, sensitivity_dirname)
     aux_functions.force_mkdir(sensitivity_dir, force=True)

@@ -45,7 +45,7 @@ parameters:
     bounds: [ 16.4545678875795, 0.3]
   - name: perm_k0
     type: lognorm
-    bounds: [ -40.3479193852247, 2.0]
+    bounds: [ -44.9530895712128, 2.0]
 #  - name: perm_kr
 #    type: lognorm
 #    bounds: [ -43.7491167668869, 0.5]
