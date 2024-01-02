@@ -52,13 +52,13 @@ def prepare_pbs_scripts(sens_config_dict, output_dir_in, np):
             'export TMPDIR=$SCRATCHDIR',
             '\n# absolute path to output_dir',
             'output_dir="' + output_dir + '"',
-            'workdir=$SCRATCHDIR'
+            'workdir=$SCRATCHDIR',
             #'\n',
             #'SWRAP="' + met["swrap"] + '"',
             #'IMG_MPIEXEC="/usr/local/mpich_4.0.3/bin/mpirun"',
             #'SING_IMAGE="' + os.path.join(endorse_root, 'endorse.sif') + '"',
             #'\n',
-            #'cd $output_dir',
+            'cd $output_dir',
             #'SCRATCH_COPY=$output_dir',
             #'python3 $SWRAP/smpiexec_prepare.py -i $SING_IMAGE -s $SCRATCH_COPY -m $IMG_MPIEXEC'
         ]
@@ -68,13 +68,15 @@ def prepare_pbs_scripts(sens_config_dict, output_dir_in, np):
     for n in range(np):
         id = solver_id(n)
         sensitivity_dir = os.path.join("$workdir", sensitivity_dirname)
-        csv_file = os.path.join(sensitivity_dir, param_dirname, "params_" + id + ".csv")
+        csv_file = "params_" + id + ".csv"
+
         sample_subdir = os.path.join(sensitivity_dir, "samples_" + id)
         sampled_data_out = os.path.join("$workdir", sampled_data_hdf(n))
         # prepare PBS script
         common_lines = create_common_lines(id)
         rsync_cmd = " ".join(["rsync -av",
                               #"--include " + os.path.join(sensitivity_dirname, empty_hdf_dirname, sampled_data_hdf(n)),
+                              #"--include " + os.path.join(sensitivity_dirname, param_dirname, "params_" + id + ".csv"),
                               "--exclude *.h5",
                               "--exclude *.pdf",
                               "--exclude " + os.path.join(sensitivity_dirname, empty_hdf_dirname),
@@ -88,6 +90,9 @@ def prepare_pbs_scripts(sens_config_dict, output_dir_in, np):
             rsync_cmd,
             ' '.join(['cp',
                       os.path.join(sensitivity_dirname, empty_hdf_dirname, sampled_data_hdf(n)),
+                      "$workdir"]),
+            ' '.join(['cp',
+                      os.path.join(sensitivity_dirname, param_dirname, csv_file),
                       "$workdir"]),
             'cd $workdir',
             'pwd',
