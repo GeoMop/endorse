@@ -187,8 +187,9 @@ def conductivity(k0, eps, delta, gamma, sigma0, a, b, c, sigma_m):
     #     return k * np.exp(gamma*(sigma_vm - sigma_tres))
 
 
-def plot_conductivity(params):
+def plot_conductivity(config_dict, params):
     import matplotlib.pyplot as plt
+    parnames = [p["name"] for p in config_dict["parameters"]]
 
     # init_sigma_m = -(42 + 19 + 14)*1e6/3
     sigma_mean = np.linspace(-120e6,7e6,200)
@@ -196,10 +197,20 @@ def plot_conductivity(params):
         # if p[4] >= p[5]:
         #     continue
         # p[[4,5]] = p[[5,4]]
-        init_sigma_m = -(p[1] + p[2] + p[3])/3
-        cond = conductivity(p[4],p[5],p[6],p[7],init_sigma_m,p[8],p[9],p[10],sigma_mean)
+        init_sigma_m = -(p[parnames.index("init_stress_x")] +
+                         p[parnames.index("init_stress_y")] +
+                         p[parnames.index("init_stress_z")])/3
+        cond = conductivity(p[parnames.index("perm_k0")],
+                            p[parnames.index("perm_eps")],
+                            p[parnames.index("perm_delta")],
+                            p[parnames.index("perm_gamma")],
+                            init_sigma_m,
+                            p[parnames.index("conductivity_a")],
+                            p[parnames.index("conductivity_b")],
+                            p[parnames.index("conductivity_c")],
+                            sigma_mean)
         plt.plot(sigma_mean/1e6, cond)
-        plt.scatter(init_sigma_m/1e6, 1000*9.81/0.001*p[4])
+        plt.scatter(init_sigma_m/1e6, 1000*9.81/0.001*p[parnames.index("perm_k0")])
 
     plt.yscale('log')
     plt.savefig('conductivity.pdf')
@@ -250,7 +261,7 @@ if __name__ == "__main__":
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
-    plot_conductivity(param_values)
+    plot_conductivity(config_dict, param_values)
 
     sensitivity_dir = os.path.join(output_dir, sensitivity_dirname)
     aux_functions.force_mkdir(sensitivity_dir, force=True)

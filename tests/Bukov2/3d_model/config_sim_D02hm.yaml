@@ -43,6 +43,9 @@ parameters:
   - name: init_stress_z
     type: lognorm
     bounds: [ 16.4545678875795, 0.3]
+  - name: init_pressure
+    type: norm
+    bounds: [ 100, 10 ]
   - name: perm_k0
     type: lognorm
     bounds: [ -44.9530895712128, 2.0]
@@ -113,7 +116,7 @@ hm_params:
     storativity: 2.998917e-07  # S = rho * g * (beta_s + nu * beta_w)
     # permeability k=6e-22 m2, dyn. viscosity mu=0.001 Pa.s, g=9.81 m.s-2
     bulk_conductivity: 5.886E-15  # K = k * rho * g /mu
-    init_pressure: 20 # 3MPa = p = h*rho*g => h = 300 m
+    init_pressure: 100 # 3MPa = p = h*rho*g => h = 300 m
 
     young_modulus: 60e9
     poisson_ratio: 0.23
