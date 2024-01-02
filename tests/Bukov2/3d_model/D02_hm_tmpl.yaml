@@ -24,7 +24,8 @@ problem: !Coupling_Sequential
           - name: sz
             scalar_field: <init_stress_z>
           - name: init_p
-            scalar_field: <init_pressure>
+            scalar_field: !FieldFormula
+              value: <init_pressure>-z
           - name: k0
             scalar_field: !FieldFormula
               value: <perm_k0>
