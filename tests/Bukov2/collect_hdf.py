@@ -18,7 +18,8 @@ from endorse.Bukov2.sample_storage import dataset_name, failed_ids_name, done_id
 from endorse.Bukov2.bukov_common import memoize, file_result
 params_name="parameters"
 
-
+reduced_sample_groups = 6
+reduced_times = [0, 1, 2, 4, 6, 8, 10, 12, 14, 16]
 
 
 #####################################š
@@ -73,13 +74,14 @@ def fill_single_hdf(out_f, in_f):
     done_ids = merge_ids(out_f, done_ids_name, in_dset.shape[0], in_done_ids)
 
     print(f"    {len(done_ids)} done and  {len(failed_ids)} failed samples out of {out_dset.shape[0]}")
+    return n_params
 
 @file_result("sampled_collected.h5")
 def collect(workdir, out_file):
     pattern = "sampled_data_*.h5"
     #print(list(workdir.glob(pattern)))
     with h5py.File(workdir / out_file, mode='a') as out_f:
-        in_files = list(workdir.glob(pattern))
+        in_files = list((workdir / "sampled_data").glob(pattern))
         for f_name in sorted(in_files):
             print(f"  {f_name.name}")
             with h5py.File(f_name, mode='r') as in_f:
@@ -198,14 +200,17 @@ def reduced_dataset(workdir, out_file, in_file):
         dset = in_f[dataset_name] 
         print("Input dset shape: ", dset.shape)
         out_shape = list(dset.shape)
-        out_shape[0] = 96
-        out_shape[1] = 5 
+        
+        n_params = 11
+        group_size = 2*(n_params+1)
+        out_shape[0] = group_size * reduced_sample_groups
+        out_shape[1] = len(reduced_times)
         print("Output dset shape: ", out_shape)
             
         # extract smaller subset
         with h5py.File(workdir / out_file, mode='w') as out_f:
             out_dset = out_f.create_dataset(dataset_name, shape=out_shape)
-            out_dset[...] = dset[0:out_shape[0], 0:2*out_shape[1]:2, :]    
+            out_dset[...] = dset[0:out_shape[0], reduced_times, :]
 
 #
 # def impute_nans_by_mean(hdf_file):

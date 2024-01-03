@@ -197,11 +197,16 @@ class BoreholeSet:
                 yield (i_phi, j_phi, bh)
 
     def _make_borehole(self, pos, y_phi, z_phi):
+        pos = np.array(pos)
         dir_unit = self.direction(y_phi, z_phi)
         length, cyl_t, bh_t, cyl_point, bh_point, yz_tangent = self.transversal_params(self.cylinder_line, np.array([*pos, *dir_unit]))
 
         abs_cyl_t = cyl_t * np.linalg.norm(self.cylinder_line[3:])
         r, l0, l1 = self.avoid_cylinder
+        dir_unit_yz = np.linalg.norm(dir_unit[1:])
+        #if not (length > r or  length > (abs_cyl_t - l1) / dir_unit[0] * dir_unit_yz or  abs_cyl_t > l1 + r) :
+        #if not (length >  r or abs_cyl_t > l1 + r):
+        #if not (length >= r or l0 >= abs_cyl_t >= l1):
         if length < r and l0 < abs_cyl_t < l1:
             return None
 
@@ -217,6 +222,22 @@ class BoreholeSet:
         #t_end = min(t_end, t_l1, t_l0)
         bh_dir = dir_unit
 
+        # For abs_cyl_t > l1, the thransversal intersection bh_point is not
+        # the closest point. The closest point between cylinder edge and the line
+        # is dicussed e.g. https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwj-i4rR1reDAxW5gP0HHYJjC5cQFnoECBMQAQ&url=https%3A%2F%2Fwww.geometrictools.com%2FDocumentation%2FDistanceToCircle3.pdf&usg=AOvVaw3YIpkGekJxKxm48hxja-CV&opi=89978449
+        # Finally it is just a quadratic equation, but as we are in hurry
+        # we use just approximation using the projection to the XY plane
+        # the line must have quite small vertical angle so it almost lies in that plane.
+
+        r, l0, l1 = self.avoid_cylinder
+        if abs_cyl_t > l1:
+            dir_unit = dir_unit / np.linalg.norm(dir_unit)
+            cylinder_corner = np.array([[l1, -r, 0], [l1, r, 0]])
+            #xy_dir = dir_unit[:2] / np.linalg.norm(dir_unit[:2])
+            t1, t2 = (cylinder_corner - pos[None, :]) @ dir_unit[:]
+            t = min(t1, t2)
+            #t = - pos[1] * xy_dir[0] / xy_dir[1]
+            bh_point = pos + dir_unit * t
 
         # print(f"({y_phi}, {z_phi}) dir: {dir} {bh_t} bh: {bh_dir} dot: {np.dot(dir, bh_dir)}")
         return np.array([pos, bh_dir, bh_point])
@@ -293,8 +314,42 @@ class BoreholeSet:
         point_1 = a1 + s * d1
 
         length = np.abs(np.dot(diff, ex_normalized))
+        point_dist = np.linalg.norm(point_1 - point_2)
+        assert np.abs(length - point_dist) < 1e-5
         return length, s, t, point_1, point_2, ez_normalized
 
+    def _distance(self,cyl, line):
+        points = np.linspace(line[0], line[1], 10)
+        line_polydata = pv.PolyData(points)
+        distances = line_polydata.compute_implicit_distance(cyl, inplace=False)['implicit_distance']
+        return np.min(distances)
+
+    def boreholes_print_sorted(self):
+        """
+        Sort boreholes by estimated distance from cylinder.
+        Print distance - borehole ID pairs.
+        :return:
+        """
+        r, l0, l1 = self.avoid_cylinder
+        cylinder = pv.Cylinder(center=self.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+        distances = np.abs([self._distance(cylinder, (p_w, p_tr)) for p_w, dir, p_tr in self.bh_list])
+        indices = np.argsort(distances)
+        for i in indices:
+            print(f"{distances[i]} | {self.bh_description(i)}")
+
+
+    def bh_description(self, i_bh):
+        pos, dir, transversal = self.bh_list[i_bh]
+        i,j,k = self.angle_ijk(i_bh)
+        y_angles = self.axis_angles(0)
+        z_angles = self.axis_angles(1)
+        y_angle = y_angles[i]
+        z_angle = z_angles[j]
+
+        pos_str =f"[{pos[0]:4.1f}, {pos[1]:4.1f}, {pos[2]:4.1f}]"
+        angle_str = f"({int(y_angle):4d}\N{DEGREE SIGN}, {int(z_angle):4d}\N{DEGREE SIGN})"
+        range_str = f"range: {tuple(self.line_bounds[i_bh])}"
+        return f"#{i_bh} {pos_str} -> {angle_str}; {range_str}"
 
     # def load_data(self, workdir, cfg):
     #     """
@@ -368,9 +423,9 @@ class BoreholeSet:
                     sample_slice = slice(i_sample,i_sample+samples_chunk_size)
                     input_chunk = np.array(input_dataset[sample_slice, :, :])
                     transformed_chunk = input_chunk[:, :, id_matrix].transpose(2, 3, 1, 0)
-                    cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
+                    #cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
                     for i, dset in enumerate(out_dsets):
-                        dset[:, :, sample_slice] = cumul_chunk[i]
+                        dset[:, :, sample_slice] = transformed_chunk[i]
         return bh_files
 
     def borohole_data(self, workdir, cfg, i_bh):
@@ -400,6 +455,10 @@ class BoreholeSet:
 
     @property
     def line_bounds(self):
+        """
+        Range of valid point indices on the borehole.
+        :return: (n_boreholes, 2)
+        """
         return self.point_lines[1]
 
 

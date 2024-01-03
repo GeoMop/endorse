@@ -15,14 +15,14 @@ def single_param_model(params):
 
 
 
-def forward_model(params):
+def forward_model(params, eps):
     P1, P2, P3, P4 = params
-    epsilon = np.random.normal(scale=0.1)  # Adding random noise
+    #epsilon = np.random.normal(scale=eps)  # Adding random noise
 
     # Toy forward model equation with modified interaction terms
-    Y = 5 * P1 + 5 * P2 + 10 * P3 + 0.1 * P4 +  3 * P1 * P4 + epsilon
-    if P1 < 0.1:
-        Y = np.NaN
+    Y = 5 * P1 + 32 * P2 + 10 * P3 + 0.1 * P4 +  10 * P1 * P4
+    # if P1 < 0.01:
+    #     Y = np.NaN
     """
     Result: replacing the NaN observations with the mean have nearly no impact on the results for 10% of NaNs
     but have very pronounced impact for 50% of Nans.
@@ -79,13 +79,15 @@ def test_salib_small():
         'num_vars': 4,
         'names': ['P1', 'P2', 'P3', 'P4'],
         'bounds': [[0, 1], [0, 1], [0, 1], [0, 1]]
+
     }
+    eps=10
 
     # Generate Saltelli samples
     param_values = sample.saltelli(problem, 1000, calc_second_order=True)
 
     # Evaluate the model for each set of parameters
-    model_evaluations = np.array([forward_model(params) for params in param_values])
+    model_evaluations = np.array([forward_model(params, eps) for params in param_values])
     mean = np.nanmean(model_evaluations)
     model_evaluations[np.isnan(model_evaluations)] = mean
 
@@ -243,7 +245,8 @@ def test_time_series_sa():
     problem = {
         'num_vars': 4,
         'names': ['P1', 'P2', 'P3', 'P4'],
-        'bounds': [[0, 1], [0, 1], [0, 1], [0, 1]]
+        'bounds': [[0, 1], [0, 1], [0, 1], [0, 1]],
+        'second_order': True
     }
 
     # Generate Saltelli samples
@@ -257,7 +260,7 @@ def test_time_series_sa():
 
     # Sensitivity of inversion
     fit(model_evaluations)
-    sobol_array = analyze.sobol_vec(model_evaluations, problem, second_order=True)
+    sobol_array = analyze.sobol_vec(model_evaluations, problem)
     sobol_indices = analyze.sobol_max(sobol_array)
     print_sensitivity_results(problem, analyze.arr_to_dict(sobol_indices))
 

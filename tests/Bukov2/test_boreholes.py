@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import timeit
 import os
-
+import pyvista as pv
 import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
 from endorse.Bukov2 import boreholes, plot_boreholes, mock
@@ -97,7 +97,11 @@ def test_borhole_set():
     bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
     print("N boreholes:", bh_set.n_boreholes)
 
-    plotter = plot_boreholes.create_scene(cfg.geometry)
+    bh_set.boreholes_print_sorted()
+
+    plotter = pv.Plotter()
+    plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
+    plot_boreholes.add_cylinders(plotter, bh_set)
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()
