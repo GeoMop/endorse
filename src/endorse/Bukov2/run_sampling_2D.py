@@ -102,8 +102,8 @@ def prepare_pbs_scripts(sens_config_dict, output_dir_in, np):
             # ' '.join(['rm', '-r', sample_subdir]),
             'ls -la',
             'mkdir -p $output_dir/sampled_data',
-            'cp ' + sampled_data_out + ' $output_dir/sampled_data',
-            #'cp -r sensitivity $output_dir',
+            'time cp ' + sampled_data_out + ' $output_dir/sampled_data',
+            #'time cp -r sensitivity $output_dir',
             'clean_scratch',
             'echo "FINISHED"'
         ]
