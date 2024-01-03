@@ -4,12 +4,14 @@ import pyvista as pv
 from vtk.util.numpy_support import numpy_to_vtk
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
+import matplotlib.colors as mcolors
 import vtk
 import os
 from xml.etree import ElementTree as ET
 import attrs
 from pathlib import Path
 from endorse.Bukov2 import bukov_common as bcommon
+from endorse.Bukov2 import bh_chambers
 
 
 def create_scene(plotter, cfg_geometry):
@@ -31,7 +33,7 @@ def add_cylinders(plotter, bh_set: 'BoreholeSet'):
     # Create a horizontal cylinder
     r, l0, l1 = bh_set.avoid_cylinder
     avoid_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-    plotter.add_mesh(avoid_cylinder, color='red')
+    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.8)
 
     r, l0, l1 = bh_set.active_cylinder
     active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
@@ -52,8 +54,18 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
     return plotter
 
 
+def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
+    values, ids = zip(*bh_tuples)
+    values = np.array(values)
+    normalized_values = (values - values.min()) / (values.max() - values.min())
+    cmap = plt.cm.get_cmap("viridis")
+    colors = cmap(normalized_values)
+    for bh_id, col in zip(ids, colors):
+        add_bh(plotter, bh_set, int(bh_id), color=col)
 
-def add_bh(plotter, bh_set, i_bh):
+
+
+def add_bh(plotter, bh_set, i_bh, color=None, label=False):
     p_w, dir, p_tr = bh_set.bh_list[i_bh]
     p_w = bh_set.transform(p_w)
     p_tr = bh_set.transform(p_tr)
@@ -64,7 +76,13 @@ def add_bh(plotter, bh_set, i_bh):
     i, j, k = bh_set.angle_ijk(i_bh)
     angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
 
-    color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
+    if color is None:
+        color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
+    if label:
+        plotter.add_point_labels([p_end], [str(i_bh)], text_color=color,
+            font_size = 50, point_size = 50,
+            render_points_as_spheres = True, always_visible = True, shadow = True
+        )
     #print(f"Adding: {bh} col: {color}")
     line = pv.Line(p_w, p_tr)
     plotter.add_mesh(line, color='grey', line_width=1)
@@ -230,20 +248,23 @@ class PlotCfg:
     bh_set : 'BoreholeSet'
     chambers : 'Chambers'
     i_bh: int
+    opt_packers: List[List[bh_chambers.PackerConfig]]
     param_names : List[str]
     show: bool
 
 
     def plot_borehole_position(self):
+        pv.start_xvfb()
         plotter = pv.Plotter(off_screen=True)
         plotter = create_scene(plotter, self.cfg.geometry)
         add_cylinders(plotter, self.bh_set)
         add_bh(plotter, self.bh_set, self.i_bh)
+        plotter.add_text(self.bh_set.bh_description(self.i_bh))
 
         camera_positions = [
-            ([-60, 0, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, -60, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, 0, 60], [0, 0, 0], [0, 1, 0])
+            ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
+            ([0, 0, 50], [0, 0, 0], [0, 1, 0])
         ]
         resolution = (1920, 1080)
 
@@ -262,29 +283,35 @@ class PlotCfg:
 
 
     def plot_chamber_data(self):
+        """
+        Plot some precomputed chamber data for selected chamber sizes.
+        :return:
+        """
         n_params = len(self.param_names)
         n_points = self.chambers.n_points
         sizes = [2, 4, 8]
+
+        chamber_data = [[self.chambers.chamber(i_begin, min(i_begin + size, n_points))
+                         for i_begin in range(0, n_points - size)]
+                            for i_size, size in enumerate(sizes)]
+        chamber_array = [i  for l in chamber_data for i in l]
+
+        sm = plt.cm.ScalarMappable(cmap=plt.cm.jet,
+                                   norm=plt.Normalize(vmin=np.min(chamber_array), vmax=np.max(chamber_array)))
+        sm.set_array([])
 
         fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
         color_values = []
         for i_param, label in enumerate(self.param_names):
             ax = axes[i_param]
-
             for i_size, size in enumerate(sizes):
-                for i_begin in range(0, n_points - size):
-                    # Calculate the color based on the chamber values
-                    i_end = min(i_begin + size, n_points)
-                    i_pos = (i_begin + i_end) // 2
-                    chamber_data = self.chambers.chamber(i_begin, i_end)
-                    #if chamber_data is None:
-                    #    continue
+                values = [l[i_param] for l in chamber_data[i_size]]
 
-                    value = chamber_data[i_param]
-                    color_values.append(value)
-                    # Add a horizontal stripe to the plot
-                    ax.broken_barh([(i_pos, 1)], (i_size+0.1, 0.8), facecolors=plt.cm.viridis(value))
-
+                x_pos = size // 2 + np.arange(0, n_points - size)
+                colors = sm.to_rgba(np.array(values))
+                assert len(x_pos) == len(colors)
+                width = np.ones(len(x_pos))
+                ax.broken_barh(list(zip(x_pos, width)), (i_size+0.1, 0.8), facecolors=colors)
 
             ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
             ax.set_yticks([0.5, 1.5, 2.5])
@@ -294,9 +321,6 @@ class PlotCfg:
         axes[0].set_title("Size", pad=-20)  # Title above the first axis
 
         # Create a common colorbar for all subplots
-        sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis,
-                                   norm=plt.Normalize(vmin=min(color_values), vmax=max(color_values)))
-        sm.set_array([])
         cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
         fig.colorbar(sm, cax=cbar_ax)
 
@@ -308,14 +332,18 @@ class PlotCfg:
         return fname
 
     def plot_mean_time_fun(self):
-        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
-
+        """
+        Goal: check projected pressures on the borehole
+        :return:
+        """
+        pressures = self.chambers.bh_data
+        # (n_points - 1, n_times, n_samples)
         # Calculate the mean over the last dimension (samples)
         mean_pressures = np.mean(pressures, axis=2)
         selected_pressures = mean_pressures[::4]
 
         # Create a colormap
-        cmap = plt.cm.viridis
+        cmap = plt.cm.jet   # better discriminatino of points then viridis
         colors = cmap(np.linspace(0, 1, selected_pressures.shape[0]))
 
         # Plotting
@@ -342,45 +370,285 @@ class PlotCfg:
         return fname
 
     def plot_relative_residual(self):
-        pressures = self.chambers.bh_data[2:] - self.chambers.bh_data[:-2]
-        # Calculate the relative residual
-        mean_pressures = pressures.mean(axis=2)
-        std_pressures = pressures.std(axis=2)
-        relative_residual = (pressures - mean_pressures[:, :, np.newaxis]) / std_pressures[:, :, np.newaxis]
+        arr_copy = self.chambers.bh_data
+        orig_arr = self.chambers.orig_bh_data
+        outlier_mask = self.chambers.outlier_mask
 
-        # Number of points and times
-        n_points, n_times, _ = pressures.shape
+        arr_copy = np.maximum(arr_copy, 0.1)
+        # Compute the time mean on arr_copy
+        time_mean_copy = np.nanmean(arr_copy, axis=1, keepdims=True)
 
-        # Set up the color map for different times
-        colors = plt.cm.rainbow(np.linspace(0, 1, n_times))
+        # Normalize orig_arr and arr_copy by dividing by the time mean of arr_copy
+        normalized_orig_arr = orig_arr / time_mean_copy
+        normalized_arr_copy = arr_copy / time_mean_copy
 
-        # Create the figure object
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # Calculating medians, quartiles, min, and max over times for the normalized copy
+        min_values, Q1, median, Q3,  max_values = [
+            np.nanpercentile(normalized_arr_copy, q, axis=(1,2))
+            for q in [0, 25, 50, 75, 100]
+            ]
 
-        # Plotting
+        n_points, n_times, _ = orig_arr.shape
+        colors = plt.cm.rainbow(np.linspace(0, 1, n_times))  # Different colors for each time
+
+        # Create plots
+        fig, ax1  = plt.subplots(1,1, figsize=(12, 12))
         for i in range(n_points):
-            for j in range(n_times):
-                # Deterministic jitter in x-coordinates based on time index
-                y = relative_residual[i, j, :]
-                x = np.full_like(y, i + 0.1 * (j - n_times / 2))
+            #for j in range(n_times):
 
-                ax.scatter(x, y, color=colors[j], label=f'Time {j}' if i == 0 else "")
+            # Plot min and max values as thin vertical lines
+            ax1.bar(i, max_values[i] - min_values[i], width=0.1, bottom=min_values[i], color='black', align='center')
+            ax1.bar(i, Q3[i] - Q1[i], width=0.5, bottom=Q1[i], color='blue', align='center')
+            ax1.bar(i, 0.01, width=0.6, bottom=median[i]-0.005, color='red', align='center')
 
+        ax = ax1
+        #ax.set_yscale('log')
         ax.set_xlabel('Point')
-        ax.set_ylabel('Relative Residual')
-        ax.set_title('Grouped Scatter Plot of Relative Residuals')
-        ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_ylabel('Log of (p / p.mean)')
+        #ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.set_xticks(range(n_points))
-        ax.grid(True)
-        fig.tight_layout()
-        fname = self.workdir / "residual.pdf"
+        #ax.grid(True)
+        ax.set_title('Relative Residuals - box plot over times and samples')
+        #ax2.set_title('Relative Residuals - box plot over samples of time sequence variance')
+        #fig.tight_layout()
+        fname = self.workdir / "residual_range.pdf"
         fig.savefig(fname)
         return fname
+
+    # Example usage
+    # plot_boxplot_style_changes(orig_arr, arr_copy, outlier_mask)
+
+    # def plot_relative_residual(self):
+    #     """
+    #     Goal: check projected pressures on the borehole
+    #     :return:
+    #     """
+    #     pressures = self.chambers.bh_data
+    #     # Calculate the relative residual with respect to mean over samples and points
+    #     #
+    #     mean_pressures = pressures.mean(axis=(0,2))
+    #     #std_pressures = pressures.std(axis=2)
+    #     relative_pressure = pressures / mean_pressures[np.newaxis, :, np.newaxis]
+    #     rel_p_time_mean = relative_pressure.mean(axis=1)
+    #     rel_p_time_std = relative_pressure.mean(axis=1)
+    #     rel_p_time_mean_QX = [rel_p_time_mean.percentile(p, axis=2)
+    #
+    #     # Number of points and times
+    #     n_points, n_times, _ = pressures.shape
+    #
+    #     # Set up the color map for different times
+    #     colors = plt.cm.rainbow(np.linspace(0, 1, n_times))
+    #
+    #     # Create the figure object
+    #     fig, ax = plt.subplots(figsize=(12, 6))
+    #
+    #     # Plotting
+    #     for i in range(n_points):
+    #         for j in range(n_times):
+    #             # Deterministic jitter in x-coordinates based on time index
+    #             y = relative_residual[i, j, :]
+    #             x = np.full_like(y, i + 0.1 * (j - n_times / 2))
+    #
+    #             ax.scatter(x, y, color=colors[j], label=f'Time {j}' if i == 0 else "")
+    #
+    #     ax.set_xlabel('Point')
+    #     ax.set_ylabel('Relative Residual')
+    #     ax.set_title('Grouped Scatter Plot of Relative Residuals')
+    #     ax.legend(title='Time', bbox_to_anchor=(1.05, 1), loc='upper left')
+    #     ax.set_xticks(range(n_points))
+    #     ax.grid(True)
+    #     fig.tight_layout()
+    #     fname = self.workdir / "residual.pdf"
+    #     fig.savefig(fname)
+    #     return fname
+
+    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col):
+        """
+        Plot a stacked bar plot for the given data.
+
+        Args:
+        ax (matplotlib.axes.Axes): Axis object to plot on.
+        data_array (numpy.array): Array of shape (n_chambers, n_params).
+        packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
+        """
+        # Invert the y-axis
+        n_chambers, n_params = data_array.shape
+        for i in range(n_params):
+            for j in range(n_chambers):
+                width = packers[j + 1] - packers[j]
+                color = cmap.to_rgba(data_array[j, i])
+                ax.barh(i, width, left=packers[j], color=color)
+                ax.axvline(x=packers[j], color='black', linewidth=0.5, ymin=i / n_params,
+                           ymax=(i + 1) / n_params)
+                if col == 0:
+                    ax.set_yticks(range(n_params))
+                    ax.set_yticklabels(self.param_names)
+
+        #ax.set_yticks([])
+
+        #ax.set_xlabel('Chamber Length')
+
+    def plot_best_packers_st(self):
+        data_array = [[p.st_values[:,:]  for p in l] for l in self.opt_packers]
+        packers = [[p.packers for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers)
+        fname = self.workdir / "optim_packers_st.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def plot_best_packers_full(self):
+        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
+        packers = [[p.packers for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers)
+        fname = self.workdir / "optim_packers_full.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def _plot_best_packers(self, data_array, packers):
+        """
+        Goal: show the packer positions of the bes variants, compare indices
+        """
+        n_params = self.chambers.n_params
+        n_variants = len(data_array[0])
+        threshold = 1e-3
+        data_array = np.maximum(data_array, threshold)
+        max_sobol = np.max(data_array)
+        print("Max sobol: ", max_sobol)
+
+        cmap = plt.cm.jet   # better discriminatino of points then viridis
+        sm = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(threshold, max_sobol))
+        sm.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
+
+        #sm = combined_mapper(max_sobol, threshold)
+
+        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 10),  sharex='col', sharey='row')
+                                #constrained_layout=True,)
+
+        for i in range(n_variants):
+            for j in range(n_params):
+        # for i in range(1):
+        #     for j in range(1):
+                ax = axs[i, j] #if n_variants > 1 else axs[j]
+                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j)
+
+                if i == 0:
+                    # Set column labels (parameter names) for the top row
+                    ax.set_title(self.param_names[j])
+
+                if j == 0:
+                    ax.invert_yaxis()
+                    # Set row labels (variant indices) for the first column
+                    ax.set_ylabel(f'Variant {i + 1}')
+
+        ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, max_sobol]
+        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.015, pad=0.05,
+                            ticks=ticks)
+
+        #fig.tight_layout()
+        return  fig
 
     def all(self):
         plots = [
             *self.plot_borehole_position(),
             self.plot_chamber_data(),
             self.plot_mean_time_fun(),
-            self.plot_relative_residual()]
+            self.plot_relative_residual(),
+            self.plot_best_packers_st(),
+            self.plot_best_packers_full()
+        ]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
+
+
+# def create_custom_colormap(max_value=2.0, threshold=1e-4, n_points=20):
+#     """
+#     Create a custom colormap with a logarithmic transition from threshold to 1.0.
+#
+#     Args:
+#     threshold (float): Threshold value up to which the color is white.
+#     max_value (float): Maximum value for the transition to green.
+#     n_points (int): Number of points to approximate the logarithmic transition.
+#
+#     Returns:
+#     LinearSegmentedColormap: The custom colormap.
+#     """
+#     # Ensure the threshold and max_value are within a valid range
+#     threshold = min(max(threshold, 1e-10), max_value)  # Avoid division by zero in log
+#
+#     # Generate points for logarithmic transition
+#     log_min = np.log(threshold)
+#     log_max = np.log(1)
+#     log_points = np.exp(np.linspace(log_min, log_max, n_points))
+#
+#     # Create the colormap data
+#     cdict = {'red': [], 'green': [], 'blue': []}
+#     last_val = 0
+#     for val in log_points:
+#         norm_val = val / max_value
+#         r = min(val, 1)
+#         g = min(max(val - 1, 0), 1)
+#         cdict['red'].append((norm_val, r, r))
+#         cdict['green'].append((norm_val, g, g))
+#         cdict['blue'].append((norm_val, 0, 0))
+#         last_val = norm_val
+#
+#     # Add final point for max_value
+#     cdict['red'].append((1.0, 0.0, 0.0))
+#     cdict['green'].append((1.0, 1.0, 1.0))
+#     cdict['blue'].append((1.0, 0.0, 0.0))
+#
+#     # Create the colormap
+#     custom_cmap = LinearSegmentedColormap('custom_colormap', cdict)
+#     return custom_cmap
+
+
+def create_value_mapper(threshold=1e-3, max_value=1.0):
+    """
+    Create a value mapping function for the custom colormap.
+
+    Args:
+    threshold (float): Threshold value for the logarithmic transition.
+    max_value (float): Maximum value of the data.
+
+    Returns:
+    function: A function that maps input values to the normalized range (0, 1).
+    """
+    T = threshold
+    M = max_value
+    # Calculate constants a, b, and c
+    b = (T + M - 2) / (1 - T)
+    a = 1 / np.log((T + M - 1) ** 2)
+    c = 1 - b * T
+
+    # Define the function
+    def func(x):
+        log_arg = b * x + c
+        return a * np.log(log_arg)
+
+    def inv(y):
+        return (np.exp(y / a) - c) / b
+
+    return func, inv
+
+def create_custom_colormap():
+    """
+    Create a custom colormap for the transformed value range.
+
+    Returns:
+    LinearSegmentedColormap: The custom colormap.
+    """
+    cdict = {
+        'red':   ((0.0, 1.0, 1.0), (0.5, 1.0, 1.0), (1.0, 0.0, 0.0)),
+        'green': ((0.0, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 1.0, 1.0)),
+        'blue':  ((0.0, 1.0, 1.0), (0.5, 0.0, 0.0), (1.0, 0.0, 0.0))
+    }
+    return mcolors.LinearSegmentedColormap('custom_colormap', cdict)
+
+def combined_mapper(max_value, threshold=1e-3):
+    _forward, _inverse = create_value_mapper(threshold, max_value)
+    value_mapper = mcolors.FuncNorm((_forward, _inverse), vmin=0, vmax=max_value)
+
+    custom_cmap = create_custom_colormap()
+    #norm = mcolors.Normalize(vmin=0, vmax=max_value)
+    #cmapper = lambda x : custom_cmap(value_mapper(norm.inverse(x)))
+    sm = plt.cm.ScalarMappable(norm=value_mapper, cmap=custom_cmap)
+    return sm

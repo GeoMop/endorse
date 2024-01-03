@@ -4,6 +4,7 @@ import itertools
 from endorse.Bukov2 import boreholes
 from endorse.sa import analyze
 from endorse.Bukov2 import sobol_fast
+from endorse import common
 import numpy as np
 from endorse.sa.analyze import sobol_vec
 from functools import cached_property
@@ -11,9 +12,11 @@ from functools import cached_property
 @attrs.define(slots=False)
 class Chambers:
     sa_problem : Dict[str, Any]
-    bh_data : np.ndarray
+    orig_bh_data : np.ndarray
+    bounds: Tuple[int, int]
     packer_size : int
     min_chamber_size : int
+    noise: float
     sobol_fn : Any = sobol_fast.vec_sobol_total_only                 # = analyze.sobol_vec
 
 
@@ -21,10 +24,11 @@ class Chambers:
     @classmethod
     def from_bh_set(cls, workdir, cfg, bh_set:boreholes.BoreholeSet,  i_bh:int, sa_problem:Dict[str, Any], sobol_fn) -> 'Chambers':
         bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
-
+        bounds = bh_set.line_bounds[i_bh]
         return cls(
             sa_problem,
-            bh_data,
+            bh_data[:, 1:,:],   # remove zero time, as it has zero variance
+            bounds,
             sobol_fn = sobol_fn,
             **cfg.chambers)
 
@@ -51,6 +55,68 @@ class Chambers:
         amax_array = np.take_along_axis(array, i_variants, axis=axis).squeeze(axis=axis)
         return amax_array
 
+    @cached_property
+    def _detect_outliers(self):
+        arr = self.orig_bh_data
+        # Create a mask for NaNs and Infs
+        nan_inf_mask = np.isnan(arr) | np.isinf(arr)
+
+        # Create a copy of the array for further processing
+        arr_copy = arr.copy()
+
+        # Replace Infs with NaNs in the copy
+        arr_copy[nan_inf_mask] = np.nan
+
+        # Calculate quartiles and IQR across the last axis, ignoring NaNs
+        Q1 = np.nanpercentile(arr_copy, 25, axis=2, keepdims=True)
+        Q3 = np.nanpercentile(arr_copy, 75, axis=2, keepdims=True)
+        IQR = Q3 - Q1
+
+        # Determine outlier criteria
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+
+        # Detect outliers on the copy
+        outlier_mask = (arr_copy < lower_bound) | (arr_copy > upper_bound)
+        outlier_mask = nan_inf_mask
+
+        # Calculate mean of non-outliers, ignoring NaNs
+        non_outlier_mean = np.nanmean(arr_copy, axis=2, keepdims=True)
+
+        # Replace outliers in the original array with the mean of non-outliers
+        np.putmask(arr_copy, outlier_mask, non_outlier_mean)
+        assert arr_copy.shape == arr.shape
+
+        return outlier_mask, arr_copy
+
+    @property
+    def outlier_mask(self):
+        return self._detect_outliers[0]
+
+    @property
+    def bh_data(self):
+        """
+        (n_points, n_times, n_samples)
+        :return:
+        """
+        return self._detect_outliers[1]
+
+    @cached_property
+    def cumul_bh_data(self):
+        return np.cumsum(self.bh_data, axis=0)
+
+    @property
+    def n_groups(self):
+        n_params = self.n_params
+        group_size = 2 * (n_params + 1)
+        return self.bh_data.shape[-1] // group_size
+
+    @cached_property
+    def noise_vectors(self):
+        a_noise = self.noise * np.random.randn(self.n_groups)
+        b_noise = self.noise * np.random.randn(self.n_groups)
+        return a_noise, b_noise
+
     def eval_from_chambers_sa(self, chamber_data, sobol_fn):
         """
         chamber_data (n_chambers, n_times, n_samples)
@@ -62,11 +128,39 @@ class Chambers:
         """
 
         n_chambers, n_times, n_samples = chamber_data.shape
-        ch_data = chamber_data.reshape(-1, n_samples)
-        sobol_array = sobol_fn(ch_data, self.sa_problem)
+        n_params = self.n_params
+        group_size = 2 * (n_params + 1)
+        n_groups = n_samples // group_size
+
+        ch_data = chamber_data.reshape(-1, n_groups, group_size)
+        a_noise, b_noise = self.noise_vectors
+
+        group_size = 2 * (n_params + 1) + 2
+        ch_data_with_noise = np.empty((ch_data.shape[0], n_groups, group_size))
+        # A matrix eval
+        ch_data_with_noise[:, :, 0] = ch_data[:,:,0] + a_noise
+        # AB matrix eval
+        ch_data_with_noise[:, :, 1:n_params + 1] = ch_data[:, :, 1:n_params + 1] + a_noise[None, :, None]
+        ch_data_with_noise[:, :, n_params + 1] = ch_data[:, :, 0] + b_noise
+        # BA matrix eval
+        ch_data_with_noise[:, :, n_params+2:2*n_params + 2] = ch_data[:, :, n_params + 1:2*n_params+1] + b_noise[None, :, None]
+        ch_data_with_noise[:, :, 2*n_params + 2] = ch_data[:, :, 2*n_params+1] + a_noise
+        # B matrix eval
+        ch_data_with_noise[:, :, 2 * n_params + 3] = ch_data[:,:, 2*n_params+1] + b_noise
+
+        problem = dict(self.sa_problem)
+        problem['num_vars'] += 1
+
+        sobol_array = sobol_fn(ch_data_with_noise.reshape(ch_data.shape[0], -1), problem)    # (:, n_indices)
         sobol_array = np.nan_to_num(sobol_array, nan=0.0)
         sobol_array[np.isinf(sobol_array)] = 0
-        sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params, -1)# n_chambers
+        #var = np.var(ch_data, axis=1)
+        #noise_scale = var / (var + self.noise**2)
+        #sobol_array[:, :, :] *= noise_scale[:, None, None]
+        sobol_array = sobol_array.reshape(n_chambers, n_times, self.n_params+1, -1)
+
+        # remove noise indices
+        sobol_array = sobol_array[:, :, :-1, :]
 
         # Compute maximum over times
         max_sobol = self.sobol_max(sobol_array, axis = 1)  # max over times with respect to total indices
@@ -80,7 +174,7 @@ class Chambers:
         for begin, end in chambers:
                 chamber_begin = begin
                 chamber_size = (end - chamber_begin)
-                mean_value = (self.bh_data[end, :, :] - self.bh_data[chamber_begin, :, :]) / chamber_size
+                mean_value = (self.cumul_bh_data[end, :, :] - self.cumul_bh_data[chamber_begin, :, :]) / chamber_size
                 chamber_means.append(mean_value)
 
         chamber_means = np.stack(chamber_means)
@@ -96,10 +190,11 @@ class Chambers:
         (n_chamber_variants, n_params)
         :return:
         """
+        min_idx, max_idx = self.bounds
         chambers = [
             (begin, end)
-            for begin in range(self.n_points - self.min_chamber_size)
-                for end in range(begin + self.min_chamber_size, self.n_points)
+            for begin in range(min_idx, max_idx - self.min_chamber_size)
+                for end in range(begin + self.min_chamber_size, max_idx)
             ]
         index = np.full((self.n_points, self.n_points), -1, dtype=np.int32)
         for i_chamber, (begin, end) in enumerate(chambers):
@@ -112,20 +207,24 @@ class Chambers:
         if i_chamber > 0:
             return data[i_chamber, :]
         else:
+            #return np.full(self.n_params, np.nan)
             return np.zeros(self.n_params)
     #
     # @property
     # def index(self):
     #     return self.all_chambers[0]
 
-    def packer_config(self, packers):
-        chambers = zip(packers[:-1], packers[1:])
+    def packer_config(self, packers, st_values):
+        chambers = list(zip(packers[:-1], packers[1:] - self.packer_size))
+        sensitivites = np.array([self.chamber(i, j) for i, j in chambers])
+
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
-        return PackerConfig(packers, full_sobol)
+        return PackerConfig(packers, sensitivites, full_sobol)
 
 @attrs.define(slots=False)
 class PackerConfig:
     packers: np.ndarray       # (n_packers,) int ; positions of the ends of the packers,
+    st_values: np.ndarray
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
     def __getstate__(self):
@@ -166,6 +265,7 @@ class PackerConfig:
 def packers_eval(chambers_obj, packers, weights):
     chambers = zip(packers[:-1], packers[1:])
     sensitivites = np.array([chambers_obj.chamber(i, j - chambers_obj.packer_size) for i, j in chambers])
+    #sensitivites = np.nan_to_num(sensitivites, nan=0.0)
     # shape: (n_chamberes = 3, n_params)
     return weights[0] * np.max(sensitivites, axis=0) + weights[1] * np.mean(sensitivites, axis=0)
 
@@ -185,10 +285,11 @@ def optimize_packers(cfg, chambers: Chambers):
     total_items = n_points - (n_packers - 1) * chambers.min_packer_distance + n_packers - 1
     combinations = list(itertools.combinations(range(total_items), n_packers))
     packers = np.array([combination_to_packers(chambers, comb) for comb in combinations], dtype=np.int32)
+    np.random.shuffle(packers)    # to avoid prior preferences in position
     values = [packers_eval(chambers, p, weights) for p in packers]
     # shape (n_combinations, n_params)
     indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
-    opt_packer_configs = [[chambers.packer_config(packers[indices[i_best, i_param]]) for i_best in range(n_largest)]
+    opt_packer_configs = [[chambers.packer_config(packers[indices[i_best, i_param]], values[indices[i_best, i_param]]) for i_best in range(n_largest)]
         for i_param in range(n_params)]
 
     return opt_packer_configs

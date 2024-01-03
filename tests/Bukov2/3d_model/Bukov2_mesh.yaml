@@ -108,8 +108,8 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    #force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
-    force: False
+    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    #force: False
     zk_30:
       invert_xy: False
       transform_shift: [0, -5, 1.8]

@@ -89,3 +89,4 @@ tests/Bukov2/3d_model/borehole_data
 tests/Bukov2/3d_pressure_results
 tests/Bukov2/borehole_data
 tests/Bukov2/borehole_data_tst
+tests/Bukov2/3d_model/PE_*
