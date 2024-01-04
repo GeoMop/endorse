@@ -9,6 +9,17 @@ import PyPDF2
 import img2pdf
 import os
 from pathlib import Path
+import numpy as np
+
+def soft_lim_pressure(pressure):
+    atm_pressure = 1.013 * 1e5 / 9.89 / 1000    # atmospheric pressure in [m] of water
+    abs_pressure = pressure + atm_pressure
+    # Limit negative pressure
+    vapour_pressure = 0.13   # [m] = 1300 Pa
+    epsilon = 10
+    soft_max = lambda a, b : 0.5 * (a + b + np.sqrt((a-b) ** 2 + epsilon))
+    soft_pressure = soft_max(vapour_pressure, abs_pressure)
+    return soft_pressure
 
 def create_combined_pdf(file_list, output_filename):
     """
@@ -111,15 +122,15 @@ def memoize(func):
         val = pkl_read(workdir, fname)
         force = kwargs.pop('force', False)
         if force is True or val is None:
-            print(f"Execute {func.__name__}  ...", end='')
+            print(f"Execute {func.__name__}  {args}")
             start = time.process_time_ns()
             val = func(workdir, *args, **kwargs)
             sec = (time.process_time_ns() - start) / 1e9
-            print(f"[{sec}] s.")
+            print(f"... [{sec}] s.")
 
             pkl_write(workdir, val, fname)
         else:
-            print(f"Skip {func.__name__}.")
+            print(f"Skip {func.__name__} {args}.")
         return val
     return wrapper
 
@@ -133,12 +144,20 @@ def file_result(filename):
     :return:
     """
     def decorator(func):
-        def wrapper(workdir, *args, **kwargs):
+        def wrapper(workdir: Path, *args, **kwargs):
             fname = workdir / filename
             if not fname.exists():
+                tmp_fname = fname.with_stem(fname.stem + "_tmp_")
                 print(f"Execute {filename} = {func.__name__}  ...", end='')
                 start = time.process_time_ns()
-                val = func(workdir, filename, *args, **kwargs)
+                try:
+                    val = func(workdir, tmp_fname, *args, **kwargs)
+                    assert val == tmp_fname
+                    tmp_fname.rename(fname)
+                    val = fname
+                except Exception as e:
+                    tmp_fname.unlink(missing_ok=True)
+                    raise e
                 sec = (time.process_time_ns() - start) / 1e9
                 print(f"[{sec}] s.")
             else:

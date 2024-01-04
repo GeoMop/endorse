@@ -1,5 +1,6 @@
 import sys
 import logging
+import shutil
 
 import h5py
 import numpy as np
@@ -8,33 +9,14 @@ import pyvista as pv
 
 from endorse import common
 from endorse.Bukov2.sample_storage import dataset_name, failed_ids_name, done_ids_name
-from endorse.Bukov2.bukov_common import memoize, file_result, load_cfg
+from endorse.Bukov2.bukov_common import memoize, file_result, load_cfg, soft_lim_pressure
 from endorse.Bukov2 import sa_problem, sobol_fast
 
 #params_name = "parameters"
 
 
+
 #####################################š
-
-@memoize
-def chracterize_samples(workdir, in_file):
-    print("Characterize samples...")
-    with h5py.File(workdir / in_file, mode='r') as in_f:
-        in_dset = in_f[dataset_name]
-        n_samples, n_times, n_els = in_dset.shape
-        s_max = np.empty(n_samples)
-        s_min = np.empty(n_samples)
-        stride = 8
-        for i_sample in range(0, n_samples, stride):
-            print("  i_sample: ", i_sample)
-            step = min(stride, n_samples - i_sample)
-            frame = slice(i_sample, i_sample + step)
-            sample = np.array(in_dset[frame, :, :])
-            s_max[frame] = np.max(sample, axis=(1, 2))
-            s_min[frame] = np.min(sample, axis=(1, 2))
-    return s_max, s_min
-
-
 
 def get_shape(workdir, fname):
     with h5py.File(workdir / fname, mode='r') as in_f:
@@ -44,19 +26,30 @@ def get_in_slice(workdir, in_file, in_slice):
     with h5py.File(workdir / in_file, mode='r') as in_f:
         in_dset = in_f[dataset_name]
         pressure = np.array(in_dset[in_slice])
-    atm_pressure = 1.013 * 1e5 / 9.89 / 1000    # atmospheric pressure in [m] of water
-    abs_pressure = pressure + atm_pressure
-    # Limit negative pressure
-    vapour_pressure = 0.13   # [m] = 1300 Pa
-    epsilon = 0.1
-    soft_max = lambda a, b : a + b + np.sqrt((a-b) ** 2 + epsilon)
-    soft_pressure = soft_max(vapour_pressure, abs_pressure)
-    return soft_pressure
+    return soft_lim_pressure(pressure)
 
 def read_time_frame(workdir, in_file, i_time):
     time_frame =  get_in_slice(workdir, in_file, (slice(None), i_time, slice(None)))
     print("time frame: ", time_frame.shape)
     return time_frame
+
+@memoize
+def characterize_samples(workdir, in_file):
+    print("Characterize samples...")
+    n_samples, n_times, n_els = get_shape(workdir, in_file)
+    s_max = np.empty(n_samples)
+    s_min = np.empty(n_samples)
+    stride = 8
+    for i_sample in range(0, n_samples, stride):
+        print("  i_sample: ", i_sample)
+        step = min(stride, n_samples - i_sample)
+        frame = slice(i_sample, i_sample + step)
+        sample = get_in_slice(workdir, in_file, (frame, slice(None), slice(None)))
+        s_max[frame] = np.max(sample, axis=(1, 2))
+        s_min[frame] = np.min(sample, axis=(1, 2))
+    return s_max, s_min
+
+
 
 """
 Call the function only if the given file does not exist.
@@ -117,7 +110,7 @@ def mesh_sobol_st(workdir, out_file, in_file):
             dset = out_f.require_dataset(name, (n_times, n_els), dtype='float64')
             dset[i_time, :] = data
 
-    s_max, s_min = chracterize_samples(workdir, in_file)
+    s_max, s_min = characterize_samples(workdir, in_file)
     samples_sorted = np.argsort(s_max - s_min)
 
     print("Compute Pressure fields ...")
@@ -128,8 +121,8 @@ def mesh_sobol_st(workdir, out_file, in_file):
         write_group(name, sample, all_times)
 
     write_quantile('max_sample', 1.0)
-    write_quantile('med_sample', 0.9)
-    write_quantile('max_sample', 0.5)
+    write_quantile('q90_sample', 0.9)
+    write_quantile('med_sample', 0.5)
 
     print("Compute Sobol indices ...")
     for i_time in range(n_times):
@@ -206,5 +199,12 @@ def main(workdir):
 
 
 if __name__ == '__main__':
-    workdir = Path(sys.argv[1]).absolute()
+    arg_dict = dict(enumerate(sys.argv))
+    workdir = Path(arg_dict[1]).absolute()
+    force = arg_dict.get(2, False)
+    if force:
+        (workdir / "characterize_samples.pkl").unlink(missing_ok=True)
+        (workdir / "mesh_sobol_st.h5").unlink(missing_ok=True)
+        sens_dir = (workdir / "sensitivity")
+        shutil.rmtree(sens_dir, ignore_errors=True)
     main(workdir)
