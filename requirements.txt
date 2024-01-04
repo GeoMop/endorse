@@ -5,6 +5,7 @@ deap
 salib
 PyPDF2
 img2pdf
+cartopy
 
 # endorse
 pyvista
