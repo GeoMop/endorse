@@ -26,12 +26,48 @@ The entrypoints are:
     module load python/3.9.12-gcc-10.2.1-rg2lpmk
     ```
 
-2. Plan and compute raw samples. (TBD by Paulie)
+    PE virtual environment using container (suppose having image `endorse.sif`):
+    ```
+    singularity shell endorse.sif
+    ./package/setup_venv_bayes.sh
+    ```
+    PE note:
+    Currently (4.1.24) tested the whole computation chain inside singularity
+    container with `venv_Bayes` environment without problem.
+    Therefore, no module is needed. Working branch `PE_sens_2D`.
 
-4. Collect samples. 
+    TODO:
+    - merge venv environments
+    - merge configs
+    - merge `PE_sens_2D` into `main`.
+
+2. Plan and compute raw samples.
+
+    Sampling itself is run by
     ```
     cd tests/Bukov2
-    ./ptyhon collect_hdf.py <dir_with_hdfs>
+    ./run_test_D02
+    ```
+    which calls `bin/endorse-bukov` which prepares sampling PBS jobs
+    and depends on:
+    - configuration file `3d_model/config_sim_D02hm.yaml`
+    - template file `3d_model/D02_hm_tmpl.yaml`
+    - gmsh mesh `3d_model/Bukov_both_h100_31k.msh2`
+
+    PE The rest (3.4....) is gathered in shell script which can be run
+    inside singularity container:
+    ```
+    qsub -I -q charon -l walltime=12:00:00 -l select=1:ncpus=1:mem=20gb
+    ...
+    singularity shell endorse.sif
+    cd tests/Bukov2
+    ./run_postprocess_D02
+    ```
+
+3. Collect samples.
+    ```
+    cd tests/Bukov2
+    ./python collect_hdf.py <dir_with_hdfs>
     ```
     This would merge HDFs into single file and in the second phase 
     the complete sample groups are extracted. Few missing values are imputted 
@@ -40,7 +76,7 @@ The entrypoints are:
 4. Compute field Sobol Total indices:
     ```
     cd tests/Bukov2
-    ./ptyhon sobol_data.py <workdir>
+    ./python sobol_data.py <workdir>
     ```
     Expects: 
      `Bukov2_mesh.yaml` as cfg, and paths in `cfg.simulation`    
@@ -53,20 +89,20 @@ The entrypoints are:
 
         qsub -I -q charon -l walltime=12:00:00 -l select=1:ncpus=1:mem=20gb
 
-7. Extract borehole data.
+5. Extract borehole data.
     ```
     cd tests/Bukov2
-    ./ptyhon borehole_data.py <dir_with_hdfs>
+    ./python borehole_data.py <dir_with_hdfs>
     ```
     Workdir `<dir_with_hdfs>` must contain the cofig file `Bukov2_mesh.yaml`.
     For every borehole the sample data in discrete points are extracted. 
     Boreholes are in separate files under `workdir/borehole_data` in oredr to 
     simplify parallel processing.  
 
-5. Borehole calculations.
+6. Borehole calculations.
    ```
     cd tests/Bukov2
-    ./ptyhon process_boreholes.py <dir_with_hdfs> [submit] [i_bh]
+    ./python process_boreholes.py <dir_with_hdfs> [submit] [i_bh]
    ```
    If `i_bh` is given, single borehole calculation:
    Borehole precalculation. 
@@ -81,7 +117,7 @@ The entrypoints are:
    The packer configuration results are stored there together with generated plots.
 
    Optimization of all boreholes writes the resulting list into 
-6. Global measurement optimization.
+7. Global measurement optimization.
 ## original Endorse readme for reference
 
 The software implements specialized safety calculations for the excavation disturbed zone (EDZ)
