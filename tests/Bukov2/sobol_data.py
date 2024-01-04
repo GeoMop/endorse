@@ -11,7 +11,7 @@ from endorse.Bukov2.sample_storage import dataset_name, failed_ids_name, done_id
 from endorse.Bukov2.bukov_common import memoize, file_result, load_cfg
 from endorse.Bukov2 import sa_problem, sobol_fast
 
-params_name = "parameters"
+#params_name = "parameters"
 
 
 #####################################š
@@ -67,6 +67,7 @@ def mesh_sobol_st(workdir, out_file, in_file):
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     n_params = problem['num_vars']
+    param_names = problem['names']
 
 
     n_samples, n_times, n_els = get_shape(workdir, in_file)
@@ -142,7 +143,8 @@ def mesh_sobol_st(workdir, out_file, in_file):
         print("   sobol: ", sobol.shape)
         write_group('mean', np.mean(time_frame, axis=0), i_time)
         write_group('std', np.std(time_frame, axis=0), i_time)
-        for i, param in enumerate(params_name):
+        assert sobol.shape[1] == len(param_names)
+        for i, param in enumerate(param_names):
             write_group(param, sobol[:, i], i_time)
 
     return out_file
