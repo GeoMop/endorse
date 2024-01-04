@@ -7,11 +7,10 @@
 simulation:
     cfg:  "config_sim.yaml"
     mesh: "simulation_mesh.vtu" 
-    hdf:  "sampled_reduced.h5"
+    hdf:  "sampled_fixed.h5"
 
 pbs:
-    # for proecess_boreholes.py
-    n_workers: 12
+    n_workers: 160
     queue: charon
 
 local:
@@ -108,8 +107,8 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
-    #force: False
+    #force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: False
     zk_30:
       invert_xy: False
       transform_shift: [0, -5, 1.8]
@@ -139,7 +138,8 @@ boreholes:
 chambers: # Parameters of Chamber sensitivity precalculation
     packer_size: 2          # Size of packer in terms of points
     min_chamber_size: 2     # Size in terms of points
-
+    noise: 5.0 # [m] = [0.01 MPa]
+    
 chambers_optimize:
     todo: False
 
