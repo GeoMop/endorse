@@ -27,7 +27,8 @@ The entrypoints are:
     ```
 
 2. Plan and compute raw samples. (TBD by Paulie)
-3. Collect samples. 
+
+4. Collect samples. 
     ```
     cd tests/Bukov2
     ./ptyhon collect_hdf.py <dir_with_hdfs>
@@ -35,7 +36,24 @@ The entrypoints are:
     This would merge HDFs into single file and in the second phase 
     the complete sample groups are extracted. Few missing values are imputted 
     by the mean. Reduced dataset is formed for testing and debugging.
-4. Extract borehole data.
+
+4. Compute field Sobol Total indices:
+    ```
+    cd tests/Bukov2
+    ./ptyhon sobol_data.py <workdir>
+    ```
+    Expects: 
+     `Bukov2_mesh.yaml` as cfg, and paths in `cfg.simulation`    
+    - read raw pressure sample data
+    - limit negative pressures by water vapour pressure at 10 degs
+    - compute Sobol indices 
+    - and pressure field characterization: mean, std; max, 90% quantile, median for range of pressure values
+
+    Use an interactive job with plenty of RAM:
+
+        qsub -I -q charon -l walltime=12:00:00 -l select=1:ncpus=1:mem=20gb
+
+7. Extract borehole data.
     ```
     cd tests/Bukov2
     ./ptyhon borehole_data.py <dir_with_hdfs>
