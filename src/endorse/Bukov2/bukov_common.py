@@ -147,7 +147,7 @@ def file_result(filename):
         def wrapper(workdir: Path, *args, **kwargs):
             fname = workdir / filename
             if not fname.exists():
-                tmp_fname = fname.with_stem(fname.stem + "_tmp_")
+                tmp_fname = fname.with_name(fname.stem + "_tmp_" + fname.suffix)
                 print(f"Execute {filename} = {func.__name__}  ...", end='')
                 start = time.process_time_ns()
                 try:
