@@ -38,17 +38,22 @@ The entrypoints are:
     by the mean. Reduced dataset is formed for testing and debugging.
 
 4. Compute field Sobol Total indices:
-   ```
+    ```
     cd tests/Bukov2
     ./ptyhon sobol_data.py <workdir>
-   ```
-   Expects: 
+    ```
+    Expects: 
      `Bukov2_mesh.yaml` as cfg, and paths in `cfg.simulation`    
-   - read raw pressure sample data
-   - limit negative pressures by water vapour pressure at 10 degs
-   - compute Sobol indices 
-   - and pressure field characterization: mean, std; max, 90% quantile, median for range of pressure values  
-6. Extract borehole data.
+    - read raw pressure sample data
+    - limit negative pressures by water vapour pressure at 10 degs
+    - compute Sobol indices 
+    - and pressure field characterization: mean, std; max, 90% quantile, median for range of pressure values
+
+    Use an interactive job with plenty of RAM:
+
+        qsub -I -q charon -l walltime=12:00:00 -l select=1:ncpus=1:mem=20gb
+
+7. Extract borehole data.
     ```
     cd tests/Bukov2
     ./ptyhon borehole_data.py <dir_with_hdfs>
