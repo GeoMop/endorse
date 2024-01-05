@@ -157,6 +157,11 @@ def test_from_end_points_real():
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
+    fol_start = starts[0]
+    fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
+    fol_end = starts[0] + fol_dir
+    fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
+    plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()

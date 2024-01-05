@@ -47,6 +47,9 @@ class Lateral:
     active_cylinder: Tuple[float, float, float]    # Boreholes must intersect this cylinder (r, length_min, length_max) from origin in X direction
     transform_matrix: np.ndarray    # Mapping from lateral system to main system
     transform_shift: np.array       # position of the lateral system origin
+    foliation_latitude: float       # latitude of foliation plane
+    foliation_longitude: float      # longitude of foliation plane
+    foliation_angle_tolerance: float # tolerance for borehole deviation from foliation angle
 
     @classmethod
     def from_cfg(cls, cfg):
@@ -64,7 +67,10 @@ class Lateral:
             cfg.avoid_cylinder,
             cfg.active_cylinder,
             transform_matrix,
-            np.array(cfg.transform_shift)
+            np.array(cfg.transform_shift),
+            cfg.foliation_latitude,
+            cfg.foliation_longitude,
+            cfg.foliation_angle_tolerance
         )
 
     @property
@@ -72,6 +78,7 @@ class Lateral:
         cyl_max_l = self.avoid_cylinder[2]
         return np.array([0,0,0,cyl_max_l,0,0])
 
+    # transform points from lateral coordinate system to model coordinate system
     def transform(self, points):
         points = np.array(points)[..., None]
         new_points = self.transform_matrix @ points + self.transform_shift[:,None]
@@ -191,6 +198,13 @@ class Lateral:
             return None
         t_bounds = intersection
         bh_dir = unit_direction
+
+        # deviation from foliation is below tolerance
+        dir_model = self.transform(end_point) - self.transform(start)
+        unit_dir_model = dir_model / np.linalg.norm(dir_model)
+        foliation_dir_model = Borehole._direction(self.foliation_longitude-self.l5_azimuth, self.foliation_latitude)
+        if abs(np.dot(unit_dir_model, foliation_dir_model)) < np.cos(np.radians(self.foliation_angle_tolerance)):
+            return None
 
         # Fix length
         bh_length = np.linalg.norm(direction) + add_length
