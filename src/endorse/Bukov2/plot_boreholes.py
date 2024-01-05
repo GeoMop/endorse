@@ -29,28 +29,20 @@ def create_scene(plotter, cfg_geometry):
     plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
-def add_cylinders(plotter, bh_set: 'BoreholeSet'):
+def add_cylinders(plotter, lateral: 'Lateral'):
     # Create a horizontal cylinder
-    r, l0, l1 = bh_set.avoid_cylinder
-    avoid_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    r, l0, l1 = lateral.avoid_cylinder
+    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
     plotter.add_mesh(avoid_cylinder, color='red', opacity=0.8)
 
-    r, l0, l1 = bh_set.active_cylinder
-    active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    r, l0, l1 = lateral.active_cylinder
+    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
 
 def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-    for i in range(bh_set.n_y_angles):
-        for j in range(bh_set.n_z_angles):
-            for i_bh in bh_set.angles_table[i][j]:
-                add_bh(plotter, bh_set, i_bh)
-
-    # i,j = 1, 2
-    # iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
-    # for i_bh in bh_set.angles_table[i][j]:
-    #     add_bh(plotter, iangle_norm, bh_set, i_bh)
-
+    for i_bh, bh in enumerate(bh_set.boreholes):
+        add_bh(plotter, bh)
     return plotter
 
 
@@ -65,21 +57,21 @@ def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
 
 
 
-def add_bh(plotter, bh_set, i_bh, color=None, label=False):
-    p_w, dir, p_tr = bh_set.bh_list[i_bh]
-    p_w = bh_set.transform(p_w)
-    p_tr = bh_set.transform(p_tr)
-    points, bounds = bh_set.point_lines
-    p_begin = points[i_bh, bounds[i_bh][0], :]
-    p_end = points[i_bh, bounds[i_bh][1] - 1, :]
+def add_bh(plotter, bh: 'Borehole', color=None, label=False):
+    #p_w, dir, p_tr = bh_set.bh_list[i_bh]
+    p_w = bh.lateral.transform(bh.start)
+    p_tr = bh.lateral.transform(bh.transversal)
+    bounds = bh.bounds
+    p_begin = bh.lateral.transform(bh.line_point(bounds[0]))
+    p_end = bh.lateral.transform(bh.line_point(bounds[1]))
 
-    i, j, k = bh_set.angle_ijk(i_bh)
-    angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+    angle_norm = (np.array(bh.yz_angles) + 90) / 180
 
     if color is None:
         color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     if label:
-        plotter.add_point_labels([p_end], [str(i_bh)], text_color=color,
+        # Somehow doesn't work, prevents plot of several boreholes.
+        plotter.add_point_labels([p_end], [bh.id], text_color=color,
             font_size = 50, point_size = 50,
             render_points_as_spheres = True, always_visible = True, shadow = True
         )
@@ -91,8 +83,12 @@ def add_bh(plotter, bh_set, i_bh, color=None, label=False):
     plotter.add_mesh(line, color=color, line_width=2)
 
     # Transversal point
-    sphere = pv.Sphere(0.5, p_tr)
+    sphere = pv.Sphere(0.2, p_tr)
     plotter.add_mesh(sphere, color=color)
+
+    # end point
+    sphere = pv.Sphere(0.3, bh.lateral.transform(bh.end_point))
+    plotter.add_mesh(sphere, color='black')
 
     # for pt in points[i_bh, : bounds[i_bh][1]]:
     #     sphere = pv.Sphere(0.3, pt)
@@ -241,6 +237,42 @@ def PVD_data_on_bhset(workdir, bh_set):
     PVD_eval_field(workdir, times, points, field)
 
 
+
+def plot_borehole_position(cfg, bh):
+    pv.start_xvfb()
+    plotter = pv.Plotter(off_screen=True)
+    plotter = create_scene(plotter, cfg.geometry)
+    lateral = bh.lateral
+    add_cylinders(plotter, lateral)
+    add_bh(plotter, bh)
+    plotter.add_text(bh.bh_description)
+    return plotter
+
+
+def save_projections(plotter, workdir, fname):
+
+    camera_positions = [
+        ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, 0, 50], [0, 0, 0], [0, 1, 0])
+    ]
+    resolution = (1920, 1080)
+
+    out_files = []
+    for axis in range(3):
+        plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
+        plotter.camera.parallel_projection = True
+        #f_name = workdir / f"bh_shot_{axis}.svg"
+        f_name = workdir / fname
+        f_name = f_name.parent / f"{f_name.stem}_{axis}{f_name.suffix}"
+        if f_name.suffix == ".png":
+              plotter.screenshot(f_name, window_size=resolution)
+        elif f_name.suffix == ".svg":
+            plotter.save_graphic(f_name)
+        out_files.append(f_name)
+
+    return out_files
+
 @attrs.define
 class PlotCfg:
     workdir : Path
@@ -250,36 +282,9 @@ class PlotCfg:
     i_bh: int
     opt_packers: List[List[bh_chambers.PackerConfig]]
     param_names : List[str]
-    show: bool
+    show: bool = False
 
 
-    def plot_borehole_position(self):
-        pv.start_xvfb()
-        plotter = pv.Plotter(off_screen=True)
-        plotter = create_scene(plotter, self.cfg.geometry)
-        add_cylinders(plotter, self.bh_set)
-        add_bh(plotter, self.bh_set, self.i_bh)
-        plotter.add_text(self.bh_set.bh_description(self.i_bh))
-
-        camera_positions = [
-            ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, 0, 50], [0, 0, 0], [0, 1, 0])
-        ]
-        resolution = (1920, 1080)
-
-        out_files = []
-        for axis in range(3):
-            plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
-            plotter.camera.parallel_projection = True
-            f_name = self.workdir / f"bh_shot_{axis}.png"
-            plotter.screenshot(f_name, window_size=resolution)
-            out_files.append(f_name)
-
-        if self.show:
-            plotter.show()
-
-        return out_files
 
 
     def plot_chamber_data(self):
