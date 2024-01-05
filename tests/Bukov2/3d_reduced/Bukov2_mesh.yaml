@@ -5,12 +5,12 @@
 # base of the mesh file name
 
 simulation:
-    cfg:  "3d_model/config_sim_C02hm.yaml"
-    mesh: "3d_model/simulation_mesh.vtu" 
-    hdf:  "3d_model/sampled_reduced.h5"
+    cfg:  "config_sim.yaml"
+    mesh: "simulation_mesh.vtu" 
+    hdf:  "sampled_fixed.h5"
 
 pbs:
-    n_workers: 100
+    n_workers: 60
     queue: charon
 
 local:
@@ -110,38 +110,35 @@ boreholes:
     force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
     #force: False
     zk_30:
-      invert_xy: True
-      origin_stationing: 37
-      galery_width: 4.0
-      l5_azimuth: 110
-      transform_shift: [0, +5, 1.8]
+      invert_xy: False
+      transform_shift: [0, -5, 1.8]
 
       # degree, if starts from 0, completed symmetricaly to negative angles
       # small case, about 157 boreholes
       y_angles: [0, 20, 40, 60, 80]
-      z_angles: [0, 10, 20, 40]
-      #z_angles: [0, 3, 5, 7, 9, 11, 15, 25]
+      z_angles: [0, 10, 25, 45, 70]
 
       # large case, about 431 active boreholes
       #y_angles: [0, 10, 20, 30, 40, 50, 60, 80]
       #z_angles: [0, 5, 10, 15, 25, 45, 70]
 
-      wh_pos_step: [3, 5, 1]
+      wh_pos_step: [3, 3, 1]
       avoid_cylinder: [3, 0, 12]        # r, x0, x1
-      active_cylinder: [20, 2, 30]      # r, x0, x1
+      active_cylinder: [20, 3, 30]      # r, x0, x1
       wh_zones:
-        #   Each zone is a box given by min and max corners
+        #   Each zone is a box given by mina nd max corners
         - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
         - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
       max_bh_length: 30
 
-      point_step: 1             # absolute step of evaluation points (in meters)
-      n_points_per_bh: 61         # borehole at most 20m active section
+      point_step: 0.5             # absolute step of evaluation points (in meters)
+      n_points_per_bh: 41         # borehole at most 20m active section
       n_boreholes_to_select: 6
 
 chambers: # Parameters of Chamber sensitivity precalculation
     packer_size: 2          # Size of packer in terms of points
     min_chamber_size: 2     # Size in terms of points
+    noise: 5.0 # [m] = [0.01 MPa]
 
 chambers_optimize:
     todo: False
@@ -149,12 +146,11 @@ chambers_optimize:
 optimize:
     # Borehole sampling points
     #borohole_length_rel: 2
-    weights: [1.0, 0.1]     # weights of Linf and L1 norm; Linf = np.max(values), L1 = np.mean(np.abs(values))
-                            # See e.g. src/endorse/Bukov2/bh_chambers.py: packers_eval()
-
     # Optimization space
     n_packers: 4            # meaning 3 chambers
-    n_best_packer_conf: 3   # How many best configurations preselect: per borehole  and per parameter
+    n_best_packer_conf: 5   # How many best configurations preselect: per borehole  and per parameter
+    weights: [1.0, 0.1]     # weights of Linf and L1 norm; Linf = np.max(values), L1 = np.mean(np.abs(values))
+                            # See e.g. src/endorse/Bukov2/bh_chambers.py: packers_eval()
 
     # Algorithm params
     population_size: 3

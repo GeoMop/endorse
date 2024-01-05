@@ -22,3 +22,11 @@ def sa_dict(cfg_sim):
         'second_order': cfg_sim.get('second_order_sa', True)    # Interpreted by endorse optimize.eval_from_chambers_sa
     }
     return problem
+
+# def sa_dict_with_noise(cfg_sim):
+#     problem = sa_dict(cfg_sim)
+#     # add noise
+#     problem['num_vars'] += 1
+#     problem['names'].append('noise')
+#     problem['dists'].append('norm')
+#     return problem
