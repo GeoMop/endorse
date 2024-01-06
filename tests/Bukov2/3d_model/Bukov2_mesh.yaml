@@ -110,12 +110,12 @@ geometry:
 boreholes:
     force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
     #force: False
-    zk_30:
-      invert_xy: True
+    zk_30:            # zk5_1J
+      invert_xy: False
       origin_stationing: 37
       galery_width: 4.0
       l5_azimuth: 110
-      transform_shift: [0, +5, 1.8]
+      transform_shift: [0, -5, 1.8]
 
       # orientation of foliation plane and accepted deviation of boreholes
       foliation_latitude: 45
@@ -141,8 +141,8 @@ boreholes:
         - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
       max_bh_length: 30
 
-      point_step: 1             # absolute step of evaluation points (in meters)
-      n_points_per_bh: 61         # borehole at most 20m active section
+      point_step: 0.5             # absolute step of evaluation points (in meters)
+      n_points_per_bh: 70      # borehole at most 20m active section
       n_boreholes_to_select: 6
 
 chambers: # Parameters of Chamber sensitivity precalculation

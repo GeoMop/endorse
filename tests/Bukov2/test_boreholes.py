@@ -144,8 +144,8 @@ def test_from_end_points():
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
 
-def real_bh_set():
-    workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
+def real_bh_set(workdir):
+    workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
 
     lateral = boreholes.Lateral.from_cfg(cfg.boreholes.zk_30)
     def promote_to_list(l):
@@ -156,7 +156,7 @@ def real_bh_set():
     def lines(start_x, start_y, start_z, end_x, end_y, end_z, group):
         ptl = promote_to_list
         parm_lists = map(ptl, [start_x,start_y, start_z, end_x, end_y, end_z])
-        return [([sx, sy, sz], [ex,ey,ez], 30, group) for sx,sy,sz,ex,ey,ez in itertools.product(
+        return [([sx, sy, sz], [ex,ey,ez], 10, group) for sx,sy,sz,ex,ey,ez in itertools.product(
             *parm_lists)
         ]
 
@@ -195,11 +195,16 @@ def real_bh_set():
     )
 
     bh_set = lateral.set_from_points(l_set)
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set)
+
     return bh_set
 
 @pytest.mark.skip
 def test_from_end_points_real():
-    bh_set = real_bh_set()
+    workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
+
+    bh_set = real_bh_set(workdir)
+    lateral = bh_set.lateral
     print("N boreholes:", bh_set.n_boreholes)
 
     bh_set.boreholes_print_sorted()
@@ -229,22 +234,24 @@ def test_field_projection():
     """
 
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
-    shutil.rmtree((workdir / "borehole_data"))
+    shutil.rmtree((workdir / "borehole_data"), ignore_errors=True)
     #mock.mock_hdf5(cfg_file)
     #sim_cfg = load_config(workdir / cfg.simulation.cfg)
     #problem = sa_problem.sa_dict(sim_cfg)
-    bh_set = real_bh_set()
+    bh_set = real_bh_set(workdir)
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
-
+    print("N boreholes:", bh_set.n_boreholes)
+    bh_set.boreholes_print_sorted()
     bh_range = (10, 30)
+
     updated_files = bh_set.project_field(workdir, cfg, bh_range)
     print("Updated: ", updated_files)
 
     for f in updated_files:
         with h5py.File(f, mode='r') as f:
             dset = f['pressure']
-            n_points = bh_set.n_points
+            n_points = cfg.boreholes.zk_30.n_points_per_bh
             n_times = 5
             n_samples = 96
             assert dset.shape == (n_points, n_times, n_samples)

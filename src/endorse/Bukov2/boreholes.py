@@ -281,7 +281,7 @@ class Borehole:
     unit_direction: np.ndarray          # line direction
     transversal: np.ndarray             # endpoint of transversal to the lateral tunnel avoid cylinder axis
     length: float                       # length of the borehole from start point
-    bounds: float                       # Intersection parameters with active cylinder.
+    bounds: Tuple[float, float]                       # Intersection parameters with active cylinder.
     group : str                         # label of setup group
 
     @staticmethod
@@ -339,6 +339,9 @@ class Borehole:
     def line_point(self, t):
         return self.start + t * self.unit_direction
 
+    def line_points(self, t):
+        t = np.atleast_1d(t)
+        return self.start + t[:, None] * self.unit_direction
 
 
     @property
@@ -579,7 +582,12 @@ class BoreholeSet:
         # borehole extraction matrix
         mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
         n_el_mesh = mesh.n_cells
-        active_bh_points = self.point_lines[0][list(bh_dict.keys())]
+
+        zk_cfg = cfg.boreholes.zk_30
+        n_points = zk_cfg.n_points_per_bh
+        point_step = zk_cfg.point_step
+        t_points = point_step * np.arange(n_points)
+        active_bh_points = np.array([bh.line_points(t_points + bh.bounds[0]) for bh in self.boreholes])
         id_matrix = interpolation_slow(mesh, active_bh_points)
 
         # Open the input HDF file
@@ -591,9 +599,9 @@ class BoreholeSet:
             # Open the output HDF file
             with bcommon.HDF5Files(list(bh_dict.values()), 'w') as out_files:
                 # Create the new dataset with the specified shape and chunking
-                output_shape = (self.n_points, input_dataset.shape[1], input_dataset.shape[0])
+                output_shape = (n_points, input_dataset.shape[1], input_dataset.shape[0])
                 out_chunk_size = min(output_shape[2], 4 * samples_chunk_size)
-                chunk_shape = (self.n_points, input_dataset.shape[1], out_chunk_size)
+                chunk_shape = (n_points, input_dataset.shape[1], out_chunk_size)
                 out_dsets = []
                 for f in out_files:
                     dsets = f.create_dataset(dset_name, shape=output_shape, chunks=chunk_shape)
