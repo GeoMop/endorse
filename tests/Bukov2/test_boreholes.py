@@ -112,7 +112,7 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_from_end_points():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
 
@@ -144,24 +144,62 @@ def test_from_end_points():
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
 
-@pytest.mark.skip
-def test_from_end_points_real():
+def real_bh_set():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
 
     lateral = boreholes.Lateral.from_cfg(cfg.boreholes.zk_30)
+    def promote_to_list(l):
+        if not isinstance(l, list):
+            l = [l]
+        return l
 
-    
+    def lines(start_x, start_y, start_z, end_x, end_y, end_z, group):
+        ptl = promote_to_list
+        parm_lists = map(ptl, [start_x,start_y, start_z, end_x, end_y, end_z])
+        return [([sx, sy, sz], [ex,ey,ez], 30, group) for sx,sy,sz,ex,ey,ez in itertools.product(
+            *parm_lists)
+        ]
 
-    y_starts = [-20, -16, -12, 20, 24, 28]
-    starts = [[0.4, y, -0.3] for y in y_starts]
+    def union(*lists):
+        return [x for l in lists for x in l]
 
-    ends_top_x = [4.5, 6.5, 8.5, 10.5, 12.5, 14.5]
-    ends_top_z = [3.2, 3.7, 4.2, 5.2, 6.2, 8.2]
-    ends_top = [[x, 0, z] for x in ends_top_x for z in ends_top_z]
+    l_set = union(
+        # left long variants
+        lines(0.4, 20 , -0.3,
+              [10, 12, 14], 0, [3.2, 3.7, 4.4, 5.2, 6], "left_up"),
+        lines(0.4, 20 , -0.3,
+              [10, 12, 14], 0, [-6, -5.2, -4.5, -3.8, -3.3], "left_dn"),
+         lines(0.4, 20, -0.3,
+              [7, 8, 9], 0, [-6, -5.2, -4.5, -3.8, -3.3], "left_mid_dn"),
 
-    lines = [(start, end, 20) for start in starts for end in ends_top]
+        # middle variants
+        lines(0.4, 5 , -0.3,
+        13, [5, 4.2, 3.5, 3], [-1.5, 0, 1.5], "middle"),
+        lines(0.4, [-7, -9], -0.3,
+              [10, 12, 14],  0, [3.2, 3.7, 4.4, 5.2, 6], "right_far_up"),
 
-    bh_set = lateral.set_from_points(lines)
+        # Vetšina v kolizi s foliací
+        ##lines(0.4, [-11, -13], -0.3,
+        ##      [10, 12, 14],  0, [-6, -5.2, -4.5, -3.8, -3.3], "right_far_dn"),
+
+        lines(0.4, [-7, -9], -0.3,
+              [6, 7, 8, 9],  0, [3.2, 3.7, 4.4, 5.2, 6], "right_mid_up"),
+        lines(0.4, -19, -0.3,
+              [6, 7, 8, 9],  0, [-6, -5.2, -4.5, -3.8, -3.3], "left_mid_dn"),
+        lines(0.4, -9, -0.3,
+              [3, 4, 5],  0, [3.3, 3.7, 4.4, 5.2, 6], "right_near_up"),
+        lines(0.4, -13, -0.3,
+              [3, 4, 5],  0, [-6, -5.2, -4.5, -3.8, -3.3], "right_near_dn"),
+        lines(0.4, [-5, -6], -0.3,
+              13, [-3, -3.5, -4.2 , -5, -6], [-1.5, 0, 1.5], "right_middle"),
+    )
+
+    bh_set = lateral.set_from_points(l_set)
+    return bh_set
+
+@pytest.mark.skip
+def test_from_end_points_real():
+    bh_set = real_bh_set()
     print("N boreholes:", bh_set.n_boreholes)
 
     bh_set.boreholes_print_sorted()
@@ -169,11 +207,11 @@ def test_from_end_points_real():
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
-    fol_start = starts[0]
-    fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
-    fol_end = starts[0] + fol_dir
-    fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
-    plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
+    # fol_start = starts[0]
+    # fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
+    # fol_end = starts[0] + fol_dir
+    # fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
+    # plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()
@@ -181,7 +219,7 @@ def test_from_end_points_real():
 
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
@@ -195,7 +233,7 @@ def test_field_projection():
     #mock.mock_hdf5(cfg_file)
     #sim_cfg = load_config(workdir / cfg.simulation.cfg)
     #problem = sa_problem.sa_dict(sim_cfg)
-    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    bh_set = real_bh_set()
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
 

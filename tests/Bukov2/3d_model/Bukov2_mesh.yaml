@@ -11,7 +11,7 @@ simulation:
 
 pbs:
     # for proecess_boreholes.py
-    n_workers: 12
+    n_workers: 100
     queue: charon
 
 local:
@@ -111,29 +111,38 @@ boreholes:
     force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
     #force: False
     zk_30:
-      invert_xy: False
-      transform_shift: [0, -5, 1.8]
+      invert_xy: True
+      origin_stationing: 37
+      galery_width: 4.0
+      l5_azimuth: 110
+      transform_shift: [0, +5, 1.8]
+
+      # orientation of foliation plane and accepted deviation of boreholes
+      foliation_latitude: 45
+      foliation_longitude: 265
+      foliation_angle_tolerance: 80
 
       # degree, if starts from 0, completed symmetricaly to negative angles
       # small case, about 157 boreholes
       y_angles: [0, 20, 40, 60, 80]
-      z_angles: [0, 10, 25, 45, 70]
+      z_angles: [0, 10, 20, 40]
+      #z_angles: [0, 3, 5, 7, 9, 11, 15, 25]
 
       # large case, about 431 active boreholes
       #y_angles: [0, 10, 20, 30, 40, 50, 60, 80]
       #z_angles: [0, 5, 10, 15, 25, 45, 70]
 
-      wh_pos_step: [3, 3, 1]
+      wh_pos_step: [3, 5, 1]
       avoid_cylinder: [3, 0, 12]        # r, x0, x1
-      active_cylinder: [20, 3, 30]      # r, x0, x1
+      active_cylinder: [20, 2, 30]      # r, x0, x1
       wh_zones:
-        #   Each zoe is a box given by mina nd max corners
+        #   Each zone is a box given by min and max corners
         - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
         - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
+      max_bh_length: 30
 
-
-      point_step: 0.5             # absolute step of evaluation points (in meters)
-      n_points_per_bh: 41         # borehole at most 20m active section
+      point_step: 1             # absolute step of evaluation points (in meters)
+      n_points_per_bh: 61         # borehole at most 20m active section
       n_boreholes_to_select: 6
 
 chambers: # Parameters of Chamber sensitivity precalculation

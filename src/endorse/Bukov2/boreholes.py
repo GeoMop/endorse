@@ -180,13 +180,14 @@ class Lateral:
             [*start, *unit_direction]))
 
         # transversal on oposite direction
-        if cyl_t < 0:
-            return None
+        # Some error in transversal calculation, TODO: simplify to YZ projection
+        #if cyl_t < 0:
+        #    return None
 
         # well head too close to lateral
         t_head = (self.galery_width / 2.0 - start[0]) / unit_direction[0]
         head = start + t_head * unit_direction
-        if -7 < head[1] < 16:
+        if (-5 < head[1] < 4.7) or (5.1 < head[1] < 15):
             return None
 
         intersection =  self.cyl_line_intersect(self.avoid_cylinder, (start, unit_direction))
@@ -212,26 +213,26 @@ class Lateral:
         return start, bh_dir, bh_point, bh_length, t_bounds
 
 
-    def bh_from_angle(self, start, angles, length):
+    def bh_from_angle(self, start, angles, length=30, group=""):
         start = np.array(start)
         end = start + length * Borehole._direction(*angles)
         line_points = self._filter_line(start, end)
-        return self._make_bh(line_points)
+        return self._make_bh(line_points, group)
 
-    def bh_from_points(self, start, end, add_length=0.0):
+    def bh_from_points(self, start, end, add_length=0.0, group=""):
         start = np.array(start)
         end = np.array(end)
         line_points = self._filter_line(start, end, add_length)
-        return self._make_bh(line_points)
+        return self._make_bh(line_points, group)
 
-    def _make_bh(self, points):
+    def _make_bh(self, points, group):
         if points is None:
             return None
         else:
-            return Borehole(self, *points)
+            return Borehole(self, *points, group)
 
     def set_from_points(self, lines):
-        bh_list = [self.bh_from_points(start, end, add_length = add) for start, end, add in lines]
+        bh_list = [self.bh_from_points(*line) for line in lines]
         return self._make_bh_set(bh_list)
 
     def set_from_cfg(self, bh_set_cfg):
@@ -281,6 +282,7 @@ class Borehole:
     transversal: np.ndarray             # endpoint of transversal to the lateral tunnel avoid cylinder axis
     length: float                       # length of the borehole from start point
     bounds: float                       # Intersection parameters with active cylinder.
+    group : str                         # label of setup group
 
     @staticmethod
     def _direction(y_phi, z_phi):

@@ -119,7 +119,7 @@ boreholes:
       # orientation of foliation plane and accepted deviation of boreholes
       foliation_latitude: 45
       foliation_longitude: 265
-      foliation_angle_tolerance: 70
+      foliation_angle_tolerance: 80
 
       # degree, if starts from 0, completed symmetricaly to negative angles
       # small case, about 157 boreholes
