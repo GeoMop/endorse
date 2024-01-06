@@ -112,14 +112,16 @@ def test_borhole_set():
     plotter.camera.parallel_projection = True
     plotter.show()
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_from_end_points():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
 
     lateral = boreholes.Lateral.from_cfg(cfg.boreholes.zk_30)
+    y_pos = -9.5
+
     lines = [
-        ([0, 20, -0.4], [11, 0, 3.4], 1),
-        ([0, -12, -0.4], [5, 0, 3.5], 1)
+        ([0.4, -11, -0.3], [5, 0, -3.4], 1),
+        ([0.4, -9, -0.3], [11, 0, 3.4], 1),
     ]
 
     bh_set = lateral.set_from_points(lines)
@@ -127,12 +129,22 @@ def test_from_end_points():
 
     bh_set.boreholes_print_sorted()
 
-    for i_bh, bh in enumerate(bh_set.boreholes):
-        print(i_bh)
-        plotter = plot_boreholes.plot_borehole_position(cfg, bh)
-        plot_boreholes.save_projections(plotter, workdir, bh.id + ".svg")
+    # for i_bh, bh in enumerate(bh_set.boreholes):
+    #     print(i_bh)
+    #     plotter = plot_boreholes.plot_borehole_position(cfg, bh)
+    #     plot_boreholes.save_projections(plotter, workdir, bh.id + ".svg")
+
+    # plotter = pv.Plotter()
+    # plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
+    # plot_boreholes.add_cylinders(plotter, lateral)
+    # plot_boreholes.plot_bh_set(plotter, bh_set)
+    # plotter.camera.parallel_projection = True
+    # plotter.show()
+
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
 
+@pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model_mock/Bukov2_mesh.yaml")
 

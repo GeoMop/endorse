@@ -184,9 +184,9 @@ class Lateral:
             return None
 
         # well head too close to lateral
-        t_head = (self.galery_width / 2.0) / unit_direction[0]
-        y_head = start[1] + t_head * unit_direction[1]
-        if -7 < y_head < 16:
+        t_head = (self.galery_width / 2.0 - start[0]) / unit_direction[0]
+        head = start + t_head * unit_direction
+        if -7 < head[1] < 16:
             return None
 
         intersection =  self.cyl_line_intersect(self.avoid_cylinder, (start, unit_direction))
