@@ -11,7 +11,6 @@ from xml.etree import ElementTree as ET
 import attrs
 from pathlib import Path
 from endorse.Bukov2 import bukov_common as bcommon
-from endorse.Bukov2 import bh_chambers
 
 
 def add_fields(mesh, value, label):
@@ -357,7 +356,7 @@ class PlotCfg:
     bh_set : 'BoreholeSet'
     chambers : 'Chambers'
     i_bh: int
-    opt_packers: List[List[bh_chambers.PackerConfig]]
+    opt_packers: List[List['PackerConfig']]
     param_names : List[str]
     show: bool = False
 

@@ -16,17 +16,14 @@ from pathlib import Path
 from endorse.Bukov2.sample_storage import dataset_name, failed_ids_name, done_ids_name
 from endorse.common import load_config
 from endorse.Bukov2 import sa_problem, boreholes
-from endorse.Bukov2.bukov_common import memoize, file_result
+from endorse.Bukov2.bukov_common import memoize, file_result, load_cfg
 params_name="parameters"
 from pathlib import Path
 
 def main(workdir, bh_range):
     cfg_file = workdir / "Bukov2_mesh.yaml"
-    cfg = load_config(cfg_file)
-    #mock.mock_hdf5(cfg_file)
-    #sim_cfg = load_config(workdir / cfg.simulation.cfg)
-    #problem = sa_problem.sa_dict(sim_cfg)
-    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    workdir, cfg = load_cfg(cfg_file)
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
     updated_files_dict = bh_set.project_field(workdir, cfg, bh_range)
     print("Updated: ", updated_files_dict)
 

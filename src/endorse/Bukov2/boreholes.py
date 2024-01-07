@@ -9,7 +9,7 @@ import numpy as np
 import pyvista as pv
 import json
 from endorse.Bukov2 import sample_storage
-from endorse.Bukov2 import bukov_common as bcommon
+from endorse.Bukov2 import bukov_common as bcommon, plot_boreholes
 from vtk import vtkCellLocator
 
 """
@@ -29,7 +29,30 @@ Box = Tuple[Point3d, Point3d]
 @bcommon.memoize
 def _make_borehole_set(workdir, cfg):
     # Prepare BoreholeSet with simulation data loaded
-    bh_set = BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
+    cfg_zk = cfg.boreholes.zk_30
+    lateral = Lateral.from_cfg(cfg_zk)
+    def promote_to_list(l):
+        if not isinstance(l, list):
+            l = [l]
+        return l
+
+    def lines_group(start_x, start_y, start_z, end_x, end_y, end_z, group):
+        ptl = promote_to_list
+        parm_lists = map(ptl, [start_x,start_y, start_z, end_x, end_y, end_z])
+        return [([sx, sy, sz], [ex,ey,ez], 10, group) for sx,sy,sz,ex,ey,ez in itertools.product(
+            *parm_lists)
+        ]
+
+    def union(*lists):
+        return [x for l in lists for x in l]
+
+    lines = [lines_group(**line_space, group=group) for group, line_space in cfg_zk.lines_dict.items()]
+    l_set = union(*lines)
+
+    bh_set = lateral.set_from_points(l_set)
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set)
+
     return bh_set
 
 def make_borehole_set(workdir, cfg):

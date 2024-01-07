@@ -144,66 +144,13 @@ def test_from_end_points():
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
 
-def real_bh_set(workdir):
-    workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
 
-    lateral = boreholes.Lateral.from_cfg(cfg.boreholes.zk_30)
-    def promote_to_list(l):
-        if not isinstance(l, list):
-            l = [l]
-        return l
-
-    def lines(start_x, start_y, start_z, end_x, end_y, end_z, group):
-        ptl = promote_to_list
-        parm_lists = map(ptl, [start_x,start_y, start_z, end_x, end_y, end_z])
-        return [([sx, sy, sz], [ex,ey,ez], 10, group) for sx,sy,sz,ex,ey,ez in itertools.product(
-            *parm_lists)
-        ]
-
-    def union(*lists):
-        return [x for l in lists for x in l]
-
-    l_set = union(
-        # left long variants
-        lines(0.4, 20 , -0.3,
-              [10, 12, 14], 0, [3.2, 3.7, 4.4, 5.2, 6], "left_up"),
-        lines(0.4, 20 , -0.3,
-              [10, 12, 14], 0, [-6, -5.2, -4.5, -3.8, -3.3], "left_dn"),
-         lines(0.4, 20, -0.3,
-              [7, 8, 9], 0, [-6, -5.2, -4.5, -3.8, -3.3], "left_mid_dn"),
-
-        # middle variants
-        lines(0.4, 5 , -0.3,
-        13, [5, 4.2, 3.5, 3], [-1.5, 0, 1.5], "middle"),
-        lines(0.4, [-7, -9], -0.3,
-              [10, 12, 14],  0, [3.2, 3.7, 4.4, 5.2, 6], "right_far_up"),
-
-        # Vetšina v kolizi s foliací
-        ##lines(0.4, [-11, -13], -0.3,
-        ##      [10, 12, 14],  0, [-6, -5.2, -4.5, -3.8, -3.3], "right_far_dn"),
-
-        lines(0.4, [-7, -9], -0.3,
-              [6, 7, 8, 9],  0, [3.2, 3.7, 4.4, 5.2, 6], "right_mid_up"),
-        lines(0.4, -19, -0.3,
-              [6, 7, 8, 9],  0, [-6, -5.2, -4.5, -3.8, -3.3], "left_mid_dn"),
-        lines(0.4, -9, -0.3,
-              [3, 4, 5],  0, [3.3, 3.7, 4.4, 5.2, 6], "right_near_up"),
-        lines(0.4, -13, -0.3,
-              [3, 4, 5],  0, [-6, -5.2, -4.5, -3.8, -3.3], "right_near_dn"),
-        lines(0.4, [-5, -6], -0.3,
-              13, [-3, -3.5, -4.2 , -5, -6], [-1.5, 0, 1.5], "right_middle"),
-    )
-
-    bh_set = lateral.set_from_points(l_set)
-    plot_boreholes.export_vtk_bh_set(workdir, bh_set)
-
-    return bh_set
 
 @pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
-    bh_set = real_bh_set(workdir)
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
     lateral = bh_set.lateral
     print("N boreholes:", bh_set.n_boreholes)
 
@@ -238,12 +185,16 @@ def test_field_projection():
     #mock.mock_hdf5(cfg_file)
     #sim_cfg = load_config(workdir / cfg.simulation.cfg)
     #problem = sa_problem.sa_dict(sim_cfg)
-    bh_set = real_bh_set(workdir)
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
     print("N boreholes:", bh_set.n_boreholes)
     bh_set.boreholes_print_sorted()
     bh_range = (10, 30)
+
+    # Test serialization
+    serialized = pickle.dumps(bh_set)
+    new_bh_set = pickle.loads(serialized)
 
     updated_files = bh_set.project_field(workdir, cfg, bh_range)
     print("Updated: ", updated_files)
@@ -257,8 +208,5 @@ def test_field_projection():
             assert dset.shape == (n_points, n_times, n_samples)
     #ref_field_on_lines = bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
 
-    # Test serialization
-    # serialized = pickle.dumps(bh_set)
-    # new_bh_set = pickle.loads(serialized)
-    # new_field_on_lines = new_bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
-    # np.testing.assert_allclose(ref_field_on_lines, new_field_on_lines, rtol=1e-6)
+    #new_field_on_lines = new_bh_set.project_field(mesh, pressure_array[None, :, :], cached=True)
+    #np.testing.assert_allclose(ref_field_on_lines, new_field_on_lines, rtol=1e-6)
