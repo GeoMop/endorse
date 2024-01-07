@@ -196,10 +196,10 @@ def test_field_projection():
     serialized = pickle.dumps(bh_set)
     new_bh_set = pickle.loads(serialized)
 
-    updated_files = bh_set.project_field(workdir, cfg, bh_range)
-    print("Updated: ", updated_files)
+    borehole_field = bh_set.project_field(workdir, cfg, bh_range)
+    print("Updated: ", borehole_field.data_files)
 
-    for f in updated_files:
+    for f in borehole_field.data_files:
         with h5py.File(f, mode='r') as f:
             dset = f['pressure']
             n_points = cfg.boreholes.zk_30.n_points_per_bh

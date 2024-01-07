@@ -3,6 +3,7 @@ import glob
 import attrs
 from functools import cached_property
 import itertools
+import pathlib
 
 import h5py
 import numpy as np
@@ -110,7 +111,8 @@ class Lateral:
     def stationing(self, y_pos):
         return y_pos + self.origin_stationing
 
-    def cyl_line_intersect(self, cyl, line):
+    @staticmethod
+    def cyl_line_intersect(cyl, line):
         r, l0, l1 = cyl
         pos, dir = line
         a = np.sum(dir[1:] ** 2)
@@ -388,6 +390,28 @@ class Borehole:
         #range_str = f"range: {tuple(self.line_bounds[i_bh])}"
         return f"#{self.id} {pos_str} -> {angle_str}, {length_str}"
 
+    def place_points(self, n_points, point_step):
+        half_points = int((n_points - 1) / 2)
+        i_points = np.arange(-n_points * (2.0 / 3), n_points * (1.0 / 3) + 1, 1, dtype=int)
+        i_points = i_points[:n_points]
+        dir_length = np.linalg.norm(self.unit_direction)
+        pt_step = (self.unit_direction / dir_length) * point_step
+        points = self.transversal[None, :] + pt_step[None, :] * i_points[:, None]
+
+        # Bounds given by active cylinder
+        r, l0, l1 = self.lateral.active_cylinder
+        mask = (points[:, 0] > l0)
+        min_bound = np.argmax(mask)
+        mask = (points[:, 0] < l1)
+        min_bound_flipped = np.argmax(np.flip(mask))
+        max_bound = n_points - min_bound_flipped
+        assert len(points) == n_points
+
+        min_bound = max(0, min_bound)
+        max_bound = min(n_points, max_bound)
+        points = self.lateral.transform(points)
+        return points, (min_bound, max_bound)
+
 
 @attrs.define(slots=False)
 class BoreholeSet:
@@ -417,16 +441,16 @@ class BoreholeSet:
     def __setstate__(self, state):
         self.__dict__.update(state)
 
-    @classmethod
-    def from_angles(cls, cfg, lines):
-        n_points = 2*int(cfg.n_points_per_bh / 2) + 1
-        return BoreholeSet(
-            cfg.y_angles,
-            cfg.z_angles,
-            cfg.wh_pos_step,
-            np.array(cfg.wh_zones),
-            cfg.point_step,
-            n_points)
+    # @classmethod
+    # def from_angles(cls, cfg, lines):
+    #     n_points = 2*int(cfg.n_points_per_bh / 2) + 1
+    #     return BoreholeSet(
+    #         cfg.y_angles,
+    #         cfg.z_angles,
+    #         cfg.wh_pos_step,
+    #         np.array(cfg.wh_zones),
+    #         cfg.point_step,
+    #         n_points)
 
     @classmethod
     def from_lines(cls, cfg, lines):
@@ -444,54 +468,54 @@ class BoreholeSet:
 
 
 
-    def axis_angles(self, axis):
-        return self._axis_angles[axis]
+    # def axis_angles(self, axis):
+    #     return self._axis_angles[axis]
 
     @property
     def n_boreholes(self):
         return len(self.boreholes)
 
-    @property
-    def n_y_angles(self):
-        return len(self.axis_angles(0))
+    # @property
+    # def n_y_angles(self):
+    #     return len(self.axis_angles(0))
+    #
+    # @property
+    # def n_z_angles(self):
+    #     return len(self.axis_angles(1))
 
-    @property
-    def n_z_angles(self):
-        return len(self.axis_angles(1))
 
 
-
-    @property
-    def angles_table(self):
-        angle_tab, bh_list = self._build_boreholes
-        return angle_tab
+    # @property
+    # def angles_table(self):
+    #     angle_tab, bh_list = self._build_boreholes
+    #     return angle_tab
 
     # @property
     # def bh_list(self):
     #     angle_tab, bh_list = self._build_boreholes
     #     return bh_list
 
-    @cached_property
-    def _angle_ijk(self):
-        table = np.empty((self.n_boreholes, 3), dtype=np.int32)
-        for i in range(self.n_y_angles):
-            for j in range(self.n_z_angles):
-                for k, i_bh in enumerate(self.angles_table[i][j]):
-                    table[i_bh, :] = (i,j,k)
-        return table
-
-
-    def angle_ijk(self, i_bh):
-        return self._angle_ijk[i_bh]
-
-    def direction_lookup(self, i, j):
-        return [self.bh_list[i_bh] for i_bh in self.angles_table[i][j]]
-
-    def draw_angles(self, n):
-        return np.stack(
-             [np.random.randint(self.n_y_angles, size=n),
-                   np.random.randint(self.n_z_angles, size=n)],
-                   axis=1)
+    # @cached_property
+    # def _angle_ijk(self):
+    #     table = np.empty((self.n_boreholes, 3), dtype=np.int32)
+    #     for i in range(self.n_y_angles):
+    #         for j in range(self.n_z_angles):
+    #             for k, i_bh in enumerate(self.angles_table[i][j]):
+    #                 table[i_bh, :] = (i,j,k)
+    #     return table
+    #
+    #
+    # def angle_ijk(self, i_bh):
+    #     return self._angle_ijk[i_bh]
+    #
+    # def direction_lookup(self, i, j):
+    #     return [self.bh_list[i_bh] for i_bh in self.angles_table[i][j]]
+    #
+    # def draw_angles(self, n):
+    #     return np.stack(
+    #          [np.random.randint(self.n_y_angles, size=n),
+    #                np.random.randint(self.n_z_angles, size=n)],
+    #                axis=1)
 
 
 
@@ -531,7 +555,14 @@ class BoreholeSet:
 
 
 
-    def _distance(self,cyl, line):
+    def _distance(self, cyl, line):
+        """
+        Line - Cylinder approximate distance, viw PyVista.
+        Not reliable.
+        :param cyl:
+        :param line:
+        :return:
+        """
         points = np.linspace(line[0], line[1], 10)
         line_polydata = pv.PolyData(points)
         distances = line_polydata.compute_implicit_distance(cyl, inplace=False)['implicit_distance']
@@ -557,7 +588,17 @@ class BoreholeSet:
         for i in indices:
             print(f"{distances[i]} | {self.boreholes[i].bh_description}")
 
+    def points(self, cfg):
+        """
 
+        :return:
+        """
+        zk_cfg = cfg.boreholes.zk_30
+        n_points = zk_cfg.n_points_per_bh
+        point_step = zk_cfg.point_step
+        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes]
+        points, bounds = zip(*placed)
+        return np.array((points)), bounds
 
     # def load_data(self, workdir, cfg):
     #     """
@@ -584,7 +625,7 @@ class BoreholeSet:
     #     """
     #     return self.times, self.point_lines[0], self._bh_field
 
-    def project_field(self, workdir, cfg, bh_range=None):
+    def project_field(self, workdir, cfg, bh_range=None) -> 'BoreholeField':
         """
         Return array (n_boreholes, n_points, n_times, n_samples)
         """
@@ -605,13 +646,9 @@ class BoreholeSet:
         # borehole extraction matrix
         mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
         n_el_mesh = mesh.n_cells
-
-        zk_cfg = cfg.boreholes.zk_30
-        n_points = zk_cfg.n_points_per_bh
-        point_step = zk_cfg.point_step
-        t_points = point_step * np.arange(n_points)
-        active_bh_points = np.array([bh.line_points(t_points + bh.bounds[0]) for bh in self.boreholes])
-        id_matrix = interpolation_slow(mesh, active_bh_points)
+        points, bounds = self.points(cfg)
+        n_boreholes, n_points, n_dim = points.shape
+        id_matrix = interpolation_slow(mesh, points)
 
         # Open the input HDF file
         field_file = workdir / cfg.simulation.hdf
@@ -639,24 +676,26 @@ class BoreholeSet:
                     #cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
                     for i, dset in enumerate(out_dsets):
                         dset[:, :, sample_slice] = transformed_chunk[i]
-        return bh_files
 
-    def borohole_data(self, workdir, cfg, i_bh):
-        bh_samples_files = self.project_field(workdir, cfg, (i_bh, i_bh+1))
-        assert len(bh_samples_files) == 1
-        with h5py.File(bh_samples_files[0], mode='r') as f:
-            bh_samples = np.array(f['pressure'])
-        return bh_samples, self.line_bounds[i_bh]
+        return BoreholeField(
+            self,
+            points,
+            bounds,
+            bh_files)
 
-    @cached_property
-    def point_size(self):
-        """
-        For every borehole the length associated with a single point. (points are nonuniform)
-        :return: array of n_boreholes
-        """
-        interval_size = np.linalg.norm(self.point_lines[:, 1, :], axis=1)
-        point_size = interval_size / self.n_points
-        return point_size
+
+
+
+
+    # @cached_property
+    # def point_size(self):
+    #     """
+    #     For every borehole the length associated with a single point. (points are nonuniform)
+    #     :return: array of n_boreholes
+    #     """
+    #     interval_size = np.linalg.norm(self.point_lines[:, 1, :], axis=1)
+    #     point_size = interval_size / self.n_points
+    #     return point_size
 
     # def make_bh_active_line(self, bh):
     #     wellhead, dir, transversal_pt = bh
@@ -713,14 +752,28 @@ class BoreholeSet:
     #     points = self.transform(points)
     #     return points, line_bounds
 
+@attrs.define(slots=False)
+class BoreholeField:
+    """
+    Representation of data projected to the points on the boreholes
+    """
+    bh_set: BoreholeSet
+    points : np.ndarray                     # (n_lines, n_points)
+    point_bounds: List[Tuple[int, int]]     # for each borehole range of indices of active points
+    data_files: List[pathlib.Path]             # assign a data file to each borehole
+
+    def borohole_data(self, i_bh):
+        with h5py.File(self.data_files[i_bh], mode='r') as f:
+            bh_samples = np.array(f['pressure'])
+        return bh_samples
+
 def interpolation_slow(mesh, points):
     """
     Construct element_id matrix of shape (n_boreholes, n_points).
 
     Put n_points on every line
     :param mesh:
-    :param lines/
-    :param n_points:
+    :param points, shape (n_lines, n_points)
     :return:
     """
     cell_locator = vtkCellLocator()
