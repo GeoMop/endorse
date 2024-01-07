@@ -710,7 +710,7 @@ def project_field(workdir, cfg, bh_set, bh_range=None) -> 'BoreholeField':
 
     # get nonexisting borehole files within the range.
     (workdir / "borehole_data").mkdir(parents=True, exist_ok=True)
-    bh_files = [workdir / "borehole_data" / f"bh_{i_bh:03d}.h5" for i_bh in range(*bh_range) ]
+    bh_files = [workdir / "borehole_data" / f"bh_{i_bh:03d}.h5" for i_bh in range(bh_set.n_boreholes) ]
     bh_dict = {i_bh: bh_files[i] for i, i_bh in enumerate(range(*bh_range)) if force or not bh_files[i].exists()}
     # skip processing if all files exists (and not forced)
     if not bh_dict:

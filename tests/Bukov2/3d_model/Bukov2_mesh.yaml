@@ -108,7 +108,7 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: False      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
     #force: False
     zk_30:            # zk5_1J
       invert_xy: False
@@ -235,6 +235,7 @@ boreholes:
 chambers: # Parameters of Chamber sensitivity precalculation
     packer_size: 2          # Size of packer in terms of points
     min_chamber_size: 2     # Size in terms of points
+    noise: 5.0 # [m] = [0.01 MPa]
 
 chambers_optimize:
     todo: False
