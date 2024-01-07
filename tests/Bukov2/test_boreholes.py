@@ -196,7 +196,7 @@ def test_field_projection():
     serialized = pickle.dumps(bh_set)
     new_bh_set = pickle.loads(serialized)
 
-    borehole_field = bh_set.project_field(workdir, cfg, bh_range)
+    borehole_field = boreholes.project_field(workdir, cfg, bh_set, bh_range)
     print("Updated: ", borehole_field.data_files)
 
     for f in borehole_field.data_files:
