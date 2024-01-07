@@ -6,7 +6,6 @@ import time
 import h5py
 
 import PyPDF2
-import img2pdf
 import os
 from pathlib import Path
 import numpy as np
@@ -35,13 +34,23 @@ def create_combined_pdf(file_list, output_filename):
         file_path = Path(file_path)  # Ensure file_path is a Path object
 
         if file_path.suffix == '.png':
+            import img2pdf
             # Convert PNG to PDF
             pdf_path = file_path.with_suffix('.pdf')
             with open(file_path, "rb") as img_file, open(pdf_path, "wb") as pdf_file:
                 pdf_file.write(img2pdf.convert(img_file.read()))
 
             file_path = pdf_path  # Update file_path to the new PDF file
-
+        if file_path.suffix == '.svg':
+            import cairosvg
+            # Convert SVG to PDF
+            pdf_path = file_path.with_suffix('.pdf')
+            #try:
+            #with open(file_path, "rb") as img_file, open(pdf_path, "wb") as pdf_file:
+            cairosvg.svg2pdf(url=str(file_path), write_to=str(pdf_path))
+            #except Exception as e:
+            #    print(f"SVG -> PDF conversion failed:\n{e}")
+            file_path = pdf_path
         # Add the PDF file to the combined PDF
         with open(file_path, "rb") as f:
             pdf_reader = PyPDF2.PdfReader(f)

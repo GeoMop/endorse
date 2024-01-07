@@ -97,7 +97,8 @@ def create_scene(plotter, cfg_geometry):
     plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     plotter.add_axes()
-    plotter.show_bounds(grid='front', all_edges=True)
+    plotter.show_grid(font_size=20, xtitle="X", ytitle="Y", ztitle="Z")
+    #plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
 def add_cylinders(plotter, lateral: 'Lateral'):
@@ -316,23 +317,29 @@ def PVD_data_on_bhset(workdir, bh_set):
 
 def plot_borehole_position(cfg, bh):
     pv.start_xvfb()
-    plotter = pv.Plotter(off_screen=True)
+    font_size = 20
+    pv.global_theme.font.size = font_size
+    plotter = pv.Plotter(off_screen=True, window_size=(1024, 768))
+    #plotter.set_font(font_size=font_size)
     plotter = create_scene(plotter, cfg.geometry)
     lateral = bh.lateral
     add_cylinders(plotter, lateral)
     add_bh(plotter, bh)
-    plotter.add_text(bh.bh_description)
+    pv.global_theme.font.size = font_size
+    for i, part in enumerate(bh.bh_description.split("\n")):
+        plotter.add_text(part, position=(500, 60 - 20*(i+1)), font_size=10)
+    #plotter.renderer.axes_actor.label_text_property.font_size = font_size
+
     return plotter
 
 
 def save_projections(plotter, workdir, fname):
 
     camera_positions = [
-        ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
-        ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
-        ([0, 0, 50], [0, 0, 0], [0, 1, 0])
+        ([-30, 0, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, -30, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, 0, 30], [0, 0, 0], [1, 0, 0])
     ]
-    resolution = (1920, 1080)
 
     out_files = []
     for axis in range(3):
@@ -342,9 +349,9 @@ def save_projections(plotter, workdir, fname):
         f_name = workdir / fname
         f_name = f_name.parent / f"{f_name.stem}_{axis}{f_name.suffix}"
         if f_name.suffix == ".png":
-              plotter.screenshot(f_name, window_size=resolution)
-        elif f_name.suffix == ".svg":
-            plotter.save_graphic(f_name)
+              plotter.screenshot(f_name)
+        elif f_name.suffix == ".svg":  # or f_name.suffix == ".pdf":      # PDF too large
+            plotter.save_graphic(f_name, raster=False)
         out_files.append(f_name)
 
     return out_files
@@ -361,7 +368,9 @@ class PlotCfg:
     show: bool = False
 
 
-
+    def plot_borehole(self):
+        plotter = plot_borehole_position(self.cfg, self.bh_set.boreholes[self.i_bh])
+        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.svg")
 
     def plot_chamber_data(self):
         """
@@ -630,7 +639,7 @@ class PlotCfg:
 
     def all(self):
         plots = [
-            *self.plot_borehole_position(),
+            *self.plot_borehole(),
             self.plot_chamber_data(),
             self.plot_mean_time_fun(),
             self.plot_relative_residual(),

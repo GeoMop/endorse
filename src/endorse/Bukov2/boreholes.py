@@ -384,11 +384,11 @@ class Borehole:
         x, y, z = self.lateral.transform(self.well_head)
         assert np.isclose(abs(x), 2.0)
         sy = self.lateral.stationing(y)
-        pos_str =f"[{pos[0]:4.2f}, {pos[1]:4.2f}, {pos[2]:4.2f}], point on wall: [ stationing: {sy:6.2f} m, height: {z:6.2f} m]"
-        angle_str = f"(azimuth: {azimuth:4.2f}\N{DEGREE SIGN}, elevation: {z_angle:4.2f}\N{DEGREE SIGN})"
+        pos_str =f"[{pos[0]:4.2f}, {pos[1]:4.2f}, {pos[2]:4.2f}],\n    point on wall: [ stationing: {sy:6.2f} m, height: {z:6.2f} m]"
+        angle_str = f"(azimuth: {azimuth:4.2f}\N{DEGREE SIGN}, inclination: {z_angle:4.2f}\N{DEGREE SIGN})"
         length_str = f"length: {self.length_from_wall:5.2f} m"
         #range_str = f"range: {tuple(self.line_bounds[i_bh])}"
-        return f"#{self.id} {pos_str} -> {angle_str}, {length_str}"
+        return f"#{self.id} {pos_str} \n    -> {angle_str}, {length_str}"
 
     def place_points(self, n_points, point_step):
         half_points = int((n_points - 1) / 2)
