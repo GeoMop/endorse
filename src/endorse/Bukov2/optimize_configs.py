@@ -15,10 +15,12 @@ workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2')
 bh_data_file = workdir / "bh_set.pickle"
 cfg_file = workdir / "Bukov2_mesh.yaml"
 
-from endorse.Bukov2 import boreholes, sa_problem
+from endorse.Bukov2 import boreholes, plot_boreholes
+import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
 from endorse.sa import analyze
 import endorse.Bukov2.optimize_packers as opt_pack
+from endorse.Bukov2.bukov_common import pkl_read
 from copy import deepcopy
 
 """
@@ -31,7 +33,7 @@ The following variants of objective function are provided:
      of some borehole. It does not detect individuals with low-sensitivity configs.
     
 * eval_individual_l1: sum_b min_p max_c ( sensitivity of p-th parameter in c-th chamber of b-th boreholes).
-    This function sums over boreholes the maximal parameter sensitivities, thus prefering individuals with all configs
+    This function sums over boreholes the maximal parameter sensitivities, thus preferring individuals with all configs
     highly sensitive.
 
 """
@@ -63,11 +65,11 @@ class OptSpace:
     def __init__(self, cfg, bh_set:boreholes.BoreholeSet, bh_opt):
         self.cfg = cfg
         self.bhs = bh_set
-        self.bhs_size = self.bhs.n_boreholes
+        self.bhs_size = len(bh_opt) # self.bhs.n_boreholes
         self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
-        self.n_configs = len(bh_opt[0])
+        self.n_configs = len(bh_opt[0][0])
         self.n_chambers = cfg.optimize.n_packers-1
-        self.n_params = bh_opt[0][0].param_values.shape[1]
+        self.n_params = len(bh_opt[0]) # bh_opt[0][0].param_values.shape[1]
         self._individual_shape = (self.n_boreholes, 2)
 
     def project_decorator(self, func):
@@ -132,8 +134,9 @@ class OptSpace:
 
     def random_bh(self):
         i_bh = np.random.randint(0, self.bhs_size)
+        i_prm = np.random.randint(0, self.n_params)
         i_cfg = np.random.randint(0, self.n_configs)
-        return i_bh, i_cfg
+        return i_bh, i_prm, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
         ind = [] #[self.random_bh()  for i in range(self.n_boreholes)]
@@ -193,26 +196,66 @@ class OptSpace:
 
         # replace a random borehole or configuration by another random one
         i = np.random.randint(self.n_boreholes)
-        j = np.random.randint(2)
-        bh, cfg = ind[i]
+        j = np.random.randint(3)
+        bh, prm, cfg = ind[i]
         if j == 0:
             bh = np.random.randint(self.bhs_size)
+        elif j == 1:
+            prm = np.random.randint(self.n_params)
         else:
             cfg = np.random.randint(self.n_configs)
-        ind[i] = (bh,cfg)
+        ind[i] = (bh,prm,cfg)
         return ind,
 
 
-# def make_individual(cfg, bh_set:boreholes.BoreholeSet):
-#     angles = bh_set.draw_angles(cfg.n_boreholes - 1)
-#     angles = [angles[0], *angles]
-#     return [
-#         make_bh_cfg(a)
-#         for a in angle
-#     ]
-#     common_angle = (np.random.randint(bh_set.n_y_angles), np.random.randint(bh_set.n_z_angles)
-#     bh_set.direction_lookup(common_angle)
+def plot_borehole_set(ind: Individual):
+    def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
+        for i in range(bh_set.n_y_angles):
+            for j in range(bh_set.n_z_angles):
+                for i_bh in bh_set.angles_table[i][j]:
+                    add_bh(plotter, bh_set, i_bh)
+        return plotter
 
+    def add_bh(plotter, bh_set, i_bh):
+        p_w, dir, p_tr = bh_set.bh_list[i_bh]
+        p_w = bh_set.transform(p_w)
+        p_tr = bh_set.transform(p_tr)
+        points, bounds = bh_set.point_lines
+        p_begin = points[i_bh, bounds[i_bh][0], :]
+        p_end = points[i_bh, bounds[i_bh][1] - 1, :]
+
+        i, j, k = bh_set.angle_ijk(i_bh)
+        angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+
+        color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
+        # print(f"Adding: {bh} col: {color}")
+        # line = pv.Line(p_w, p_tr)
+        # plotter.add_mesh(line, color='grey', line_width=1)
+
+        line = pv.Line(p_begin, p_end)
+        plotter.add_mesh(line, color='grey', line_width=2)
+
+        # Transversal point
+        # sphere = pv.Sphere(0.5, p_tr)
+        # plotter.add_mesh(sphere, color=color)
+
+        # for pt in points[i_bh, : bounds[i_bh][1]]:
+        #     sphere = pv.Sphere(0.3, pt)
+        #     plotter.add_mesh(sphere, color=color)
+
+    global workdir
+    wdir, cfg = bcommon.load_cfg(workdir / "3d_model_mock/Bukov2_mesh.yaml")
+
+    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+
+    plotter = pv.Plotter(off_screen=False)
+    plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
+    plot_boreholes.add_cylinders(plotter, bh_set)
+    # plot_bh_set(plotter, bh_set)
+    for i in ind:
+        add_bh(plotter, bh_set, i[0])
+    plotter.camera.parallel_projection = True
+    plotter.show()
 
 
 
@@ -237,7 +280,7 @@ def get_opt_results(f_path, randomize=False):
     global _bhs_opt_config
     if _bhs_opt_config is None:
         try:
-            _bhs_opt_config = opt_pack.read_optimization_results(f_path)
+            _bhs_opt_config = pkl_read(f_path, "all_bh_configs_save.pkl") #opt_pack.read_optimization_results(f_path)
             if randomize:
                 i = 0
                 for bh in _bhs_opt_config:
@@ -285,8 +328,9 @@ def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
     i = 0
     for bh in np.array(ind):
         i_bh = bh[0]
-        i_cfg = bh[1]
-        cfg = _bhs_opt_config[i_bh][i_cfg]
+        i_prm = bh[1]
+        i_cfg = bh[2]
+        cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
         param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
@@ -305,11 +349,33 @@ def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
     i = 0
     for bh in np.array(ind):
         i_bh = bh[0]
-        i_cfg = bh[1]
-        cfg = _bhs_opt_config[i_bh][i_cfg]
+        i_prm = bh[1]
+        i_cfg = bh[2]
+        cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
         param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.sum( np.min(param_max, axis=0) ) # axis=0 fixes borehole and minimizes over params
+
+
+def eval_individual_max_l1(ind:Individual) -> Tuple[float, Any]:
+
+    get_bh_set(bh_data_file)
+    get_opt_results(workdir)
+    get_opt_space()
+
+    N_bhs = _opt_space.n_boreholes  # number of boreholes in Individual
+    N_params = _opt_space.n_params  # number of sensitivity parameters
+
+    param_max = np.zeros((N_params, N_bhs))
+    i = 0
+    for bh in np.array(ind):
+        i_bh = bh[0]
+        i_prm = bh[1]
+        i_cfg = bh[2]
+        cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
+        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        i = i + 1
+    return np.min( np.max(param_max, axis=1) ) + 0.1*np.sum( np.min(param_max, axis=0) )
 
 
 def optimize(cfg, map_fn, eval_fn, checkpoint=None):
@@ -319,7 +385,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     """
 
     get_bh_set(bh_data_file)
-    get_opt_results(workdir, randomize=True) # True means generate random sensitivities
+    get_opt_results(workdir) #, randomize=True) # True means generate random sensitivities
     get_opt_space()
 
     checkpoint_freq = 10
@@ -394,6 +460,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     print('Hall of fame:')
     for ind in hof:
         print(toolbox.evaluate(ind), ind)
+        plot_borehole_set(ind)
 
     # list of borehole configs sorted by sum of evaluations
     print('Most popular configs:')
@@ -453,8 +520,8 @@ def main():
 
     cfg = common.config.load_config(cfg_file)
 
-    optimize(cfg, map, eval_individual_max)
-    optimize(cfg, map, eval_individual_l1)
+    optimize(cfg, map, eval_individual_max_l1)
+    # optimize(cfg, map, eval_individual_l1)
 
     # out_file = "deap_scoop_out"
     # out_file = os.path.abspath(out_file)

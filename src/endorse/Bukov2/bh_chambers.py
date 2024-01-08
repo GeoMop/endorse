@@ -22,9 +22,10 @@ class Chambers:
 
 
     @classmethod
-    def from_bh_set(cls, workdir, cfg, bh_set:boreholes.BoreholeSet,  i_bh:int, sa_problem:Dict[str, Any], sobol_fn) -> 'Chambers':
-        bh_data, bh_bounds = bh_set.borohole_data(workdir, cfg, i_bh)
-        bounds = bh_set.line_bounds[i_bh]
+    def from_bh_set(cls, workdir, cfg, bh_field:boreholes.BoreholeField,  i_bh:int, sa_problem:Dict[str, Any], sobol_fn) -> 'Chambers':
+        # load data
+        bh_data = bh_field.borohole_data(i_bh)
+        bounds = bh_field.point_bounds[i_bh]
         return cls(
             sa_problem,
             bh_data[:, 1:,:],   # remove zero time, as it has zero variance
