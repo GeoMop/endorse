@@ -11,7 +11,78 @@ from xml.etree import ElementTree as ET
 import attrs
 from pathlib import Path
 from endorse.Bukov2 import bukov_common as bcommon
-from endorse.Bukov2 import bh_chambers
+
+
+def add_fields(mesh, value, label):
+    """
+    :param mesh: pyvista mesh
+    :param value: sequance of values
+    :param label: sequance of labels
+    :return: mesh with added constant PointData.
+    """
+    for val, lab in zip(value, label):
+        field = np.full(mesh.n_points, val)
+        mesh.point_data[lab] = field
+    return mesh
+
+
+def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
+    if chamber_data is None:
+        bounds = [0]
+        values =  []
+        value_names = []
+    else:
+        bounds, values, value_names = chamber_data
+
+    #p_w, dir, p_tr = bh_set.bh_list[i_bh]
+    p_w = bh.lateral.transform(bh.start)
+    p_tr = bh.lateral.transform(bh.transversal)
+
+    default_values = [i_bh, *bh.yz_angles]
+    default_labels = ['ID', 'l5_angle', 'inclination']
+    meshes = []
+
+    line = pv.Line(p_w, p_tr)
+    line1 = add_fields(line, default_values, default_labels )
+    if len(value_names) > 0:
+        line1 = add_fields(line1, np.mean(values, axis=0), value_names)
+    meshes.append(line1)       # borehole line
+
+    # Chamber cylinders
+    for begin, end, value in zip(bounds[:-1], bounds[1:], values):
+        p_begin = bh.lateral.transform(bh.line_point(begin))
+        p_end = bh.lateral.transform(bh.line_point(end))
+        cylinder = pv.Cylinder(
+            center=(p_begin +p_end)/2,
+            direction=p_end - p_begin,
+            radius = 0.056/2,
+            height=np.linalg.norm(p_end - p_begin),
+            resolution=8,
+            capping=False
+        )
+        cyl1 = add_fields(cylinder, default_values, default_labels)
+        meshes.append(add_fields(cyl1, value, value_names))
+    return meshes
+
+def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
+    meshes = []
+    for i_bh, bh in enumerate(bh_set.boreholes):
+        if chamber_data is None:
+            ch_d = None
+        else:
+            bounds, data, labels = chamber_data
+            ch_d = bounds[i_bh], data[i_bh], labels
+        meshes.extend(meshes_bh_vtk(i_bh, bh, chamber_data=ch_d))
+
+    # Merge the primitives
+    combined_mesh = pv.merge(meshes, merge_points=False)        # Try to get distinguise values on interfaces.
+
+    # Visualize the combined mesh with different colors for each ID
+    # plotter = pv.Plotter()
+    # plotter.add_mesh(combined_mesh, scalars=['ID', *value_names])
+    # plotter.show()
+
+    combined_mesh.save(workdir / fname)
 
 
 def create_scene(plotter, cfg_geometry):
@@ -26,31 +97,29 @@ def create_scene(plotter, cfg_geometry):
     plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     plotter.add_axes()
-    plotter.show_bounds(grid='front', all_edges=True)
+    plotter.show_grid(font_size=20, xtitle="X", ytitle="Y", ztitle="Z")
+    #plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
-def add_cylinders(plotter, bh_set: 'BoreholeSet'):
-    # Create a horizontal cylinder
-    r, l0, l1 = bh_set.avoid_cylinder
-    avoid_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.8)
+def add_cylinders(plotter, lateral: 'Lateral'):
+    corner_min = lateral.transform([2, -2, -1.8])
+    corner_max = lateral.transform([12, 2, 2.2])
+    box = pv.Box(bounds=(corner_min[0], corner_max[0], corner_min[1], corner_max[1], corner_min[2], corner_max[2]))
+    plotter.add_mesh(box, color='grey' , opacity=0.7)
 
-    r, l0, l1 = bh_set.active_cylinder
-    active_cylinder = pv.Cylinder(center=bh_set.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    # Create a horizontal cylinder
+    r, l0, l1 = lateral.avoid_cylinder
+    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.3)
+
+    r, l0, l1 = lateral.active_cylinder
+    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
 
 def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-    for i in range(bh_set.n_y_angles):
-        for j in range(bh_set.n_z_angles):
-            for i_bh in bh_set.angles_table[i][j]:
-                add_bh(plotter, bh_set, i_bh)
-
-    # i,j = 1, 2
-    # iangle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
-    # for i_bh in bh_set.angles_table[i][j]:
-    #     add_bh(plotter, iangle_norm, bh_set, i_bh)
-
+    for i_bh, bh in enumerate(bh_set.boreholes):
+        add_bh(plotter, bh)
     return plotter
 
 
@@ -65,21 +134,21 @@ def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
 
 
 
-def add_bh(plotter, bh_set, i_bh, color=None, label=False):
-    p_w, dir, p_tr = bh_set.bh_list[i_bh]
-    p_w = bh_set.transform(p_w)
-    p_tr = bh_set.transform(p_tr)
-    points, bounds = bh_set.point_lines
-    p_begin = points[i_bh, bounds[i_bh][0], :]
-    p_end = points[i_bh, bounds[i_bh][1] - 1, :]
+def add_bh(plotter, bh: 'Borehole', color=None, label=False):
+    #p_w, dir, p_tr = bh_set.bh_list[i_bh]
+    p_w = bh.lateral.transform(bh.start)
+    p_tr = bh.lateral.transform(bh.transversal)
+    bounds = bh.bounds
+    p_begin = bh.lateral.transform(bh.line_point(bounds[0]))
+    p_end = bh.lateral.transform(bh.line_point(bounds[1]))
 
-    i, j, k = bh_set.angle_ijk(i_bh)
-    angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+    angle_norm = (np.array(bh.yz_angles) + 90) / 180
 
     if color is None:
         color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
     if label:
-        plotter.add_point_labels([p_end], [str(i_bh)], text_color=color,
+        # Somehow doesn't work, prevents plot of several boreholes.
+        plotter.add_point_labels([p_end], [bh.id], text_color=color,
             font_size = 50, point_size = 50,
             render_points_as_spheres = True, always_visible = True, shadow = True
         )
@@ -91,8 +160,12 @@ def add_bh(plotter, bh_set, i_bh, color=None, label=False):
     plotter.add_mesh(line, color=color, line_width=2)
 
     # Transversal point
-    sphere = pv.Sphere(0.5, p_tr)
+    sphere = pv.Sphere(0.2, p_tr)
     plotter.add_mesh(sphere, color=color)
+
+    # end point
+    sphere = pv.Sphere(0.3, bh.lateral.transform(bh.end_point))
+    plotter.add_mesh(sphere, color='black')
 
     # for pt in points[i_bh, : bounds[i_bh][1]]:
     #     sphere = pv.Sphere(0.3, pt)
@@ -241,6 +314,48 @@ def PVD_data_on_bhset(workdir, bh_set):
     PVD_eval_field(workdir, times, points, field)
 
 
+
+def plot_borehole_position(cfg, bh):
+    pv.start_xvfb()
+    font_size = 20
+    pv.global_theme.font.size = font_size
+    plotter = pv.Plotter(off_screen=True, window_size=(1024, 768))
+    #plotter.set_font(font_size=font_size)
+    plotter = create_scene(plotter, cfg.geometry)
+    lateral = bh.lateral
+    add_cylinders(plotter, lateral)
+    add_bh(plotter, bh)
+    pv.global_theme.font.size = font_size
+    for i, part in enumerate(bh.bh_description.split("\n")):
+        plotter.add_text(part, position=(500, 60 - 20*(i+1)), font_size=10)
+    #plotter.renderer.axes_actor.label_text_property.font_size = font_size
+
+    return plotter
+
+
+def save_projections(plotter, workdir, fname):
+
+    camera_positions = [
+        ([-30, 0, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, -30, 0], [0, 0, 0], [0, 0, 1]),
+        ([0, 0, 30], [0, 0, 0], [1, 0, 0])
+    ]
+
+    out_files = []
+    for axis in range(3):
+        plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
+        plotter.camera.parallel_projection = True
+        #f_name = workdir / f"bh_shot_{axis}.svg"
+        f_name = workdir / fname
+        f_name = f_name.parent / f"{f_name.stem}_{axis}{f_name.suffix}"
+        if f_name.suffix == ".png":
+              plotter.screenshot(f_name)
+        elif f_name.suffix == ".svg":  # or f_name.suffix == ".pdf":      # PDF too large
+            plotter.save_graphic(f_name, raster=False)
+        out_files.append(f_name)
+
+    return out_files
+
 @attrs.define
 class PlotCfg:
     workdir : Path
@@ -248,39 +363,14 @@ class PlotCfg:
     bh_set : 'BoreholeSet'
     chambers : 'Chambers'
     i_bh: int
-    opt_packers: List[List[bh_chambers.PackerConfig]]
+    opt_packers: List[List['PackerConfig']]
     param_names : List[str]
-    show: bool
+    show: bool = False
 
 
-    def plot_borehole_position(self):
-        pv.start_xvfb()
-        plotter = pv.Plotter(off_screen=True)
-        plotter = create_scene(plotter, self.cfg.geometry)
-        add_cylinders(plotter, self.bh_set)
-        add_bh(plotter, self.bh_set, self.i_bh)
-        plotter.add_text(self.bh_set.bh_description(self.i_bh))
-
-        camera_positions = [
-            ([-50, 0, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, -50, 0], [0, 0, 0], [0, 0, 1]),
-            ([0, 0, 50], [0, 0, 0], [0, 1, 0])
-        ]
-        resolution = (1920, 1080)
-
-        out_files = []
-        for axis in range(3):
-            plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
-            plotter.camera.parallel_projection = True
-            f_name = self.workdir / f"bh_shot_{axis}.png"
-            plotter.screenshot(f_name, window_size=resolution)
-            out_files.append(f_name)
-
-        if self.show:
-            plotter.show()
-
-        return out_files
-
+    def plot_borehole(self):
+        plotter = plot_borehole_position(self.cfg, self.bh_set.boreholes[self.i_bh])
+        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.svg")
 
     def plot_chamber_data(self):
         """
@@ -549,7 +639,7 @@ class PlotCfg:
 
     def all(self):
         plots = [
-            *self.plot_borehole_position(),
+            *self.plot_borehole(),
             self.plot_chamber_data(),
             self.plot_mean_time_fun(),
             self.plot_relative_residual(),

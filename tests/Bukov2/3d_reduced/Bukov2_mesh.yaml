@@ -126,10 +126,10 @@ boreholes:
       avoid_cylinder: [3, 0, 12]        # r, x0, x1
       active_cylinder: [20, 3, 30]      # r, x0, x1
       wh_zones:
-        #   Each zoe is a box given by mina nd max corners
+        #   Each zone is a box given by mina nd max corners
         - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
         - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
-
+      max_bh_length: 30
 
       point_step: 0.5             # absolute step of evaluation points (in meters)
       n_points_per_bh: 41         # borehole at most 20m active section

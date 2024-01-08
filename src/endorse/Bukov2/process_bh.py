@@ -20,20 +20,25 @@ def process_borehole(workdir, i_bh):
     return _process_borehole(bh_workdir, workdir, i_bh)
 
 @bcommon.memoize
+def _optimize_borehole(workdir, cfg, chambers):
+    return bh_chambers.optimize_packers(cfg, chambers)
+
+
+@bcommon.memoize
 def _process_borehole(bh_workdir, workdir, i_bh):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     bh_set = boreholes.make_borehole_set(workdir, cfg)
+    bh_field = boreholes.project_field(workdir,cfg, bh_set, None, force=cfg.boreholes.force)
 
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     sobol_fn = sobol_fast.vec_sobol_total_only
-    chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_set, i_bh, problem, sobol_fn)
+    chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_field, i_bh, problem, sobol_fn)
 
-    best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)
-
+    best_packer_configs = _optimize_borehole(bh_workdir, cfg, chambers)
     # shuld not be necessary as the whole funcion result is memoized
-    bcommon.pkl_write(bh_workdir, best_packer_configs, "best_packer_configs.pkl")
-
+    #bcommon.pkl_write(bh_workdir, best_packer_configs, "best_packer_configs.pkl")
+    print("Plotting")
     param_names = list(problem['names'])
     plots = plot_boreholes.PlotCfg(
         bh_workdir, cfg, bh_set, chambers,
