@@ -24,8 +24,8 @@ def main(workdir, bh_range):
     cfg_file = workdir / "Bukov2_mesh.yaml"
     workdir, cfg = load_cfg(cfg_file)
     bh_set = boreholes.make_borehole_set(workdir, cfg)
-    updated_files_dict = bh_set.project_field(workdir, cfg, bh_range)
-    print("Updated: ", updated_files_dict)
+    bh_field = boreholes.project_field(workdir, cfg, bh_set, bh_range)
+    print("Updated: ", bh_field.data_files)
 
 if __name__ == '__main__':
     workdir = Path(sys.argv[1]).absolute()

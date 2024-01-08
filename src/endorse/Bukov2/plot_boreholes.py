@@ -370,7 +370,7 @@ class PlotCfg:
 
     def plot_borehole(self):
         plotter = plot_borehole_position(self.cfg, self.bh_set.boreholes[self.i_bh])
-        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.svg")
+        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.png")
 
     def plot_chamber_data(self):
         """
