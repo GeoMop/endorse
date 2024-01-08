@@ -202,7 +202,7 @@ class Lateral:
         # deviation from foliation is below tolerance
         dir_model = self.transform(end_point) - self.transform(start)
         unit_dir_model = dir_model / np.linalg.norm(dir_model)
-        foliation_dir_model = Borehole._direction(self.foliation_longitude-self.l5_azimuth, self.foliation_latitude)
+        foliation_dir_model = Borehole._direction(-self.foliation_longitude+self.l5_azimuth+90, self.foliation_latitude)
         if abs(np.dot(unit_dir_model, foliation_dir_model)) < np.cos(np.radians(self.foliation_angle_tolerance)):
             return None
 

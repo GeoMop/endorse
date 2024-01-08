@@ -144,7 +144,7 @@ def test_from_end_points_real():
     starts = [[0.4, y, -0.3] for y in y_starts]
 
     ends_top_x = [4.5, 6.5, 8.5, 10.5, 12.5, 14.5]
-    ends_top_z = [3.2, 3.7, 4.2, 5.2, 6.2, 8.2]
+    ends_top_z = [3.2, 3.7, 4.2, 5.2, 6.2, 8.2, -3.2, -3.7, -4.2, -5.2, -6.2, -8.2]
     ends_top = [[x, 0, z] for x in ends_top_x for z in ends_top_z]
 
     lines = [(start, end, 20) for start in starts for end in ends_top]
@@ -157,11 +157,9 @@ def test_from_end_points_real():
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
-    fol_start = starts[0]
-    fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
-    fol_end = starts[0] + fol_dir
-    fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
-    plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
+    fol_dir = boreholes.Borehole._direction(-lateral.foliation_longitude+lateral.l5_azimuth+90, lateral.foliation_latitude)
+    for s in starts:
+        plot_boreholes.add_cone(plotter, lateral.transform(s), fol_dir, 10, lateral.foliation_angle_tolerance, 'green')
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()

@@ -95,6 +95,15 @@ def add_bh(plotter, bh: 'Borehole', color=None, label=False):
     #     plotter.add_mesh(sphere, color=color)
 
 
+def add_cone(plotter, start, direction, length, angle, color):
+    cone = pv.Cone(center=start+length/2*direction/np.linalg.norm(direction), direction=-direction, height=length, angle=angle, resolution=angle)
+    plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
+    plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
+    cone = pv.Cone(center=start-length/2*direction/np.linalg.norm(direction), direction=direction, height=length, angle=angle, resolution=angle)
+    plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
+    plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
+
+
 #######################################################################
 
 
