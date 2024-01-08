@@ -179,6 +179,8 @@ def add_cone(plotter, start, direction, length, angle, color):
     cone = pv.Cone(center=start-length/2*direction/np.linalg.norm(direction), direction=direction, height=length, angle=angle, resolution=angle)
     plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
     plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
+    line = pv.Line(start-5*length*direction, start+5*length*direction)
+    plotter.add_mesh(line, color=color, line_width=2)
 
 
 #######################################################################
