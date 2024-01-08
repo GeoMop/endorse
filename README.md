@@ -61,7 +61,7 @@ The entrypoints are:
     ...
     singularity shell endorse.sif
     cd tests/Bukov2
-    ./run_postprocess_D02
+    ./run_postprocess
     ```
 
 3. Collect samples.
