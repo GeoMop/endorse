@@ -765,3 +765,40 @@ def combined_mapper(max_value, threshold=1e-3):
     #cmapper = lambda x : custom_cmap(value_mapper(norm.inverse(x)))
     sm = plt.cm.ScalarMappable(norm=value_mapper, cmap=custom_cmap)
     return sm
+
+def plot_sensitivity_histograms(sensitivities, param_names):
+    import scipy
+    """
+      Plots histograms for an array `sensitivities` based on the derivative of a smoothed empirical CDF
+      (using Gaussian kernel density estimation) for each parameter, with logarithmic scale and fixed x range.
+
+      :param sensitivities: numpy array of shape (n_samples, n_params)
+      :param param_names: list of parameter names of length n_params
+      """
+    n_params = sensitivities.shape[1]
+
+    # Using a discrete color map (tab10)
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i) for i in range(n_params)]
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    x_grid = np.geomspace(1e-10, 2, 1000)  # Fixed x range
+
+    for i in range(n_params):
+        data = sensitivities[:, i]
+
+        # Gaussian Kernel Density Estimation
+        kde = scipy.stats.gaussian_kde(data, bw_method='silverman')
+        pdf = kde.evaluate(x_grid)
+        ax.plot(x_grid, pdf, color=colors[i % len(colors)], label=param_names[i])
+
+    ax.set_xscale('log')  # Setting logarithmic scale
+    ax.set_yscale('log')
+    ax.set_ylim(1e-2, 1e6)
+    ax.legend()
+    ax.set_xlabel('Parameter Value (log scale)')
+    ax.set_ylabel('Density')
+    ax.set_title('Smoothed Histograms of Sensitivities on Log Scale')
+
+    plt.show()

@@ -25,6 +25,12 @@ def direction_angles(unit_direction):
     return 180 * y_angle / np.pi, 180 * z_angle / np.pi
 
 
+def normalize_sensitivities(data, fn):
+    data_2d = data.reshape(-1, data.shape[-1])
+    param_scale = fn(data_2d, axis=0)
+    data_scaled =  data_2d[:, :] / param_scale[None, :]
+    return data_scaled.reshape(data.shape)
+
 def soft_lim_pressure(pressure):
     atm_pressure = 1.013 * 1e5 / 9.89 / 1000    # atmospheric pressure in [m] of water
     abs_pressure = pressure + atm_pressure

@@ -6,10 +6,10 @@ from endorse.Bukov2 import plot_boreholes, boreholes
 from pathlib import Path
 script_dir = Path(__file__).absolute().parent
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_bh_chamebres():
-
-    workdir, cfg = bcommon.load_cfg(script_dir / "3d_reduced/Bukov2_mesh.yaml")
+    # Full borehole processing: optimization + plotting
+    workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
     i_bh = 11
     process_bh.process_borehole(workdir, i_bh)
     # sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
@@ -30,16 +30,19 @@ def test_bh_chamebres():
     #     i_bh, best_packer_configs, param_names, show=False)
     # plots.all()
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_optimize_packers():
-
+    # Optimization of packers only ( about half that time)
+    # reduced number of points
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     bh_set = boreholes.make_borehole_set(workdir, cfg)
-    i_bh = 9
-    sobol_fn = sobol_fast.vec_sobol_total_only
-    chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_set, i_bh, problem, sobol_fn)
+    bh_field = boreholes.project_field(workdir, cfg, bh_set, None, force=cfg.boreholes.force)
 
+    i_bh = 45
+    sobol_fn = sobol_fast.vec_sobol_total_only
+    chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_field, i_bh, problem, sobol_fn)
+    plot_boreholes.plot_sensitivity_histograms(chambers.all_chambers[1], problem['names'])
     # Optimize
     best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)

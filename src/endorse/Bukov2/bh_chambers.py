@@ -48,8 +48,8 @@ class Chambers:
 
     @staticmethod
     def sobol_max(array, axis=0, index=0):
-        # n_variants, n_param, n_indices = array.shape
-        # return max over n_variants in given sobol index
+        # n_times, n_param, n_indices = array.shape
+        # return max over n_times in given sobol index
         # default is ST
         i_variants = np.argmax(array[..., index], axis=axis, keepdims=True)
         i_variants = i_variants[..., None]
@@ -183,7 +183,8 @@ class Chambers:
         # (n_chambers, n_times, n_samples)
 
         # Evaluate chamber sensitivities
-        return self.eval_from_chambers_sa(chamber_means, sobol_fn)
+        sensitivities =  self.eval_from_chambers_sa(chamber_means, sobol_fn)
+        return sensitivities
 
     @cached_property
     def all_chambers(self):
@@ -201,24 +202,53 @@ class Chambers:
         index = np.full((self.n_points, self.n_points), -1, dtype=np.int32)
         for i_chamber, (begin, end) in enumerate(chambers):
             index[begin, end] = i_chamber
-        return index, self.eval_chambers(chambers)[:, :, 0]
+        total_sensitivities = self.eval_chambers(chambers)[:, :, 0] # remove index axis of size one
+        # (n_chambers, n_params)
+        return index, total_sensitivities
+
+
+
+
+    def _get_chamber_data(self, index, all_data, i, j):
+        i_chamber = index[i, j]
+        if i_chamber >= 0:
+            return all_data[i_chamber, :]
+        else:
+            # return zero indices for unavailable chamber configurations
+            return np.zeros(self.n_params)
 
     def chamber(self, i, j):
+        """
+        Use index to map (begin, end) pair to chamber index
+        and return data for that index.
+        :param i:
+        :param j:
+        :return:
+        """
         index, data = self.all_chambers
-        i_chamber = index[i, j]
-        if i_chamber > 0:
-            return data[i_chamber, :]
-        else:
-            #return np.full(self.n_params, np.nan)
-            return np.zeros(self.n_params)
-    #
+        return self._get_chamber_data(index, data, i, j)
+
+    @cached_property
+    def _normalized_sensitivities(self):
+        index, data = self.all_chambers
+        """
+        All sensitivities have skewed PDF with steep right edge, high quantile or even maximum would be good scaling 
+        function.
+        """
+        scaling_measure = lambda x, **kw : np.quantile(data, q=0.95, **kw)
+        return index, bcommon.normalize_sensitivities(data, scaling_measure)
+
+    def normalized_chamber(self, i, j):
+        index, data = self._normalized_sensitivities
+        return self._get_chamber_data(index, data, i, j)
+
     # @property
     # def index(self):
     #     return self.all_chambers[0]
 
     def packer_config(self, packers, st_values):
         chambers = list(zip(packers[:-1], packers[1:] - self.packer_size))
-        sensitivites = np.array([self.chamber(i, j) for i, j in chambers])
+        sensitivites = np.array([self.normalized_chamber(i, j) for i, j in chambers])
 
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
         return PackerConfig(packers, sensitivites, full_sobol)
@@ -264,9 +294,11 @@ class PackerConfig:
         return f"Packers{self.packers.tolist()} = sens {self.param_sensitivity.tolist()}"
 
 
-def packers_eval(chambers_obj, packers, weights):
+def packers_eval(chambers_obj: Chambers, packers, weights):
     chambers = zip(packers[:-1], packers[1:])
     sensitivites = np.array([chambers_obj.chamber(i, j - chambers_obj.packer_size) for i, j in chambers])
+
+
     #sensitivites = np.nan_to_num(sensitivites, nan=0.0)
     # shape: (n_chamberes = 3, n_params)
     return weights[0] * np.max(sensitivites, axis=0) + weights[1] * np.mean(sensitivites, axis=0)
