@@ -43,6 +43,6 @@ def test_optimize_packers():
     i_bh = 45
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_field, i_bh, problem, sobol_fn)
-    plot_boreholes.plot_sensitivity_histograms(chambers.all_chambers[1], problem['names'])
+    #plot_boreholes.plot_sensitivity_histograms(chambers.all_chambers[1], problem['names'])
     # Optimize
     best_packer_configs = bh_chambers.optimize_packers(cfg, chambers)

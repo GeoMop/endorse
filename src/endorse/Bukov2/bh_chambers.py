@@ -184,10 +184,11 @@ class Chambers:
 
         # Evaluate chamber sensitivities
         sensitivities =  self.eval_from_chambers_sa(chamber_means, sobol_fn)
+        # (n_chambers, n_params, 1)
         return sensitivities
 
     @cached_property
-    def all_chambers(self):
+    def _all_chambers(self):
         """
         Precalculates ST indices of all chamber variants.
         (n_chamber_variants, n_params)
@@ -199,64 +200,56 @@ class Chambers:
             for begin in range(min_idx, max_idx - self.min_chamber_size)
                 for end in range(begin + self.min_chamber_size, max_idx)
             ]
-        index = np.full((self.n_points, self.n_points), -1, dtype=np.int32)
+        index = np.full((self.n_points, self.n_points), len(chambers), dtype=np.int32)
         for i_chamber, (begin, end) in enumerate(chambers):
             index[begin, end] = i_chamber
         total_sensitivities = self.eval_chambers(chambers)[:, :, 0] # remove index axis of size one
-        # (n_chambers, n_params)
+        n_chambers, n_params = total_sensitivities.shape
+
+        # add zero sensitivities item for invalid bigin, end pairs
+        total_sensitivities = np.concatenate((total_sensitivities, np.zeros((1, n_params))), axis=0)
+
         return index, total_sensitivities
 
+    @property
+    def index(self):
+        index, data = self._all_chambers
+        return index
 
-
-
-    def _get_chamber_data(self, index, all_data, i, j):
-        i_chamber = index[i, j]
-        if i_chamber >= 0:
-            return all_data[i_chamber, :]
-        else:
-            # return zero indices for unavailable chamber configurations
-            return np.zeros(self.n_params)
-
-    def chamber(self, i, j):
-        """
-        Use index to map (begin, end) pair to chamber index
-        and return data for that index.
-        :param i:
-        :param j:
-        :return:
-        """
-        index, data = self.all_chambers
-        return self._get_chamber_data(index, data, i, j)
+    @property
+    def chambers_sensitivities(self):
+        index, data = self._all_chambers
+        return data
 
     @cached_property
-    def _normalized_sensitivities(self):
-        index, data = self.all_chambers
+    def chambers_norm_sensitivities(self):
+        data = self.chambers_sensitivities
         """
         All sensitivities have skewed PDF with steep right edge, high quantile or even maximum would be good scaling 
         function.
         """
         scaling_measure = lambda x, **kw : np.quantile(data, q=0.95, **kw)
-        return index, bcommon.normalize_sensitivities(data, scaling_measure)
-
-    def normalized_chamber(self, i, j):
-        index, data = self._normalized_sensitivities
-        return self._get_chamber_data(index, data, i, j)
+        return bcommon.normalize_sensitivities(data, scaling_measure)
 
     # @property
     # def index(self):
     #     return self.all_chambers[0]
 
-    def packer_config(self, packers, st_values):
-        chambers = list(zip(packers[:-1], packers[1:] - self.packer_size))
-        sensitivites = np.array([self.normalized_chamber(i, j) for i, j in chambers])
+    def packer_config(self, packers, opt_values):
+        chambers_begin = packers[:-1]
+        chambers_end = packers[1:] - self.packer_size
+        i_chambers = self.index[chambers_begin, chambers_end]
+        sensitivites = self.chambers_sensitivities[i_chambers]
 
+        chambers = zip(chambers_begin, chambers_end)
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
-        return PackerConfig(packers, sensitivites, full_sobol)
+        return PackerConfig(packers, sensitivites, opt_values, full_sobol)
 
 @attrs.define(slots=False)
 class PackerConfig:
-    packers: np.ndarray       # (n_packers,) int ; positions of the ends of the packers,
-    st_values: np.ndarray
+    packers: np.ndarray          # (n_packers,) int ; positions of the ends of the packers,
+    st_values: np.ndarray        # chambers sensitivities, shape (3, n_params)
+    opt_values: np.ndarray       # value of self in the view of every parameter (n_params, )
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
     def __getstate__(self):
@@ -294,18 +287,36 @@ class PackerConfig:
         return f"Packers{self.packers.tolist()} = sens {self.param_sensitivity.tolist()}"
 
 
-def packers_eval(chambers_obj: Chambers, packers, weights):
-    chambers = zip(packers[:-1], packers[1:])
-    sensitivites = np.array([chambers_obj.chamber(i, j - chambers_obj.packer_size) for i, j in chambers])
-
-
-    #sensitivites = np.nan_to_num(sensitivites, nan=0.0)
-    # shape: (n_chamberes = 3, n_params)
-    return weights[0] * np.max(sensitivites, axis=0) + weights[1] * np.mean(sensitivites, axis=0)
-
 def combination_to_packers(chambers, comb):
     i_chamber = np.arange(len(comb), dtype=np.int32)
     return (i_chamber * (chambers.min_packer_distance - 1)) + comb
+
+
+def optimal_configs(chambers:Chambers, packers, chamber_sensitivities, n_largest, weights):
+    """
+    :param packers: (n_combinations, n_packers)  # packer positions
+    :param chamber_sensitivities: (n_combinations, n_chambers, n_param)
+    :param n_largest: int
+    :return: (n_param, n_largest) x PackerConfig
+    """
+    n_params = chambers.n_params
+    # first criteria
+    param_max_over_chambers = np.max(chamber_sensitivities, axis=1)
+
+    # second criteria
+    sum_over_chambers = np.sum(chamber_sensitivities, axis=1)
+    sum_over_other_params = np.sum(sum_over_chambers, axis=1)[:, None] - sum_over_chambers
+
+    values = weights[0] * param_max_over_chambers + weights[1] * sum_over_other_params
+    # shape (n_combinations, n_params)
+
+    # Now we select for each parameter n_largest combinations
+    indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
+    single_best_config = lambda idx : chambers.packer_config(packers[idx], values[idx])
+    best_configs_for_param = lambda i_param_configs : [single_best_config(i_param_configs[i_best]) for i_best in range(n_largest)]
+    opt_packer_configs = [ best_configs_for_param(indices[:, i_param]) for i_param in range(n_params)]
+    # shape: (n_params, n_largest) of PackerConfig
+    return opt_packer_configs
 
 
 def optimize_packers(cfg, chambers: Chambers):
@@ -316,15 +327,30 @@ def optimize_packers(cfg, chambers: Chambers):
     n_params = chambers.n_params
     weights = cfg_opt.weights
 
-    total_items = n_points - (n_packers - 1) * chambers.min_packer_distance + n_packers - 1
+    # Chambers implicitely evaluates all_chambers, computing sensitivities for all possible chamber begin - end
+    # pairs.
+
+    # Next we evaluate all combinations of 3 chambers
+    n_chambers = n_packers - 1
+    total_items = n_points - n_chambers * chambers.min_packer_distance + n_chambers
     combinations = list(itertools.combinations(range(total_items), n_packers))
+    n_comb = len(combinations)
     packers = np.array([combination_to_packers(chambers, comb) for comb in combinations], dtype=np.int32)
     np.random.shuffle(packers)    # to avoid prior preferences in position
-    values = [packers_eval(chambers, p, weights) for p in packers]
-    # shape (n_combinations, n_params)
-    indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
-    opt_packer_configs = [[chambers.packer_config(packers[indices[i_best, i_param]], values[indices[i_best, i_param]]) for i_best in range(n_largest)]
-        for i_param in range(n_params)]
+    chambers_ranges = np.stack( (packers[:, :-1], packers[:, 1:]), axis=2) # (n_packer_configs, n_chambers, 2)
+    assert chambers_ranges.shape[1] == n_chambers
+    chambers_ranges = chambers_ranges.reshape(-1, 2)
+    begins = chambers_ranges[:, 0]
+    ends = chambers_ranges[:, 1] - chambers.packer_size
+    chamber_indices = chambers.index[begins, ends]
+    assert chamber_indices.shape == (chambers_ranges.shape[0],)
+    chamber_sensitivites = chambers.chambers_sensitivities[chamber_indices].reshape(n_comb, n_chambers, n_params)
+    chamber_norm_sensitivites = chambers.chambers_norm_sensitivities[chamber_indices].reshape(n_comb, n_chambers, n_params)
 
+    opt_fn = lambda x : optimal_configs(chambers, packers, x, n_largest, weights)
+    opt_for_unscaled = opt_fn(chamber_sensitivites)
+    opt_for_normalized = opt_fn(chamber_norm_sensitivites)
+    opt_packer_configs = [ [*unscaled, *normalized] for unscaled, normalized in zip(opt_for_unscaled, opt_for_normalized)]
+    print( len(opt_packer_configs), len(opt_packer_configs[0]))
     return opt_packer_configs
 
