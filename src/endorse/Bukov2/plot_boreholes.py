@@ -98,6 +98,11 @@ def create_scene(plotter, cfg_geometry):
 
     plotter.add_axes()
     plotter.show_grid(font_size=20, xtitle="X", ytitle="Y", ztitle="Z")
+    plotter.camera.position = (-30, 0, 0)
+    plotter.camera.focal_point = (0, 0, 0)
+    plotter.camera.up = (0, 0, 1)
+    plotter.camera.parallel_projection = True
+
     #plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
@@ -125,12 +130,13 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
 
 def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
     values, ids = zip(*bh_tuples)
+    ids = [int(id) for id in ids]
     values = np.array(values)
     normalized_values = (values - values.min()) / (values.max() - values.min())
     cmap = plt.cm.get_cmap("viridis")
     colors = cmap(normalized_values)
     for bh_id, col in zip(ids, colors):
-        add_bh(plotter, bh_set, int(bh_id), color=col)
+        add_bh(plotter, bh_set.boreholes[bh_id], color=col)
 
 
 
@@ -172,7 +178,7 @@ def add_bh(plotter, bh: 'Borehole', color=None, label=False):
     #     plotter.add_mesh(sphere, color=color)
 
 
-def add_cone(plotter, start, direction, length, angle, color):
+def _add_cone(plotter, start, direction, length, angle, color):
     cone = pv.Cone(center=start+length/2*direction/np.linalg.norm(direction), direction=-direction, height=length, angle=angle, resolution=angle)
     plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
     plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
@@ -182,6 +188,12 @@ def add_cone(plotter, start, direction, length, angle, color):
     line = pv.Line(start-5*length*direction, start+5*length*direction)
     plotter.add_mesh(line, color=color, line_width=2)
 
+def add_foliation_cylinders(plotter, lateral):
+    fol_dir = bcommon.direction_vector(-lateral.foliation_longitude+lateral.l5_azimuth+90, lateral.foliation_latitude)
+    r, l0, l1 = lateral.avoid_cylinder
+    fol_start = lateral.transform([1.0 * l0 - 0.0 * l1, 0, 0])
+    _add_cone(plotter, fol_start, fol_dir, 10, lateral.foliation_angle_tolerance, 'green')
+    return plotter
 
 #######################################################################
 

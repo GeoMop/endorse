@@ -3,7 +3,7 @@ import attrs
 import itertools
 from endorse.Bukov2 import boreholes
 from endorse.sa import analyze
-from endorse.Bukov2 import sobol_fast
+from endorse.Bukov2 import sobol_fast, bukov_common as bcommon
 from endorse import common
 import numpy as np
 from endorse.sa.analyze import sobol_vec
@@ -104,7 +104,8 @@ class Chambers:
 
     @cached_property
     def cumul_bh_data(self):
-        return np.cumsum(self.bh_data, axis=0)
+        lim_pressure = bcommon.soft_lim_pressure(self.bh_data)
+        return np.cumsum(lim_pressure, axis=0)
 
     @property
     def n_groups(self):

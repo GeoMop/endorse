@@ -10,6 +10,21 @@ import os
 from pathlib import Path
 import numpy as np
 
+
+def direction_vector(y_phi, z_phi):
+    y_phi = y_phi / 180 * np.pi
+    z_phi = z_phi / 180 * np.pi
+    sy, cy = np.sin(y_phi), np.cos(y_phi)
+    sz, cz = np.sin(z_phi), np.cos(z_phi)
+    return np.array([cy * cz, sy * cz, sz])
+
+
+def direction_angles(unit_direction):
+    z_angle = np.arcsin(unit_direction[2])
+    y_angle = np.arcsin(unit_direction[1] / np.cos(z_angle))
+    return 180 * y_angle / np.pi, 180 * z_angle / np.pi
+
+
 def soft_lim_pressure(pressure):
     atm_pressure = 1.013 * 1e5 / 9.89 / 1000    # atmospheric pressure in [m] of water
     abs_pressure = pressure + atm_pressure
@@ -131,7 +146,7 @@ def memoize(func):
         val = pkl_read(workdir, fname)
         force = kwargs.pop('force', False)
         if force is True or val is None:
-            print(f"Execute {func.__name__}  {args}")
+            print(f"Execute {func.__name__}  ")
             start = time.process_time_ns()
             val = func(workdir, *args, **kwargs)
             sec = (time.process_time_ns() - start) / 1e9
@@ -139,7 +154,7 @@ def memoize(func):
 
             pkl_write(workdir, val, fname)
         else:
-            print(f"Skip {func.__name__} {args}.")
+            print(f"Skip {func.__name__} .")
         return val
     return wrapper
 

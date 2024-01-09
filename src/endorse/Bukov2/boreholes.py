@@ -28,7 +28,7 @@ Point3d = Tuple[float, float, float]
 Box = Tuple[Point3d, Point3d]
 
 @bcommon.memoize
-def _make_borehole_set(workdir, cfg):
+def _make_borehole_set(workdir, cfg) -> 'BoreholeSet':
     # Prepare BoreholeSet with simulation data loaded
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     cfg_zk = cfg.boreholes.zk_30
@@ -52,11 +52,14 @@ def _make_borehole_set(workdir, cfg):
     l_set = union(*lines)
 
     bh_set = lateral.set_from_points(l_set)
+
+    print("N boreholes:", bh_set.n_boreholes)
+    bh_set.boreholes_print_sorted()
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
     return bh_set
 
-def make_borehole_set(workdir, cfg):
+def make_borehole_set(workdir, cfg) -> 'BoreholeSet':
     return _make_borehole_set(workdir, cfg, force=cfg.boreholes.force)
 
 
@@ -228,7 +231,7 @@ class Lateral:
         # deviation from foliation is below tolerance
         dir_model = self.transform(end_point) - self.transform(start)
         unit_dir_model = dir_model / np.linalg.norm(dir_model)
-        foliation_dir_model = Borehole._direction(-self.foliation_longitude+self.l5_azimuth+90, self.foliation_latitude)
+        foliation_dir_model = bcommon.direction_vector(-self.foliation_longitude+self.l5_azimuth+90, self.foliation_latitude)
         if abs(np.dot(unit_dir_model, foliation_dir_model)) < np.cos(np.radians(self.foliation_angle_tolerance)):
             return None
 
@@ -240,7 +243,7 @@ class Lateral:
 
     def bh_from_angle(self, start, angles, length=30, group=""):
         start = np.array(start)
-        end = start + length * Borehole._direction(*angles)
+        end = (start + length * bcommon.direction_vector(*angles))
         line_points = self._filter_line(start, end)
         return self._make_bh(line_points, group)
 
@@ -309,19 +312,20 @@ class Borehole:
     bounds: Tuple[float, float]                       # Intersection parameters with active cylinder.
     group : str                         # label of setup group
 
-    @staticmethod
-    def _direction(y_phi, z_phi):
-        y_phi = y_phi / 180 * np.pi
-        z_phi = z_phi / 180 * np.pi
-        sy, cy = np.sin(y_phi), np.cos(y_phi)
-        sz, cz = np.sin(z_phi), np.cos(z_phi)
-        return np.array([cy * cz, sy * cz, sz])
-
-    @staticmethod
-    def _angles(unit_direction):
-        z_angle = np.arcsin(unit_direction[2])
-        y_angle = np.arcsin(unit_direction[1] / np.cos(z_angle))
-        return 180 * y_angle / np.pi, 180 * z_angle / np.pi
+    # Moved to bcommon.direction_*
+    # @staticmethod
+    # def _direction(y_phi, z_phi):
+    #     y_phi = y_phi / 180 * np.pi
+    #     z_phi = z_phi / 180 * np.pi
+    #     sy, cy = np.sin(y_phi), np.cos(y_phi)
+    #     sz, cz = np.sin(z_phi), np.cos(z_phi)
+    #     return np.array([cy * cz, sy * cz, sz])
+    #
+    # @staticmethod
+    # def _angles(unit_direction):
+    #     z_angle = np.arcsin(unit_direction[2])
+    #     y_angle = np.arcsin(unit_direction[1] / np.cos(z_angle))
+    #     return 180 * y_angle / np.pi, 180 * z_angle / np.pi
 
     @property
     def stationing(self):
@@ -349,7 +353,7 @@ class Borehole:
     @property
     def yz_angles(self) -> Tuple[float, float]:
         # relative azimuth (y angle) and elevation (Z angle)
-        return self._angles(self.unit_direction)
+        return bcommon.direction_angles(self.unit_direction)
 
 
     def __getstate__(self):

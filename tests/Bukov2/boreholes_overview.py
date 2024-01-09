@@ -14,7 +14,7 @@ def plot_bh_selection(cfg, bh_set, param_name, bh_tuples):
     plotter = pv.Plotter()
 
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
-    plot_boreholes.add_cylinders(plotter, bh_set)
+    plot_boreholes.add_cylinders(plotter, bh_set.lateral)
     plot_boreholes.plot_bh_subset(plotter, bh_set, bh_tuples)
     plotter.camera.parallel_projection = True
 
@@ -46,7 +46,7 @@ def plot_bh_selection(cfg, bh_set, param_name, bh_tuples):
 def main(workdir):
     bh_packers = bcommon.pkl_read(workdir, "all_bh_configs.pkl")
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
-    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
 
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)

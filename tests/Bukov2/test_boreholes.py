@@ -120,7 +120,7 @@ def test_from_end_points():
     y_pos = -9.5
 
     lines = [
-        ([0.4, -11, -0.3], [5, 0, -3.4], 1),
+        ([0.4, -11, 0.3], [5, 0, -3.4], 1),
         ([0.4, -9, -0.3], [11, 0, 3.4], 1),
     ]
 
@@ -147,33 +147,26 @@ def test_from_end_points():
 
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     lateral = bh_set.lateral
-    print("N boreholes:", bh_set.n_boreholes)
-
-    bh_set.boreholes_print_sorted()
 
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
 
-    fol_dir = boreholes.Borehole._direction(-lateral.foliation_longitude+lateral.l5_azimuth+90, lateral.foliation_latitude)
-    r, l0, l1 = lateral.avoid_cylinder
-    fol_start = lateral.transform([1.0 * l0 - 0.0 * l1, 0, 0])
-    plot_boreholes.add_cone(plotter, fol_start, fol_dir, 10, lateral.foliation_angle_tolerance, 'green')
+    plot_boreholes.add_foliation_cylinders(plotter, lateral)
 
     plot_boreholes.plot_bh_set(plotter, bh_set)
-    plotter.camera.parallel_projection = True
     plotter.show()
 
 
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
