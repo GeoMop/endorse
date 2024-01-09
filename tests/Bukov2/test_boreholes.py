@@ -146,6 +146,7 @@ def test_from_end_points():
 
 
 
+
 @pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
@@ -159,11 +160,12 @@ def test_from_end_points_real():
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
-    # fol_start = starts[0]
-    # fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
-    # fol_end = starts[0] + fol_dir
-    # fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
-    # plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
+
+    fol_dir = boreholes.Borehole._direction(-lateral.foliation_longitude+lateral.l5_azimuth+90, lateral.foliation_latitude)
+    r, l0, l1 = lateral.avoid_cylinder
+    fol_start = lateral.transform([1.0 * l0 - 0.0 * l1, 0, 0])
+    plot_boreholes.add_cone(plotter, fol_start, fol_dir, 10, lateral.foliation_angle_tolerance, 'green')
+
     plot_boreholes.plot_bh_set(plotter, bh_set)
     plotter.camera.parallel_projection = True
     plotter.show()
