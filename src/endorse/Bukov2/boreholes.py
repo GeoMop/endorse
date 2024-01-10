@@ -54,7 +54,7 @@ def _make_borehole_set(workdir, cfg) -> 'BoreholeSet':
     bh_set = lateral.set_from_points(l_set)
 
     print("N boreholes:", bh_set.n_boreholes)
-    bh_set.boreholes_print_sorted()
+    bh_set.boreholes_print_sorted(f_name= workdir / "borholes_list.txt")
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
     return bh_set
@@ -582,7 +582,7 @@ class BoreholeSet:
     def transform(self, points):
         return self.lateral.transform(points)
 
-    def boreholes_print_sorted(self):
+    def boreholes_print_sorted(self, f_name=None):
         """
         Sort boreholes by estimated distance from cylinder.
         Print distance - borehole ID pairs.
@@ -592,8 +592,15 @@ class BoreholeSet:
         cylinder = pv.Cylinder(center=self.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
         distances = np.abs([self._distance(cylinder, (bh.start, bh.transversal)) for bh in self.boreholes])
         indices = np.argsort(distances)
-        for i in indices:
-            print(f"{distances[i]} | {self.boreholes[i].bh_description}")
+        report = "\n".join([
+            f"{dist} | {bh.bh_description}"
+            for dist, bh in zip(distances, self.boreholes)
+        ])
+        if f_name:
+            with open(f_name, 'w') as f:
+                f.write(report)
+        else:
+            print(report)
 
     def points(self, cfg):
         """
@@ -710,7 +717,7 @@ def project_field(workdir, cfg, bh_set, from_sample=0) -> 'BoreholeField':
     Return array (n_boreholes, n_points, n_times, n_samples)
     """
     dset_name = "pressure"
-    samples_chunk_size = 32
+    samples_chunk_size = 1024
 
     # get nonexisting borehole files within the range.
     (workdir / "borehole_data").mkdir(parents=True, exist_ok=True)
@@ -734,7 +741,7 @@ def project_field(workdir, cfg, bh_set, from_sample=0) -> 'BoreholeField':
         assert n_el == n_el_mesh
 
         output_shape = (n_points, n_times, input_dataset.shape[0])
-        out_chunk_size = min(output_shape[2], 4 * samples_chunk_size)
+        out_chunk_size = min(output_shape[2], samples_chunk_size)
         chunk_shape = (n_points, n_times, out_chunk_size)
 
         def write_group(out_file, out_slice, data):
