@@ -39,7 +39,7 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
     p_tr = bh.lateral.transform(bh.transversal)
 
     default_values = [i_bh, *bh.yz_angles]
-    default_labels = ['ID', 'l5_angle', 'inclination']
+    default_labels = ['index', 'l5_angle', 'inclination']
     meshes = []
 
     line = pv.Line(p_w, p_tr)
@@ -64,7 +64,8 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
         meshes.append(add_fields(cyl1, value, value_names))
     return meshes
 
-def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
+
+def make_mesh_bh_set(bh_set, chamber_data = None):
     meshes = []
     for i_bh, bh in enumerate(bh_set.boreholes):
         if chamber_data is None:
@@ -73,9 +74,13 @@ def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk
             bounds, data, labels = chamber_data
             ch_d = bounds[i_bh], data[i_bh], labels
         meshes.extend(meshes_bh_vtk(i_bh, bh, chamber_data=ch_d))
+    return pv.merge(meshes, merge_points=False)
+
+
+def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
 
     # Merge the primitives
-    combined_mesh = pv.merge(meshes, merge_points=False)        # Try to get distinguise values on interfaces.
+    combined_mesh = make_mesh_bh_set(bh_set, chamber_data)        # Try to get distinguise values on interfaces.
 
     # Visualize the combined mesh with different colors for each ID
     # plotter = pv.Plotter()

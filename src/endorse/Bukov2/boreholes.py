@@ -433,7 +433,7 @@ class BoreholeSet:
     #n_points: int
     # _y_angle_range = (-80, 80)      # achive 2m from 10m distance
     # _z_angle_range = (-60, 60)
-    boreholes: List[Borehole]
+    boreholes: Dict[int, Borehole]
     lateral: Lateral
 
     def __getstate__(self):
