@@ -558,7 +558,7 @@ class BoreholeSet:
     #     return lengths
 
     def subset(self, indices):
-        new_set = [self.boreholes[i] for i in indices]
+        new_set = {i:self.boreholes[i] for i in indices}
         return BoreholeSet(new_set, self.lateral )
 
 

@@ -12,10 +12,10 @@ from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
 workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2')
-bh_data_file = workdir / "bh_set.pickle"
-cfg_file = workdir / "Bukov2_mesh.yaml"
+bh_data_file = workdir / "all_bh_configs_completed.pkl" # "bh_set.pickle"
+cfg_file = workdir / "3d_model" / "Bukov2_mesh.yaml"
 
-from endorse.Bukov2 import boreholes, plot_boreholes
+from endorse.Bukov2 import boreholes, plot_boreholes, sa_problem
 import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
 from endorse.sa import analyze
@@ -208,54 +208,35 @@ class OptSpace:
         return ind,
 
 
-def plot_borehole_set(ind: Individual):
-    def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-        for i in range(bh_set.n_y_angles):
-            for j in range(bh_set.n_z_angles):
-                for i_bh in bh_set.angles_table[i][j]:
-                    add_bh(plotter, bh_set, i_bh)
-        return plotter
+def export_vtk_optim_set(ind: Individual, fname):
+    wdir, cfg = bcommon.load_cfg(cfg_file)
+    sim_cfg = common.load_config(wdir / cfg.simulation.cfg)
 
-    def add_bh(plotter, bh_set, i_bh):
-        p_w, dir, p_tr = bh_set.bh_list[i_bh]
-        p_w = bh_set.transform(p_w)
-        p_tr = bh_set.transform(p_tr)
-        points, bounds = bh_set.point_lines
-        p_begin = points[i_bh, bounds[i_bh][0], :]
-        p_end = points[i_bh, bounds[i_bh][1] - 1, :]
+    # save boreholes
+    bh_set = boreholes.make_borehole_set(wdir, cfg)
+    problem = sa_problem.sa_dict(sim_cfg)
+    param_names = problem['names']
+    bounds = [_bhs_opt_config[i[0]][i[1]][i[2]].packers for i in ind]
+    sensitivities = [_bhs_opt_config[i[0]][i[1]][i[2]].param_values for i in ind]
+    chamber_data = [bounds, sensitivities, param_names]
+    plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset([i[0] for i in ind]), chamber_data=chamber_data, fname=fname)
 
-        i, j, k = bh_set.angle_ijk(i_bh)
-        angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
+    # save tunnel and cylinders
+    cylinders = plot_boreholes._make_cylinders(bh_set.lateral)
+    tunnel = plot_boreholes._make_main_tunnel(cfg.geometry.main_tunnel)
+    scene = list(cylinders)
+    scene.append(tunnel)
+    scene = pv.merge(scene, merge_points=False)
+    scene.save(wdir / "scene.vtk")
 
-        color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
-        # print(f"Adding: {bh} col: {color}")
-        # line = pv.Line(p_w, p_tr)
-        # plotter.add_mesh(line, color='grey', line_width=1)
-
-        line = pv.Line(p_begin, p_end)
-        plotter.add_mesh(line, color='grey', line_width=2)
-
-        # Transversal point
-        # sphere = pv.Sphere(0.5, p_tr)
-        # plotter.add_mesh(sphere, color=color)
-
-        # for pt in points[i_bh, : bounds[i_bh][1]]:
-        #     sphere = pv.Sphere(0.3, pt)
-        #     plotter.add_mesh(sphere, color=color)
-
-    global workdir
-    wdir, cfg = bcommon.load_cfg(workdir / "3d_model_mock/Bukov2_mesh.yaml")
-
-    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-
-    plotter = pv.Plotter(off_screen=False)
-    plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
-    plot_boreholes.add_cylinders(plotter, bh_set)
-    # plot_bh_set(plotter, bh_set)
-    for i in ind:
-        add_bh(plotter, bh_set, i[0])
-    plotter.camera.parallel_projection = True
-    plotter.show()
+    # plotter = pv.Plotter(off_screen=False)
+    # plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
+    # plot_boreholes.add_cylinders(plotter, bh_set)
+    # # plot_bh_set(plotter, bh_set)
+    # for i in ind:
+    #     add_bh(plotter, bh_set, i[0])
+    # plotter.camera.parallel_projection = True
+    # plotter.show()
 
 
 
@@ -280,7 +261,7 @@ def get_opt_results(f_path, randomize=False):
     global _bhs_opt_config
     if _bhs_opt_config is None:
         try:
-            _bhs_opt_config = pkl_read(f_path, "all_bh_configs_save.pkl") #opt_pack.read_optimization_results(f_path)
+            _bhs_opt_config = pkl_read(f_path, bh_data_file) #opt_pack.read_optimization_results(f_path)
             if randomize:
                 i = 0
                 for bh in _bhs_opt_config:
@@ -458,9 +439,9 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
                 pickle.dump(cp, cp_file)
 
     print('Hall of fame:')
-    for ind in hof:
+    for (i,ind) in enumerate(hof):
         print(toolbox.evaluate(ind), ind)
-        plot_borehole_set(ind)
+        export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk")
 
     # list of borehole configs sorted by sum of evaluations
     print('Most popular configs:')

@@ -67,13 +67,13 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
 
 def make_mesh_bh_set(bh_set, chamber_data = None):
     meshes = []
-    for i_bh, bh in enumerate(bh_set.boreholes):
+    for (i_bh,(ind_bh,bh)) in enumerate(bh_set.boreholes.items()):
         if chamber_data is None:
             ch_d = None
         else:
             bounds, data, labels = chamber_data
             ch_d = bounds[i_bh], data[i_bh], labels
-        meshes.extend(meshes_bh_vtk(i_bh, bh, chamber_data=ch_d))
+        meshes.extend(meshes_bh_vtk(ind_bh, bh, chamber_data=ch_d))
     return pv.merge(meshes, merge_points=False)
 
 
@@ -89,16 +89,19 @@ def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk
 
     combined_mesh.save(workdir / fname)
 
+def _make_main_tunnel(cfg):
+    # L5
+    x_half = cfg.width / 2
+    y_half = cfg.length / 2
+
+    return pv.Box(bounds=(-x_half, +x_half, -y_half - 10, +y_half - 10, 0, cfg.height))
 
 def create_scene(plotter, cfg_geometry):
     cfg = cfg_geometry.main_tunnel
     # Create a plotting object
 
     # L5
-    x_half = cfg.width / 2
-    y_half = cfg.length / 2
-
-    box = pv.Box(bounds=(-x_half, +x_half, -y_half -10, +y_half -10, 0, cfg.height))
+    box = _make_main_tunnel(cfg)
     plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     plotter.add_axes()
@@ -111,19 +114,27 @@ def create_scene(plotter, cfg_geometry):
     #plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
-def add_cylinders(plotter, lateral: 'Lateral'):
+
+def _make_cylinders(lateral: 'Lateral'):
     corner_min = lateral.transform([2, -2, -1.8])
     corner_max = lateral.transform([12, 2, 2.2])
     box = pv.Box(bounds=(corner_min[0], corner_max[0], corner_min[1], corner_max[1], corner_min[2], corner_max[2]))
-    plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     # Create a horizontal cylinder
     r, l0, l1 = lateral.avoid_cylinder
-    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.3)
+    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r,
+                                 height=l1 - l0)
 
     r, l0, l1 = lateral.active_cylinder
-    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r,
+                                  height=l1 - l0)
+
+    return box, avoid_cylinder, active_cylinder
+
+def add_cylinders(plotter, lateral: 'Lateral'):
+    box, avoid_cylinder, active_cylinder = _make_cylinders(lateral)
+    plotter.add_mesh(box, color='grey' , opacity=0.7)
+    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.3)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
 
