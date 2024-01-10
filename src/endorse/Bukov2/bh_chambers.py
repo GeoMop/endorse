@@ -241,7 +241,7 @@ class Chambers:
         i_chambers = self.index[chambers_begin, chambers_end]
         sensitivites = self.chambers_sensitivities[i_chambers]
 
-        chambers = zip(chambers_begin, chambers_end)
+        chambers = list(zip(chambers_begin, chambers_end))
         full_sobol = self.eval_chambers(chambers, sobol_fn = sobol_vec)
         return PackerConfig(packers, sensitivites, opt_values, full_sobol)
 
@@ -249,7 +249,7 @@ class Chambers:
 class PackerConfig:
     packers: np.ndarray          # (n_packers,) int ; positions of the ends of the packers,
     st_values: np.ndarray        # chambers sensitivities, shape (3, n_params)
-    opt_values: np.ndarray       # value of self in the view of every parameter (n_params, )
+    opt_values: np.ndarray       # value of self in the view of every parameter (n_params, 2) ... objective components
     sobol_indices: np.ndarray # (n_chambers, n_param, n_sobol_indices) float
 
     def __getstate__(self):
@@ -305,14 +305,21 @@ def optimal_configs(chambers:Chambers, packers, chamber_sensitivities, n_largest
 
     # second criteria
     sum_over_chambers = np.sum(chamber_sensitivities, axis=1)
-    sum_over_other_params = np.sum(sum_over_chambers, axis=1)[:, None] - sum_over_chambers
+    sum_over_other_params = (np.sum(sum_over_chambers, axis=1)[:, None] - sum_over_chambers) / (n_params - 1)
+    # (n_comb, n_params)
 
-    values = weights[0] * param_max_over_chambers + weights[1] * sum_over_other_params
+    vec_values = np.stack((param_max_over_chambers, sum_over_other_params), axis=2)
+    vec_values = np.array(weights)[None, None, :] * vec_values
+    values = np.sum(vec_values, axis=-1)
     # shape (n_combinations, n_params)
+
+    # scale vec_values by max in each param for plotting, should have no impact on optimizaiton
+    value_max = np.max(values, axis=0)
+    vec_values = vec_values / value_max[None, :, None]
 
     # Now we select for each parameter n_largest combinations
     indices = np.argpartition(values, -n_largest, axis=0)[-n_largest:]
-    single_best_config = lambda idx : chambers.packer_config(packers[idx], values[idx])
+    single_best_config = lambda idx : chambers.packer_config(packers[idx], vec_values[idx])
     best_configs_for_param = lambda i_param_configs : [single_best_config(i_param_configs[i_best]) for i_best in range(n_largest)]
     opt_packer_configs = [ best_configs_for_param(indices[:, i_param]) for i_param in range(n_params)]
     # shape: (n_params, n_largest) of PackerConfig

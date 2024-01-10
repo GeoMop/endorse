@@ -365,9 +365,11 @@ def save_projections(plotter, workdir, fname):
     ]
 
     out_files = []
-    for axis in range(3):
+    for axis in [0, 1, 2]:
         plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
         plotter.camera.parallel_projection = True
+        plotter.render()
+
         #f_name = workdir / f"bh_shot_{axis}.svg"
         f_name = workdir / fname
         f_name = f_name.parent / f"{f_name.stem}_{axis}{f_name.suffix}"
@@ -395,7 +397,7 @@ class PlotCfg:
         plotter = plot_borehole_position(self.cfg, self.bh_set.boreholes[self.i_bh])
         return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.png")
 
-    def plot_chamber_data(self):
+    def plot_chamber_data(self, sensitivities, f_name, vmin):
         """
         Plot some precomputed chamber data for selected chamber sizes.
         :return:
@@ -403,14 +405,17 @@ class PlotCfg:
         n_params = len(self.param_names)
         n_points = self.chambers.n_points
         sizes = [2, 4, 8]
-
-        chamber_data = [[self.chambers.chamber(i_begin, min(i_begin + size, n_points))
+        range_sens = lambda b, s: sensitivities[self.chambers.index[b, min(b + s, n_points)]]
+        chamber_data = [[ range_sens(i_begin, size)
                          for i_begin in range(0, n_points - size)]
                             for i_size, size in enumerate(sizes)]
-        chamber_array = [i  for l in chamber_data for i in l]
 
+        # flatten
+        chamber_array = np.array([i  for l in chamber_data for i in l])
+
+        vmax = np.max(chamber_array)
         sm = plt.cm.ScalarMappable(cmap=plt.cm.jet,
-                                   norm=plt.Normalize(vmin=np.min(chamber_array), vmax=np.max(chamber_array)))
+                                   norm=mcolors.LogNorm(vmin=vmin, vmax=vmax))
         sm.set_array([])
 
         fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
@@ -418,10 +423,10 @@ class PlotCfg:
         for i_param, label in enumerate(self.param_names):
             ax = axes[i_param]
             for i_size, size in enumerate(sizes):
-                values = [l[i_param] for l in chamber_data[i_size]]
-
+                point_values = [l[i_param] for l in chamber_data[i_size]]
+                point_values = np.maximum(np.array(point_values), vmin)
                 x_pos = size // 2 + np.arange(0, n_points - size)
-                colors = sm.to_rgba(np.array(values))
+                colors = sm.to_rgba(point_values)
                 assert len(x_pos) == len(colors)
                 width = np.ones(len(x_pos))
                 ax.broken_barh(list(zip(x_pos, width)), (i_size+0.1, 0.8), facecolors=colors)
@@ -435,10 +440,11 @@ class PlotCfg:
 
         # Create a common colorbar for all subplots
         cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
-        fig.colorbar(sm, cax=cbar_ax)
+        #ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, vmaxmax_sobol]
+        cbar = fig.colorbar(sm, ax=axes, orientation='vertical', cax = cbar_ax)
 
         #plt.tight_layout()
-        fname = self.workdir / "chambers_sa.pdf"
+        fname = self.workdir / f_name
         fig.savefig(fname)
         if self.show:
             plt.show()
@@ -575,7 +581,7 @@ class PlotCfg:
     #     fig.savefig(fname)
     #     return fname
 
-    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col):
+    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col, vec_objective, sm_obj):
         """
         Plot a stacked bar plot for the given data.
 
@@ -585,8 +591,17 @@ class PlotCfg:
         packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
         """
         # Invert the y-axis
+        max_x = np.max(packers)
+        m_size = 5
+
         n_chambers, n_params = data_array.shape
         for i in range(n_params):
+            # plot objective, only for parameter that match the column i.e. against which the column is optimized)
+            if i == col:
+                colors = sm_obj.to_rgba(vec_objective[i, :])
+                ax.scatter([max_x + 2, max_x + 3], [i, i], m_size, color=colors)
+
+            # plot chambers
             for j in range(n_chambers):
                 width = packers[j + 1] - packers[j]
                 color = cmap.to_rgba(data_array[j, i])
@@ -604,26 +619,28 @@ class PlotCfg:
     def plot_best_packers_st(self):
         data_array = [[p.st_values[:,:]  for p in l] for l in self.opt_packers]
         packers = [[p.packers for p in l] for l in self.opt_packers]
-        fig = self._plot_best_packers(data_array, packers)
+        vec_objective = [[p.opt_values for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers, vec_objective)
         fname = self.workdir / "optim_packers_st.pdf"
         fig.savefig(fname)
         return fname
 
-    def plot_best_packers_full(self):
-        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
-        packers = [[p.packers for p in l] for l in self.opt_packers]
-        fig = self._plot_best_packers(data_array, packers)
-        fname = self.workdir / "optim_packers_full.pdf"
-        fig.savefig(fname)
-        return fname
+    # def plot_best_packers_full(self):
+    #     data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
+    #     packers = [[p.packers for p in l] for l in self.opt_packers]
+    #     vec_objective = [[p.opt_values for p in l] for l in self.opt_packers]
+    #     fig = self._plot_best_packers(data_array, packers, vec_objective)
+    #     fname = self.workdir / "optim_packers_full.pdf"
+    #     fig.savefig(fname)
+    #     return fname
 
-    def _plot_best_packers(self, data_array, packers):
+    def _plot_best_packers(self, data_array, packers, vec_objective):
         """
         Goal: show the packer positions of the bes variants, compare indices
         """
         n_params = self.chambers.n_params
         n_variants = len(data_array[0])
-        threshold = 1e-3
+        threshold = 1e-5
         data_array = np.maximum(data_array, threshold)
         max_sobol = np.max(data_array)
         print("Max sobol: ", max_sobol)
@@ -632,9 +649,13 @@ class PlotCfg:
         sm = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(threshold, max_sobol))
         sm.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
 
+        cmap = plt.cm.gist_rainbow
+        sm_objective = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(0.001, 1.0))
+        sm_objective.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
+
         #sm = combined_mapper(max_sobol, threshold)
 
-        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 10),  sharex='col', sharey='row')
+        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 15),  sharex='col', sharey='row')
                                 #constrained_layout=True,)
 
         for i in range(n_variants):
@@ -642,7 +663,8 @@ class PlotCfg:
         # for i in range(1):
         #     for j in range(1):
                 ax = axs[i, j] #if n_variants > 1 else axs[j]
-                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j)
+                objective = vec_objective[j][i]
+                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j, objective, sm_objective)
 
                 if i == 0:
                     # Set column labels (parameter names) for the top row
@@ -653,9 +675,14 @@ class PlotCfg:
                     # Set row labels (variant indices) for the first column
                     ax.set_ylabel(f'Variant {i + 1}')
 
-        ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, max_sobol]
-        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.015, pad=0.05,
-                            ticks=ticks)
+        ticks = [1e-5,  3e-5, 1e-4,  3e-4, 1e-3,  3e-3, 1e-2, 3e-2, 0.1, 0.3, 1.0, max_sobol]
+        cbar_ax = fig.add_axes([0.92, 0.05, 0.01, 0.9])  # x-position, y-position, width, height
+        # ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, vmaxmax_sobol]
+        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', #fraction=0.015, pad=0.05,
+                            ticks=ticks, cax=cbar_ax)
+        cbar_ax = fig.add_axes([0.96, 0.05, 0.01, 0.9])  # x-position, y-position, width, height
+        cbar = fig.colorbar(sm_objective, ax=axs, orientation='vertical', #fraction=0.015, pad=0.05,
+                            ticks=ticks, cax=cbar_ax)
 
         #fig.tight_layout()
         return  fig
@@ -663,11 +690,14 @@ class PlotCfg:
     def all(self):
         plots = [
             *self.plot_borehole(),
-            self.plot_chamber_data(),
+            self.plot_chamber_data(self.chambers.chambers_sensitivities,
+                                   f_name="chambers_sa.pdf", vmin=1e-5),
+            self.plot_chamber_data(self.chambers.chambers_norm_sensitivities,
+                                   f_name="chambers_norm_sa.pdf", vmin=1e-2),
             self.plot_mean_time_fun(),
             self.plot_relative_residual(),
             self.plot_best_packers_st(),
-            self.plot_best_packers_full()
+            # self.plot_best_packers_full()
         ]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
 

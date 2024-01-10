@@ -28,7 +28,7 @@ def _optimize_borehole(workdir, cfg, chambers):
 def _process_borehole(bh_workdir, workdir, i_bh):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     bh_set = boreholes.make_borehole_set(workdir, cfg)
-    bh_field = boreholes.project_field(workdir,cfg, bh_set, None, force=cfg.boreholes.force)    
+    bh_field = boreholes.project_field(workdir,cfg, bh_set, from_sample=0, force=cfg.boreholes.force)
     sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     sobol_fn = sobol_fast.vec_sobol_total_only
