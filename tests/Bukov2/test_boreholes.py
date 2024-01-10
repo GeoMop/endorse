@@ -147,7 +147,7 @@ def test_from_end_points():
 
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
@@ -166,7 +166,7 @@ def test_from_end_points_real():
 
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
@@ -183,15 +183,16 @@ def test_field_projection():
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
-    print("N boreholes:", bh_set.n_boreholes)
-    bh_set.boreholes_print_sorted()
-    bh_range = (10, 30)
+    bh_range = list(range(10, 30))
+    bh_sub_set = bh_set.subset(bh_range)
+    print("N boreholes:", bh_sub_set.n_boreholes)
+    bh_sub_set.boreholes_print_sorted()
 
     # Test serialization
-    serialized = pickle.dumps(bh_set)
+    serialized = pickle.dumps(bh_sub_set)
     new_bh_set = pickle.loads(serialized)
 
-    borehole_field = boreholes.project_field(workdir, cfg, bh_set, bh_range)
+    borehole_field = boreholes.project_field(workdir, cfg, new_bh_set, force=True)
     print("Updated: ", borehole_field.data_files)
 
     for f in borehole_field.data_files:

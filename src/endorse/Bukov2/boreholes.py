@@ -456,19 +456,19 @@ class BoreholeSet:
     #         cfg.point_step,
     #         n_points)
 
-    @classmethod
-    def from_lines(cls, cfg, lines):
-        """
-        CFG is used only for
-        :param cfg:
-        :param lines:
-        :return:
-        """
-        n_points = 2*int(cfg.n_points_per_bh / 2) + 1
-        return BoreholeSet(
-            cfg.point_step,
-            n_points,
-            lines)
+    # @classmethod
+    # def from_lines(cls, cfg, lines):
+    #     """
+    #     CFG is used only for
+    #     :param cfg:
+    #     :param lines:
+    #     :return:
+    #     """
+    #     n_points = 2*int(cfg.n_points_per_bh / 2) + 1
+    #     return BoreholeSet(
+    #         cfg.point_step,
+    #         n_points,
+    #         lines)
 
 
 
@@ -557,6 +557,9 @@ class BoreholeSet:
     #
     #     return lengths
 
+    def subset(self, indices):
+        new_set = [self.boreholes[i] for i in indices]
+        return BoreholeSet(new_set, self.lateral )
 
 
     def _distance(self, cyl, line):
@@ -702,23 +705,18 @@ class BoreholeSet:
 
 
 @bcommon.memoize
-def project_field(workdir, cfg, bh_set, bh_range=None) -> 'BoreholeField':
+def project_field(workdir, cfg, bh_set, from_sample=0) -> 'BoreholeField':
     """
     Return array (n_boreholes, n_points, n_times, n_samples)
     """
-    if bh_range is None:
-        bh_range = (0, bh_set.n_boreholes)
     dset_name = "pressure"
     samples_chunk_size = 32
-    force = cfg.boreholes.force
 
     # get nonexisting borehole files within the range.
     (workdir / "borehole_data").mkdir(parents=True, exist_ok=True)
     bh_files = [workdir / "borehole_data" / f"bh_{i_bh:03d}.h5" for i_bh in range(bh_set.n_boreholes) ]
-    bh_dict = {i_bh: bh_files[i] for i, i_bh in enumerate(range(*bh_range)) if force or not bh_files[i].exists()}
-    # skip processing if all files exists (and not forced)
-    if not bh_dict:
-        return bh_files
+    # full dict
+    bh_dict = {i_bh: bh_files[i] for i, i_bh in enumerate(range(bh_set.n_boreholes))}
 
     # borehole extraction matrix
     mesh = get_clear_mesh(workdir / cfg.simulation.mesh)
@@ -727,32 +725,33 @@ def project_field(workdir, cfg, bh_set, bh_range=None) -> 'BoreholeField':
     n_boreholes, n_points, n_dim = points.shape
     id_matrix = interpolation_slow(mesh, points)
 
+
     # Open the input HDF file
     field_file = workdir / cfg.simulation.hdf
     with h5py.File(field_file, 'r') as input_file:
         input_dataset = input_file[dset_name]
         n_samples, n_times, n_el = input_dataset.shape
         assert n_el == n_el_mesh
-        # Open the output HDF file
-        with bcommon.HDF5Files(list(bh_dict.values()), 'w') as out_files:
-            # Create the new dataset with the specified shape and chunking
-            output_shape = (n_points, input_dataset.shape[1], input_dataset.shape[0])
-            out_chunk_size = min(output_shape[2], 4 * samples_chunk_size)
-            chunk_shape = (n_points, input_dataset.shape[1], out_chunk_size)
-            out_dsets = []
-            for f in out_files:
-                dsets = f.create_dataset(dset_name, shape=output_shape, chunks=chunk_shape)
-                out_dsets.append(dsets)
 
-            # Iterate through chunks of the input dataset
-            for i_sample in range(0, input_dataset.shape[0], samples_chunk_size):
-                print(f"Chunk: {i_sample} : {i_sample+samples_chunk_size}")
-                sample_slice = slice(i_sample,i_sample+samples_chunk_size)
-                input_chunk = np.array(input_dataset[sample_slice, :, :])
-                transformed_chunk = input_chunk[:, :, id_matrix].transpose(2, 3, 1, 0)
-                #cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
-                for i, dset in enumerate(out_dsets):
-                    dset[:, :, sample_slice] = transformed_chunk[i]
+        output_shape = (n_points, n_times, input_dataset.shape[0])
+        out_chunk_size = min(output_shape[2], 4 * samples_chunk_size)
+        chunk_shape = (n_points, n_times, out_chunk_size)
+
+        def write_group(out_file, out_slice, data):
+            with h5py.File(workdir / out_file, mode='a') as out_f:
+                dset = out_f.require_dataset(dset_name, shape=output_shape, chunks=chunk_shape, dtype='float64')
+                dset[:, :, out_slice] = data
+
+
+        # Iterate through chunks of the input dataset
+        for i_sample in range(from_sample, input_dataset.shape[0], samples_chunk_size):
+            print(f"Chunk: {i_sample} : {i_sample+samples_chunk_size}")
+            sample_slice = slice(i_sample,i_sample+samples_chunk_size)
+            input_chunk = np.array(input_dataset[sample_slice, :, :])
+            transformed_chunk = input_chunk[:, :, id_matrix].transpose(2, 3, 1, 0)
+            #cumul_chunk = np.cumsum(transformed_chunk, axis=1)  # cummulative sum along points
+            for i, out_f in enumerate(bh_dict.values()):
+                write_group(out_f, sample_slice, transformed_chunk[i])
 
     return BoreholeField(
         bh_set,
