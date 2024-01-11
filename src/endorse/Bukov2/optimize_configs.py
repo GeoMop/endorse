@@ -62,14 +62,13 @@ class OptSpace:
 
     """
 
-    def __init__(self, cfg, bh_set:boreholes.BoreholeSet, bh_opt):
+    def __init__(self, cfg, bh_opt):
         self.cfg = cfg
-        self.bhs = bh_set
-        self.bhs_size = len(bh_opt) # self.bhs.n_boreholes
+        self.bhs_size = len(bh_opt)
         self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
         self.n_configs = len(bh_opt[0][0])
         self.n_chambers = cfg.optimize.n_packers-1
-        self.n_params = len(bh_opt[0]) # bh_opt[0][0].param_values.shape[1]
+        self.n_params = len(bh_opt[0])
         self._individual_shape = (self.n_boreholes, 2)
 
     def project_decorator(self, func):
@@ -139,7 +138,7 @@ class OptSpace:
         return i_bh, i_prm, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
-        ind = [] #[self.random_bh()  for i in range(self.n_boreholes)]
+        ind = []
         seen = set()
         for i in range(self.n_boreholes):
             t = self.random_bh()
@@ -240,43 +239,14 @@ def export_vtk_optim_set(ind: Individual, fname):
 
 
 
-_bh_set = None
-
-
-def get_bh_set(f_path):
-    global _bh_set
-    if _bh_set is None:
-        try:
-            with open(f_path, "rb") as f:
-                _bh_set = pickle.load(f)
-        except FileNotFoundError:
-            pass
-    return _bh_set
-
-
 _bhs_opt_config = None
 
 
-def get_opt_results(f_path, randomize=False):
+def get_opt_results(f_path):
     global _bhs_opt_config
     if _bhs_opt_config is None:
         try:
             _bhs_opt_config = pkl_read(f_path, bh_data_file) #opt_pack.read_optimization_results(f_path)
-            if randomize:
-                i = 0
-                for bh in _bhs_opt_config:
-                    _bhs_opt_config[i] = deepcopy(bh)
-                    bh = _bhs_opt_config[i]
-                    for cfg in bh:
-                        cfg.sobol_indices[:,:,0] = np.random.random(cfg.sobol_indices[:,:,0].size).reshape(cfg.sobol_indices[:,:,0].shape)
-                    i = i + 1
-                # for i in range(1):
-                #     i_bh = np.random.randint(len(_bhs_opt_config))
-                #     i_cfg = np.random.randint(len(_bhs_opt_config[0]))
-                #     print("randomizing config ", (i_bh, i_cfg))
-                #     _bhs_opt_config[i_bh] = deepcopy( _bhs_opt_config[i_bh] )
-                #     cfg = _bhs_opt_config[i_bh][i_cfg]
-                #     cfg.sobol_indices[:, :, 0] = 100 * np.ones(cfg.sobol_indices[:, :, 0].shape)
         except FileNotFoundError:
             pass
     return _bhs_opt_config
@@ -289,7 +259,7 @@ def get_opt_space():
     if _opt_space is None:
         try:
             cfg = common.config.load_config(cfg_file)
-            _opt_space = OptSpace(cfg, _bh_set, _bhs_opt_config)
+            _opt_space = OptSpace(cfg, _bhs_opt_config)
         except FileNotFoundError:
             pass
     return _opt_space
@@ -298,7 +268,6 @@ def get_opt_space():
 
 def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -319,7 +288,6 @@ def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
 
 def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -340,7 +308,6 @@ def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
 
 def eval_individual_max_l1(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -365,7 +332,6 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     :return:
     """
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir) #, randomize=True) # True means generate random sensitivities
     get_opt_space()
 
