@@ -207,7 +207,7 @@ class OptSpace:
         return ind,
 
 
-def export_vtk_optim_set(ind: Individual, fname):
+def export_vtk_optim_set(ind: Individual, fname, plot=False):
     wdir, cfg = bcommon.load_cfg(cfg_file)
     sim_cfg = common.load_config(wdir / cfg.simulation.cfg)
 
@@ -215,9 +215,11 @@ def export_vtk_optim_set(ind: Individual, fname):
     bh_set = boreholes.make_borehole_set(wdir, cfg)
     problem = sa_problem.sa_dict(sim_cfg)
     param_names = problem['names']
-    bounds = [_bhs_opt_config[i[0]][i[1]][i[2]].packers for i in ind]
+    packer_indices = [_bhs_opt_config[i[0]][i[1]][i[2]].packers for i in ind]
+    all_packer_coords, bounds = bh_set.points(cfg, transform=False)
+    packer_coords = [[(all_packer_coords[i[0],pi,0]-bh_set.boreholes[i[0]].start[0])/bh_set.boreholes[i[0]].unit_direction[0] for pi in pids] for (pids,i) in zip(packer_indices,ind)]
     sensitivities = [_bhs_opt_config[i[0]][i[1]][i[2]].param_values for i in ind]
-    chamber_data = [bounds, sensitivities, param_names]
+    chamber_data = [packer_coords, sensitivities, param_names]
     plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset([i[0] for i in ind]), chamber_data=chamber_data, fname=fname)
 
     # save tunnel and cylinders
@@ -228,14 +230,16 @@ def export_vtk_optim_set(ind: Individual, fname):
     scene = pv.merge(scene, merge_points=False)
     scene.save(wdir / "scene.vtk")
 
-    # plotter = pv.Plotter(off_screen=False)
-    # plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
-    # plot_boreholes.add_cylinders(plotter, bh_set)
-    # # plot_bh_set(plotter, bh_set)
-    # for i in ind:
-    #     add_bh(plotter, bh_set, i[0])
-    # plotter.camera.parallel_projection = True
-    # plotter.show()
+    if plot:
+        plotter = pv.Plotter(off_screen=False)
+        plotter.add_mesh(scene, opacity=0.1) # = plot_boreholes.create_scene(plotter, cfg.geometry)
+        # plot_boreholes.add_cylinders(plotter, bh_set)
+        # plot_bh_set(plotter, bh_set)
+        # for i in ind:
+        #     add_bh(plotter, bh_set, i[0])
+        plotter.add_mesh( plot_boreholes.make_mesh_bh_set(bh_set.subset([i[0] for i in ind]), chamber_data=chamber_data) )
+        plotter.camera.parallel_projection = True
+        plotter.show()
 
 
 
@@ -407,7 +411,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     print('Hall of fame:')
     for (i,ind) in enumerate(hof):
         print(toolbox.evaluate(ind), ind)
-        export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk")
+        export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
 
     # list of borehole configs sorted by sum of evaluations
     print('Most popular configs:')
