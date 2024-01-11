@@ -283,7 +283,8 @@ class Lateral:
         return self._make_bh_set(bh_list)
 
     def _make_bh_set(self, bh_list):
-        return BoreholeSet([bh for bh in bh_list if bh is not None], self)
+        boreholes = {i:bh for i, bh in enumerate(bh_list) if bh is not None}
+        return BoreholeSet(boreholes, self)
 
     @staticmethod
     def _angle_array(lst):
@@ -342,9 +343,13 @@ class Borehole:
         return f"{self.lateral.side}{pos}{ya}{za}"
 
     @property
-    def well_head(self):
+    def t_well_head(self):
         t = (self.lateral.galery_width / 2.0 -self.start[0]) / self.unit_direction[0]
-        return self.line_point(t)
+        return t
+
+    @property
+    def well_head(self):
+        return self.line_point(self.t_well_head)
 
     @property
     def end_point(self):
@@ -394,28 +399,32 @@ class Borehole:
         #range_str = f"range: {tuple(self.line_bounds[i_bh])}"
         return f"#{self.id} {pos_str} \n    -> {angle_str}, {length_str}"
 
-    def place_points(self, n_points, point_step):
-        half_points = int((n_points - 1) / 2)
-        i_points = np.arange(-n_points * (2.0 / 3), n_points * (1.0 / 3) + 1, 1, dtype=int)
-        i_points = i_points[:n_points]
-        dir_length = np.linalg.norm(self.unit_direction)
-        pt_step = (self.unit_direction / dir_length) * point_step
-        points = self.transversal[None, :] + pt_step[None, :] * i_points[:, None]
+    def place_t_points(self, n_points, point_step):
+        #half_points = int((n_points - 1) / 2)
+        i_points = np.arange(n_points)
+        #dir_length = np.linalg.norm(self.unit_direction)
+        #pt_step = (self.unit_direction / dir_length) * point_step
+        t_points = self.t_well_head + point_step * i_points
+        points = self.line_points(t_points)[:, 0]
 
         # Bounds given by active cylinder
         r, l0, l1 = self.lateral.active_cylinder
-        mask = (points[:, 0] > l0)
+        mask = (points > l0)
         min_bound = np.argmax(mask)
-        mask = (points[:, 0] < l1)
+        mask = (points < l1)
         min_bound_flipped = np.argmax(np.flip(mask))
         max_bound = n_points - min_bound_flipped
         assert len(points) == n_points
 
         min_bound = max(0, min_bound)
         max_bound = min(n_points, max_bound)
-        points = self.lateral.transform(points)
-        return points, (min_bound, max_bound)
+        #points = self.lateral.transform(points)
+        return t_points, (min_bound, max_bound)
 
+
+    def place_points(self, n_points, point_step):
+        t_points, pt_range = self.place_t_points(n_points, point_step)
+        return self.lateral.transform(self.line_points(t_points)), pt_range
 
 @attrs.define(slots=False)
 class BoreholeSet:
@@ -433,7 +442,7 @@ class BoreholeSet:
     #n_points: int
     # _y_angle_range = (-80, 80)      # achive 2m from 10m distance
     # _z_angle_range = (-60, 60)
-    boreholes: List[Borehole]
+    boreholes: Dict[int, Borehole]
     lateral: Lateral
 
     def __getstate__(self):
@@ -558,7 +567,7 @@ class BoreholeSet:
     #     return lengths
 
     def subset(self, indices):
-        new_set = [self.boreholes[i] for i in indices]
+        new_set = {i:self.boreholes[i] for i in indices}
         return BoreholeSet(new_set, self.lateral )
 
 
