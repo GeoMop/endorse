@@ -154,6 +154,27 @@ boreholes:
             end_y: 0
             end_z: [ -6, -5.2, -4.5, -3.8, -3.3 ]
 
+          mid_far_up:
+            start_x: 0.4
+            start_y: 5.5
+            start_z: 0.1
+            end_x: [ 10, 12, 14 ]
+            end_y: 0
+            end_z: [ 3.2, 3.7, 4.4, 5.2, 6 ]
+          mid_far_dn:
+            start_x: 0.4
+            start_y: 5.5
+            start_z: 0.1
+            end_x: [ 10, 12, 14 ]
+            end_y: 0
+            end_z: [ -6, -5.2, -4.5, -3.8, -3.3 ]
+          mid_mid_dn:  
+            start_x: 0.4
+            start_y: 6
+            start_z: 0.1
+            end_x: [ 7, 8, 9 ]
+            end_y: 0
+            end_z: [ -6, -5.2, -4.5, -3.8, -3.3 ]
 
 #          # middle variants, [ 5, 1.5]
           middle:
