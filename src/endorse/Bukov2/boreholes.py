@@ -394,7 +394,7 @@ class Borehole:
         #range_str = f"range: {tuple(self.line_bounds[i_bh])}"
         return f"#{self.id} {pos_str} \n    -> {angle_str}, {length_str}"
 
-    def place_points(self, n_points, point_step):
+    def place_points(self, n_points, point_step, transform: bool):
         half_points = int((n_points - 1) / 2)
         i_points = np.arange(-n_points * (2.0 / 3), n_points * (1.0 / 3) + 1, 1, dtype=int)
         i_points = i_points[:n_points]
@@ -413,7 +413,8 @@ class Borehole:
 
         min_bound = max(0, min_bound)
         max_bound = min(n_points, max_bound)
-        points = self.lateral.transform(points)
+        if transform:
+            points = self.lateral.transform(points)
         return points, (min_bound, max_bound)
 
 
@@ -602,7 +603,7 @@ class BoreholeSet:
         else:
             print(report)
 
-    def points(self, cfg):
+    def points(self, cfg, transform: bool):
         """
 
         :return:
@@ -610,7 +611,7 @@ class BoreholeSet:
         zk_cfg = cfg.boreholes.zk_30
         n_points = zk_cfg.n_points_per_bh
         point_step = zk_cfg.point_step
-        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes]
+        placed = [ bh.place_points(n_points, point_step, transform) for bh in self.boreholes]
         points, bounds = zip(*placed)
         return np.array((points)), bounds
 
