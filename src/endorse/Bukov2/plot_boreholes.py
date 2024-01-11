@@ -66,7 +66,7 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
 
 def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
     meshes = []
-    for i_bh, bh in enumerate(bh_set.boreholes):
+    for i_bh, bh in enumerate(bh_set.boreholes.values()):
         if chamber_data is None:
             ch_d = None
         else:

@@ -599,11 +599,11 @@ class BoreholeSet:
         """
         r, l0, l1 = self.lateral.avoid_cylinder
         cylinder = pv.Cylinder(center=self.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-        distances = np.abs([self._distance(cylinder, (bh.start, bh.transversal)) for bh in self.boreholes])
+        distances = np.abs([self._distance(cylinder, (bh.start, bh.transversal)) for bh in self.boreholes.values()])
         indices = np.argsort(distances)
         report = "\n".join([
             f"{dist} | {bh.bh_description}"
-            for dist, bh in zip(distances, self.boreholes)
+            for dist, bh in zip(distances, self.boreholes.values())
         ])
         if f_name:
             with open(f_name, 'w') as f:
@@ -619,7 +619,7 @@ class BoreholeSet:
         zk_cfg = cfg.boreholes.zk_30
         n_points = zk_cfg.n_points_per_bh
         point_step = zk_cfg.point_step
-        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes]
+        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes.values()]
         points, bounds = zip(*placed)
         return np.array((points)), bounds
 
