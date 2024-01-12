@@ -147,11 +147,12 @@ def test_from_end_points():
 
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
     bh_set = boreholes.make_borehole_set(workdir, cfg)
+    assert list(bh_set.boreholes.keys()) == list(range(bh_set.n_boreholes))
     lateral = bh_set.lateral
 
     plotter = pv.Plotter()
@@ -166,7 +167,7 @@ def test_from_end_points_real():
 
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
