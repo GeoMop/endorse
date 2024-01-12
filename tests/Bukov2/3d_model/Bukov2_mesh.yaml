@@ -163,7 +163,7 @@ boreholes:
             end_x: 13
             end_y: [ 5, 4.2, 3.5, 3 ]
             end_z: [ -1.5, 0, 1.5 ]
-          # Vetšina v kolizi s foliací (Commented out section)
+          # Vetsina v kolizi s foliaci (Commented out section)
           # keep for optimization, but probably reject later, rather use left_far_up
           # shifted start allows to pass at least some of them
           right_far_up: # [26, 2.7]
@@ -255,8 +255,8 @@ optimize:
                             # See e.g. src/endorse/Bukov2/bh_chambers.py: packers_eval()
 
     # Algorithm params
-    population_size: 3
-    n_generations: 1
+    population_size: 1000
+    n_generations: 100
     crossover_probability: 0.8
     mutation_probability: 0.2
 

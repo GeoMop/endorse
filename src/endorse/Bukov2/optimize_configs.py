@@ -12,7 +12,7 @@ from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
 workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2')
-bh_data_file = workdir / "all_bh_configs_completed.pkl" # "bh_set.pickle"
+bh_data_file = workdir / "all_bh_configs.pkl"
 cfg_file = workdir / "3d_model" / "Bukov2_mesh.yaml"
 
 from endorse.Bukov2 import boreholes, plot_boreholes, sa_problem
@@ -61,8 +61,10 @@ class OptSpace:
 
 
     """
+    param_norms: np.ndarray # normalized values of parameter sensitivities
 
     def __init__(self, cfg, bh_opt):
+        # bh_opt is List[n_boreholes] of List[n_params] of List[n_configs] of PackerConfig
         self.cfg = cfg
         self.bhs_size = len(bh_opt)
         self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
@@ -70,6 +72,9 @@ class OptSpace:
         self.n_chambers = cfg.optimize.n_packers-1
         self.n_params = len(bh_opt[0])
         self._individual_shape = (self.n_boreholes, 2)
+
+        param_sensitivities = np.array([np.sum(c.chamber_sensitivity, axis=0) for b in bh_opt for p in b for c in p])
+        self.param_norms = np.quantile(param_sensitivities, 0.95, axis=0)
 
     def project_decorator(self, func):
         def wrapper(*args, **kwargs):
@@ -206,6 +211,12 @@ class OptSpace:
         ind[i] = (bh,prm,cfg)
         return ind,
 
+    def similar(self, ind: Individual, hofer: Individual):
+        if [i[0] for i in ind] == [i[0] for i in hofer]:
+            return True
+        else:
+            return False
+
 
 def export_vtk_optim_set(ind: Individual, fname, plot=False):
     wdir, cfg = bcommon.load_cfg(cfg_file)
@@ -285,7 +296,7 @@ def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
 
@@ -305,7 +316,7 @@ def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.sum( np.min(param_max, axis=0) ) # axis=0 fixes borehole and minimizes over params
 
@@ -325,9 +336,12 @@ def eval_individual_max_l1(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
-    return np.min( np.max(param_max, axis=1) ) + 0.1*np.sum( np.min(param_max, axis=0) )
+
+    max_over_ind = np.max(param_max, axis=1)
+    min_over_par = np.min(param_max, axis=0)
+    return np.min( max_over_ind ) + 0.2*np.sum( min_over_par )  # coefficient fitted to balance both values
 
 
 def optimize(cfg, map_fn, eval_fn, checkpoint=None):
@@ -376,7 +390,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
         # Start a new evolution
         population = toolbox.population(n=cfg.optimize.population_size)
         start_gen = 0
-        hof = tools.HallOfFame(maxsize= 10) # * cfg.optimize.population_size)
+        hof = tools.HallOfFame(maxsize = 10, similar=_opt_space.similar) # * cfg.optimize.population_size)
         logbook = tools.Logbook()
 
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -410,7 +424,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
 
     print('Hall of fame:')
     for (i,ind) in enumerate(hof):
-        print(toolbox.evaluate(ind), ind)
+        print(toolbox.evaluate(ind), [(i[0], list(_bhs_opt_config[i[0]][i[1]][i[2]].packers)) for i in ind])
         export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
 
     # list of borehole configs sorted by sum of evaluations
