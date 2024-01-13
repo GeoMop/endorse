@@ -39,8 +39,9 @@ def test_optimize_packers():
     problem = sa_problem.sa_dict(sim_cfg)
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     bh_field = boreholes.project_field(workdir, cfg, bh_set, from_sample=0, force=cfg.boreholes.force)
+    # bh_field = boreholes.project_field(workdir, cfg, bh_set, force=cfg.boreholes.force)
 
-    i_bh = 45
+    i_bh = 19
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_field, i_bh, problem, sobol_fn)
     #plot_boreholes.plot_sensitivity_histograms(chambers.all_chambers[1], problem['names'])
