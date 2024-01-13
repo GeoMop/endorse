@@ -123,7 +123,7 @@ def add_cylinders(plotter, lateral: 'Lateral'):
 
 
 def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-    for i_bh, bh in enumerate(bh_set.boreholes):
+    for i_bh, bh in enumerate(bh_set.boreholes.values()):
         add_bh(plotter, bh)
     return plotter
 
