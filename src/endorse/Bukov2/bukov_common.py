@@ -73,10 +73,13 @@ def create_combined_pdf(file_list, output_filename):
             #    print(f"SVG -> PDF conversion failed:\n{e}")
             file_path = pdf_path
         # Add the PDF file to the combined PDF
-        with open(file_path, "rb") as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            for page_num in range(len(pdf_reader.pages)):
-                pdf_writer.add_page(pdf_reader.pages[page_num])
+        try:
+            with open(file_path, "rb") as f:
+                pdf_reader = PyPDF2.PdfReader(f)
+                for page_num in range(len(pdf_reader.pages)):
+                    pdf_writer.add_page(pdf_reader.pages[page_num])
+        except PyPDF2.errors.EmptyFileError as e:
+            raise PyPDF2.errors.EmptyFileError(file_path)
 
     # Write out the combined PDF
     with open(output_filename, 'wb') as out:
@@ -150,6 +153,7 @@ def memoize(func):
     def wrapper(workdir, *args, **kwargs):
         fname = f"{func.__name__}.pkl"
         val = pkl_read(workdir, fname)
+        
         force = kwargs.pop('force', False)
         if force is True or val is None:
             print(f"Execute {func.__name__}  ")
@@ -158,9 +162,10 @@ def memoize(func):
             sec = (time.process_time_ns() - start) / 1e9
             print(f"... [{sec}] s.")
 
+            print("Memoize to: ", workdir, fname)
             pkl_write(workdir, val, fname)
         else:
-            print(f"Skip {func.__name__} .")
+            print(f"Skip {func.__name__}, val: {str(val)[:200]} .")
         return val
     return wrapper
 

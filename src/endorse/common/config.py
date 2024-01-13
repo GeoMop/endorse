@@ -220,7 +220,7 @@ def load_config(path, collect_files=False, hostname=None):
     """
     instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
     cfg_dir = os.path.dirname(path)
-    with open(path) as f:
+    with open(path, "r", encoding='utf-8') as f:
         cfg = yaml.load(f, Loader=YamlNoTimestampSafeLoader)
     cfg['_config_root_dir'] = os.path.abspath(cfg_dir)
     dd = dotdict.create(cfg)

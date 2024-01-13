@@ -283,7 +283,8 @@ class Lateral:
         return self._make_bh_set(bh_list)
 
     def _make_bh_set(self, bh_list):
-        boreholes = {i:bh for i, bh in enumerate(bh_list) if bh is not None}
+        boreholes = [bh for bh in bh_list if bh is not None]
+        boreholes = {i: bh for i, bh in enumerate(boreholes)}
         return BoreholeSet(boreholes, self)
 
     @staticmethod
