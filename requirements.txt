@@ -6,11 +6,10 @@ salib       # Sobol indices
 PyPDF2      # PDF report compilation
 img2pdf     # png to pdf
 cartopy     #  For stereographic projection
-tables      # PyTables
-cairosvg    # SVG to PDF conversion
-zarr        # alternative to H5PY
-pandas
-xarray
+#tables      # PyTables
+#zarr        # alternative to H5PY
+#pandas
+#xarray
 
 
 # endorse
@@ -24,5 +23,6 @@ pytest
 tox
 tox-gh-actions
 importlib-resources
+pandas
 attrs
 
