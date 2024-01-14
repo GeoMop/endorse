@@ -31,7 +31,7 @@ Box = Tuple[Point3d, Point3d]
 def _make_borehole_set(workdir, cfg) -> 'BoreholeSet':
     # Prepare BoreholeSet with simulation data loaded
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
-    cfg_zk = cfg.boreholes.zk_30
+    cfg_zk = cfg.boreholes.active_zk
     lateral = Lateral.from_cfg(cfg_zk)
     def promote_to_list(l):
         if not isinstance(l, list):
@@ -52,9 +52,14 @@ def _make_borehole_set(workdir, cfg) -> 'BoreholeSet':
     l_set = union(*lines)
 
     bh_set = lateral.set_from_points(l_set)
+    print("N all boreholes:", bh_set.n_boreholes)
+    bh_set.boreholes_print_sorted(f_name= workdir / "all_boreholes_list.txt")
 
-    print("N boreholes:", bh_set.n_boreholes)
-    bh_set.boreholes_print_sorted(f_name= workdir / "borholes_list.txt")
+    if cfg_zk.get("subset", []):
+        bh_set = bh_set.subset_by_ids(cfg_zk.subset)
+        print("N subset boreholes:", bh_set.n_boreholes)
+        bh_set.boreholes_print_sorted(f_name= workdir / "subset_boreholes_list.txt")
+
     plot_boreholes.export_vtk_bh_set(workdir, bh_set)
 
     return bh_set
@@ -88,16 +93,16 @@ class Lateral:
             transform_matrix = np.eye(3)
         return cls(
             side,
-            cfg.origin_stationing,
-            cfg.galery_width,
-            cfg.l5_azimuth,
+            cfg.common.origin_stationing,
+            cfg.common.galery_width,
+            cfg.common.l5_azimuth,
             cfg.avoid_cylinder,
             cfg.active_cylinder,
             transform_matrix,
             np.array(cfg.transform_shift),
-            cfg.foliation_latitude,
-            cfg.foliation_longitude,
-            cfg.foliation_angle_tolerance
+            cfg.common.foliation_latitude,
+            cfg.common.foliation_longitude,
+            cfg.common.foliation_angle_tolerance
         )
 
     @property
@@ -229,11 +234,12 @@ class Lateral:
         bh_dir = unit_direction
 
         # deviation from foliation is below tolerance
-        dir_model = self.transform(end_point) - self.transform(start)
-        unit_dir_model = dir_model / np.linalg.norm(dir_model)
-        foliation_dir_model = bcommon.direction_vector(-self.foliation_longitude+self.l5_azimuth+90, self.foliation_latitude)
-        if abs(np.dot(unit_dir_model, foliation_dir_model)) < np.cos(np.radians(self.foliation_angle_tolerance)):
-            return None
+        if self.foliation_angle_tolerance < 90:
+            dir_model = self.transform(end_point) - self.transform(start)
+            unit_dir_model = dir_model / np.linalg.norm(dir_model)
+            foliation_dir_model = bcommon.direction_vector(-self.foliation_longitude+self.l5_azimuth+90, self.foliation_latitude)
+            if abs(np.dot(unit_dir_model, foliation_dir_model)) < np.cos(np.radians(self.foliation_angle_tolerance)):
+                return None
 
         # Fix length
         bh_length = np.linalg.norm(direction) + add_length
@@ -425,7 +431,8 @@ class Borehole:
 
     def place_points(self, n_points, point_step):
         t_points, pt_range = self.place_t_points(n_points, point_step)
-        return self.lateral.transform(self.line_points(t_points)), pt_range
+        points = self.lateral.transform(self.line_points(t_points)), pt_range
+        return points
 
 @attrs.define(slots=False)
 class BoreholeSet:
@@ -571,6 +578,10 @@ class BoreholeSet:
         new_set = {i:self.boreholes[i] for i in indices}
         return BoreholeSet(new_set, self.lateral )
 
+    def subset_by_ids(self, ids):
+        ids = set(ids)
+        new_set = {i:bh for i, bh in self.boreholes.items() if bh.id in ids}
+        return BoreholeSet(new_set, self.lateral )
 
     def _distance(self, cyl, line):
         """
@@ -618,8 +629,8 @@ class BoreholeSet:
         :return:
         """
         zk_cfg = cfg.boreholes.zk_30
-        n_points = zk_cfg.n_points_per_bh
-        point_step = zk_cfg.point_step
+        n_points = zk_cfg.common.n_points_per_bh
+        point_step = zk_cfg.common.point_step
         placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes.values()]
         points, bounds = zip(*placed)
         return np.array((points)), bounds

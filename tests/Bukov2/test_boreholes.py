@@ -151,8 +151,8 @@ def test_from_end_points():
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
-    bh_set = boreholes.make_borehole_set(workdir, cfg)
-    assert list(bh_set.boreholes.keys()) == list(range(bh_set.n_boreholes))
+    bh_set = boreholes._make_borehole_set(workdir, cfg, force=True)
+    #assert list(bh_set.boreholes.keys()) == list(range(bh_set.n_boreholes))
     lateral = bh_set.lateral
 
     plotter = pv.Plotter()
@@ -167,7 +167,7 @@ def test_from_end_points_real():
 
 
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
@@ -184,8 +184,9 @@ def test_field_projection():
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
-    bh_range = list(range(10, 30))
-    bh_sub_set = bh_set.subset(bh_range)
+    #bh_range = list(range(10, 30))
+    #bh_sub_set = bh_set.subset(bh_range)
+    bh_sub_set = bh_set
     print("N boreholes:", bh_sub_set.n_boreholes)
     bh_sub_set.boreholes_print_sorted()
 
@@ -199,7 +200,7 @@ def test_field_projection():
     for f in borehole_field.data_files:
         with h5py.File(f, mode='r') as f:
             dset = f['pressure']
-            n_points = cfg.boreholes.zk_30.n_points_per_bh
+            n_points = cfg.boreholes.zk_30.common.n_points_per_bh
             n_times = 5
             n_samples = 96
             assert dset.shape == (n_points, n_times, n_samples)

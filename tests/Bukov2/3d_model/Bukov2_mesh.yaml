@@ -7,11 +7,11 @@
 simulation:
     cfg:  "config_sim.yaml"
     mesh: "simulation_mesh.vtu" 
-    hdf:  "sampled_reduced.h5"
+    hdf:  "sampled_fixed.h5"
 
 pbs:
     # for proecess_boreholes.py
-    n_workers: 100
+    n_workers: 40
     queue: charon
 
 local:
@@ -108,26 +108,71 @@ geometry:
       y_spacing: 25
 
 boreholes:
-    force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
-    #force: False
-    zk_30:            # zk5_1J
-      invert_xy: False
+    #force: True      # Force BHSet  data sampling update, use for changing BHSet config, mesh or HDF5
+    force: False
+    common: &COMMON
       origin_stationing: 37
       galery_width: 4.0
       l5_azimuth: 110
-      transform_shift: [0, -5, 1.8]
 
       # orientation of foliation plane and accepted deviation of boreholes
       foliation_latitude: 45
       foliation_longitude: 265
-      foliation_angle_tolerance: 80
-
-      avoid_cylinder: [3, 0, 12]        # r, x0, x1
-      active_cylinder: [20, 2, 30]      # r, x0, x1
+      #foliation_angle_tolerance: 80
+      foliation_angle_tolerance: 90
 
       point_step: 0.5             # absolute step of evaluation points (in meters)
       n_points_per_bh: 70      # borehole at most 20m active section
       n_boreholes_to_select: 6
+    zk_40:  &ZK_40          # zk5_1S
+      invert_xy: True
+      common: *COMMON
+      transform_shift: [0, 5, 1.8]
+
+      avoid_cylinder: [3, 0, 12]        # r, x0, x1
+      active_cylinder: [20, 2, 30]      # r, x0, x1
+
+      lines_dict:
+          right_far_up: # 26, 1.7
+            start_x: 0.4
+            start_y: [ -5, -6 ]
+            start_z: 0.1
+            end_x: 13
+            end_y: [ -3, -3.5, -4.2 , -5, -6 ]
+            end_z: [ -1.5, 0, 1.5 ]
+
+          right_near_dn: # 26, 1.7
+            start_x: 0.4
+            start_y: [ -5, -6 ]
+            start_z: 0.1
+            end_x: 13
+            end_y: [ -3, -3.5, -4.2 , -5, -6 ]
+            end_z: [ -1.5, 0, 1.5 ]
+
+      # degree, if starts from 0, completed symmetricaly to negative angles
+      # small case, about 157 boreholes
+      y_angles: [0, 20, 40, 60, 80]
+      z_angles: [0, 10, 20, 40]
+      #z_angles: [0, 3, 5, 7, 9, 11, 15, 25]
+
+      # large case, about 431 active boreholes
+      #y_angles: [0, 10, 20, 30, 40, 50, 60, 80]
+      #z_angles: [0, 5, 10, 15, 25, 45, 70]
+
+      wh_pos_step: [3, 5, 1]
+      wh_zones:
+        #   Each zone is a box given by min and max corners
+        - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
+        - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
+      max_bh_length: 30
+
+    zk_30: &ZK_30            # zk5_1S
+      invert_xy: False
+      common: *COMMON
+      transform_shift: [0, -5, 1.8]
+
+      avoid_cylinder: [3, 0, 12]        # r, x0, x1
+      active_cylinder: [20, 2, 30]      # r, x0, x1
 
       lines_dict:
           # left long variants
@@ -168,7 +213,7 @@ boreholes:
             end_x: [ 10, 12, 14 ]
             end_y: 0
             end_z: [ -6, -5.2, -4.5, -3.8, -3.3 ]
-          mid_mid_dn:  
+          mid_mid_dn:
             start_x: 0.4
             start_y: 6
             start_z: 0.1
@@ -239,6 +284,49 @@ boreholes:
             end_y: [ -3, -3.5, -4.2 , -5, -6 ]
             end_z: [ -1.5, 0, 1.5 ]
 
+      subset:
+        # mid_far_up:  OK
+        - P +5-25+15
+        - P +5-22+16
+        - P +5-22+13
+        # mid_far_dn    OK
+        - P +5-22-14
+        - P +5-22-17
+        - P +5-25-16
+        # right_far_dn OK
+        - P-13+53-11
+        - P-11+43-12
+        - P-11+48-13
+        - P-13+48-11
+        # mid_mid_dn    OK
+        - P +6-34-20
+        - P +6-38-21
+        - P +6-38-25
+        # right_mid_dn OK
+        - P-13+56-12
+        - P-13+59-12
+        - P-13+66-13
+        # right_mid_up: OK
+        - P-13+56+11
+        - P-13+66+12
+        - P-13+63+12
+        - P-13+59+11
+        #right_near_up:   OK
+        - P-13+74+13
+        - P-13+70+13
+        # right_near_dn: OK
+        - P-13+70-15
+        - P-13+74-15
+        # right_middle  OK
+        - P -6+13+06
+        - P -5+00-07
+        - P -6+13-07
+        - P -6+13+00
+        - P -6+11-07
+        - P -6+11+00
+        - P -6+08-07
+        - P -6+04-07
+
       # degree, if starts from 0, completed symmetricaly to negative angles
       # small case, about 157 boreholes
       y_angles: [0, 20, 40, 60, 80]
@@ -255,7 +343,7 @@ boreholes:
         - [[-1, -5, -0.4],  [+1, -20, 0.1]]  # min, max
         - [[-1, 15, -0.4],  [+1, 25, 0.1]]    # min, max
       max_bh_length: 30
-
+    active_zk: *ZK_30
 
 chambers: # Parameters of Chamber sensitivity precalculation
     packer_size: 2          # Size of packer in terms of points

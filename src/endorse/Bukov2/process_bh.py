@@ -17,7 +17,8 @@ def borehole_dir(workdir, i_bh):
 
 def process_borehole(workdir, i_bh):
     bh_workdir = borehole_dir(workdir, i_bh)
-    return _process_borehole(bh_workdir, workdir, i_bh)
+    force = False
+    return _process_borehole(bh_workdir, workdir, i_bh, force=force)
 
 @bcommon.memoize
 def _optimize_borehole(workdir, cfg, chambers):
