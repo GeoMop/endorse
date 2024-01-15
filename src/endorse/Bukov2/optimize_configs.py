@@ -254,24 +254,26 @@ def export_vtk_optim_set(ind: Individual, fname, plot=False):
 
 
 def export_vtk_bh_chamber_set(bh_pk_ids, fname, plot=False):
-    # bh_pk_ids = list of tuples (borehole index, list of packer positions)
+    # bh_pk_ids = list of tuples (borehole ID (str), list of packer positions)
     wdir, cfg = bcommon.load_cfg(cfg_file)
     sim_cfg = common.load_config(wdir / cfg.simulation.cfg)
 
     # save boreholes
     bh_set = boreholes.make_borehole_set(wdir, cfg)
+    bh_ids = [bi for (bi,pi) in bh_pk_ids]
+    bh_indices = [idx for idx, bh in enumerate(bh_set.boreholes) if bh.id in bh_ids]
     problem = sa_problem.sa_dict(sim_cfg)
     param_names = problem['names']
     all_packer_coords, bounds = bh_set.points(cfg)
-    packer_coords = [[(all_packer_coords[bi,pi,0]-bh_set.boreholes[bi].start[0])/bh_set.boreholes[bi].unit_direction[0] for pi in pids] for (bi,pids) in bh_pk_ids]
+    packer_coords = [[(all_packer_coords[bi,pi,0]-bh_set.boreholes[bi].start[0])/bh_set.boreholes[bi].unit_direction[0] for pi in pids] for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids)]
     sensitivities = []
-    for (bi,pids) in bh_pk_ids:
+    for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids):
         bh_workdir = process_bh.borehole_dir(workdir, bi)
         index, data = process_bh._chamber_sensitivities(bh_workdir, cfg, chambers=None)
         bh_sens = [data[index[pids[i],pids[i+1]],:] for i in range(len(pids)-1)]
         sensitivities.append(bh_sens)
     chamber_data = [packer_coords, sensitivities, param_names]
-    plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset([bi for (bi,pi) in bh_pk_ids]), chamber_data=chamber_data, fname=fname)
+    plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
 
     # save tunnel and cylinders
     cylinders = plot_boreholes._make_cylinders(bh_set.lateral)
@@ -288,7 +290,7 @@ def export_vtk_bh_chamber_set(bh_pk_ids, fname, plot=False):
         # plot_bh_set(plotter, bh_set)
         # for i in ind:
         #     add_bh(plotter, bh_set, i[0])
-        plotter.add_mesh( plot_boreholes.make_mesh_bh_set(bh_set.subset([bi for (bi,pi) in bh_pk_ids]), chamber_data=chamber_data) )
+        plotter.add_mesh( plot_boreholes.make_mesh_bh_set(bh_set.subset(bh_indices), chamber_data=chamber_data) )
         plotter.camera.parallel_projection = True
         plotter.show()
 
