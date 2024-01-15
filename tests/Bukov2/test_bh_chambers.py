@@ -10,8 +10,9 @@ script_dir = Path(__file__).absolute().parent
 def test_bh_chamebres():
     # Full borehole processing: optimization + plotting
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model/Bukov2_mesh.yaml")
-    i_bh = 13
-    process_bh.process_borehole(workdir, i_bh)
+    i_bh = 2
+    bh_workdir = process_bh.borehole_dir(workdir, i_bh)
+    process_bh._process_borehole(bh_workdir, workdir, i_bh, force=True)
     # sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
     # problem = sa_problem.sa_dict(sim_cfg)
     # bh_set = boreholes.make_borehole_set(workdir, cfg)

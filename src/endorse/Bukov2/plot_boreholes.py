@@ -5,6 +5,7 @@ from vtk.util.numpy_support import numpy_to_vtk
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 import matplotlib.colors as mcolors
+import matplotlib as mpl
 import vtk
 import os
 from xml.etree import ElementTree as ET
@@ -65,9 +66,9 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
     return meshes
 
 
-def make_mesh_bh_set(bh_set, chamber_data = None):
+def make_mesh_bh_set(bh_set: 'BoreholeSet', chamber_data = None):
     meshes = []
-    for (i_bh,(ind_bh,bh)) in enumerate(bh_set.boreholes.items()):
+    for (i_bh,(ind_bh, bh)) in enumerate(zip(bh_set.orig_indices, bh_set.boreholes)):
         if chamber_data is None:
             ch_d = None
         else:
@@ -139,19 +140,19 @@ def add_cylinders(plotter, lateral: 'Lateral'):
 
 
 def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-    for i_bh, bh in enumerate(bh_set.boreholes.values()):
+    for i_bh, bh in enumerate(bh_set.boreholes):
         add_bh(plotter, bh)
     return plotter
 
 
 def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
     values, ids = zip(*bh_tuples)
-    ids = [int(id) for id in ids]
+    bh_indices = [int(id) for id in ids]
     values = np.array(values)
     normalized_values = (values - values.min()) / (values.max() - values.min())
     cmap = plt.cm.get_cmap("viridis")
     colors = cmap(normalized_values)
-    for bh_id, col in zip(ids, colors):
+    for bh_id, col in zip(bh_indices, colors):
         add_bh(plotter, bh_set.boreholes[bh_id], color=col)
 
 
@@ -421,7 +422,7 @@ class PlotCfg:
         """
         n_params = len(self.param_names)
         n_points = self.chambers.n_points
-        sizes = [2, 4, 8]
+        sizes = [4]
         range_sens = lambda b, s: sensitivities[self.chambers.index[b, min(b + s, n_points)]]
         chamber_data = [[ range_sens(i_begin, size)
                          for i_begin in range(0, n_points - size)]
@@ -435,7 +436,7 @@ class PlotCfg:
                                    norm=mcolors.LogNorm(vmin=vmin, vmax=vmax))
         sm.set_array([])
 
-        fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
+        fig, axes = plt.subplots(n_params, 1, figsize=(12, 4), sharex=True)
         color_values = []
         for i_param, label in enumerate(self.param_names):
             ax = axes[i_param]
@@ -448,11 +449,14 @@ class PlotCfg:
                 width = np.ones(len(x_pos))
                 ax.broken_barh(list(zip(x_pos, width)), (i_size+0.1, 0.8), facecolors=colors)
 
-            ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
-            ax.set_yticks([0.5, 1.5, 2.5])
-            ax.set_yticklabels(['2', '4', '8'])
-
-
+            #ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
+            #ax.set_yticks([0.5, 1.5, 2.5])
+            #ax.set_yticklabels(['2', '4', '8'])
+            #ax.set_xticks
+        ax.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
+        xticks = list(range(0, 80, 10))
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(list(range(0, 40, 5)))
         axes[0].set_title("Size", pad=-20)  # Title above the first axis
 
         # Create a common colorbar for all subplots
@@ -467,19 +471,36 @@ class PlotCfg:
             plt.show()
         return fname
 
-    def plot_mean_time_fun(self):
+    def plot_mean_pressure(self):
+        chamber_pressures = self.chambers.cumul_bh_data[4:, :, :] - self.chambers.cumul_bh_data[:-4, :, :]
+        # (n_points - 1, n_times, n_samples)
+        # Calculate the mean over the last dimension (samples)
+        mean_pressures = np.mean(chamber_pressures, axis=2)   # mean over samples
+        selected_pressures = mean_pressures[::4, :]
+        fig = self._plot_time_fun(selected_pressures)
+        fname = self.workdir / "mean_time_fun.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def plot_q90_pressure(self):
+        chamber_pressures = self.chambers.cumul_bh_data[4:, :, :] - self.chambers.cumul_bh_data[:-4, :, :]
+        # (n_points - 1, n_times, n_samples)
+        # Calculate the mean over the last dimension (samples)
+        mean_pressures = np.quantile(chamber_pressures, q=0.9, axis=2)   # mean over samples
+        selected_pressures = mean_pressures[::4, :]
+        fig = self._plot_time_fun(selected_pressures)
+        fname = self.workdir / "q90_time_fun.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def _plot_time_fun(self, selected_pressures):
         """
         Goal: check projected pressures on the borehole
         :return:
         """
-        pressures = self.chambers.bh_data
-        # (n_points - 1, n_times, n_samples)
-        # Calculate the mean over the last dimension (samples)
-        mean_pressures = np.mean(pressures, axis=2)
-        selected_pressures = mean_pressures[::4]
 
         # Create a colormap
-        cmap = plt.cm.jet   # better discriminatino of points then viridis
+        cmap = plt.cm.gist_rainbow   # better discriminatino of points then viridis
         colors = cmap(np.linspace(0, 1, selected_pressures.shape[0]))
 
         # Plotting
@@ -498,17 +519,12 @@ class PlotCfg:
         ax.set_xlabel('Time')
         ax.set_ylabel('Mean Pressure')
         ax.set_title('Mean Pressure Over Time for Every 4th Point')
-
-        fname = self.workdir / "mean_time_fun.pdf"
-        fig.savefig(fname)
-        if self.show:
-            plt.show()
-        return fname
+        return fig
 
     def plot_relative_residual(self):
         arr_copy = self.chambers.bh_data
         orig_arr = self.chambers.orig_bh_data
-        outlier_mask = self.chambers.outlier_mask
+        #outlier_mask = self.chambers.outlier_mask
 
         arr_copy = np.maximum(arr_copy, 0.1)
         # Compute the time mean on arr_copy
@@ -711,7 +727,8 @@ class PlotCfg:
                                    f_name="chambers_sa.pdf", vmin=1e-5),
             self.plot_chamber_data(self.chambers.chambers_norm_sensitivities,
                                    f_name="chambers_norm_sa.pdf", vmin=1e-2),
-            self.plot_mean_time_fun(),
+            self.plot_mean_pressure(),
+            self.plot_q90_pressure(),
             self.plot_relative_residual(),
             self.plot_best_packers_st(),
             # self.plot_best_packers_full()

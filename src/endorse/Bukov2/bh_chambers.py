@@ -56,56 +56,55 @@ class Chambers:
         amax_array = np.take_along_axis(array, i_variants, axis=axis).squeeze(axis=axis)
         return amax_array
 
+    # @cached_property
+    # def _detect_outliers(self):
+    #     arr = self.orig_bh_data
+    #     # Create a mask for NaNs and Infs
+    #     nan_inf_mask = np.isnan(arr) | np.isinf(arr)
+    #
+    #     # Create a copy of the array for further processing
+    #     arr_copy = arr.copy()
+    #
+    #     # Replace Infs with NaNs in the copy
+    #     arr_copy[nan_inf_mask] = np.nan
+    #
+    #     # Calculate quartiles and IQR across the last axis, ignoring NaNs
+    #     Q1 = np.nanpercentile(arr_copy, 25, axis=2, keepdims=True)
+    #     Q3 = np.nanpercentile(arr_copy, 75, axis=2, keepdims=True)
+    #     IQR = Q3 - Q1
+    #
+    #     # Determine outlier criteria
+    #     lower_bound = Q1 - 1.5 * IQR
+    #     upper_bound = Q3 + 1.5 * IQR
+    #
+    #     # Detect outliers on the copy
+    #     outlier_mask = (arr_copy < lower_bound) | (arr_copy > upper_bound)
+    #     outlier_mask = nan_inf_mask
+    #
+    #     # Calculate mean of non-outliers, ignoring NaNs
+    #     non_outlier_mean = np.nanmean(arr_copy, axis=2, keepdims=True)
+    #
+    #     # Replace outliers in the original array with the mean of non-outliers
+    #     np.putmask(arr_copy, outlier_mask, non_outlier_mean)
+    #     assert arr_copy.shape == arr.shape
+    #
+    #     return outlier_mask, arr_copy
+
+    # @property
+    # def outlier_mask(self):
+    #     return self._detect_outliers[0]
+
     @cached_property
-    def _detect_outliers(self):
-        arr = self.orig_bh_data
-        # Create a mask for NaNs and Infs
-        nan_inf_mask = np.isnan(arr) | np.isinf(arr)
-
-        # Create a copy of the array for further processing
-        arr_copy = arr.copy()
-
-        # Replace Infs with NaNs in the copy
-        arr_copy[nan_inf_mask] = np.nan
-
-        # Calculate quartiles and IQR across the last axis, ignoring NaNs
-        Q1 = np.nanpercentile(arr_copy, 25, axis=2, keepdims=True)
-        Q3 = np.nanpercentile(arr_copy, 75, axis=2, keepdims=True)
-        IQR = Q3 - Q1
-
-        # Determine outlier criteria
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-
-        # Detect outliers on the copy
-        outlier_mask = (arr_copy < lower_bound) | (arr_copy > upper_bound)
-        outlier_mask = nan_inf_mask
-
-        # Calculate mean of non-outliers, ignoring NaNs
-        non_outlier_mean = np.nanmean(arr_copy, axis=2, keepdims=True)
-
-        # Replace outliers in the original array with the mean of non-outliers
-        np.putmask(arr_copy, outlier_mask, non_outlier_mean)
-        assert arr_copy.shape == arr.shape
-
-        return outlier_mask, arr_copy
-
-    @property
-    def outlier_mask(self):
-        return self._detect_outliers[0]
-
-    @property
     def bh_data(self):
         """
         (n_points, n_times, n_samples)
         :return:
         """
-        return self._detect_outliers[1]
+        return bcommon.soft_lim_pressure(self.orig_bh_data)
 
-    @cached_property
+    @property
     def cumul_bh_data(self):
-        lim_pressure = bcommon.soft_lim_pressure(self.bh_data)
-        return np.cumsum(lim_pressure, axis=0)
+        return np.cumsum(self.bh_data, axis=0)
 
     @property
     def n_groups(self):

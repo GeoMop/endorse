@@ -143,7 +143,7 @@ def main(workdir):
 
             print("N boreholes:", bh_set.n_boreholes)
 
-            #plot_bh_selection(cfg, bh_set, pname, par_list[:10])
+            plot_bh_selection(cfg, bh_set, pname, par_list[:10])
 
     select_by_group_rank(bh_set, bh_par_dict)
 

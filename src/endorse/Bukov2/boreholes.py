@@ -290,8 +290,8 @@ class Lateral:
 
     def _make_bh_set(self, bh_list):
         boreholes = [bh for bh in bh_list if bh is not None]
-        boreholes = {i: bh for i, bh in enumerate(boreholes)}
-        return BoreholeSet(boreholes, self)
+        indices = list(range(len(boreholes)))
+        return BoreholeSet(boreholes, self, orig_indices=indices)
 
     @staticmethod
     def _angle_array(lst):
@@ -450,8 +450,9 @@ class BoreholeSet:
     #n_points: int
     # _y_angle_range = (-80, 80)      # achive 2m from 10m distance
     # _z_angle_range = (-60, 60)
-    boreholes: Dict[int, Borehole]
-    lateral: Lateral
+    boreholes: List[Borehole]
+    lateral: 'Lateral'
+    orig_indices: List[int]
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -575,13 +576,14 @@ class BoreholeSet:
     #     return lengths
 
     def subset(self, indices):
-        new_set = {i:self.boreholes[i] for i in indices}
-        return BoreholeSet(new_set, self.lateral )
+        new_set = [self.boreholes[i] for i in indices]
+
+        return BoreholeSet(new_set, self.lateral, orig_indices=indices)
 
     def subset_by_ids(self, ids):
         ids = set(ids)
-        new_set = {i:bh for i, bh in self.boreholes.items() if bh.id in ids}
-        return BoreholeSet(new_set, self.lateral )
+        new_indices = [idx for idx, bh in enumerate(self.boreholes) if bh.id in ids]
+        return self.subset(new_indices)
 
     def _distance(self, cyl, line):
         """
@@ -596,10 +598,6 @@ class BoreholeSet:
         distances = line_polydata.compute_implicit_distance(cyl, inplace=False)['implicit_distance']
         return np.min(distances)
 
-    @property
-    def lateral(self):
-        return self.boreholes[0].lateral
-
     def transform(self, points):
         return self.lateral.transform(points)
 
@@ -611,11 +609,11 @@ class BoreholeSet:
         """
         r, l0, l1 = self.lateral.avoid_cylinder
         cylinder = pv.Cylinder(center=self.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-        distances = np.abs([self._distance(cylinder, (bh.start, bh.transversal)) for bh in self.boreholes.values()])
+        distances = np.abs([self._distance(cylinder, (bh.start, bh.transversal)) for bh in self.boreholes])
         indices = np.argsort(distances)
         report = "\n".join([
             f"{dist} | {bh.bh_description}"
-            for dist, bh in zip(distances, self.boreholes.values())
+            for dist, bh in zip(distances, self.boreholes)
         ])
         if f_name:
             with open(f_name, 'w') as f:
@@ -631,7 +629,7 @@ class BoreholeSet:
         zk_cfg = cfg.boreholes.zk_30
         n_points = zk_cfg.common.n_points_per_bh
         point_step = zk_cfg.common.point_step
-        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes.values()]
+        placed = [ bh.place_points(n_points, point_step) for bh in self.boreholes]
         points, bounds = zip(*placed)
         return np.array((points)), bounds
 

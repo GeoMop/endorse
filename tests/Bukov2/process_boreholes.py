@@ -22,16 +22,16 @@ def all_boreholes(workdir, map_fn):
     workdir, cfg = bcommon.load_cfg(workdir / "Bukov2_mesh.yaml")
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     #n_boreholes = (0,50,5)
-    bh_keys = list(bh_set.boreholes.keys()) 
-    print(bh_keys)
-    print(list(range(bh_set.n_boreholes)))
-    assert bh_keys == list(range(bh_set.n_boreholes))
-    
+    # bh_keys = list(bh_set.boreholes.keys())
+    # print(bh_keys)
+    # print(list(range(bh_set.n_boreholes)))
+    # assert bh_keys == list(range(bh_set.n_boreholes))
+    #
     # Set directories to avoid NFS IO errors
-    for i_bh in bh_keys:
+    for i_bh in range(bh_set.n_boreholes):
         bh_dir = workdir / "processed_bh" / f"bh_{i_bh:03d}"
         bh_dir.mkdir(parents=True, exist_ok=True)
-    bh_args = [(workdir, i_bh) for i_bh in bh_keys]
+    bh_args = [(workdir, i_bh) for i_bh in range(bh_set.n_boreholes)]
     #time.sleep(10)
 
     results = list(map_fn(single_borehole, bh_args))
