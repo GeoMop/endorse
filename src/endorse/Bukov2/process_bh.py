@@ -27,6 +27,10 @@ def _optimize_borehole(workdir, cfg, chambers):
     print(f"[{workdir.name}] optimization ", tracemalloc.get_traced_memory())
     return bh_chambers.optimize_packers(cfg, chambers)
 
+@bcommon.memoize
+def _chamber_sensitivities(workdir, cfg, chambers=None):
+    return chambers.index, chambers.chambers_sensitivities
+
 
 @bcommon.memoize
 def _process_borehole(bh_workdir, workdir, i_bh):
@@ -41,7 +45,11 @@ def _process_borehole(bh_workdir, workdir, i_bh):
     problem = sa_problem.sa_dict(sim_cfg)
     sobol_fn = sobol_fast.vec_sobol_total_only
     chambers = bh_chambers.Chambers.from_bh_set(workdir, cfg, bh_field, i_bh,  problem, sobol_fn)
-    
+    print(f"[{i_bh}] compute sensitivities")
+
+    bh_workdir = borehole_dir(workdir, i_bh)
+    index, sensitivities = _chamber_sensitivities(bh_workdir, cfg, chambers)
+
     print(f"[{i_bh}] optimization ")    
     
     best_packer_configs = _optimize_borehole(bh_workdir, cfg, chambers)
