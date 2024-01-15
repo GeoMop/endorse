@@ -155,6 +155,8 @@ def test_from_end_points_real():
     #assert list(bh_set.boreholes.keys()) == list(range(bh_set.n_boreholes))
     lateral = bh_set.lateral
 
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset([10, 20, 30]), fname="boreholes_subset.vtk")
+
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
@@ -167,7 +169,7 @@ def test_from_end_points_real():
 
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.

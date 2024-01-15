@@ -49,6 +49,8 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
         line1 = add_fields(line1, np.mean(values, axis=0), value_names)
     meshes.append(line1)       # borehole line
 
+    # text = pv.Text3D(str(i_bh), height=0.5, center=p_tr, normal=bh.unit_direction)
+
     # Chamber cylinders
     for begin, end, value in zip(bounds[:-1], bounds[1:], values):
         p_begin = bh.lateral.transform(bh.line_point(begin))
