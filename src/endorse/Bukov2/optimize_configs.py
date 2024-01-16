@@ -270,7 +270,7 @@ def export_vtk_bh_chamber_set(cfg_file, bh_pk_ids, fname, plot=False):
     for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids):
         bh_workdir = process_bh.borehole_dir(workdir, bi)
         index, data = process_bh._chamber_sensitivities(bh_workdir, cfg, chambers=None)
-        bh_sens = [data[index[pids[i],pids[i+1]],:] for i in range(len(pids)-1)]
+        bh_sens = [data[index[pids[i],pids[i+1]-2],:] for i in range(len(pids)-1)]
         sensitivities.append(bh_sens)
     chamber_data = [packer_coords, sensitivities, param_names]
     plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
@@ -468,8 +468,8 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     for (i,ind) in enumerate(hof):
         bh_pk_ids = [(i[0], list(_bhs_opt_config[i[0]][i[1]][i[2]].packers)) for i in ind]
         print(toolbox.evaluate(ind), bh_pk_ids)
-        # export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
-        export_vtk_bh_chamber_set(bh_pk_ids, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
+        export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
+        # export_vtk_bh_chamber_set(bh_pk_ids, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
 
     # list of borehole configs sorted by sum of evaluations
     print('Most popular configs:')

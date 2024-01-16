@@ -54,7 +54,7 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
     # Chamber cylinders
     for begin, end, value in zip(bounds[:-1], bounds[1:], values):
         p_begin = bh.lateral.transform(bh.line_point(begin))
-        p_end = bh.lateral.transform(bh.line_point(end))
+        p_end = bh.lateral.transform(bh.line_point(end-1))
         cylinder = pv.Cylinder(
             center=(p_begin +p_end)/2,
             direction=p_end - p_begin,
