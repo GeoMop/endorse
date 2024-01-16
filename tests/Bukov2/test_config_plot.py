@@ -1,11 +1,20 @@
 from endorse.Bukov2 import optimize_configs as oc
+from pathlib import Path
+script_dir = Path(__file__).absolute().parent
 
 
-configs = [
-    ('P +5-25+15', [0,10,50,69]),
-    ('P +5-22-14', [10,20,30,40]),
-    ('P-13+53-11', [40,45,50,55]),
-    ('P-11+48-13', [30,31,32,33]),
-    ('P +6-34-20', [20,40,60,69])
+configs = \
+[[
+    ('P +5-25+15', [3,9,14,24]),
+    ('P-13+66+12', [6, 13,19,30]),
+
+    ('P-13+59-12', [16,20,28,34]),
+    ('P-13+70-15', [30,31,16,26]),
+    ('P -6+13-07', [11,18,24,30]),
+    ('P +5-09+00', [18, 26, 32, 38])
+],
 ]
-oc.export_vtk_bh_chamber_set(configs, "boreholes_opt_cfg.test.vtk", plot=False)
+
+cfg_file = script_dir / "3d_model/PE_01_02/Bukov2_mesh.yaml"
+for i, cfg in enumerate(configs):
+    oc.export_vtk_bh_chamber_set(cfg_file, cfg, f"boreholes_opt_cfg_{i}.vtk", plot=False)

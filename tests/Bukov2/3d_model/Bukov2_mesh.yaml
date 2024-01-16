@@ -326,6 +326,9 @@ boreholes:
         - P -6+11+00
         - P -6+08-07
         - P -6+04-07
+        # middle
+        - P +5-09+00
+        - P +5-09-07
 
       # degree, if starts from 0, completed symmetricaly to negative angles
       # small case, about 157 boreholes

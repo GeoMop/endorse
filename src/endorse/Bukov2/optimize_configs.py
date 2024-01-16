@@ -11,9 +11,9 @@ from pathlib import Path
 from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
-workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2/PE_01_02_zk30_32')
-bh_data_file = workdir / "all_bh_configs.pkl"
-cfg_file = workdir / "Bukov2_mesh.yaml"
+#workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2/PE_01_02_zk30_32')
+#bh_data_file = workdir / "all_bh_configs.pkl"
+#cfg_file = workdir / "Bukov2_mesh.yaml"
 
 from endorse.Bukov2 import boreholes, plot_boreholes, sa_problem, process_bh
 import endorse.Bukov2.bukov_common as bcommon
@@ -253,13 +253,13 @@ def export_vtk_optim_set(ind: Individual, fname, plot=False):
         plotter.show()
 
 
-def export_vtk_bh_chamber_set(bh_pk_ids, fname, plot=False):
+def export_vtk_bh_chamber_set(cfg_file, bh_pk_ids, fname, plot=False):
     # bh_pk_ids = list of tuples (borehole ID (str), list of packer positions)
-    wdir, cfg = bcommon.load_cfg(cfg_file)
-    sim_cfg = common.load_config(wdir / cfg.simulation.cfg)
+    workdir, cfg = bcommon.load_cfg(cfg_file)
+    sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
 
     # save boreholes
-    bh_set = boreholes.make_borehole_set(wdir, cfg)
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
     bh_ids = [bi for (bi,pi) in bh_pk_ids]
     bh_indices = [idx for idx, bh in enumerate(bh_set.boreholes) if bh.id in bh_ids]
     problem = sa_problem.sa_dict(sim_cfg)
@@ -273,7 +273,7 @@ def export_vtk_bh_chamber_set(bh_pk_ids, fname, plot=False):
         bh_sens = [data[index[pids[i],pids[i+1]],:] for i in range(len(pids)-1)]
         sensitivities.append(bh_sens)
     chamber_data = [packer_coords, sensitivities, param_names]
-    plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
 
     # save tunnel and cylinders
     cylinders = plot_boreholes._make_cylinders(bh_set.lateral)
@@ -281,7 +281,7 @@ def export_vtk_bh_chamber_set(bh_pk_ids, fname, plot=False):
     scene = list(cylinders)
     scene.append(tunnel)
     scene = pv.merge(scene, merge_points=False)
-    scene.save(wdir / "scene.vtk")
+    scene.save(workdir / "scene.vtk")
 
     if plot:
         plotter = pv.Plotter(off_screen=False)
