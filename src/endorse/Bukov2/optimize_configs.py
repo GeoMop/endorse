@@ -261,16 +261,33 @@ def export_vtk_bh_chamber_set(cfg_file, bh_pk_ids, fname, plot=False):
     # save boreholes
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     bh_ids = [bi for (bi,pi) in bh_pk_ids]
-    bh_indices = [idx for idx, bh in enumerate(bh_set.boreholes) if bh.id in bh_ids]
+    bh_id_to_idx  = {bh.id: idx for idx, bh in enumerate(bh_set.boreholes)}
+    bh_indices = [bh_id_to_idx[bh_id] for bh_id in bh_ids]
     problem = sa_problem.sa_dict(sim_cfg)
     param_names = problem['names']
     all_packer_coords, bounds = bh_set.points(cfg)
-    packer_coords = [[(all_packer_coords[bi,pi,0]-bh_set.boreholes[bi].start[0])/bh_set.boreholes[bi].unit_direction[0] for pi in pids] for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids)]
+
+    def t_for_idx(bi, idx):
+        return (idx - bh_set.boreholes[bi].start[0]) / bh_set.boreholes[bi].unit_direction[0]
+    def single_bh_packers(bi, bid, pids):
+        packers = [
+            t_for_idx(bi, all_packer_coords[bi, pi, 0])
+            for pi in pids]
+        t_0 = t_for_idx(bi, all_packer_coords[bi, 0, 0])
+        packers.insert(0, t_0)
+        return packers
+
+    packer_coords = [
+        single_bh_packers(bi, bid, pids)
+        for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids)]
     sensitivities = []
     for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids):
         bh_workdir = process_bh.borehole_dir(workdir, bi)
         index, data = process_bh._chamber_sensitivities(bh_workdir, cfg, chambers=None)
-        bh_sens = [data[index[pids[i],pids[i+1]-2],:] for i in range(len(pids)-1)]
+        i_begin = [pids[i] for i in range(len(pids)-1)]
+        i_end = [pids[i+1]-2 for i in range(len(pids)-1)]
+        bh_sens = [data[index[i_begin, i_end],:] for i_begin, i_end in zip(i_begin, i_end)]
+        bh_sens.insert(0, data[-1, :])
         sensitivities.append(bh_sens)
     chamber_data = [packer_coords, sensitivities, param_names]
     plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
