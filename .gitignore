@@ -23,6 +23,8 @@ sandbox
 # environments
 .tox
 venv
+**/venv/**
+**/env/**
 
 # temporary excluded
 **/*.zip
@@ -34,10 +36,6 @@ experiments/mlmc-modelling-2019/workdir/**
 experiments/repository-model/new_from_bgem/**
 experiments/repository-model/prd/**
 experiments/repository-model/tmp/**
-
-# venv
-**/venv/**
-**/env/**
 
 # Latex
 **/*.aux
@@ -55,9 +53,6 @@ experiments/repository-model/tmp/**
 
 # kate swap
 *.kate-swp
-
-venv
-venv_bayes
 
 tests/test_data/*_fields
 tests/test_data/*_fields.*

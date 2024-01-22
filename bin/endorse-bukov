@@ -6,7 +6,7 @@ set -x
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
 ENDORSE_SRC_BUKOV="${ENDORSE_SRC_ROOT}/src/endorse/Bukov2"
-ENDORSE_VENV="${ENDORSE_SRC_ROOT}/venv_bayes"
+ENDORSE_VENV="${ENDORSE_SRC_ROOT}/venv"
 
 debug=false
 
@@ -58,7 +58,7 @@ venv_command="source ${ENDORSE_VENV}/bin/activate"
 
 # build command
 
-command="$venv_command && python3 ${ENDORSE_SRC_BUKOV}/run_sampling_2D.py ${output_dir}"
+command="$venv_command && python3 ${ENDORSE_SRC_BUKOV}/run_sampling.py ${output_dir}"
 
 
 # finalize command

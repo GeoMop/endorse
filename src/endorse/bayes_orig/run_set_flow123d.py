@@ -12,8 +12,8 @@ from measured_data import MeasuredData
 from run_all import setup
 from preprocess import preprocess
 
-from surrDAMH.modules.raw_data import RawData
-from surrDAMH.modules.analysis import Analysis
+# from surrDAMH.modules.raw_data import RawData
+# from surrDAMH.modules.analysis import Analysis
 
 from endorse.Bukov2 import sample_storage
 
@@ -53,36 +53,36 @@ def just_run_flow123d(config_dict, measured_data, params_in, output_dir_in, solv
         #     exit(0)
 
 
-def get_best_accepted_params(config_dict_in, output_dir_in, count):
-    no_parameters = len(config_dict_in['surrDAMH_parameters']['parameters'])
-
-    conf_bayes_path = os.path.join(output_dir_in, "common_files", config_dict_in["surrDAMH_parameters"]["config_file"])
-    with open(conf_bayes_path) as f:
-        config_bayes = yaml.safe_load(f)
-    observations = np.array(config_bayes["problem_parameters"]["observations"])
-    basename = os.path.basename(conf_bayes_path)
-    problem_name, fext = os.path.splitext(basename)
-    output_dir_bayes = os.path.join(output_dir_in, 'saved_samples', problem_name)
-
-    raw_data = RawData()
-    raw_data.load(output_dir_bayes, no_parameters, len(observations))
-    # type: 0-accepted, 1-prerejected, 2-rejected
-    raw_data_filtered = raw_data.filter(types=[0, 2], stages=[0])
-
-    analysis_pe = Analysis(config=config_bayes, raw_data=raw_data_filtered)
-    fits, norms = analysis_pe.find_n_best_fits(observations, count=count, norm="L2")
-
-    param_file = os.path.join(output_dir_in, "best_accepted_params.csv")
-    params = []
-    with open(param_file, 'w') as file:
-        line = ','.join(analysis_pe.par_names)
-        file.write(line + "\n")
-        for sample in fits:
-            params.append(sample.parameters())
-            line = ','.join([str(s) for s in sample.parameters()])
-            file.write(line + "\n")
-
-    return params
+# def get_best_accepted_params(config_dict_in, output_dir_in, count):
+#     no_parameters = len(config_dict_in['surrDAMH_parameters']['parameters'])
+#
+#     conf_bayes_path = os.path.join(output_dir_in, "common_files", config_dict_in["surrDAMH_parameters"]["config_file"])
+#     with open(conf_bayes_path) as f:
+#         config_bayes = yaml.safe_load(f)
+#     observations = np.array(config_bayes["problem_parameters"]["observations"])
+#     basename = os.path.basename(conf_bayes_path)
+#     problem_name, fext = os.path.splitext(basename)
+#     output_dir_bayes = os.path.join(output_dir_in, 'saved_samples', problem_name)
+#
+#     raw_data = RawData()
+#     raw_data.load(output_dir_bayes, no_parameters, len(observations))
+#     # type: 0-accepted, 1-prerejected, 2-rejected
+#     raw_data_filtered = raw_data.filter(types=[0, 2], stages=[0])
+#
+#     analysis_pe = Analysis(config=config_bayes, raw_data=raw_data_filtered)
+#     fits, norms = analysis_pe.find_n_best_fits(observations, count=count, norm="L2")
+#
+#     param_file = os.path.join(output_dir_in, "best_accepted_params.csv")
+#     params = []
+#     with open(param_file, 'w') as file:
+#         line = ','.join(analysis_pe.par_names)
+#         file.write(line + "\n")
+#         for sample in fits:
+#             params.append(sample.parameters())
+#             line = ','.join([str(s) for s in sample.parameters()])
+#             file.write(line + "\n")
+#
+#     return params
 
 
 def add_output_keys(config_dict):
@@ -174,8 +174,9 @@ if __name__ == "__main__":
             #next(csvreader)
             #parameters = list(csvreader)
     else:
-        print("Getting " + str(n_best_params) + " best parameters.")
-        parameters = get_best_accepted_params(config_dict, output_dir, n_best_params)
+        # print("Getting " + str(n_best_params) + " best parameters.")
+        # parameters = get_best_accepted_params(config_dict, output_dir, n_best_params)
+        exit(1)
 
     # print(parameters)
 

@@ -6,7 +6,7 @@ import yaml
 from endorse.bayes_orig import aux_functions
 from endorse.bayes_orig.preprocess import preprocess
 
-from surrDAMH.configuration import Configuration
+# from surrDAMH.configuration import Configuration
 
 # this script is supposed to be dependent only on python packages present on any machine
 # all other python scripts are later run inside docker container
@@ -107,12 +107,13 @@ if __name__ == "__main__":
             raise Exception("Missing problem configuration '" + problem_path + "'."
                             + " Call simulation with 'run' command first!")
         print(problem_path, flush=True)
-        C = Configuration(N, problem_path)
-        args = [str(N), problem_path, output_dir]
-        if os.path.exists(surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py"):
-            command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
-        else:
-            command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
+        # C = Configuration(N, problem_path)
+        # args = [str(N), problem_path, output_dir]
+        # if os.path.exists(surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py"):
+        #     command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
+        # else:
+        # command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
+        exit(1)
     else:
         if oversubscribe:
             opt = " --oversubscribe "
