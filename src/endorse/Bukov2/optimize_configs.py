@@ -11,11 +11,11 @@ from pathlib import Path
 from functools import cached_property
 import pyvista as pv
 script_path = Path(__file__).absolute()
-workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2')
-bh_data_file = workdir / "bh_set.pickle"
-cfg_file = workdir / "Bukov2_mesh.yaml"
+#workdir = Path('/home/stebel/dev/git/endorse-experiment/tests/Bukov2/PE_01_02_zk30_32')
+#bh_data_file = workdir / "all_bh_configs.pkl"
+#cfg_file = workdir / "Bukov2_mesh.yaml"
 
-from endorse.Bukov2 import boreholes, plot_boreholes
+from endorse.Bukov2 import boreholes, plot_boreholes, sa_problem, process_bh
 import endorse.Bukov2.bukov_common as bcommon
 from endorse import common
 from endorse.sa import analyze
@@ -61,16 +61,20 @@ class OptSpace:
 
 
     """
+    param_norms: np.ndarray # normalized values of parameter sensitivities
 
-    def __init__(self, cfg, bh_set:boreholes.BoreholeSet, bh_opt):
+    def __init__(self, cfg, bh_opt):
+        # bh_opt is List[n_boreholes] of List[n_params] of List[n_configs] of PackerConfig
         self.cfg = cfg
-        self.bhs = bh_set
-        self.bhs_size = len(bh_opt) # self.bhs.n_boreholes
-        self.n_boreholes = cfg.boreholes.zk_30.n_boreholes_to_select
+        self.bhs_size = len(bh_opt)
+        self.n_boreholes = cfg.boreholes.common.n_boreholes_to_select
         self.n_configs = len(bh_opt[0][0])
         self.n_chambers = cfg.optimize.n_packers-1
-        self.n_params = len(bh_opt[0]) # bh_opt[0][0].param_values.shape[1]
+        self.n_params = len(bh_opt[0])
         self._individual_shape = (self.n_boreholes, 2)
+
+        param_sensitivities = np.array([np.sum(c.chamber_sensitivity, axis=0) for b in bh_opt for p in b for c in p])
+        self.param_norms = np.quantile(param_sensitivities, 0.95, axis=0)
 
     def project_decorator(self, func):
         def wrapper(*args, **kwargs):
@@ -139,7 +143,7 @@ class OptSpace:
         return i_bh, i_prm, i_cfg
 
     def make_individual(self) -> Tuple[Individual]:
-        ind = [] #[self.random_bh()  for i in range(self.n_boreholes)]
+        ind = []
         seen = set()
         for i in range(self.n_boreholes):
             t = self.random_bh()
@@ -207,95 +211,116 @@ class OptSpace:
         ind[i] = (bh,prm,cfg)
         return ind,
 
-
-def plot_borehole_set(ind: Individual):
-    def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
-        for i in range(bh_set.n_y_angles):
-            for j in range(bh_set.n_z_angles):
-                for i_bh in bh_set.angles_table[i][j]:
-                    add_bh(plotter, bh_set, i_bh)
-        return plotter
-
-    def add_bh(plotter, bh_set, i_bh):
-        p_w, dir, p_tr = bh_set.bh_list[i_bh]
-        p_w = bh_set.transform(p_w)
-        p_tr = bh_set.transform(p_tr)
-        points, bounds = bh_set.point_lines
-        p_begin = points[i_bh, bounds[i_bh][0], :]
-        p_end = points[i_bh, bounds[i_bh][1] - 1, :]
-
-        i, j, k = bh_set.angle_ijk(i_bh)
-        angle_norm = (i / bh_set.n_y_angles, j / bh_set.n_z_angles)
-
-        color = (0.8 * angle_norm[0] + 0.1, 0.2, 0.8 * angle_norm[1] + 0.1)
-        # print(f"Adding: {bh} col: {color}")
-        # line = pv.Line(p_w, p_tr)
-        # plotter.add_mesh(line, color='grey', line_width=1)
-
-        line = pv.Line(p_begin, p_end)
-        plotter.add_mesh(line, color='grey', line_width=2)
-
-        # Transversal point
-        # sphere = pv.Sphere(0.5, p_tr)
-        # plotter.add_mesh(sphere, color=color)
-
-        # for pt in points[i_bh, : bounds[i_bh][1]]:
-        #     sphere = pv.Sphere(0.3, pt)
-        #     plotter.add_mesh(sphere, color=color)
-
-    global workdir
-    wdir, cfg = bcommon.load_cfg(workdir / "3d_model_mock/Bukov2_mesh.yaml")
-
-    bh_set = boreholes.BoreholeSet.from_cfg(cfg.boreholes.zk_30)
-
-    plotter = pv.Plotter(off_screen=False)
-    plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
-    plot_boreholes.add_cylinders(plotter, bh_set)
-    # plot_bh_set(plotter, bh_set)
-    for i in ind:
-        add_bh(plotter, bh_set, i[0])
-    plotter.camera.parallel_projection = True
-    plotter.show()
+    def similar(self, ind: Individual, hofer: Individual):
+        if [i[0] for i in ind] == [i[0] for i in hofer]:
+            return True
+        else:
+            return False
 
 
+def export_vtk_optim_set(ind: Individual, fname, plot=False):
+    wdir, cfg = bcommon.load_cfg(cfg_file)
+    sim_cfg = common.load_config(wdir / cfg.simulation.cfg)
 
-_bh_set = None
+    # save boreholes
+    bh_set = boreholes.make_borehole_set(wdir, cfg)
+    problem = sa_problem.sa_dict(sim_cfg)
+    param_names = problem['names']
+    packer_indices = [_bhs_opt_config[i[0]][i[1]][i[2]].packers for i in ind]
+    all_packer_coords, bounds = bh_set.points(cfg)
+    packer_coords = [[(all_packer_coords[i[0],pi,0]-bh_set.boreholes[i[0]].start[0])/bh_set.boreholes[i[0]].unit_direction[0] for pi in pids] for (pids,i) in zip(packer_indices,ind)]
+    sensitivities = [_bhs_opt_config[i[0]][i[1]][i[2]].param_values for i in ind]
+    chamber_data = [packer_coords, sensitivities, param_names]
+    plot_boreholes.export_vtk_bh_set(wdir, bh_set.subset([i[0] for i in ind]), chamber_data=chamber_data, fname=fname)
+
+    # save tunnel and cylinders
+    cylinders = plot_boreholes._make_cylinders(bh_set.lateral)
+    tunnel = plot_boreholes._make_main_tunnel(cfg.geometry.main_tunnel)
+    scene = list(cylinders)
+    scene.append(tunnel)
+    scene = pv.merge(scene, merge_points=False)
+    scene.save(wdir / "scene.vtk")
+
+    if plot:
+        plotter = pv.Plotter(off_screen=False)
+        plotter.add_mesh(scene, opacity=0.1) # = plot_boreholes.create_scene(plotter, cfg.geometry)
+        # plot_boreholes.add_cylinders(plotter, bh_set)
+        # plot_bh_set(plotter, bh_set)
+        # for i in ind:
+        #     add_bh(plotter, bh_set, i[0])
+        plotter.add_mesh( plot_boreholes.make_mesh_bh_set(bh_set.subset([i[0] for i in ind]), chamber_data=chamber_data) )
+        plotter.camera.parallel_projection = True
+        plotter.show()
 
 
-def get_bh_set(f_path):
-    global _bh_set
-    if _bh_set is None:
-        try:
-            with open(f_path, "rb") as f:
-                _bh_set = pickle.load(f)
-        except FileNotFoundError:
-            pass
-    return _bh_set
+def export_vtk_bh_chamber_set(cfg_file, bh_pk_ids, fname, plot=False):
+    # bh_pk_ids = list of tuples (borehole ID (str), list of packer positions)
+    workdir, cfg = bcommon.load_cfg(cfg_file)
+    sim_cfg = common.load_config(workdir / cfg.simulation.cfg)
+
+    # save boreholes
+    bh_set = boreholes.make_borehole_set(workdir, cfg)
+    bh_ids = [bi for (bi,pi) in bh_pk_ids]
+    bh_id_to_idx  = {bh.id: idx for idx, bh in enumerate(bh_set.boreholes)}
+    bh_indices = [bh_id_to_idx[bh_id] for bh_id in bh_ids]
+    problem = sa_problem.sa_dict(sim_cfg)
+    param_names = problem['names']
+    all_packer_coords, bounds = bh_set.points(cfg)
+
+    def t_for_idx(bi, idx):
+        return (idx - bh_set.boreholes[bi].start[0]) / bh_set.boreholes[bi].unit_direction[0]
+    def single_bh_packers(bi, bid, pids):
+        packers = [
+            t_for_idx(bi, all_packer_coords[bi, pi, 0])
+            for pi in pids]
+        t_0 = t_for_idx(bi, all_packer_coords[bi, 0, 0])
+        packers.insert(0, t_0)
+        return packers
+
+    packer_coords = [
+        single_bh_packers(bi, bid, pids)
+        for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids)]
+    sensitivities = []
+    for (bi,(bid,pids)) in zip(bh_indices,bh_pk_ids):
+        bh_workdir = process_bh.borehole_dir(workdir, bi)
+        index, data = process_bh._chamber_sensitivities(bh_workdir, cfg, chambers=None)
+        i_begin = [pids[i] for i in range(len(pids)-1)]
+        i_end = [pids[i+1]-2 for i in range(len(pids)-1)]
+        bh_sens = [data[index[i_begin, i_end],:] for i_begin, i_end in zip(i_begin, i_end)]
+        bh_sens.insert(0, data[-1, :])
+        sensitivities.append(bh_sens)
+    chamber_data = [packer_coords, sensitivities, param_names]
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset(bh_indices), chamber_data=chamber_data, fname=fname)
+
+    # save tunnel and cylinders
+    cylinders = plot_boreholes._make_cylinders(bh_set.lateral)
+    tunnel = plot_boreholes._make_main_tunnel(cfg.geometry.main_tunnel)
+    scene = list(cylinders)
+    scene.append(tunnel)
+    scene = pv.merge(scene, merge_points=False)
+    scene.save(workdir / "scene.vtk")
+
+    if plot:
+        plotter = pv.Plotter(off_screen=False)
+        plotter.add_mesh(scene, opacity=0.1) # = plot_boreholes.create_scene(plotter, cfg.geometry)
+        # plot_boreholes.add_cylinders(plotter, bh_set)
+        # plot_bh_set(plotter, bh_set)
+        # for i in ind:
+        #     add_bh(plotter, bh_set, i[0])
+        plotter.add_mesh( plot_boreholes.make_mesh_bh_set(bh_set.subset(bh_indices), chamber_data=chamber_data) )
+        plotter.camera.parallel_projection = True
+        plotter.show()
+
 
 
 _bhs_opt_config = None
 
 
-def get_opt_results(f_path, randomize=False):
+def get_opt_results(f_path):
     global _bhs_opt_config
     if _bhs_opt_config is None:
         try:
-            _bhs_opt_config = pkl_read(f_path, "all_bh_configs_save.pkl") #opt_pack.read_optimization_results(f_path)
-            if randomize:
-                i = 0
-                for bh in _bhs_opt_config:
-                    _bhs_opt_config[i] = deepcopy(bh)
-                    bh = _bhs_opt_config[i]
-                    for cfg in bh:
-                        cfg.sobol_indices[:,:,0] = np.random.random(cfg.sobol_indices[:,:,0].size).reshape(cfg.sobol_indices[:,:,0].shape)
-                    i = i + 1
-                # for i in range(1):
-                #     i_bh = np.random.randint(len(_bhs_opt_config))
-                #     i_cfg = np.random.randint(len(_bhs_opt_config[0]))
-                #     print("randomizing config ", (i_bh, i_cfg))
-                #     _bhs_opt_config[i_bh] = deepcopy( _bhs_opt_config[i_bh] )
-                #     cfg = _bhs_opt_config[i_bh][i_cfg]
-                #     cfg.sobol_indices[:, :, 0] = 100 * np.ones(cfg.sobol_indices[:, :, 0].shape)
+            _bhs_opt_config = pkl_read(f_path, bh_data_file) #opt_pack.read_optimization_results(f_path)
         except FileNotFoundError:
             pass
     return _bhs_opt_config
@@ -308,7 +333,7 @@ def get_opt_space():
     if _opt_space is None:
         try:
             cfg = common.config.load_config(cfg_file)
-            _opt_space = OptSpace(cfg, _bh_set, _bhs_opt_config)
+            _opt_space = OptSpace(cfg, _bhs_opt_config)
         except FileNotFoundError:
             pass
     return _opt_space
@@ -317,7 +342,6 @@ def get_opt_space():
 
 def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -331,14 +355,13 @@ def eval_individual_max(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.min( np.max(param_max, axis=1) ) # axis=1 fixes param and maximizes over borehole maximums
 
 
 def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -352,14 +375,13 @@ def eval_individual_l1(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
     return np.sum( np.min(param_max, axis=0) ) # axis=0 fixes borehole and minimizes over params
 
 
 def eval_individual_max_l1(ind:Individual) -> Tuple[float, Any]:
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir)
     get_opt_space()
 
@@ -373,9 +395,12 @@ def eval_individual_max_l1(ind:Individual) -> Tuple[float, Any]:
         i_prm = bh[1]
         i_cfg = bh[2]
         cfg = _bhs_opt_config[i_bh][i_prm][i_cfg]
-        param_max[:, i] = np.max(cfg.param_values, axis=0) # axis=0 fixes param and maximizes over chambers
+        param_max[:, i] = np.max(cfg.param_values, axis=0)/_opt_space.param_norms # axis=0 fixes param and maximizes over chambers
         i = i + 1
-    return np.min( np.max(param_max, axis=1) ) + 0.1*np.sum( np.min(param_max, axis=0) )
+
+    max_over_ind = np.max(param_max, axis=1)
+    min_over_par = np.min(param_max, axis=0)
+    return np.min( max_over_ind ) + 0.2*np.sum( min_over_par )  # coefficient fitted to balance both values
 
 
 def optimize(cfg, map_fn, eval_fn, checkpoint=None):
@@ -384,7 +409,6 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
     :return:
     """
 
-    get_bh_set(bh_data_file)
     get_opt_results(workdir) #, randomize=True) # True means generate random sensitivities
     get_opt_space()
 
@@ -425,7 +449,7 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
         # Start a new evolution
         population = toolbox.population(n=cfg.optimize.population_size)
         start_gen = 0
-        hof = tools.HallOfFame(maxsize= 10) # * cfg.optimize.population_size)
+        hof = tools.HallOfFame(maxsize = 10, similar=_opt_space.similar) # * cfg.optimize.population_size)
         logbook = tools.Logbook()
 
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -458,9 +482,11 @@ def optimize(cfg, map_fn, eval_fn, checkpoint=None):
                 pickle.dump(cp, cp_file)
 
     print('Hall of fame:')
-    for ind in hof:
-        print(toolbox.evaluate(ind), ind)
-        plot_borehole_set(ind)
+    for (i,ind) in enumerate(hof):
+        bh_pk_ids = [(i[0], list(_bhs_opt_config[i[0]][i[1]][i[2]].packers)) for i in ind]
+        print(toolbox.evaluate(ind), bh_pk_ids)
+        export_vtk_optim_set(ind, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
+        # export_vtk_bh_chamber_set(bh_pk_ids, "boreholes_opt_cfg." + str(i) + ".vtk", plot=False)
 
     # list of borehole configs sorted by sum of evaluations
     print('Most popular configs:')

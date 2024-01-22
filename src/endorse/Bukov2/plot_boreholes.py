@@ -5,6 +5,7 @@ from vtk.util.numpy_support import numpy_to_vtk
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 import matplotlib.colors as mcolors
+import matplotlib as mpl
 import vtk
 import os
 from xml.etree import ElementTree as ET
@@ -39,7 +40,7 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
     p_tr = bh.lateral.transform(bh.transversal)
 
     default_values = [i_bh, *bh.yz_angles]
-    default_labels = ['ID', 'l5_angle', 'inclination']
+    default_labels = ['index', 'l5_angle', 'inclination']
     meshes = []
 
     line = pv.Line(p_w, p_tr)
@@ -48,14 +49,16 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
         line1 = add_fields(line1, np.mean(values, axis=0), value_names)
     meshes.append(line1)       # borehole line
 
+    # text = pv.Text3D(str(i_bh), height=0.5, center=p_tr, normal=bh.unit_direction)
+
     # Chamber cylinders
     for begin, end, value in zip(bounds[:-1], bounds[1:], values):
         p_begin = bh.lateral.transform(bh.line_point(begin))
-        p_end = bh.lateral.transform(bh.line_point(end))
+        p_end = bh.lateral.transform(bh.line_point(end-1))
         cylinder = pv.Cylinder(
             center=(p_begin +p_end)/2,
             direction=p_end - p_begin,
-            radius = 0.056/2,
+            radius = 0.056/2*10,
             height=np.linalg.norm(p_end - p_begin),
             resolution=8,
             capping=False
@@ -64,18 +67,23 @@ def meshes_bh_vtk(i_bh: int, bh: 'Borehole', chamber_data = None):
         meshes.append(add_fields(cyl1, value, value_names))
     return meshes
 
-def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
+
+def make_mesh_bh_set(bh_set: 'BoreholeSet', chamber_data = None):
     meshes = []
-    for i_bh, bh in enumerate(bh_set.boreholes):
+    for (i_bh,(ind_bh, bh)) in enumerate(zip(bh_set.orig_indices, bh_set.boreholes)):
         if chamber_data is None:
             ch_d = None
         else:
             bounds, data, labels = chamber_data
             ch_d = bounds[i_bh], data[i_bh], labels
-        meshes.extend(meshes_bh_vtk(i_bh, bh, chamber_data=ch_d))
+        meshes.extend(meshes_bh_vtk(ind_bh, bh, chamber_data=ch_d))
+    return pv.merge(meshes, merge_points=False)
+
+
+def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk"):
 
     # Merge the primitives
-    combined_mesh = pv.merge(meshes, merge_points=False)        # Try to get distinguise values on interfaces.
+    combined_mesh = make_mesh_bh_set(bh_set, chamber_data)        # Try to get distinguise values on interfaces.
 
     # Visualize the combined mesh with different colors for each ID
     # plotter = pv.Plotter()
@@ -84,36 +92,52 @@ def export_vtk_bh_set(workdir, bh_set, chamber_data = None, fname="boreholes.vtk
 
     combined_mesh.save(workdir / fname)
 
+def _make_main_tunnel(cfg):
+    # L5
+    x_half = cfg.width / 2
+    y_half = cfg.length / 2
+
+    return pv.Box(bounds=(-x_half, +x_half, -y_half - 10, +y_half - 10, 0, cfg.height))
 
 def create_scene(plotter, cfg_geometry):
     cfg = cfg_geometry.main_tunnel
     # Create a plotting object
 
     # L5
-    x_half = cfg.width / 2
-    y_half = cfg.length / 2
-
-    box = pv.Box(bounds=(-x_half, +x_half, -y_half -10, +y_half -10, 0, cfg.height))
+    box = _make_main_tunnel(cfg)
     plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     plotter.add_axes()
     plotter.show_grid(font_size=20, xtitle="X", ytitle="Y", ztitle="Z")
+    plotter.camera.position = (-30, 0, 0)
+    plotter.camera.focal_point = (0, 0, 0)
+    plotter.camera.up = (0, 0, 1)
+    plotter.camera.parallel_projection = True
+
     #plotter.show_bounds(grid='front', all_edges=True)
     return plotter
 
-def add_cylinders(plotter, lateral: 'Lateral'):
+
+def _make_cylinders(lateral: 'Lateral'):
     corner_min = lateral.transform([2, -2, -1.8])
     corner_max = lateral.transform([12, 2, 2.2])
     box = pv.Box(bounds=(corner_min[0], corner_max[0], corner_min[1], corner_max[1], corner_min[2], corner_max[2]))
-    plotter.add_mesh(box, color='grey' , opacity=0.7)
 
     # Create a horizontal cylinder
     r, l0, l1 = lateral.avoid_cylinder
-    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
-    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.3)
+    avoid_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r,
+                                 height=l1 - l0)
 
     r, l0, l1 = lateral.active_cylinder
-    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r, height=l1-l0)
+    active_cylinder = pv.Cylinder(center=lateral.transform([0.5 * l0 + 0.5 * l1, 0, 0]), direction=(1, 0, 0), radius=r,
+                                  height=l1 - l0)
+
+    return box, avoid_cylinder, active_cylinder
+
+def add_cylinders(plotter, lateral: 'Lateral'):
+    box, avoid_cylinder, active_cylinder = _make_cylinders(lateral)
+    plotter.add_mesh(box, color='grey' , opacity=0.7)
+    plotter.add_mesh(avoid_cylinder, color='red', opacity=0.3)
     plotter.add_mesh(active_cylinder, color='grey', opacity=0.1)
 
 
@@ -125,12 +149,13 @@ def plot_bh_set(plotter, bh_set: 'BoreholeSet'):
 
 def plot_bh_subset(plotter, bh_set: 'BoreholeSet', bh_tuples):
     values, ids = zip(*bh_tuples)
+    bh_indices = [int(id) for id in ids]
     values = np.array(values)
     normalized_values = (values - values.min()) / (values.max() - values.min())
     cmap = plt.cm.get_cmap("viridis")
     colors = cmap(normalized_values)
-    for bh_id, col in zip(ids, colors):
-        add_bh(plotter, bh_set, int(bh_id), color=col)
+    for bh_id, col in zip(bh_indices, colors):
+        add_bh(plotter, bh_set.boreholes[bh_id], color=col)
 
 
 
@@ -171,6 +196,24 @@ def add_bh(plotter, bh: 'Borehole', color=None, label=False):
     #     sphere = pv.Sphere(0.3, pt)
     #     plotter.add_mesh(sphere, color=color)
 
+
+def _add_cone(plotter, start, direction, length, angle, color):
+    cone = pv.Cone(center=start+length/2*direction/np.linalg.norm(direction), direction=-direction, height=length, angle=angle, resolution=angle)
+    plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
+    plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
+    cone = pv.Cone(center=start-length/2*direction/np.linalg.norm(direction), direction=direction, height=length, angle=angle, resolution=angle)
+    plotter.add_mesh(cone, color=color, line_width=1, opacity=0.1)
+    plotter.add_mesh(cone, color=color, line_width=1, style='wireframe')
+    line = pv.Line(start-5*length*direction, start+5*length*direction)
+    plotter.add_mesh(line, color=color, line_width=2)
+
+def add_foliation_cylinders(plotter, lateral):
+    if lateral.foliation_angle_tolerance < 90:
+        fol_dir = bcommon.direction_vector(-lateral.foliation_longitude+lateral.l5_azimuth+90, lateral.foliation_latitude)
+        r, l0, l1 = lateral.avoid_cylinder
+        fol_start = lateral.transform([1.0 * l0 - 0.0 * l1, 0, 0])
+        _add_cone(plotter, fol_start, fol_dir, 10, lateral.foliation_angle_tolerance, 'green')
+    return plotter
 
 #######################################################################
 
@@ -342,9 +385,11 @@ def save_projections(plotter, workdir, fname):
     ]
 
     out_files = []
-    for axis in range(3):
+    for axis in [0, 1, 2]:
         plotter.camera.position, plotter.camera.focal_point, plotter.camera.up = camera_positions[axis]
         plotter.camera.parallel_projection = True
+        plotter.render()
+
         #f_name = workdir / f"bh_shot_{axis}.svg"
         f_name = workdir / fname
         f_name = f_name.parent / f"{f_name.stem}_{axis}{f_name.suffix}"
@@ -370,70 +415,94 @@ class PlotCfg:
 
     def plot_borehole(self):
         plotter = plot_borehole_position(self.cfg, self.bh_set.boreholes[self.i_bh])
-        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.svg")
+        return save_projections(plotter, self.workdir, f"bh_{self.i_bh}.png")
 
-    def plot_chamber_data(self):
+    def plot_chamber_data(self, sensitivities, f_name, vmin):
         """
         Plot some precomputed chamber data for selected chamber sizes.
         :return:
         """
         n_params = len(self.param_names)
         n_points = self.chambers.n_points
-        sizes = [2, 4, 8]
-
-        chamber_data = [[self.chambers.chamber(i_begin, min(i_begin + size, n_points))
+        sizes = [4]
+        range_sens = lambda b, s: sensitivities[self.chambers.index[b, min(b + s, n_points)]]
+        chamber_data = [[ range_sens(i_begin, size)
                          for i_begin in range(0, n_points - size)]
                             for i_size, size in enumerate(sizes)]
-        chamber_array = [i  for l in chamber_data for i in l]
 
+        # flatten
+        chamber_array = np.array([i  for l in chamber_data for i in l])
+
+        vmax = np.max(chamber_array)
         sm = plt.cm.ScalarMappable(cmap=plt.cm.jet,
-                                   norm=plt.Normalize(vmin=np.min(chamber_array), vmax=np.max(chamber_array)))
+                                   norm=mcolors.LogNorm(vmin=vmin, vmax=vmax))
         sm.set_array([])
 
-        fig, axes = plt.subplots(n_params, 1, figsize=(12, 3     * n_params), sharex=True)
+        fig, axes = plt.subplots(n_params, 1, figsize=(12, 4), sharex=True)
         color_values = []
         for i_param, label in enumerate(self.param_names):
             ax = axes[i_param]
             for i_size, size in enumerate(sizes):
-                values = [l[i_param] for l in chamber_data[i_size]]
-
+                point_values = [l[i_param] for l in chamber_data[i_size]]
+                point_values = np.maximum(np.array(point_values), vmin)
                 x_pos = size // 2 + np.arange(0, n_points - size)
-                colors = sm.to_rgba(np.array(values))
+                colors = sm.to_rgba(point_values)
                 assert len(x_pos) == len(colors)
                 width = np.ones(len(x_pos))
                 ax.broken_barh(list(zip(x_pos, width)), (i_size+0.1, 0.8), facecolors=colors)
 
-            ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
-            ax.set_yticks([0.5, 1.5, 2.5])
-            ax.set_yticklabels(['2', '4', '8'])
-
-
+            #ax.set_ylabel(label, rotation=0, horizontalalignment='right', verticalalignment='center')
+            #ax.set_yticks([0.5, 1.5, 2.5])
+            #ax.set_yticklabels(['2', '4', '8'])
+            #ax.set_xticks
+        ax.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator())
+        xticks = list(range(0, 80, 10))
+        ax.set_xticks(xticks)
+        ax.set_xticklabels(list(range(0, 40, 5)))
         axes[0].set_title("Size", pad=-20)  # Title above the first axis
 
         # Create a common colorbar for all subplots
         cbar_ax = fig.add_axes([0.93, 0.15, 0.02, 0.7])  # x-position, y-position, width, height
-        fig.colorbar(sm, cax=cbar_ax)
+        #ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, vmaxmax_sobol]
+        cbar = fig.colorbar(sm, ax=axes, orientation='vertical', cax = cbar_ax)
 
         #plt.tight_layout()
-        fname = self.workdir / "chambers_sa.pdf"
+        fname = self.workdir / f_name
         fig.savefig(fname)
         if self.show:
             plt.show()
         return fname
 
-    def plot_mean_time_fun(self):
+    def plot_mean_pressure(self):
+        chamber_pressures = self.chambers.cumul_bh_data[4:, :, :] - self.chambers.cumul_bh_data[:-4, :, :]
+        # (n_points - 1, n_times, n_samples)
+        # Calculate the mean over the last dimension (samples)
+        mean_pressures = np.mean(chamber_pressures, axis=2)   # mean over samples
+        selected_pressures = mean_pressures[::4, :]
+        fig = self._plot_time_fun(selected_pressures)
+        fname = self.workdir / "mean_time_fun.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def plot_q90_pressure(self):
+        chamber_pressures = self.chambers.cumul_bh_data[4:, :, :] - self.chambers.cumul_bh_data[:-4, :, :]
+        # (n_points - 1, n_times, n_samples)
+        # Calculate the mean over the last dimension (samples)
+        mean_pressures = np.quantile(chamber_pressures, q=0.9, axis=2)   # mean over samples
+        selected_pressures = mean_pressures[::4, :]
+        fig = self._plot_time_fun(selected_pressures)
+        fname = self.workdir / "q90_time_fun.pdf"
+        fig.savefig(fname)
+        return fname
+
+    def _plot_time_fun(self, selected_pressures):
         """
         Goal: check projected pressures on the borehole
         :return:
         """
-        pressures = self.chambers.bh_data
-        # (n_points - 1, n_times, n_samples)
-        # Calculate the mean over the last dimension (samples)
-        mean_pressures = np.mean(pressures, axis=2)
-        selected_pressures = mean_pressures[::4]
 
         # Create a colormap
-        cmap = plt.cm.jet   # better discriminatino of points then viridis
+        cmap = plt.cm.gist_rainbow   # better discriminatino of points then viridis
         colors = cmap(np.linspace(0, 1, selected_pressures.shape[0]))
 
         # Plotting
@@ -452,17 +521,12 @@ class PlotCfg:
         ax.set_xlabel('Time')
         ax.set_ylabel('Mean Pressure')
         ax.set_title('Mean Pressure Over Time for Every 4th Point')
-
-        fname = self.workdir / "mean_time_fun.pdf"
-        fig.savefig(fname)
-        if self.show:
-            plt.show()
-        return fname
+        return fig
 
     def plot_relative_residual(self):
         arr_copy = self.chambers.bh_data
         orig_arr = self.chambers.orig_bh_data
-        outlier_mask = self.chambers.outlier_mask
+        #outlier_mask = self.chambers.outlier_mask
 
         arr_copy = np.maximum(arr_copy, 0.1)
         # Compute the time mean on arr_copy
@@ -552,7 +616,7 @@ class PlotCfg:
     #     fig.savefig(fname)
     #     return fname
 
-    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col):
+    def plot_stacked_barplot(self, ax, data_array, packers, cmap, col, vec_objective, sm_obj):
         """
         Plot a stacked bar plot for the given data.
 
@@ -562,8 +626,17 @@ class PlotCfg:
         packers (numpy.array): Array of shape (n_chambers + 1,) providing boundaries.
         """
         # Invert the y-axis
+        max_x = np.max(packers)
+        m_size = 5
+
         n_chambers, n_params = data_array.shape
         for i in range(n_params):
+            # plot objective, only for parameter that match the column i.e. against which the column is optimized)
+            if i == col:
+                colors = sm_obj.to_rgba(vec_objective[i, :])
+                ax.scatter([max_x + 2, max_x + 3], [i, i], m_size, color=colors)
+
+            # plot chambers
             for j in range(n_chambers):
                 width = packers[j + 1] - packers[j]
                 color = cmap.to_rgba(data_array[j, i])
@@ -581,26 +654,28 @@ class PlotCfg:
     def plot_best_packers_st(self):
         data_array = [[p.st_values[:,:]  for p in l] for l in self.opt_packers]
         packers = [[p.packers for p in l] for l in self.opt_packers]
-        fig = self._plot_best_packers(data_array, packers)
+        vec_objective = [[p.opt_values for p in l] for l in self.opt_packers]
+        fig = self._plot_best_packers(data_array, packers, vec_objective)
         fname = self.workdir / "optim_packers_st.pdf"
         fig.savefig(fname)
         return fname
 
-    def plot_best_packers_full(self):
-        data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
-        packers = [[p.packers for p in l] for l in self.opt_packers]
-        fig = self._plot_best_packers(data_array, packers)
-        fname = self.workdir / "optim_packers_full.pdf"
-        fig.savefig(fname)
-        return fname
+    # def plot_best_packers_full(self):
+    #     data_array = [[p.sobol_indices[:,:,0]  for p in l] for l in self.opt_packers]
+    #     packers = [[p.packers for p in l] for l in self.opt_packers]
+    #     vec_objective = [[p.opt_values for p in l] for l in self.opt_packers]
+    #     fig = self._plot_best_packers(data_array, packers, vec_objective)
+    #     fname = self.workdir / "optim_packers_full.pdf"
+    #     fig.savefig(fname)
+    #     return fname
 
-    def _plot_best_packers(self, data_array, packers):
+    def _plot_best_packers(self, data_array, packers, vec_objective):
         """
         Goal: show the packer positions of the bes variants, compare indices
         """
         n_params = self.chambers.n_params
         n_variants = len(data_array[0])
-        threshold = 1e-3
+        threshold = 1e-5
         data_array = np.maximum(data_array, threshold)
         max_sobol = np.max(data_array)
         print("Max sobol: ", max_sobol)
@@ -609,9 +684,13 @@ class PlotCfg:
         sm = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(threshold, max_sobol))
         sm.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
 
+        cmap = plt.cm.gist_rainbow
+        sm_objective = ScalarMappable(cmap=cmap, norm=mcolors.LogNorm(0.001, 1.0))
+        sm_objective.set_array([])  # This line is necessary for ScalarMappable to work with colorbar
+
         #sm = combined_mapper(max_sobol, threshold)
 
-        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 10),  sharex='col', sharey='row')
+        fig, axs = plt.subplots(n_variants, n_params, figsize=(20, 15),  sharex='col', sharey='row')
                                 #constrained_layout=True,)
 
         for i in range(n_variants):
@@ -619,7 +698,8 @@ class PlotCfg:
         # for i in range(1):
         #     for j in range(1):
                 ax = axs[i, j] #if n_variants > 1 else axs[j]
-                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j)
+                objective = vec_objective[j][i]
+                self.plot_stacked_barplot(ax, data_array[j][i], packers[j][i], sm, j, objective, sm_objective)
 
                 if i == 0:
                     # Set column labels (parameter names) for the top row
@@ -630,9 +710,14 @@ class PlotCfg:
                     # Set row labels (variant indices) for the first column
                     ax.set_ylabel(f'Variant {i + 1}')
 
-        ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, max_sobol]
-        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', fraction=0.015, pad=0.05,
-                            ticks=ticks)
+        ticks = [1e-5,  3e-5, 1e-4,  3e-4, 1e-3,  3e-3, 1e-2, 3e-2, 0.1, 0.3, 1.0, max_sobol]
+        cbar_ax = fig.add_axes([0.92, 0.05, 0.01, 0.9])  # x-position, y-position, width, height
+        # ticks = [1e-3, 2e-3, 5e-3, 1e-2, 2e-2, 5e-2, 0.1, 0.2, 0.5, 1.0, vmaxmax_sobol]
+        cbar = fig.colorbar(sm, ax=axs, orientation='vertical', #fraction=0.015, pad=0.05,
+                            ticks=ticks, cax=cbar_ax)
+        cbar_ax = fig.add_axes([0.96, 0.05, 0.01, 0.9])  # x-position, y-position, width, height
+        cbar = fig.colorbar(sm_objective, ax=axs, orientation='vertical', #fraction=0.015, pad=0.05,
+                            ticks=ticks, cax=cbar_ax)
 
         #fig.tight_layout()
         return  fig
@@ -640,11 +725,15 @@ class PlotCfg:
     def all(self):
         plots = [
             *self.plot_borehole(),
-            self.plot_chamber_data(),
-            self.plot_mean_time_fun(),
+            self.plot_chamber_data(self.chambers.chambers_sensitivities,
+                                   f_name="chambers_sa.pdf", vmin=1e-5),
+            self.plot_chamber_data(self.chambers.chambers_norm_sensitivities,
+                                   f_name="chambers_norm_sa.pdf", vmin=1e-2),
+            self.plot_mean_pressure(),
+            self.plot_q90_pressure(),
             self.plot_relative_residual(),
             self.plot_best_packers_st(),
-            self.plot_best_packers_full()
+            # self.plot_best_packers_full()
         ]
         bcommon.create_combined_pdf(plots, self.workdir / "summary.pdf")
 
@@ -742,3 +831,40 @@ def combined_mapper(max_value, threshold=1e-3):
     #cmapper = lambda x : custom_cmap(value_mapper(norm.inverse(x)))
     sm = plt.cm.ScalarMappable(norm=value_mapper, cmap=custom_cmap)
     return sm
+
+def plot_sensitivity_histograms(sensitivities, param_names):
+    import scipy
+    """
+      Plots histograms for an array `sensitivities` based on the derivative of a smoothed empirical CDF
+      (using Gaussian kernel density estimation) for each parameter, with logarithmic scale and fixed x range.
+
+      :param sensitivities: numpy array of shape (n_samples, n_params)
+      :param param_names: list of parameter names of length n_params
+      """
+    n_params = sensitivities.shape[1]
+
+    # Using a discrete color map (tab10)
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(i) for i in range(n_params)]
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    x_grid = np.geomspace(1e-10, 2, 1000)  # Fixed x range
+
+    for i in range(n_params):
+        data = sensitivities[:, i]
+
+        # Gaussian Kernel Density Estimation
+        kde = scipy.stats.gaussian_kde(data, bw_method='silverman')
+        pdf = kde.evaluate(x_grid)
+        ax.plot(x_grid, pdf, color=colors[i % len(colors)], label=param_names[i])
+
+    ax.set_xscale('log')  # Setting logarithmic scale
+    ax.set_yscale('log')
+    ax.set_ylim(1e-2, 1e6)
+    ax.legend()
+    ax.set_xlabel('Parameter Value (log scale)')
+    ax.set_ylabel('Density')
+    ax.set_title('Smoothed Histograms of Sensitivities on Log Scale')
+
+    plt.show()
