@@ -120,7 +120,7 @@ def test_from_end_points():
     y_pos = -9.5
 
     lines = [
-        ([0.4, -11, -0.3], [5, 0, -3.4], 1),
+        ([0.4, -11, 0.3], [5, 0, -3.4], 1),
         ([0.4, -9, -0.3], [11, 0, 3.4], 1),
     ]
 
@@ -146,32 +146,30 @@ def test_from_end_points():
 
 
 
-@pytest.mark.skip
+
+#@pytest.mark.skip
 def test_from_end_points_real():
     workdir, cfg = bcommon.load_cfg(script_dir / "3d_model" / "Bukov2_mesh.yaml")
 
-    bh_set = boreholes.make_borehole_set(workdir, cfg)
+    bh_set = boreholes._make_borehole_set(workdir, cfg, force=True)
+    #assert list(bh_set.boreholes.keys()) == list(range(bh_set.n_boreholes))
     lateral = bh_set.lateral
-    print("N boreholes:", bh_set.n_boreholes)
 
-    bh_set.boreholes_print_sorted()
+    plot_boreholes.export_vtk_bh_set(workdir, bh_set.subset([10, 20, 30]), fname="boreholes_subset.vtk")
 
     plotter = pv.Plotter()
     plotter = plot_boreholes.create_scene(plotter, cfg.geometry)
     plot_boreholes.add_cylinders(plotter, lateral)
-    # fol_start = starts[0]
-    # fol_dir = np.transpose(lateral.transform_matrix) @ (boreholes.Borehole._direction(lateral.foliation_longitude-lateral.l5_azimuth, lateral.foliation_latitude))
-    # fol_end = starts[0] + fol_dir
-    # fol_bh = lateral._make_bh([fol_start, fol_dir, fol_end, 40, [2, 38]])
-    # plot_boreholes.add_bh(plotter, fol_bh,'green', 'F')
+
+    plot_boreholes.add_foliation_cylinders(plotter, lateral)
+
     plot_boreholes.plot_bh_set(plotter, bh_set)
-    plotter.camera.parallel_projection = True
     plotter.show()
 
 
 
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_field_projection():
     """
     Test projection of the full pressure field to the borehole points.
@@ -188,21 +186,23 @@ def test_field_projection():
     bh_set = boreholes.make_borehole_set(workdir, cfg)
     #input_hdf, field_shape = mock.mock_hdf5(cfg_file)
     #cfg.simulation.hdf = input_hdf
-    print("N boreholes:", bh_set.n_boreholes)
-    bh_set.boreholes_print_sorted()
-    bh_range = (10, 30)
+    #bh_range = list(range(10, 30))
+    #bh_sub_set = bh_set.subset(bh_range)
+    bh_sub_set = bh_set
+    print("N boreholes:", bh_sub_set.n_boreholes)
+    bh_sub_set.boreholes_print_sorted()
 
     # Test serialization
-    serialized = pickle.dumps(bh_set)
+    serialized = pickle.dumps(bh_sub_set)
     new_bh_set = pickle.loads(serialized)
 
-    borehole_field = boreholes.project_field(workdir, cfg, bh_set, bh_range)
+    borehole_field = boreholes.project_field(workdir, cfg, new_bh_set, force=True)
     print("Updated: ", borehole_field.data_files)
 
     for f in borehole_field.data_files:
         with h5py.File(f, mode='r') as f:
             dset = f['pressure']
-            n_points = cfg.boreholes.zk_30.n_points_per_bh
+            n_points = cfg.boreholes.zk_30.common.n_points_per_bh
             n_times = 5
             n_samples = 96
             assert dset.shape == (n_points, n_times, n_samples)

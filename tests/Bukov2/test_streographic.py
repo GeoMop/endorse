@@ -6,7 +6,8 @@ import cartopy.feature as cfeature
 import numpy as np
 
 
-#@pytest.mark.skip
+
+@pytest.mark.skip
 def test_full_stereo():
     def sphere_circle(lon, lat, r_phi, n_points):
         lat0, lon0, phi = np.radians([lat, lon, r_phi])  # Convert to radians

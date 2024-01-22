@@ -15,8 +15,16 @@ virtualenv venv
 venv_pip=${ENDORSE_SRC_ROOT}/venv/bin/pip
 #source venv/bin/activate
 
+#pip install cffi
+
 
 $venv_pip install -r requirements.txt
+
+# Unsuccessfull fix of cairosvg
+#$venv_pip install --force-reinstall --no-binary :all: cffi
+#$venv_pip install cairosvg    # SVG to PDF conversion
+
+
 $venv_pip install -e submodules/bgem
 #$venv_pip install -e submodules/salib
 

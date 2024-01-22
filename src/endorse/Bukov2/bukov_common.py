@@ -10,6 +10,27 @@ import os
 from pathlib import Path
 import numpy as np
 
+
+def direction_vector(y_phi, z_phi):
+    y_phi = y_phi / 180 * np.pi
+    z_phi = z_phi / 180 * np.pi
+    sy, cy = np.sin(y_phi), np.cos(y_phi)
+    sz, cz = np.sin(z_phi), np.cos(z_phi)
+    return np.array([cy * cz, sy * cz, sz])
+
+
+def direction_angles(unit_direction):
+    z_angle = np.arcsin(unit_direction[2])
+    y_angle = np.arcsin(unit_direction[1] / np.cos(z_angle))
+    return 180 * y_angle / np.pi, 180 * z_angle / np.pi
+
+
+def normalize_sensitivities(data, fn):
+    data_2d = data.reshape(-1, data.shape[-1])
+    param_scale = fn(data_2d, axis=0)
+    data_scaled =  data_2d[:, :] / param_scale[None, :]
+    return data_scaled.reshape(data.shape)
+
 def soft_lim_pressure(pressure):
     atm_pressure = 1.013 * 1e5 / 9.89 / 1000    # atmospheric pressure in [m] of water
     abs_pressure = pressure + atm_pressure
@@ -52,10 +73,13 @@ def create_combined_pdf(file_list, output_filename):
             #    print(f"SVG -> PDF conversion failed:\n{e}")
             file_path = pdf_path
         # Add the PDF file to the combined PDF
-        with open(file_path, "rb") as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            for page_num in range(len(pdf_reader.pages)):
-                pdf_writer.add_page(pdf_reader.pages[page_num])
+        try:
+            with open(file_path, "rb") as f:
+                pdf_reader = PyPDF2.PdfReader(f)
+                for page_num in range(len(pdf_reader.pages)):
+                    pdf_writer.add_page(pdf_reader.pages[page_num])
+        except PyPDF2.errors.EmptyFileError as e:
+            raise PyPDF2.errors.EmptyFileError(file_path)
 
     # Write out the combined PDF
     with open(output_filename, 'wb') as out:
@@ -129,17 +153,19 @@ def memoize(func):
     def wrapper(workdir, *args, **kwargs):
         fname = f"{func.__name__}.pkl"
         val = pkl_read(workdir, fname)
+        
         force = kwargs.pop('force', False)
         if force is True or val is None:
-            print(f"Execute {func.__name__}  {args}")
+            print(f"Execute {func.__name__}  ")
             start = time.process_time_ns()
             val = func(workdir, *args, **kwargs)
             sec = (time.process_time_ns() - start) / 1e9
             print(f"... [{sec}] s.")
 
+            print("Memoize to: ", workdir, fname)
             pkl_write(workdir, val, fname)
         else:
-            print(f"Skip {func.__name__} {args}.")
+            print(f"Skip {func.__name__}, val: {str(val)[:200]} .")
         return val
     return wrapper
 
