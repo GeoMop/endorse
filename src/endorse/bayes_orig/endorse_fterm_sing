@@ -3,7 +3,9 @@
 set -x
 
 rep_dir=$(pwd)
-sif_image="endorse.sif"
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+cd ${SCRIPTPATH}
+sif_image=${SCRIPTPATH}/../../../"endorse.sif"
 
 if [ -e ${sif_image} ]
 then
@@ -12,9 +14,7 @@ else
     image=$(./endorse_fterm image)
     echo "Building SIF image '${sif_image}' from '${image}'"
     singularity build ${sif_image} docker://$image
-    # echo "singularity will open docker image: $image"
-    # command for running correct docker image
-    # singularity shell -B $rep_dir:$rep_dir docker://$image
 fi
 
+cd ${rep_dir}
 singularity shell -B $rep_dir:$rep_dir ${sif_image}

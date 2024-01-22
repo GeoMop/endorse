@@ -38,21 +38,11 @@ REL_FLOW_DIR=$(realpath --relative-to=$(pwd) $ABS_FLOW_DIR)
 #image_name=geomop
 #image_tag=master_8c1b58980
 
-#image_name=geomop
-#image_tag=JS_nonlinear_conductivity_2_b971e62bf
+#image_name=endorse_ci
+#image_tag=a785dd
 
-# includes nonlinear conductivity from JS_nonlinear_conductivity_2
-#image_name=geomop
-#image_tag=master_1edfbef2b
-
-# testing branch - due to parsing fieldformula
-#image_name=geomop
-#image_tag=PE_user_fields_12e8aadde
-
-#image_name=geomop-gnu
-#image_tag=2.0.0
 image_name=endorse_ci
-image_tag=a785dd
+image_tag=050f77
 
 function get_base_image() {
     local image=flow123d/$image_name:$image_tag
