@@ -1,6 +1,7 @@
 import sys
 import os.path
 
+import matplotlib.pyplot as plt
 from endorse.sa import sample, analyze
 from endorse.bayes_orig import aux_functions
 from endorse.bayes_orig import run_all as bayes_run_all
@@ -174,22 +175,19 @@ def prepare_sets_of_params(parameters, output_dir_in, n_processes, par_names):
     #     print(f"Saved {output_file}")
 
 
-
-def conductivity(k0, eps, delta, gamma, sigma0, a, b, c, sigma_m):
+def fpermeability(k0, eps, delta, gamma, sigma0, a, b, c, sigma_m, sigma_tres):
     sigma_vm = 170/120*np.abs(sigma_m)
-    sigma_tres = 55e6
     x = 0
     y = 30
     z = 30
     lin = (1 + 0.1*(a * x / 35 + b * y / 30 + c * z / 30))
     kr = 1/eps *k0
     k = kr + delta * np.exp(np.log((k0 - kr) / delta) * sigma_m / sigma0)
-    cond = 1000*9.81/0.001 * k
-    return np.where(sigma_vm < sigma_tres, cond, cond * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres)) * lin
-    # if sigma_vm < sigma_tres:
-    #     return k
-    # else:
-    #     return k * np.exp(gamma*(sigma_vm - sigma_tres))
+    return np.where(sigma_vm < sigma_tres, k, k * np.exp(gamma * (sigma_vm - sigma_tres)/sigma_tres)) * lin
+
+
+def fconductivity(perm):
+    return 1000*9.81/0.001*perm
 
 
 def plot_conductivity(config_dict, params):
@@ -197,32 +195,124 @@ def plot_conductivity(config_dict, params):
     parnames = [p["name"] for p in config_dict["parameters"]]
 
     # init_sigma_m = -(42 + 19 + 14)*1e6/3
-    sigma_mean = np.linspace(-120e6,7e6,200)
-    for p in params:
+    sigma_tres = 55e6
+    # sigma_mean is positive for graph, but goes negative into the permeability function
+    sigma_mean = np.linspace(-7e6,120e6,200)
+    init_sigma_m = -(params[:,parnames.index("init_stress_x")] +
+                     params[:,parnames.index("init_stress_y")] +
+                     params[:,parnames.index("init_stress_z")]) / 3
+    # cond = conductivity(p[parnames.index("perm_k0")],
+    #                     p[parnames.index("perm_eps")],
+    #                     p[parnames.index("perm_delta")],
+    #                     p[parnames.index("perm_gamma")],
+    #                     init_sigma_m,
+    #                     p[parnames.index("conductivity_a")],
+    #                     p[parnames.index("conductivity_b")],
+    #                     p[parnames.index("conductivity_c")],
+    permeability = np.zeros((params.shape[0],len(sigma_mean)))
+
+    # fig_cond, ax_cond = plt.subplots()
+    plt.rcParams['text.usetex'] = True
+    fig, ax1 = plt.subplots()
+    xax = sigma_mean / 1e6
+
+    for i in range(params.shape[0]):
+        p = params[i,:]
         # if p[4] >= p[5]:
         #     continue
         # p[[4,5]] = p[[5,4]]
-        init_sigma_m = -(p[parnames.index("init_stress_x")] +
-                         p[parnames.index("init_stress_y")] +
-                         p[parnames.index("init_stress_z")])/3
-        cond = conductivity(p[parnames.index("perm_k0")],
+        perm = fpermeability(p[parnames.index("perm_k0")],
                             p[parnames.index("perm_eps")],
                             p[parnames.index("perm_delta")],
                             p[parnames.index("perm_gamma")],
-                            init_sigma_m,
+                            init_sigma_m[i],
                             p[parnames.index("conductivity_a")],
                             p[parnames.index("conductivity_b")],
                             p[parnames.index("conductivity_c")],
-                            sigma_mean)
-        plt.plot(sigma_mean/1e6, cond)
-        plt.scatter(init_sigma_m/1e6, 1000*9.81/0.001*p[parnames.index("perm_k0")])
+                            -sigma_mean, sigma_tres)
+        permeability[i,:] = perm
+        # cond = fconductivity(perm)
+        # ax_cond.plot(sigma_mean/1e6, cond)
+        # ax_cond.scatter(init_sigma_m[i]/1e6, fconductivity(p[parnames.index("perm_k0")]))
 
-    plt.yscale('log')
-    plt.savefig('conductivity.pdf')
-    plt.close()
+    # plot N random samples:
+    from random import randrange
+    rids = [randrange(0, params.shape[0]) for i in range(0, 50)]
+    for rid in rids:
+        ax1.plot(xax, permeability[rid, :], linewidth=0.5, color="black", alpha=0.2)
 
-    plt.scatter(range(params.shape[0]), params[:,5])
-    plt.savefig('eps.pdf')
+    # plot permeability range
+    q_mean = np.mean(permeability, axis=0)
+    q_up = np.quantile(permeability, q=0.95, axis=0)
+    q_down = np.quantile(permeability, q=0.05, axis=0)
+    # q_99 = np.max(permeability, axis=0)
+    # q_01 = np.min(permeability, axis=0)
+
+    ax1.set_xlabel(r'$\sigma_m \mathrm{[MPa]}$')
+    ax1.set_ylabel(r'$\kappa \mathrm{[m^2]}$', color='black')
+    ax1.fill_between(xax, q_down, q_up,
+                     color="red", alpha=0.2, label=None)
+
+    # plot vertical lines of interest
+    def add_vline(x, label):
+        ax1.axvline(x=x / 1e6, linewidth=0.5)
+        ax1.text(x / 1e6 + 0.75, 0.015, label, rotation=0, transform=ax1.get_xaxis_transform())
+    def add_hline(y, label):
+        ax1.axhline(y=y, linewidth=0.5)
+        ax1.text(0.01, y*1.4, label, rotation=0, transform=ax1.get_yaxis_transform())
+
+    add_vline(sigma_tres, r'$\sigma_{\mathrm{VM}c}$')
+    add_vline(0, '')
+    # add_vline(np.min(-init_sigma_m), r'$\sigma_0$')
+    init_sigma_m_mean = np.mean(-init_sigma_m)
+    add_vline(init_sigma_m_mean, r'$\sigma_{m0}$')
+    # add_vline(np.max(-init_sigma_m), r'$\sigma_0$')
+
+    # plot permeability
+    ax1.plot(xax, q_mean, color="red")
+
+    def add_annotated_point(x,y,label):
+        ax1.scatter(x, y, facecolors='none', edgecolors='limegreen', marker='o',
+                    zorder=100)
+        ax1.annotate(label, xy=(x + 2, y),
+                     bbox=dict(facecolor='white', alpha=0.6, edgecolor='none',
+                               boxstyle='round,pad=0.2,rounding_size=0.2'))
+
+    perm_delta_mean = np.mean(params[:, parnames.index("perm_delta")])
+    add_annotated_point(0, perm_delta_mean, r'$[0, \kappa_\delta]$')
+    # ax1.scatter(0, perm_delta_mean, facecolors='none', edgecolors='limegreen', marker='o', zorder=100)
+    # ax1.text(0, perm_delta_mean, r'$[0, \kappa_\delta]$', rotation=0, transform=ax1.get_yaxis_transform())
+    # ax1.annotate(r'$[0, \kappa_\delta]$', xy=(0+2, perm_delta_mean),
+    #              bbox=dict(facecolor='white', alpha=0.4, edgecolor='none'))
+    perm_k0_mean = np.mean(params[:, parnames.index("perm_k0")])
+    add_annotated_point(init_sigma_m_mean/1e6, perm_k0_mean, r'$[\sigma_{m0}, \kappa_0]$')
+
+    perm_kr_mean = np.mean(params[:, parnames.index("perm_k0")]/params[:, parnames.index("perm_eps")])
+    # perm_kr_mean = np.mean(params[:, parnames.index("perm_k0")]) / np.mean(params[:, parnames.index("perm_eps")])
+    # print(perm_kr_mean)
+    # ax1.scatter(init_sigma_m_mean / 1e6, perm_kr_mean, facecolors='none', edgecolors='limegreen', marker='o',
+    #             zorder=100)
+    add_hline(perm_kr_mean, label=r'$\kappa_r$')
+
+    ax1.text(0.52,0.9,
+             # r'$\sigma_{VM}=\frac{170}{120}\sigma_m$\\$\kappa_r=\kappa_0/\epsilon,\qquad \epsilon>1.1$',
+             r'\begin{eqnarray*} \sigma_{\mathrm{VM}c} &=& \frac{170}{120}\sigma_m \\'
+             r'\kappa_r &=& \kappa_0/\epsilon,\qquad \epsilon>1.1 \end{eqnarray*}',
+             transform=ax1.transAxes,
+             bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5,rounding_size=0.2', linewidth=0.5)
+             )
+
+    # finialize figure
+    ax1.set_xlim(np.min(xax), np.max(xax))
+    ax1.set_yscale('log')
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    fig.savefig("permeability.pdf")
+
+    # ax_cond.set_yscale('log')
+    # fig_cond.savefig('conductivity.pdf')
+
+    # plt.scatter(range(params.shape[0]), params[:,5])
+    # plt.savefig('eps.pdf')
 
 
 if __name__ == "__main__":
@@ -266,7 +356,9 @@ if __name__ == "__main__":
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
+    # plot requires LaTeX installed
     plot_conductivity(config_dict, param_values)
+    # exit(0)
 
     sensitivity_dir = os.path.join(output_dir, sensitivity_dirname)
     aux_functions.force_mkdir(sensitivity_dir, force=True)
