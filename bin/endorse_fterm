@@ -42,7 +42,7 @@ REL_FLOW_DIR=$(realpath --relative-to=$(pwd) $ABS_FLOW_DIR)
 #image_tag=a785dd
 
 image_name=endorse_ci
-image_tag=050f77
+image_tag=cff333
 
 function get_base_image() {
     local image=flow123d/$image_name:$image_tag

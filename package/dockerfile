@@ -1,8 +1,9 @@
-FROM flow123d/install-gnu:4.0.3 as installer
-# FROM flow123d/install-gnu:4.0.1 as installer
+# FROM flow123d/install-gnu:4.0.3 as installer
+FROM flow123d/install-gnu:4.0.1 as installer
 # ? difference to 4.0.2 the last one
 
-FROM flow123d/flow-dev-gnu-rel:4.0.3
+# FROM flow123d/flow-dev-gnu-rel:4.0.3
+FROM flow123d/ci-gnu:4.0.0a01_0b2509
 # FROM flow123d/ci-gnu:4.0.0a_d61969
 #FROM flow123d/flow123d-gnu:3.9.1
 
