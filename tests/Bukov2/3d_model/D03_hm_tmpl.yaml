@@ -44,6 +44,9 @@ problem: !Coupling_Sequential
             scalar_field: <conductivity_b>
           - name: c # coefficient for nonhomogeneous conductivity (range: -1 to 1)
             scalar_field: <conductivity_c>
+          - name: nonlin_cond
+            field: !FieldFormula
+              value: 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
         nonlinear_solver:
           linear_solver: !Petsc
             a_tol: <flow_solver__a_tol>
@@ -52,15 +55,11 @@ problem: !Coupling_Sequential
         input_fields:
           - region: BULK
             conductivity: !FieldFormula
-              value: if(von_mises_stress<stress_threshold,
-                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3))),
-                1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
-                * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
-                )* (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
-#              value: if(von_mises_stress<stress_threshold,
-#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)),
-#                        1000*9.81/0.001 * (kr + deltakmax*exp(beta1 * mean_stress)) * exp(gamma*(von_mises_stress-stress_threshold))
-#                       )*(1 + a*x/35 + b*y/30 + c*z/30)
+              value:
+                ( nonlin_cond if (von_mises_stress<stress_threshold)
+                  else nonlin_cond * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                ) * (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
+
             # https://en.wikipedia.org/wiki/Specific_storage
             storativity: <storativity>
             # S = rho * g * (beta_s + nu * beta_w)
@@ -80,16 +79,16 @@ problem: !Coupling_Sequential
             time: 0
             bc_type: total_flux
             bc_pressure: !FieldFormula
-              value: if((-x>2) | (x>2),init_p,0)
+              value: init_p if ((-x>2) or (x>2)) else 0
             bc_robin_sigma: !FieldFormula
-              value: if((-x>2) | (x>2),0,1e3)
+              value: 0 if ((-x>2) or (x>2)) else 1e3
           - region: .box_tunnel
             time: 100
             bc_type: total_flux
             bc_pressure: !FieldFormula
-              value: if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),init_p,0)
+              value: init_p if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else 0
             bc_robin_sigma: !FieldFormula
-              value: if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,1e3)
+              value: 0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else 1e3
 #          - region: .box_tunnel
 #            time: 112
 #            bc_type: dirichlet
@@ -148,7 +147,9 @@ problem: !Coupling_Sequential
             young_modulus: <young_modulus>
             poisson_ratio: <poisson_ratio>
             initial_stress: !FieldFormula
-              value: [ [-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz] ]
+              value: "[ [-sx, -sxy, 0],
+                        [-sxy, -sy, 0],
+                        [0, 0, -sz] ]"
 
           - region: .box_outer
             bc_type: displacement_n
@@ -160,14 +161,24 @@ problem: !Coupling_Sequential
             time: 0
             bc_type: stress
             bc_stress: !FieldFormula
-              value: [ ["if((-x>2) | (x>2),0,-sx)", "if((-x>2) | (x>2),0,-sxy)", 0], ["if((-x>2) | (x>2),0,-sxy)", "if((-x>2) | (x>2),0,-sy)", 0], [0, 0, -sz] ]
+              value: "[ [ 0 if ((-x>2) or (x>2)) else -sx,
+                          0 if ((-x>2) or (x>2)) else -sxy,
+                          0],
+                        [ 0 if ((-x>2) or (x>2)) else -sxy,
+                          0 if ((-x>2) or (x>2)) else -sy,
+                          0],
+                        [0, 0, -sz] ]"
           - region: .box_tunnel
             time: 100
             bc_type: stress
             bc_stress: !FieldFormula
-              value: [ ["if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sx)", "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sxy)", 0],
-                       ["if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sxy)", "if((-x>2+2*(t/86400-100)) | (x>2+2*max(0,t/86400-107)),0,-sy)", 0],
-                       [0, 0, -sz] ]
+              value: "[ [ 0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sx,
+                          0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sxy,
+                          0],
+                        [ if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sxy,
+                          if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sy,
+                          0],
+                        [ 0, 0, -sz] ]"
 #          - region: .box_tunnel
 #            time: 112
 #            bc_type: stress
