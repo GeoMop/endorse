@@ -1,4 +1,4 @@
-flow123d_version: 3.9.1
+flow123d_version: 4.0.0
 problem: !Coupling_Sequential
   description: Model of tunnel surroundings relaxation after boring.
   mesh:
@@ -18,32 +18,32 @@ problem: !Coupling_Sequential
     flow_equation: !Flow_Richards_LMH
         user_fields:
           - name: sx
-            scalar_field: <init_stress_x>
+            field: <init_stress_x>
           - name: sy
-            scalar_field: <init_stress_y>
+            field: <init_stress_y>
           - name: sz
-            scalar_field: <init_stress_z>
+            field: <init_stress_z>
           - name: init_p
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: <init_pressure>-z
           - name: k0
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: <perm_k0>
           - name: kr
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: 1/<perm_eps>*k0
           - name: delta
-            scalar_field: <perm_delta>
+            field: <perm_delta>
           - name: gamma
-            scalar_field: <perm_gamma>
+            field: <perm_gamma>
           - name: stress_threshold
-            scalar_field: 55e6
+            field: 55e6
           - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
-            scalar_field: <conductivity_a>
+            field: <conductivity_a>
           - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
-            scalar_field: <conductivity_b>
+            field: <conductivity_b>
           - name: c # coefficient for nonhomogeneous conductivity (range: -1 to 1)
-            scalar_field: <conductivity_c>
+            field: <conductivity_c>
           - name: nonlin_cond
             field: !FieldFormula
               value: 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
@@ -110,19 +110,19 @@ problem: !Coupling_Sequential
     mechanics_equation:
         user_fields:
           - name: a
-            scalar_field: !FieldFormula # uhel mezi osou rozrazky a hlavnim napetim
+            field: !FieldFormula # uhel mezi osou rozrazky a hlavnim napetim
               value: 117*pi/180
           - name: sx # initial stress in x direction (orthogonal to tunnel axis)
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: <init_stress_x>*cos(a)**2 + <init_stress_y>*sin(a)**2
           - name: sxy
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: cos(a)*sin(a)*(<init_stress_y>-<init_stress_x>)
           - name: sy
-            scalar_field: !FieldFormula
+            field: !FieldFormula
               value: <init_stress_y>*cos(a)**2 + <init_stress_x>*sin(a)**2
           - name: sz
-            scalar_field: <init_stress_z>
+            field: <init_stress_z>
 
         output_stream:
           file: mechanics.pvd
@@ -161,26 +161,20 @@ problem: !Coupling_Sequential
             time: 0
             bc_type: stress
             bc_stress: !FieldFormula
-              value: "[ [ 0 if ((-x>2) or (x>2)) else -sx,
-                          0 if ((-x>2) or (x>2)) else -sxy,
-                          0],
-                        [ 0 if ((-x>2) or (x>2)) else -sxy,
-                          0 if ((-x>2) or (x>2)) else -sy,
-                          0],
-                        [0, 0, -sz] ]"
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, -sz]]
+                        if ((-x>2) or (x>2)) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+
           - region: .box_tunnel
             time: 100
             bc_type: stress
             bc_stress: !FieldFormula
-              value: "[ [ 0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sx,
-                          0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sxy,
-                          0],
-                        [ if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sxy,
-                          if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else -sy,
-                          0],
-                        [ 0, 0, -sz] ]"
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, -sz]]
+                        if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+
 #          - region: .box_tunnel
 #            time: 112
 #            bc_type: stress
 #            bc_stress: !FieldFormula
-#              value: [ -sx, -sy, -sz]
+#              value: "[ -sx, -sy, -sz]"
