@@ -23,8 +23,6 @@ sandbox
 # environments
 .tox
 venv
-**/venv/**
-**/env/**
 
 # temporary excluded
 **/*.zip
@@ -36,6 +34,10 @@ experiments/mlmc-modelling-2019/workdir/**
 experiments/repository-model/new_from_bgem/**
 experiments/repository-model/prd/**
 experiments/repository-model/tmp/**
+
+# venv
+**/venv/**
+**/env/**
 
 # Latex
 **/*.aux
@@ -76,12 +78,3 @@ metodika_vypoctu_indikatoru/*.blg
 metodika_vypoctu_indikatoru/*.log
 metodika_vypoctu_indikatoru/*.out
 metodika_vypoctu_indikatoru/main.pdf
-
-endorse.sif
-
-# Bukov2
-tests/Bukov2/3d_model/borehole_data
-tests/Bukov2/3d_pressure_results
-tests/Bukov2/borehole_data
-tests/Bukov2/borehole_data_tst
-tests/Bukov2/3d_model/PE_*

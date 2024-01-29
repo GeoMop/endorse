@@ -3,7 +3,6 @@ import subprocess
 import time
 
 import numpy as np
-import pyvista as pv
 import itertools
 import collections
 import shutil
@@ -38,19 +37,15 @@ class endorse_2Dtest():
 
     def __init__(self, config, clean):
 
-        if "sample_subdir" in config:
-            self.work_dir = config["sample_subdir"]
-            print(config["sample_subdir"])
-        else:
-            self.work_dir = config["work_dir"]
+        # TODO: set work dir
+        self.work_dir = config["work_dir"]
         self.clean = clean
         self._config = config
-        self.sample_counter = -1
         self.sample_dir = ""
-        self.sample_output_dir = ""
+        self.sample_counter = -1
 
     def set_parameters(self, data_par):
-        param_list = self._config["parameters"]
+        param_list = self._config["surrDAMH_parameters"]["parameters"]
         assert(len(data_par) == len(param_list))
 
         for idx, param in enumerate(param_list):
@@ -77,14 +72,11 @@ class endorse_2Dtest():
 
         # create sample dir
         self.sample_counter = self.sample_counter + 1
-        self.sample_dir = os.path.join(self.work_dir,
+        self.sample_dir = os.path.join(config_dict["work_dir"],
                                        "solver_" + str(config_dict["solver_id"]).zfill(2) +
                                        "_sample_" + str(self.sample_counter).zfill(3))
         os.makedirs(self.sample_dir, mode=0o775, exist_ok=True)
         os.chdir(self.sample_dir)
-
-        param_key = 'hm_params'
-        self.sample_output_dir = "output_" + config_dict[param_key]["in_file"]
 
         print("=========================== RUNNING CALCULATION " +
               "solver {} ".format(config_dict["solver_id"]).zfill(2) +
@@ -98,7 +90,7 @@ class endorse_2Dtest():
 
         print("Creating mesh...")
         # comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=False)
-        comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=False)
+        comp_mesh = self.prepare_mesh(config_dict, cut_tunnel=True)
 
         mesh_bn = os.path.basename(comp_mesh)
         config_dict["hm_params"]["mesh"] = mesh_bn
@@ -107,11 +99,11 @@ class endorse_2Dtest():
         print("Creating mesh...finished")
 
         if config_dict["mesh_only"]:
-            return -10, None  # tag, value_list
+            return -10, []  # tag, value_list
 
         # endorse_2Dtest.prepare_hm_input(config_dict)
         print("Running Flow123d - HM...")
-        hm_succeed = self.call_flow(config_dict, param_key, result_files=["flow_observe.yaml"])
+        hm_succeed = self.call_flow(config_dict, 'hm_params', result_files=["flow_observe.yaml"])
 
         # params = config_dict.tsx_hm_model.hm_params
         # template = os.path.join(flow123d_inputs_path, params.input_template)
@@ -121,16 +113,7 @@ class endorse_2Dtest():
             # raise Exception("HM model failed.")
             # "Flow123d failed (wrong input or solver diverged)"
             print("Flow123d failed.")
-            # still try collect results
-            try:
-                collected_values = self.collect_results(config_dict)
-                print("Sample results collected.")
-                return 3, collected_values  # tag, value_list
-            except:
-                print("Collecting sample results failed:")
-                traceback.print_exc()
-                return -3, None
-            # return -1, None  # tag, value_list
+            return -1, []  # tag, value_list
         print("Running Flow123d - HM...finished")
 
         if self._config["make_plots"]:
@@ -139,7 +122,7 @@ class endorse_2Dtest():
             except:
                 print("Making plot of sample results failed:")
                 traceback.print_exc()
-                return -2, None
+                return -2, []
 
         print("Finished computation")
 
@@ -154,7 +137,7 @@ class endorse_2Dtest():
         except:
             print("Collecting sample results failed:")
             traceback.print_exc()
-            return -3, None
+            return -3, []
 
     # def check_data(self, data, minimum, maximum):
     #     n_times = len(endorse_2Dtest.result_format()[0].times)
@@ -171,65 +154,44 @@ class endorse_2Dtest():
     #     if max > maximum:
     #         raise Exception("Data out of given range [max].")
 
-    # def collect_results(self, config_dict):
-    #     pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
-    #     cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
-    #
-    #     values = np.empty((0,))
-    #
-    #     # the times defined in input
-    #     times = np.array(generate_time_axis(config_dict))
-    #     with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
-    #         loaded_yaml = yaml.load(f, yaml.CSafeLoader)
-    #
-    #         vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
-    #         values = np.concatenate((values, vals), axis=None)
-    #
-    #         vals = self.get_from_observe(loaded_yaml, cond_points2collect, 'conductivity', times[-1])
-    #         vals = np.log10(vals)  # consider log10!
-    #         values = np.concatenate((values, vals), axis=None)
-    #
-    #     if config_dict["clean_sample_dir"]:
-    #         shutil.rmtree(self.sample_dir)
-    #
-    #     # flatten to format: [Point0_all_all_times, Point1_all_all_times, Point2_all_all_times, ...]
-    #     res = values.flatten()
-    #     return res
-
     def collect_results(self, config_dict):
-        # Load the PVD file
-        pvd_file_path = os.path.join(self.sample_output_dir, "flow.pvd")
-        field_name = "pressure_p0"
-        pvd_reader = pv.PVDReader(pvd_file_path)
+        output_dir = config_dict["hm_params"]["output_dir"]
+        pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
+        cond_points2collect = config_dict["surrDAMH_parameters"]["conductivity_observe_points"]
 
-        field_data_list = []
-        for time_frame in range(len(pvd_reader.time_values)):
-            pvd_reader.set_active_time_point(time_frame)
-            mesh = pvd_reader.read()[0]  # MultiBlock mesh with only 1 block
+        values = np.empty((0,))
 
-            field_data = mesh[field_name]
-            field_data_list.append(field_data)
+        # the times defined in input
+        times = np.array(generate_time_axis(config_dict))
+        with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
+            loaded_yaml = yaml.load(f, yaml.CSafeLoader)
 
-        sample_data = np.stack(field_data_list)
-        sample_data = sample_data.reshape((1, *sample_data.shape))  # axis 0 - sample
+            vals = self.get_from_observe(loaded_yaml, pressure_points2collect, 'pressure_p0', times)
+            values = np.concatenate((values, vals), axis=None)
+
+            vals = self.get_from_observe(loaded_yaml, cond_points2collect, 'conductivity', times[-1])
+            vals = np.log10(vals)  # consider log10!
+            values = np.concatenate((values, vals), axis=None)
 
         if config_dict["clean_sample_dir"]:
             shutil.rmtree(self.sample_dir)
 
-        return sample_data
+        # flatten to format: [Point0_all_all_times, Point1_all_all_times, Point2_all_all_times, ...]
+        res = values.flatten()
+        return res
 
     def get_from_observe(self, observe_dict, point_names, field_name, select_times=None):
         points = observe_dict['points']
         all_point_names = [p["name"] for p in points]
-        # print('all_point_names', all_point_names)
-        # print('point_names', point_names)
+        print('all_point_names', all_point_names)
+        print('point_names', point_names)
         points2collect_indices = []
         for p2c in point_names:
             tmp = [i for i, pn in enumerate(all_point_names) if pn == p2c]
             assert len(tmp) == 1
             points2collect_indices.append(tmp[0])
 
-        # print("Collecting results for observe points: ", point_names)
+        print("Collecting results for observe points: ", point_names)
         data = observe_dict['data']
         data_values = np.array([d[field_name] for d in data])
         values = data_values[:, points2collect_indices]
@@ -264,15 +226,16 @@ class endorse_2Dtest():
         status = False
         params = config_dict[param_key]
         fname = params["in_file"]
+        # arguments = config_dict["_aux_flow_path"].copy()
         arguments = ['env', '-i']
-        arguments.extend(config_dict["local"]["flow_executable"].copy())
-        arguments.extend(['--output_dir', self.sample_output_dir, fname + ".yaml"])
+        arguments.extend(config_dict["_aux_flow_path"].copy())
+        output_dir = "output_" + fname
+        config_dict[param_key]["output_dir"] = output_dir
 
         stdout_path = fname + "_stdout"
         stderr_path = fname + "_stderr"
-        if all([os.path.isfile(os.path.join(self.sample_output_dir, f)) for f in result_files]):
+        if all([os.path.isfile(os.path.join(output_dir, f)) for f in result_files]):
             status = True
-            completed = subprocess.CompletedProcess(args=arguments, returncode=0)
         else:
             common.substitute_placeholders(
                 os.path.join(config_dict["common_files_dir"],
@@ -280,6 +243,7 @@ class endorse_2Dtest():
                 fname + '.yaml',
                 params)
 
+            arguments.extend(['--output_dir', output_dir, fname + ".yaml"])
             print("Running: ", " ".join(arguments))
             with open(stdout_path, "w") as stdout:
                 with open(stderr_path, "w") as stderr:
@@ -288,7 +252,7 @@ class endorse_2Dtest():
             status = completed.returncode == 0
 
         if status:
-            fo = common.flow_call.FlowOutput(completed, stdout_path, stderr_path, self.sample_output_dir)
+            fo = common.flow_call.FlowOutput(completed, stdout_path, stderr_path, output_dir)
             conv_check = fo.check_conv_reasons()
             print("converged: ", conv_check)
             status = conv_check >= 0
@@ -374,10 +338,8 @@ class endorse_2Dtest():
         mesh_name = config_dict["geometry"]["mesh_name"]
         if cut_tunnel:
             mesh_name = mesh_name + "_cut"
-        # mesh_file = mesh_name + ".msh"
-        # mesh_healed = mesh_name + "_healed.msh"
-        mesh_healed = mesh_name + ".msh"
-        print(mesh_healed)
+        mesh_file = mesh_name + ".msh"
+        mesh_healed = mesh_name + "_healed.msh"
 
         # suppose that the mesh was created/copied during preprocess
         assert os.path.isfile(os.path.join(config_dict["common_files_dir"], mesh_healed))
@@ -501,9 +463,10 @@ class endorse_2Dtest():
 
     def observe_time_plot(self, config_dict):
 
+        output_dir = config_dict["hm_params"]["output_dir"]
         pressure_points2collect = config_dict["surrDAMH_parameters"]["observe_points"]
 
-        with open(os.path.join(self.sample_output_dir, "flow_observe.yaml"), "r") as f:
+        with open(os.path.join(output_dir, "flow_observe.yaml"), "r") as f:
             loaded_yaml = yaml.load(f, yaml.CSafeLoader)
             data = loaded_yaml['data']
             times = np.array([d["time"] for d in data]).transpose()

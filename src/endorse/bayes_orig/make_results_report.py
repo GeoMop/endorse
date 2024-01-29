@@ -61,12 +61,7 @@ if __name__ == "__main__":
         params["DAMHsmu_N"] = DAMHsmu["N samples [a, r, pr, all]"]
         params["DAMHsmu_acceptance"] = print_num(DAMHsmu["acceptance ratio [a/r, a/all]"], 'f', 3)
         params["DAMHsmu_proposal_std"] = DAMHsmu["proposal_std"]
-        best_fit_L2 = loaded_yaml["best_fit_L2"]
-        params["bf_type_L2"] = best_fit_L2["type"]
-        params["bf_paramters_L2"] = print_num(best_fit_L2["parameters"], 'g', 2)
-        best_fit_LH = loaded_yaml["best_fit_LH"]
-        params["bf_type_LH"] = best_fit_LH["type"]
-        params["bf_paramters_LH"] = print_num(best_fit_LH["parameters"], 'g', 2)
+        best_fit = loaded_yaml["best_fit_L2"]["parameters"]
 
 
     common.substitute_placeholders(tex_template, tex_file, params)
@@ -83,15 +78,15 @@ if __name__ == "__main__":
     # os.system(" ".join(arguments))
 
     # is best fit accepted or rejected?
-    # num = print_num(best_fit[0], 'e', 14)[:14]
-    # # res = os.system("grep -rn saved_samples -e \"" + num +"\"")
-    # res = subprocess.check_output(["grep -rn saved_samples -e \"" + num +"\""], shell=True)
-    # res = str(res)
-    # # print(res)
-    # if "rejected" in res:
-    #     print("BEST FIT L2 is REJECTED")
-    # elif "accepted" in res:
-    #     print("BEST FIT L2 is ACCEPTED")
+    num = print_num(best_fit[0], 'e', 14)[:14]
+    # res = os.system("grep -rn saved_samples -e \"" + num +"\"")
+    res = subprocess.check_output(["grep -rn saved_samples -e \"" + num +"\""], shell=True)
+    res = str(res)
+    # print(res)
+    if "rejected" in res:
+        print("BEST FIT L2 is REJECTED")
+    elif "accepted" in res:
+        print("BEST FIT L2 is ACCEPTED")
 
 
 

@@ -3,9 +3,9 @@ import sys
 import ruamel.yaml as yaml
 import numpy as np
 
-from endorse.bayes_orig import flow_wrapper
-from endorse.bayes_orig.measured_data import MeasuredData
-from endorse.bayes_orig.mesh_factory import MeshFactory
+import flow_wrapper
+from measured_data import MeasuredData
+from mesh_factory import MeshFactory
 
 
 def preprocess(config_dict):
@@ -20,11 +20,10 @@ def preprocess(config_dict):
 
     pressure_obs_points = conf_bayes["observe_points"]
     conductivity_obs_points = conf_bayes["conductivity_observe_points"]
-
-    if "synthetic_data" in config_dict.keys():
-        times, values = md.generate_synthetic_samples(pressure_obs_points, conductivity_obs_points)
+    if config_dict["synthetic_data"]:
+        times, values = md.generate_synthetic_samples(pressure_obs_points)
     else:
-        times, values = md.generate_measured_samples(pressure_obs_points, conductivity_obs_points)
+        times, values = md.generate_measured_samples(pressure_obs_points)
 
     config_bayes_file = config_dict["bayes_config_file"]
     yaml_handler = yaml.YAML()
@@ -44,25 +43,30 @@ def preprocess(config_dict):
     conf["problem_parameters"]["prior_std"] = [1.0] * npar
     conf["no_observations"] = len(values)
 
-    noise_model_list = conf_bayes["noise_model"]
-
-    assert len(noise_model_list) >= npob, "Not enough parameters for pressure observations in config.yaml."
-    assert len(noise_model_list) == npob+ncob, "Dimension mismatch in noise model in config.yaml."
-    offset = 0
+    noise_model_list = []
     # noise for pressure head in boreholes
+    dict_01 = dict()
+    dict_01["time_grid"] = np.array(times).tolist()
+    dict_01["corr_length"] = 30
+    dict_01["std"] = 20
+    dict_01["cov_type"] = "default"
+    offset = 0
     for i in range(npob):
-        dict_01 = noise_model_list[i]
-        dict_01["time_grid"] = np.array(times).tolist()
+        d = dict_01.copy()
         length = len(times)
-        dict_01["range"] = [offset, offset + length]
+        d["range"] = [offset, offset + length]
+        noise_model_list.append(d)
         offset = offset + length
-
     # noise for conductivity
+    dict_02 = dict_01.copy()
+    dict_02["time_grid"] = np.array(times[-1]).tolist()
+    dict_02["corr_length"] = 0
+    dict_02["std"] = 1.0
     for i in range(ncob):
-        dict_02 = noise_model_list[npob+i]
-        dict_02["time_grid"] = np.array(times[-1]).tolist()
+        d = dict_02.copy()
         length = 1
-        dict_02["range"] = [offset, offset + length]
+        d["range"] = [offset, offset + length]
+        noise_model_list.append(d)
         offset = offset + length
 
     conf["noise_model"] = noise_model_list
@@ -70,13 +74,6 @@ def preprocess(config_dict):
     conf["solver_module_path"] = os.path.join(config_dict["script_dir"], "flow_wrapper.py")
     conf["transformations"] = conf_bayes["parameters"]
     conf["observe_points"] = pressure_obs_points
-
-    if "initial_sample_type" in conf_bayes.keys():
-        conf["initial_sample_type"] = conf_bayes["initial_sample_type"]
-    if "samplers_list" in conf_bayes.keys():
-        conf["samplers_list"] = conf_bayes["samplers_list"]
-    if "surrogate" in conf_bayes.keys():
-        conf.update(conf_bayes["surrogate"])
 
     for i, par in enumerate(conf_bayes["parameters"]):
         if par["type"] is None:

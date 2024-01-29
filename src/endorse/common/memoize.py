@@ -1,6 +1,6 @@
 import logging
 from typing import *
-#import redis_cache
+import redis_cache
 import hashlib
 from functools import wraps
 import time
@@ -15,21 +15,20 @@ TODO: modify redis_simple_cache or our memoize decorator to hash also function c
 """
 
 class EndorseCache:
-    pass
-#     __instance__ = None
-#     @staticmethod
-#     def instance(*args, **kwargs):
-#         if EndorseCache.__instance__ is None:
-#             EndorseCache.__instance__ = EndorseCache(*args, **kwargs)
-#         return EndorseCache.__instance__
-#
-#     def __init__(self, host="localhost", port=6379):
-#         # TODO: possibly start redis server
-#         self.cache = redis_cache.SimpleCache(10000, hashkeys=True, host=host, port=port)
-#
-#
-#     def expire_all(self):
-#         self.cache.expire_all_in_set()
+    __instance__ = None
+    @staticmethod
+    def instance(*args, **kwargs):
+        if EndorseCache.__instance__ is None:
+            EndorseCache.__instance__ = EndorseCache(*args, **kwargs)
+        return EndorseCache.__instance__
+
+    def __init__(self, host="localhost", port=6379):
+        # TODO: possibly start redis server
+        self.cache = redis_cache.SimpleCache(10000, hashkeys=True, host=host, port=port)
+
+
+    def expire_all(self):
+        self.cache.expire_all_in_set()
 
 # Workaround missing module in the function call key
 # def memoize():
@@ -49,11 +48,10 @@ class EndorseCache:
 #     return decorator
 
 def memoize(fn):
-    return fn
-#     endorse_cache = EndorseCache.instance()
-#     redis_cache_deco = redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)
-#     return redis_cache_deco(fn)
-#
+    endorse_cache = EndorseCache.instance()
+    redis_cache_deco = redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)
+    return redis_cache_deco(fn)
+
 
 
 
