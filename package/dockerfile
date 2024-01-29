@@ -1,16 +1,19 @@
+# FROM flow123d/install-gnu:4.0.3 as installer
 FROM flow123d/install-gnu:4.0.1 as installer
 # ? difference to 4.0.2 the last one
 
-FROM flow123d/ci-gnu:4.0.0a_d61969
+# FROM flow123d/flow-dev-gnu-rel:4.0.3
+FROM flow123d/ci-gnu:4.0.0a01_0b2509
+# FROM flow123d/ci-gnu:4.0.0a_d61969
 #FROM flow123d/flow123d-gnu:3.9.1
 
 # Build-time metadata as defined at http://label-schema.org
 LABEL org.label-schema.build-date="$build_date" \
-      org.label-schema.name="Endorsed" \
+      org.label-schema.name="EndorseExperiment" \
       org.label-schema.description="Stochastic prediction of contaminant transport safety indicators for excavation damage zone." \
-      org.label-schema.url="https://github.com/jbrezmorf/Endorse" \
+      org.label-schema.url="https://github.com/GeoMop/endorse-experiment" \
       org.label-schema.vcs-ref="$git_hash" \
-      org.label-schema.vcs-url="https://github.com/jbrezmorf/Endorse" \
+      org.label-schema.vcs-url="https://github.com/GeoMop/endorse-experiment" \
       org.label-schema.vendor="Technical University of Liberec" \
       org.label-schema.version="0.0.1"
 
@@ -18,7 +21,7 @@ LABEL org.label-schema.build-date="$build_date" \
 
 RUN sudo apt-get update
 RUN sudo apt install -y curl libglu1-mesa redis git
-RUN sudo python3 -m pip install --upgrade numpy>=1.20.3
+RUN sudo python3 -m pip install --upgrade numpy>=1.23.3
 # install mpi4py using mpi in base container
 COPY --from=installer /.mpiccpath /.mpiccpath
 RUN env MPICC=$(cat /.mpiccpath) python3 -m pip install --no-cache-dir --ignore-installed  mpi4py

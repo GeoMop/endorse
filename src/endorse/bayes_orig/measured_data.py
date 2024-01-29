@@ -39,7 +39,7 @@ class MeasuredData:
         self.bnames_dict = {'V1':'HGT1-5', 'V2':'HGT1-4',
                             'H1':'HGT2-4', 'H2':'HGT2-3'}
 
-    def generate_measured_samples(self, boreholes):
+    def generate_measured_samples(self, boreholes, cond_boreholes):
         times = np.array(generate_time_axis(self._config))
 
         # sample measured data at generated times
@@ -49,15 +49,20 @@ class MeasuredData:
             p = self.interp_data[bn](times)
             values.extend(p)
 
-        values.extend(self.conductivity_measurement(times))
+        values.extend(self.conductivity_measurement(cond_boreholes, times))
         return times, values
 
-    def conductivity_measurement(self, times):
+    def conductivity_measurement(self, boreholes, times):
+        measurements = {"V01_cond": 2e-17, "V02_cond": 1e-19, "H01_cond": 3e-19, "H02_cond": 7e-21}
         n = len(times)
         # initial bulk conductivity
         # init_cond = np.log10(1e7 * 6e-22)
         # values at points V01_cond, V02_cond, H01_cond, H02_cond
-        values = np.log10(1e7 * np.array([2e-17, 1e-19, 3e-19, 7e-21]))
+        # values = np.log10(1e7 * np.array([2e-17, 1e-19, 3e-19, 7e-21]))
+        values = []
+        for b in boreholes:
+            values.append(measurements[b])
+        values = np.log10(1e7 * np.array(values))
         # make time rows
         # values = np.tile(values, (n, 1)).transpose()
 
@@ -136,7 +141,8 @@ class MeasuredData:
         idx = 0
         label_comsol="comsol"
         for bname in boreholes:
-            p_interp = self.interp_data[bname](t)
+            bn = self.bnames_dict[bname]
+            p_interp = self.interp_data[bn](t)
             end_idx = idx + len(t)
             p_comp = computed_data[idx:end_idx]
             zm_t = self.zm_data[bname]["time"]
@@ -256,6 +262,76 @@ class MeasuredData:
             dat["pressure"] = v
         return borehole_names, data
 
+    def generate_synthetic_samples(self, boreholes, cond_boreholes):
+        times = np.array(generate_time_axis(self._config))
+
+        L = float(self._config["synthetic_data"]["corr_length"])/365     # correlation length
+        noise_std = float(self._config["synthetic_data"]["noise_std"]) # target std of the synthetic noise
+
+        if noise_std > 0:
+          # noise will be applied at the same time steps as the underlying data
+          N = len(times)
+          # rescale target std to std of coefficients of Fourier basis
+          # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
+          std = noise_std / np.sqrt(2 * N + 1)
+          # print("std", std)
+
+          # Construct the orthonormal Fourier basis on interval [0,1]
+          x = np.linspace(0, 1, N)
+          # dimension of basis is given by the intended correlation length (its inverse)
+          Nk = int(1/L)
+          # print(Nk)
+          Nb = 2 * Nk + 1
+          basis = np.zeros((N, Nb))
+          basis[:, 0] = 1
+          for i in range(1, Nk+1):
+              basis[:, i] = np.sqrt(2)*np.cos(2 * np.pi * i * x)
+              basis[:, Nk+i] = np.sqrt(2)*np.sin(2 * np.pi * i * x)
+
+          # Generate uncorrelated random coefficients
+          np.random.seed(2)
+          coeffs = np.random.normal(size=Nb, scale=std)
+          # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
+          scaled_std = std / np.sqrt(Nb)
+          print("N", N, "Nb", Nb, "std", scaled_std)
+          coeffs = np.random.normal(size=Nb, scale=scaled_std)
+          # coeffs = np.random.normal(loc=0, size=Nb, scale=1)
+          # print("mean", np.mean(coeffs))
+          # print("std", np.sqrt(np.var(coeffs)))
+          # print("coeffs", coeffs)
+
+          # Compute noise
+          # print("basis shape", np.shape(basis))
+          # print("coeffs shape", np.shape(coeffs))
+          noise = np.dot(basis, coeffs)
+          # print("noise shape", np.shape(noise))
+        else:
+          noise = 0
+        # print("noise", noise)
+
+        if plot:
+            fig, ax1 = plt.subplots()
+            ax1.set_xlabel('time [d]')
+            ax1.set_ylabel('noise [m]')
+            ax1.plot(1 / len(noise) * 365 * np.arange(0, len(noise)), noise, label="noise", linestyle='solid')
+            fig.tight_layout()
+            fig_file = os.path.join(self._config["work_dir"], plotname + ".pdf")
+            plt.savefig(fig_file)
+
+            from scipy.stats import norm
+            fig, ax1 = plt.subplots()
+            ax1.set_xlabel('time [d]')
+            ax1.set_ylabel('noise [m]')
+            ax1.hist(noise, bins=50, density=True, alpha=0.6, color='b')
+            xx = np.linspace(-3*std, 3*std, 100)
+            pp = norm.pdf(xx, 0, std)
+            ax1.plot(xx, pp, 'k', linewidth=2)
+            fig.tight_layout()
+            fig_file = os.path.join(self._config["work_dir"], plotname + "_hist.pdf")
+            plt.savefig(fig_file)
+
+        return noise
+
     def generate_synthetic_samples(self, boreholes):
         times = np.array(generate_time_axis(self._config))
 
@@ -264,33 +340,10 @@ class MeasuredData:
 
         # noise will be applied at the same time steps as the underlying data
         N = len(times)
-        # rescale target std to std of coefficients of Fourier basis
-        # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
-        std = noise_std / np.sqrt(2 * N + 1)
-        # print("std", std)
 
-        # Construct the orthonormal Fourier basis on interval [0,1]
-        x = np.linspace(0, 1, N)
-        # dimension of basis is given by the intended correlation length (its inverse)
-        Nk = int(1/L)
-        # print(Nk)
-        Nb = 2 * Nk + 1
-        basis = np.zeros((N, Nb))
-        basis[:, 0] = 1
-        for i in range(1, Nk+1):
-            basis[:, i] = np.sqrt(2)*np.cos(2 * np.pi * i * x)
-            basis[:, Nk+i] = np.sqrt(2)*np.sin(2 * np.pi * i * x)
-
-        # Generate uncorrelated random coefficients
-        np.random.seed(2)
-        coeffs = np.random.normal(size=Nb, scale=std)
-        # print("coeffs", coeffs)
-
-        # Compute noise
-        # print("basis shape", np.shape(basis))
-        # print("coeffs shape", np.shape(coeffs))
-        noise = np.dot(basis, coeffs)
-        # print("noise shape", np.shape(noise))
+        seed = 2
+        noise = self.generate_noise(N, noise_std, L, seed=seed, plot=True, plotname="noise")
+        self.generate_noise(1000, noise_std, L, seed=seed, plot=True, plotname="noise_fine")
 
         import copy
         data_synth = copy.deepcopy(self.synthetic_data)
@@ -329,7 +382,8 @@ class MeasuredData:
         fig_file = os.path.join(self._config["work_dir"], "measured_synthetic.pdf")
         plt.savefig(fig_file)
 
-        values.extend(self.conductivity_measurement(times))
+        values.extend(self.conductivity_measurement(cond_boreholes, times))
+        # exit(0)
         return times, values
 
     def plot_data_set(self, bnames, data, axes, linestyle):

@@ -50,7 +50,8 @@ setuptools.setup(
     # according to setuptols documentation
     # the including 'endorse.flow123d_inputs' should not be neccessary,
     # however packege_data 'endorse.flow123d_inputs' doesn't work without it
-    packages=['endorse', 'endorse.common', 'endorse.flow123d_inputs', 'endorse.mesh', 'endorse.mlmc', 'endorse.scripts'],
+    packages=['endorse', 'endorse.common', 'endorse.flow123d_inputs',
+              'endorse.mesh', 'endorse.mlmc', 'endorse.scripts', 'endorse.sa'],
     package_dir={
         "": "src"
     },

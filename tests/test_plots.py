@@ -1,6 +1,7 @@
 import os
 import pytest
 from endorse import plots, common, indicator
+from endorse.Bukov2 import plot_boreholes
 from bgem.gmsh.gmsh_io import GmshIO
 import matplotlib.pyplot as plt
 import matplotlib

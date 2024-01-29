@@ -1,0 +1,180 @@
+flow123d_version: 4.0.0
+problem: !Coupling_Sequential
+  description: Model of tunnel surroundings relaxation after boring.
+  mesh:
+    mesh_file: <mesh>
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: BULK
+        biot_alpha: <biot_coefficient>
+        fluid_density: 1000
+    time:
+      end_time: <end_time>
+      # common time unit cannot be used in field formulas
+      common_time_unit: d
+    iteration_parameter: 1 # affects convergence of HM coupling (defaults to 1, lower value sometimes helps)
+    a_tol: 0
+    r_tol: 1e-6
+    flow_equation: !Flow_Richards_LMH
+        user_fields:
+          - name: sx
+            field: <init_stress_x>
+          - name: sy
+            field: <init_stress_y>
+          - name: sz
+            field: <init_stress_z>
+          - name: init_p
+            field: !FieldFormula
+              value: <init_pressure>-z
+          - name: k0
+            field: !FieldFormula
+              value: <perm_k0>
+          - name: kr
+            field: !FieldFormula
+              value: 1/<perm_eps>*k0
+          - name: delta
+            field: <perm_delta>
+          - name: gamma
+            field: <perm_gamma>
+          - name: stress_threshold
+            field: 55e6
+          - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: <conductivity_a>
+          - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: <conductivity_b>
+          - name: c # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: <conductivity_c>
+          - name: nonlin_cond
+            field: !FieldFormula
+              value: 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
+        nonlinear_solver:
+          linear_solver: !Petsc
+            a_tol: <flow_solver__a_tol>
+            r_tol: <flow_solver__r_tol>
+            options: <flow_solver__options>
+        input_fields:
+          - region: BULK
+            conductivity: !FieldFormula
+              value:
+                ( nonlin_cond if (von_mises_stress<stress_threshold)
+                  else nonlin_cond * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                ) * (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
+
+            # https://en.wikipedia.org/wiki/Specific_storage
+            storativity: <storativity>
+            # S = rho * g * (beta_s + nu * beta_w)
+            # 9.81e3 * (3*(1-2*0.23)/60e9 + 0.007*5.1e-10)
+            # bulk compressibility beta_s=1/K = (3(1-2pr)/E) 
+            # porosity nu=0.007
+            # water compressibility beta_w=5.1 1/Pa
+            init_pressure: !FieldFormula
+              value: init_p
+
+          - region: .box_outer
+            bc_type: dirichlet
+            bc_pressure: !FieldFormula
+              value: init_p
+
+          - region: .box_tunnel
+            time: 0
+            bc_type: total_flux
+            bc_pressure: !FieldFormula
+              value: init_p if ((-x>2) or (x>2)) else 0
+            bc_robin_sigma: !FieldFormula
+              value: 0 if ((-x>2) or (x>2)) else 1e3
+          - region: .box_tunnel
+            time: 100
+            bc_type: total_flux
+            bc_pressure: !FieldFormula
+              value: init_p if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else 0
+            bc_robin_sigma: !FieldFormula
+              value: 0 if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else 1e3
+#          - region: .box_tunnel
+#            time: 112
+#            bc_type: dirichlet
+#            bc_pressure: 0
+
+        output:
+          times: <output_times>
+          fields:
+#            - { field: conductivity, interpolation: P1_average }
+#            - piezo_head_p0
+            #- conductivity
+            - pressure_p0
+            #- velocity_p0
+            #- region_id
+        output_stream:
+          file: flow.pvd
+          format: !vtk
+
+    mechanics_equation:
+        user_fields:
+          - name: a
+            field: !FieldFormula # uhel mezi osou rozrazky a hlavnim napetim
+              value: 117*pi/180
+          - name: sx # initial stress in x direction (orthogonal to tunnel axis)
+            field: !FieldFormula
+              value: <init_stress_x>*cos(a)**2 + <init_stress_y>*sin(a)**2
+          - name: sxy
+            field: !FieldFormula
+              value: cos(a)*sin(a)*(<init_stress_y>-<init_stress_x>)
+          - name: sy
+            field: !FieldFormula
+              value: <init_stress_y>*cos(a)**2 + <init_stress_x>*sin(a)**2
+          - name: sz
+            field: <init_stress_z>
+
+        output_stream:
+          file: mechanics.pvd
+          format: !vtk
+        output:
+          times: <output_times>
+          fields: []
+#            - { field: displacement, interpolation: P1_average }
+#            - displacement_divergence
+            #- displacement
+            #- stress
+            #- mean_stress
+            #- von_mises_stress
+            #- initial_stress
+            #- region_id
+        solver: !Petsc
+          a_tol: <mechanics_solver__a_tol>
+          r_tol: <mechanics_solver__r_tol>
+          options: <mechanics_solver__options>
+        input_fields:
+          - region: BULK
+            young_modulus: <young_modulus>
+            poisson_ratio: <poisson_ratio>
+            initial_stress: !FieldFormula
+              value: "[ [-sx, -sxy, 0],
+                        [-sxy, -sy, 0],
+                        [0, 0, -sz] ]"
+
+          - region: .box_outer
+            bc_type: displacement_n
+            bc_displacement: 0
+
+          # bc_type stress prepocita tenzor napeti na normalovou silu, s normalou orientovanou dovnitr
+          # bc_stress * vnitřní normála = bc_traction = síla působící na těleso
+          - region: .box_tunnel
+            time: 0
+            bc_type: stress
+            bc_stress: !FieldFormula
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, -sz]]
+                        if ((-x>2) or (x>2)) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+
+          - region: .box_tunnel
+            time: 100
+            bc_type: stress
+            bc_stress: !FieldFormula
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, -sz]]
+                        if ((-x>2+2*(t/86400-100)) or (x>2+2*maximum(0,t/86400-107))) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+
+#          - region: .box_tunnel
+#            time: 112
+#            bc_type: stress
+#            bc_stress: !FieldFormula
+#              value: "[ -sx, -sy, -sz]"

@@ -3,10 +3,10 @@ import sys
 import shutil
 import yaml
 
-import aux_functions
-from preprocess import preprocess
+from endorse.bayes_orig import aux_functions
+from endorse.bayes_orig.preprocess import preprocess
 
-from surrDAMH.configuration import Configuration
+# from surrDAMH.configuration import Configuration
 
 # this script is supposed to be dependent only on python packages present on any machine
 # all other python scripts are later run inside docker container
@@ -23,9 +23,16 @@ def setup(output_dir, can_overwrite, clean):
     os.chdir(work_dir)
 
     # test if config exists, copy from rep_dir if necessary
-    config_file = os.path.join(common_files_dir, "config.yaml")
+    config_file = os.path.join(work_dir, "config.yaml")
     if not os.path.exists(config_file):
-        shutil.copyfile(os.path.join(rep_dir, "config.yaml"), config_file)
+        # to enable processing older results
+        config_file = os.path.join(common_files_dir, "config.yaml")
+        if not os.path.exists(config_file):
+            raise Exception("Main configuration file 'config.yaml' not found in workdir.")
+        else:
+            import warnings
+            warnings.warn("Main configuration file 'config.yaml' found in 'workdir/common_files'.",
+                          category=DeprecationWarning)
 
     # read config file and setup paths
     with open(config_file, "r") as f:
@@ -35,8 +42,8 @@ def setup(output_dir, can_overwrite, clean):
     config_dict["script_dir"] = rep_dir
 
     config_dict["common_files_dir"] = common_files_dir
-    config_dict["bayes_config_file"] = os.path.join(common_files_dir,
-                                                    config_dict["surrDAMH_parameters"]["config_file"])
+    # config_dict["bayes_config_file"] = os.path.join(common_files_dir,
+    #                                                 config_dict["surrDAMH_parameters"]["config_file"])
 
     # copy common files
     for f in config_dict["copy_files"]:
@@ -100,12 +107,13 @@ if __name__ == "__main__":
             raise Exception("Missing problem configuration '" + problem_path + "'."
                             + " Call simulation with 'run' command first!")
         print(problem_path, flush=True)
-        C = Configuration(N, problem_path)
-        args = [str(N), problem_path, output_dir]
-        if os.path.exists(surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py"):
-            command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
-        else:
-            command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
+        # C = Configuration(N, problem_path)
+        # args = [str(N), problem_path, output_dir]
+        # if os.path.exists(surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py"):
+        #     command = "python3 " + surrDAMH_path + "/examples/visualization/" + C.problem_name + ".py " + " ".join(args)
+        # else:
+        # command = "python3 " + surrDAMH_path + "/examples/visualization/general_visualization.py " + " ".join(args)
+        exit(1)
     else:
         if oversubscribe:
             opt = " --oversubscribe "
@@ -169,12 +177,10 @@ if __name__ == "__main__":
                 'echo $command', 'eval $command', '\n',
                 'command="' + ' '.join([os.path.join(script_dir,'run_visualize.sh'), '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
                 'echo $command', 'eval $command', '\n',
-                'cd $output_dir'
-                'zip -r samples.zip solver_*',
-                'rm -r solver_*',
-                'cd ..',
-                'command="' + ' '.join([os.path.join(script_dir,'run_set.sh'), output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
-                'echo $command', 'eval $command'
+                # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
+                'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
+                'find . -name "solver_*" -print0 | xargs -0 rm -r',
+                'echo "FINISHED"'
             ]
             with open("pbs_job.sh", 'w') as f:
                 f.write('\n'.join(lines))

@@ -5,7 +5,7 @@
 [submodule "submodule.submodules/bgem.path"]
 	path = submodules/bgem
 	url = ../../GeoMop/bgem.git
-	branch = JB_endorse_fix
+	branch = JB_endorse_experiment
 [submodule "submodule.submodules/bih.path"]
 	path = submodules/bih
 	url = ../../flow123d/bih.git
@@ -26,3 +26,6 @@
 	path = submodules/surrDAMH
 	url = ../../dom0015/surrDAMH.git
 	branch = PE_endorse
+[submodule "submodules/salib"]
+	path = submodules/salib
+	url = git@github.com:GeoMop/SALib.git
