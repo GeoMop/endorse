@@ -68,7 +68,7 @@ if __name__ == "__main__":
     # resolve root dir of Endorse repository
     script_dir = os.path.dirname(os.path.abspath(__file__))
     endorse_root = os.path.abspath(os.path.join(script_dir, "../../.."))
-    venv_path = os.path.join(endorse_root, "venv_bayes")
+    venv_path = os.path.join(endorse_root, "venv")
 
     # default parameters
     output_dir = "flow123d_sim"
