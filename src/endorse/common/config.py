@@ -8,7 +8,7 @@ from socket import gethostname
 from glob import iglob
 
 from yamlinclude import YamlIncludeConstructor
-from yamlinclude.constructor import WILDCARDS_REGEX, get_reader_class_by_name
+from yamlinclude.constructor import get_reader_class_by_name
 
 
 class YamlLimitedSafeLoader(type):
@@ -152,6 +152,16 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
         new_cfg = deep_update(new_cfg, PathIter(path), val)
     return new_cfg
 
+def is_glob_pattern(s):
+    """
+    Check if the string `s` contains glob pattern characters.
+    """
+    # Regular expression to detect glob pattern characters
+    glob_pattern_regex = re.compile(r"[\*\?\[\]]")
+
+    # Check if the string contains any of these characters
+    return glob_pattern_regex.search(s) is not None
+
 class YamlInclude(YamlIncludeConstructor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -172,7 +182,7 @@ class YamlInclude(YamlIncludeConstructor):
         reader_clz = None
         if reader:
             reader_clz = get_reader_class_by_name(reader)
-        if re.match(WILDCARDS_REGEX, pathname):
+        if is_glob_pattern(pathname):
             result = []
             iterable = iglob(pathname, recursive=recursive)
             for path in filter(os.path.isfile, iterable):
@@ -210,7 +220,7 @@ def load_config(path, collect_files=False, hostname=None):
     """
     instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
     cfg_dir = os.path.dirname(path)
-    with open(path) as f:
+    with open(path, "r", encoding='utf-8') as f:
         cfg = yaml.load(f, Loader=YamlNoTimestampSafeLoader)
     cfg['_config_root_dir'] = os.path.abspath(cfg_dir)
     dd = dotdict.create(cfg)
