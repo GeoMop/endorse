@@ -10,11 +10,11 @@ tox-gh-actions
 importlib-resources
 
 #numpy==1.21.4
-PyQt5==5.15.6
+##PyQt5==5.15.6
 #vtk==9.1.0
 #bgem # commit 4428b2286b5d1711b3c2fcd9f3651a004d91704f
 #pandas==1.3.4
-openpyxl==3.0.9
+##openpyxl==3.0.9
 #pygimli==1.2.1
 psutil==5.8.0
 #attrs==21.2.0
