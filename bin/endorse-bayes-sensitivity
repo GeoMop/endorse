@@ -6,7 +6,7 @@
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
 ENDORSE_SRC_BAYES="${ENDORSE_SRC_ROOT}/src/endorse/bayes_orig"
-ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv_bayes"
+ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv"
 
 debug=false
 
