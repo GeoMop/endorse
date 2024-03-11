@@ -262,15 +262,8 @@ class MeasuredData:
             dat["pressure"] = v
         return borehole_names, data
 
-    def generate_synthetic_samples(self, boreholes, cond_boreholes):
-        times = np.array(generate_time_axis(self._config))
-
-        L = float(self._config["synthetic_data"]["corr_length"])/365     # correlation length
-        noise_std = float(self._config["synthetic_data"]["noise_std"]) # target std of the synthetic noise
-
+    def generate_noise(self, N, noise_std, L, seed, plot=False, plotname="noise"):
         if noise_std > 0:
-          # noise will be applied at the same time steps as the underlying data
-          N = len(times)
           # rescale target std to std of coefficients of Fourier basis
           # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
           std = noise_std / np.sqrt(2 * N + 1)
@@ -290,7 +283,7 @@ class MeasuredData:
 
           # Generate uncorrelated random coefficients
           np.random.seed(2)
-          coeffs = np.random.normal(size=Nb, scale=std)
+          # coeffs = np.random.normal(size=Nb, scale=std)
           # (each coef. is sampled from N(0,std) so that the linear combination has N(0,noise_std))
           scaled_std = std / np.sqrt(Nb)
           print("N", N, "Nb", Nb, "std", scaled_std)
@@ -332,11 +325,11 @@ class MeasuredData:
 
         return noise
 
-    def generate_synthetic_samples(self, boreholes):
+    def generate_synthetic_samples(self, boreholes, cond_boreholes):
         times = np.array(generate_time_axis(self._config))
 
-        L = 20.0/365     # correlation length
-        noise_std = 20.0 # target std of the synthetic noise
+        L = float(self._config["synthetic_data"]["corr_length"]) / 365  # correlation length
+        noise_std = float(self._config["synthetic_data"]["noise_std"])  # target std of the synthetic noise
 
         # noise will be applied at the same time steps as the underlying data
         N = len(times)
