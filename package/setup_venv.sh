@@ -17,10 +17,23 @@ pip3 install wheel
 pip3 install --upgrade pip
 python3 -m pip install -r requirements.txt
 
+
 # Following included into requirements.txt
-#python3 -m pip install -e submodules/bgem
-#python3 -m pip install -e submodules/bih
-#python3 -m pip install -e submodules/redis-cache
-#python3 -m pip install -e submodules/MLMC
+python3 -m pip install -e ../bgem
+python3 -m pip install -e ../bih
+python3 -m pip install -e submodules/MLMC
 
 python3 -m pip install -e .
+
+
+# attrs are broken after all installs, force reinstallation
+python3 -m pip uninstall --yes attrs
+python3 -m pip install attrs
+python3 -m pip install pytest
+
+#python3 -m pip uninstall --yes pyyaml-include
+#python3 -m pip install pyyaml-include
+
+# check it
+python3 -c "import attrs, yaml_include, mlmc, endorse, bgem, bih, pytest"
+

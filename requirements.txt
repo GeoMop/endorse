@@ -8,6 +8,8 @@ pytest
 tox
 tox-gh-actions
 importlib-resources
+git+https://github.com/flow123d/bih.git@master
+pytest
 
 #numpy==1.21.4
 PyQt5==5.15.6
@@ -21,3 +23,5 @@ attrs==21.2.0
 #obspy==1.2.2
 #pyqtgraph==0.12.3
 #pymeshlab==2021.10
+
+#git+https://github.com/GeoMop/bgem.git@master
