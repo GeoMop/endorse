@@ -2,7 +2,7 @@ from endorse import common
 import os
 import time
 import pytest
-
+from pathlib import Path
 import logging
 
 
@@ -26,8 +26,9 @@ def file_func(f:common.File, out_file:str) -> common.File:
 
 def test_file_memoization():
     cache = common.EndorseCache.instance()
-    cache.expire_all()
+    cache.clear_all()
 
+    Path('sandbox').mkdir(exist_ok=True)
     input_file = "sandbox/memoize_file.txt"
     output_file = "sandbox/output_file.txt"
     with open(input_file, "w") as ff:

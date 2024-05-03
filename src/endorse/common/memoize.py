@@ -1,6 +1,8 @@
 import logging
 from typing import *
-import redis_cache
+import datetime
+import joblib
+
 import hashlib
 from functools import wraps
 import time
@@ -15,6 +17,21 @@ TODO: modify redis_simple_cache or our memoize decorator to hash also function c
 """
 
 class EndorseCache:
+    """
+    Specific configuration of the joblib.Memory function call cache.
+    - singleton
+    - TODO: runt reduce_size in separate thread at the job start for
+      at most 1min, in order to keep the cache functional.
+    - TODO: log function calls: time, reuse
+
+    In order to clear cached calls of a function use:
+    @memoize
+    def foo():
+        pass
+
+    # here clear all calls of foo
+    foo.clear()
+    """
     __instance__ = None
     @staticmethod
     def instance(*args, **kwargs):
@@ -22,13 +39,27 @@ class EndorseCache:
             EndorseCache.__instance__ = EndorseCache(*args, **kwargs)
         return EndorseCache.__instance__
 
-    def __init__(self, host="localhost", port=6379):
-        # TODO: possibly start redis server
-        self.cache = redis_cache.SimpleCache(10000, hashkeys=True, host=host, port=port)
+    def __init__(self, cachedir=None):
+        if cachedir is None:
+            # Get the home directory using os.environ and construct the path
+            home_dir = os.environ['HOME']
+            cachedir = os.path.join(home_dir, 'endorse_cache')
+        self.memory = joblib.Memory(cachedir, verbose=0)
+
+    def clear_all(self):
+        """
+        Clear the whole cache.
+        """
+        self.memory.clear()
+        #self.cache.expire_all_in_set()
 
 
-    def expire_all(self):
-        self.cache.expire_all_in_set()
+    def reduce_size(self,
+                    bytes_limit="1000G",
+                    items_limit="1000000",
+                    age_limit=datetime.timedelta(days=365)):
+        self.memory.reduce_size(bytes_limit, items_limit, age_limit)
+
 
 # Workaround missing module in the function call key
 # def memoize():
@@ -48,9 +79,11 @@ class EndorseCache:
 #     return decorator
 
 def memoize(fn):
+    """
+    Decorator for memoizing endorse expensive functions.
+    """
     endorse_cache = EndorseCache.instance()
-    redis_cache_deco = redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)
-    return redis_cache_deco(fn)
+    return endorse_cache.memory.cache(fn)
 
 
 
