@@ -1,3 +1,5 @@
+venv
+venv_loc
 # PyCharm IDE user configuration
 .idea/*
 .idea/workspace.xml
