@@ -1,16 +1,18 @@
 import os
+import sys
 import pytest
 import shutil
 from endorse import common
 #from endorse.scripts.endorse_mlmc import FullScaleTransport
 import subprocess
-script_dir = os.path.dirname(os.path.realpath(__file__))
-endorse_dir = os.path.join(script_dir, "../..")
+from pathlib import Path
+script_dir = Path(__file__).resolve().parent
+endorse_dir = script_dir.parent.parent
 
 
 
 def run_script(args, workdir=None):
-    script_args = ['python', os.path.join(endorse_dir, 'src/endorse/scripts/endorse_mlmc.py')]
+    script_args = [sys.executable, endorse_dir / 'src/endorse/scripts/endorse_mlmc.py']
     # TODO: run as subprocess
     if workdir is None:
         workdir = os.path.join(script_dir, '../sandbox/mlmc_run')
@@ -45,7 +47,7 @@ def test_plot_cases():
 
     run_script(['plot', 'mc_cases', 'edz_0,noedz_0', '2,5,10'], workdir=workdir)
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_plot_cases_variants():
     #run_script(['plot', 'cases', '*', '2'])
     #run_script(['plot', 'cases', 'base dg_1 dg_3 dg_30 tol_low tol_high', '2'])
@@ -53,9 +55,9 @@ def test_plot_cases_variants():
         workdir=f"../test_data/collected_charon_run3/calc_230122_02_{i}"
         run_script(['plot', 'mc_cases', f'edz_{i},noedz_{i}', '2,5,10'], workdir=workdir)
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_script_sample():
-    for i in [0,1,2,3,4]:
+    for i in [0]: #,1,2,3,4]:
         run_script(['run', '-c', '-nt=2', '-np=1', f'edz_{i},noedz_{i}', '2'])
 
 

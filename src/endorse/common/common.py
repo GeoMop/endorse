@@ -22,13 +22,13 @@ class workdir:
     portable reference and with lazy evaluation. Optional true copy possible.
     """
     CopyArgs = Union[str, Tuple[str, str]]
-    def __init__(self, name:str="sandbox", inputs:List[CopyArgs] = None, clean=False):
+    def __init__(self, name: Union[str, Path, File]="sandbox", inputs:List[CopyArgs] = None, clean=False):
 
         if inputs is None:
             inputs = []
         self._inputs = inputs
-        self.work_dir = os.path.abspath(name)
-        Path(self.work_dir).mkdir(parents=True, exist_ok=True)
+        self.work_dir = Path(name).absolute()
+        self.work_dir.mkdir(parents=True, exist_ok=True)
         self._clean = clean
         self._orig_dir = os.getcwd()
 
@@ -39,10 +39,13 @@ class workdir:
                     Default is the same as the relative source path,
                     for abs path it is the just the last name in the path.
         """
+
         if isinstance(src, File):
             src = src.path
         if isinstance(dest, File):
             dest = dest.path
+        src = Path(src)
+
         #if dest == ".":
         #    if os.path.isabs(src):
         #        dest = os.path.basename(src)
@@ -50,18 +53,18 @@ class workdir:
         #        dest = src
         if dest is None:
             dest = ""
-        dest = os.path.join(self.work_dir, dest, os.path.basename(src))
-        dest_dir, _ = os.path.split(dest)
-        if not os.path.isdir(dest_dir):
+        dest = (self.work_dir / dest) / src.stem
+        dest_dir = dest.parent
+        if not dest_dir.is_dir():
             #print(f"MAKE DIR: {dest_dir}")
-            Path(dest_dir).mkdir(parents=True, exist_ok=True)
-        abs_src = os.path.abspath(src)
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        abs_src = src.absolute()
 
         # ensure that we always update the target
-        if os.path.isdir(dest):
+        if dest.is_dir():
             shutil.rmtree(dest)
-        elif os.path.isfile(dest):
-            os.remove(dest)
+        elif dest.is_file():
+            dest.unlink()
 
         # TODO: perform copy, link or redirectio to src during extraction of the File object from dictionary
         # assumes custom tag for file, file_link, file_copy etc.

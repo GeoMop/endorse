@@ -1,6 +1,7 @@
 from typing import *
 import os
 import sys
+from pathlib import Path
 import numpy as np
 import attrs
 import argparse
@@ -9,8 +10,6 @@ import shutil
 import time
 import logging
 
-logging.basicConfig(level=logging.INFO, filename='endorse_mlmc.log')
-logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 from concurrent.futures import ProcessPoolExecutor
 import subprocess
@@ -35,6 +34,8 @@ from endorse import plots
 
 _script_dir = os.path.dirname(os.path.realpath(__file__))
 _endorse_repository = os.path.abspath(os.path.join(_script_dir, '../../../'))
+
+common.EndorseCache.instance()  # $HOME/endorse_cache
 
 MAIN_CONFIG_FILE = 'config.yaml'
 
@@ -717,8 +718,14 @@ def get_arguments(arguments):
     return args
 
 def main():
+    print(sys.argv)
     args = get_arguments(sys.argv[1:])
-    with common.workdir(args.workdir):
+    workdir = Path(args.workdir)
+    print("emc_work: ", workdir)
+    with common.workdir(workdir):
+        logging.basicConfig(level=logging.INFO, filename=workdir / 'endorse_mlmc.log')
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
         time.sleep(30)
         command_instance = args.cmd_class()
         command_instance.execute(args)

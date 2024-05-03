@@ -87,7 +87,7 @@ def edz_2d_mesh():
 
 
 if __name__ == "__main__":
-    EndorseCache.instance().expire_all()
+    EndorseCache.instance().clear_all()
     with workdir('sandbox/transport_2d'):
         mesh = edz_2d_mesh()
 

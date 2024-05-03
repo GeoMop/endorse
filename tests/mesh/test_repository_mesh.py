@@ -11,7 +11,7 @@ script_dir = os.path.dirname(os.path.realpath(__file__))
 
 
 def test_make_mesh():
-    common.EndorseCache.instance().expire_all()
+    common.EndorseCache.instance().clear_all()
     # about 280 k elements
     # conf_file = os.path.join(script_dir, "./config_full_coarse.yaml")
     conf_file = os.path.join(script_dir, "../test_data/config.yaml")

@@ -16,7 +16,7 @@ def test_flow123d_templates():
 #@pytest.mark.skip
 def test_macro_transport():
    # with common.workdir("sandbox"):
-    common.EndorseCache.instance().expire_all()
+    common.EndorseCache.instance().clear_all()
     conf_file = os.path.join(script_dir, "test_data/config.yaml")
     #cfg = common.load_config(conf_file)
     #files = input_files(cfg.transport_fullscale)
@@ -31,7 +31,7 @@ def test_macro_transport():
 @pytest.mark.skip
 def test_find_large_fractures():
    # with common.workdir("sandbox"):
-    common.EndorseCache.instance().expire_all()
+    common.EndorseCache.instance().clear_all()
     conf_file = os.path.join(script_dir, "test_data/config.yaml")
     for large_seed in range(0, 1000):
         #cfg = common.load_config(conf_file)
@@ -64,7 +64,7 @@ def test_transport_2d():
         print("Result:", ind_time_max)
 
 def test_fracture_conductivity():
-    common.EndorseCache.instance().expire_all()
+    common.EndorseCache.instance().clear_all()
     conf_file = os.path.join(script_dir, "test_data/config_fr_Forsmark_repo.yaml")
     cfg_fr = common.load_config(conf_file)
 
