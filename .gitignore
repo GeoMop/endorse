@@ -1,3 +1,5 @@
+
+
 # PyCharm IDE user configuration
 .idea/*
 .idea/workspace.xml
@@ -38,6 +40,7 @@ experiments/repository-model/tmp/**
 # venv
 **/venv/**
 **/env/**
+venv_loc/**
 
 # Latex
 **/*.aux
