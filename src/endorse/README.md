@@ -28,7 +28,7 @@ Processing laser scan data to surface meshes.
 ## `mesh`
 
 ## `mlmc`
-submodule, TODO: modularize, add DASK support
+stub: application of mlmc to transport
 
 ## `scripts`
 High level executables.
@@ -36,7 +36,7 @@ High level executables.
 ## `sobol`
 Fast, but incomplete sobol estimation.
 
-
+__init__.py
 apply_fields.py
 aux_functions.py
 flow123d_simulation.py
@@ -45,11 +45,9 @@ hm_simulation.py
 HM_transport.py
 homogenisation.py
 indicator.py
-__init__.py
 large_mesh_shift.py
 macro_flow_model.py
 mesh_class.py
 mesh_plots.py
 plots.py
-README.md
 
