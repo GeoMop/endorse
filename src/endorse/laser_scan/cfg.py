@@ -1,5 +1,4 @@
-import pathlib\
-
+import pathlib
 script_dir = pathlib.Path(__file__).parent
 workdir = script_dir.parent.parent / "workdir"
 
