@@ -54,7 +54,7 @@ machine_config:
     #    - flow123d
         
 mlmc:
-    n_samples: 100
+    n_samples: 10
     n_levels: 1
  
 # TODO: replace hardwired indicator list. 
