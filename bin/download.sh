@@ -1,6 +1,14 @@
 #!/bin/bash
 
+# Download large test data
+# Temporary solution until we manage to:
+# a) support URL resources in the config
+# b) make test files smaler
+
 set -x
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+TEST_DATA_DIR="$SCRIPT_DIR/../tests/test_data"
+
 
 update() {
     target_path="$1"
@@ -17,9 +25,15 @@ update() {
     fi
 }
 
+OLD_DIR=`pwd`
+cd $TEST_DATA_DIR
+
 # download big test data
 #update large_model.msh https://flow.nti.tul.cz/endorse_large_data/large_model.tar.gz
 update large_model_local.msh2 http://flow.nti.tul.cz/endorse_large_data/large_model_local.tar.gz 
 
 #update flow_fields.pvd https://flow.nti.tul.cz/endorse_large_data/output_transport_2022_5.tar.gz
 #update solute_fields.pvd https://flow.nti.tul.cz/endorse_large_data/output_transport_2022_5.tar.gz
+
+cd $OLD_DIR
+

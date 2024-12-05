@@ -43,7 +43,7 @@ setuptools.setup(
     ],
     # include_package_data=True, # package includes all files of the package directory
     zip_safe=False,
-    install_requires=['numpy>=1.13.4', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'bih', 'gmsh>=4.10.4', 'pyyaml',
+    install_requires=['attrs', 'numpy>=1.13.4', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'bih', 'gmsh>=4.10.4', 'pyyaml',
                       'pyyaml-include', 'pyvista', 'importlib-resources'],
     python_requires='>=3',
 

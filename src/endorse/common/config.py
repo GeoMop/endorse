@@ -119,7 +119,7 @@ def _item_update(key:Key, val:dotdict, sub_path:Key, sub:dotdict):
 def deep_update(cfg: dotdict, iter:PathIter, substitute:dotdict):
     if iter.is_leaf():
         return substitute
-    new_cfg = dotdict(cfg)
+    new_cfg = cfg.copy()
     if isinstance(cfg, list):
         key, sub_path = iter.idx()
     elif isinstance(cfg, (dict, dotdict)):
