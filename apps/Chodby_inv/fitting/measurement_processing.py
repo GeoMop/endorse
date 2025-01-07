@@ -10,6 +10,7 @@ script_dir = pathlib.Path(__file__).parent
 def is_leap_year(year):
     return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)
 
+
 # Funkce pro přepočet na celé dny
 def calculate_cas(row):
     year = row['Year']
