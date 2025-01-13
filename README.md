@@ -29,6 +29,16 @@ with little effort on Windows due to containerization.
 See [full documentation](doc/main.md) for the details.
 
 
+## DVC usage
+[DVC](dvc.org) is used to separate version control of large datasets from processing codes and configurations stored on GitHub.
+For endorse repository the large datasets are stored on Google drive under the shared drive DZ04_Chodby.
+
+Install: 
+1. try Debian package 
+
+XX. client_secret_255905579316-e7uhu3frnv8ilbt2secbqla9q9cofd55.apps.googleusercontent.com
+
+
 ## Acknowledgement
 
 
