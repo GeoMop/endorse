@@ -49,7 +49,9 @@ Install:
         ```
         dvc pull
         ```
-
+   The browser should open to ask you for the login to your Google account (the TUL one ussually).
+   
+   
 5. See [large datasets modification doc](https://dvc.org/doc/user-guide/data-management/modifying-large-datasets) for further work.
 
 
