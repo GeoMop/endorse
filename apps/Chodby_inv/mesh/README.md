@@ -1,3 +1,5 @@
+README.md
+
 # Geometries and meshes for project Chodby
 (update 2025-01-10)
 
@@ -14,11 +16,11 @@ Y axis direction: [9.72, -3.49, 0] (in the local system).
 
 Point at floor at intersection of L5 axis and ZK5-1J axis:  P1 = [-66.52, -20.96, 18] (in the local system)
 Point at floor at intersection of L5 axis and ZK5-1S axis:  P2 = [-56.80, -24.45, 18] (in the local system)
-Origin of simulation system: O = (P1 + P2)/2 = [-61.66, -22.71] (in the local system)
-Origin coordinates are given by requirements:  X in the middle of L5, Y in the middle between ZK5-1J and ZK5-1S, Z at the floor of L5
+Origin of simulation system: O = (P1 + P2)/2 = [-61.66, -22.71, 18] (in the local system)
+Origin coordinates are given by requirements:  X in the middle of L5, Y in the middle between ZK5-1J and ZK5-1S, Z at the floor of drifts
 
 Domain extension is about 20m to each direction, more specificaly
-domain dimensions are: [50, 65, 45] with origin in the middle.
+domain dimensions are: [65, 50, 45] with origin in the middle.
 Note: floor at L5 is slightly lower at: z = 17.5 (local system)
 
 ### Original Scan Data
@@ -43,3 +45,4 @@ Triangular meshes provided in VTX and GMSH 2.2 mesh formats. Conversion to other
 
 
 ## Near-field transport model
+
