@@ -29,6 +29,33 @@ with little effort on Windows due to containerization.
 See [full documentation](doc/main.md) for the details.
 
 
+## DVC usage
+[DVC](dvc.org) is used to separate version control of large datasets from processing codes and configurations stored on GitHub.
+For endorse repository the large datasets are stored on Google drive under the shared drive DZ04_Chodby.
+
+Install: 
+1. see 'bin/dvc_install.sh' for pip install into a Python environment and 
+[DVC install](https://dvc.org/doc/install) for other options 
+   
+2. Download DVC endorse secret [config script](https://drive.google.com/file/d/1ZLEC1QlfX_3xWYzs4E4U0h9mUm1kYPaM/view?usp=drive_link),
+   place it to endorse root under original name (NEVER COMMIT THIS FILE).
+
+3. Execute the script like:
+
+        ```
+        bash dvc_secret_config.sh
+        ```
+4. Pull the laarge files:
+        ```
+        dvc pull
+        ```
+   The browser should open to ask you for the login to your Google account (the TUL one ussually).
+   
+   
+5. See [large datasets modification doc](https://dvc.org/doc/user-guide/data-management/modifying-large-datasets) for further work.
+
+
+
 ## Acknowledgement
 
 

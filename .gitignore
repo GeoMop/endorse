@@ -1,5 +1,10 @@
 venv
 venv_loc
+
+
+endorse_dvc.apps.googleusercontent.com.json
+dvc_secret_config.sh
+
 # PyCharm IDE user configuration
 .idea/*
 .idea/workspace.xml
@@ -40,6 +45,7 @@ experiments/repository-model/tmp/**
 # venv
 **/venv/**
 **/env/**
+venv_loc/**
 
 # Latex
 **/*.aux

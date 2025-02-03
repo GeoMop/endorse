@@ -1,1 +1,6 @@
-Sources for the whole Endorse application including GUI.
+# endorse
+Endorse packages and highe level general usage executables.
+
+# endorse_gui
+KDE visualization, incomplete.
+
