@@ -5,15 +5,14 @@ from datetime import datetime
 import numpy as np
 import pathlib
 script_dir = pathlib.Path(__file__).parent
-#workdir = script_dir.parent.parent / "workdir"
 
 # funkce v programu
 # zjištění názvů vrtů a jejich orientace S/J
-def read_borehole_config(file_path):
+def read_konfigurace(file_path):
     """
     Načtení souboru Konfigurace vrtu, kde je seznam listu a jejich orientace
     """
-    file_path = 'konfigurace_vrtu.xlsx'
+
     konfigurace = pd.read_excel(file_path)
     labels = []
     orientace = []
@@ -31,6 +30,23 @@ def read_borehole_config(file_path):
     print(f'Labels: {labels}')
     print(f'Orientace: {orientace}')
     return labels, orientace
+
+def read_rozrazka(file_path):
+    # Načtení dat ze severní rozrážky
+    rozrazka_s = pd.read_excel(file_path, sheet_name='Sever', usecols="L", skiprows=1)
+    data_s = rozrazka_s.iloc[:, 0]  # Pouze první sloupec z vybraného rozsahu
+
+    # Načtení dat z jižní rozrážky
+    rozrazka_j = pd.read_excel(file_path, sheet_name='Jih', usecols="L", skiprows=1)
+    data_j = rozrazka_j.iloc[:, 0]  # Pouze první sloupec z vybraného rozsahu
+
+    print('Data ze severní rozrážky:')
+    print(data_s)
+    print('Data z jižní rozrážky:')
+    print(data_j)
+    print(f'Data z excelovské tabulky času rozrážek načtena ze souboru rozrazka_nova.xlsx')
+
+    return data_s, data_j
 
 # Otevře soubor piezo.xlsx, vytvoří jeho kopii piezo2.xlsx a nahradí prázdné buňky NaN.
 def process_piezo_file(input_file, output_file):
@@ -94,25 +110,6 @@ def create_new_sheets_from_jz(file_path):
     print(f'Labels: {labels}')
     print(f"Nové listy byly přidány do souboru {file_path}")
 
-def read_measurement_data(file_path, labels):
-    """
-    Načtení dat z Excelu
-    """
-    data_sets = {label: pd.read_excel(file_path, sheet_name=label) for label in labels}
-    print('Data z excelovské tabulky tlaků načtena')
-
-    columns = []
-    for label, df  in data_sets.items():
-        df = pd.read_excel(file_path, sheet_name=label, header=None)
-        col1 = df.iloc[0, 19]  # T1 je ve 20. sloupci (index 19)
-        col2 = df.iloc[0, 20]  # U1 je ve 21. sloupci (index 20)
-        col3 = df.iloc[0, 21]  # V1 je ve 22. sloupci (index 21)
-        columns.append([col1, col2, col3])
-    print('Nacteny nazvy sloupcu')
-    print(columns)
-    print(data_sets)
-    return columns,data_sets
-
 def add_decimal_time_column(file_path, labels):
     # Definice počátečního času
     start_date = datetime(2024, 3, 11)
@@ -133,60 +130,24 @@ def add_decimal_time_column(file_path, labels):
             df.drop(columns=['datetime'], inplace=True)  # Odstranění pomocného sloupce datetime
             df.to_excel(writer, sheet_name=label, index=False)
 
-def plot_pressure_graphs(data_sets, labels, columns, data_s, data_j, orientace):
-    for idx, (label, data, orient, cols) in enumerate(zip(labels, data_sets.values(), orientace, columns)):
-        if isinstance(data, pd.DataFrame):
-            if 'cas' in data.columns:
-                # Grafy pro časy <= 0
-                plt.figure(figsize=(10, 6))
-                for col in cols:
-                    if col in data.columns:
-                        plt.plot(data[data['cas'] <= 0]['cas'], data[data['cas'] <= 0][col], label=f'{col}', linewidth=1)
-                    else:
-                        print(f"Sloupec {col} není v datech pro {label}.")
+def read_measurement_data(file_path, labels):
+    """
+    Načtení dat z Excelu
+    """
+    data_sets = {label: pd.read_excel(file_path, sheet_name=label) for label in labels}
+    print('Data z excelovské tabulky tlaků načtena')
 
-                plt.xlabel('Čas [Den]')
-                plt.ylabel('Tlak [kPa]')
-                plt.title(f'Velikost porézního tlaku v závislosti na čase t<0, čidla {label}')
-                plt.legend()
-                plt.grid(True, which='both', linestyle='--', linewidth=0.1)
-                plt.gca().xaxis.set_major_locator(MultipleLocator(10))
-                plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
-                plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
-                plt.savefig(f'VTZ_{label}.pdf', format='pdf')
-                plt.close()
-
-                # Grafy pro časy > 0
-                plt.figure(figsize=(10, 6))
-                for col in cols:
-                    if col in data.columns:
-                        plt.plot(data[data['cas'] > 0]['cas'], data[data['cas'] > 0][col], label=f'{col}', linewidth=1)
-                    else:
-                        print(f"Sloupec {col} není v datech pro {label}.")
-
-                plt.xlabel('Čas [Den]')
-                plt.ylabel('Tlak [kPa]')
-                plt.title(f'Velikost porézního tlaku v závislosti na čase t>0, čidla {label}')
-                plt.legend()
-                plt.grid(True, which='both', linestyle='--', linewidth=0.1)
-                plt.gca().xaxis.set_major_locator(MultipleLocator(10))
-                plt.gca().xaxis.set_minor_locator(MultipleLocator(1))
-                plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
-
-                if orient == 'S':
-                    for i, cas in enumerate(data_s):
-                        plt.axvline(x=cas, color='red', linestyle='--', label='Odstřel' if i == 0 else "", linewidth=0.5)
-                elif orient == 'J':
-                    for i, cas in enumerate(data_j):
-                        plt.axvline(x=cas, color='blue', linestyle='--', label='Odstřel' if i == 0 else "", linewidth=0.5)
-
-                plt.savefig(f'MINE_{label}.pdf', format='pdf')
-                plt.close()
-                print(f'Hotovy grafy pro {label}')
-            else:
-                print(f"Sloupec 'cas' chybí v datech pro {label}.")
-        else:
-            print(f"Chyba: Data pro {label} nejsou DataFrame, ale {type(data).__name__}.")
+    columns = []
+    for label, df  in data_sets.items():
+        df = pd.read_excel(file_path, sheet_name=label, header=None)
+        col1 = df.iloc[0, 19]  # T1 je ve 20. sloupci (index 19)
+        col2 = df.iloc[0, 20]  # U1 je ve 21. sloupci (index 20)
+        col3 = df.iloc[0, 21]  # V1 je ve 22. sloupci (index 21)
+        columns.append([col1, col2, col3])
+    print('Nacteny nazvy sloupcu')
+    print(columns)
+    print(data_sets)
+    return columns,data_sets
 
 def add_new_sheet(file_path):
     # Vytvoření prázdného DataFrame
@@ -247,10 +208,13 @@ def add_date_columns_to_vystup(file_path):
         df_vystup.to_excel(writer, sheet_name='vystup', index=False)
 
     print(f"Datumové sloupce byly přidány do listu 'vystup' v souboru {file_path}")
+    print(df_vystup)
+    return df_vystup  # Vrací upravený dataframe, pokud ho chcete dále používat
 
-def merge_columns_to_vystup(file_path, labels, columns):
+
+def merge_columns_to_vystup(df_vystup, file_path, labels, columns):
     # Načtení listu 'vystup'
-    df_vystup = pd.read_excel(file_path, sheet_name='vystup')
+    # df_vystup = pd.read_excel(file_path, sheet_name='vystup')
 
     for label, cols in zip(labels, columns):
         # Načtení listu dle názvu
@@ -267,14 +231,15 @@ def merge_columns_to_vystup(file_path, labels, columns):
             df_vystup = pd.merge(df_vystup, df_selected, on='cas', how='left')
 
     # Zápis zpět do listu 'vystup'
-    with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+    with pd.ExcelWriter(df_vystup, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
         df_vystup.to_excel(writer, sheet_name='vystup', index=False)
 
+    return df_vystup
     print(f"Sloupce z listů v 'Labels' byly přidány do listu 'vystup' v souboru {file_path}")
 
-def rename_columns_in_vystup(file_path, labels, columns):
+def rename_columns_in_vystup(df_vystup, labels, columns):
     # Načtení listu 'vystup'
-    df_vystup = pd.read_excel(file_path, sheet_name='vystup')
+    # df_vystup = pd.read_excel(file_path, sheet_name='vystup')
 
     # Vytvoření mapy pro přejmenování sloupců
     rename_map = {}
@@ -291,10 +256,11 @@ def rename_columns_in_vystup(file_path, labels, columns):
     # Zápis zpět do listu 'vystup'
     with pd.ExcelWriter(file_path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
         df_vystup.to_excel(writer, sheet_name='vystup', index=False)
-
+    
+    df_vystup
     print(f"Názvy sloupců v listu 'vystup' byly přejmenovány podle názvu listu a upraveny.")
 
-def log_large_differences_and_averages(file_path, output_minus_file, output_plus_file):
+def log_large_differences_and_averages(df_vystup, output_minus_file, output_plus_file):
     # Seznam sloupců, které chceme porovnávat
     columns_to_check = [
         'L5-49DL 7,67 m [kPa]', 'L5-49DL 5,68 m [kPa]', 'L5-50UL 12,58 m [kPa]',
@@ -339,7 +305,7 @@ def log_large_differences_and_averages(file_path, output_minus_file, output_plus
 
     print(f"Záznamy o velkých rozdílech byly uloženy do souborů {output_minus_file} a {output_plus_file}")
 
-def log_large_differences_to_excel_with_nan_handling(file_path, output_excel_file):
+def log_large_differences_to_excel_and_csv(df_vystup, output_excel_file, output_csv_file, rozrazka_file):
     # Seznam sloupců, které chceme porovnávat
     columns_to_check = [
         'L5-49DL 7,67 m [kPa]', 'L5-49DL 5,68 m [kPa]', 'L5-50UL 12,58 m [kPa]',
@@ -355,6 +321,12 @@ def log_large_differences_to_excel_with_nan_handling(file_path, output_excel_fil
     # Načtení listu 'vystup' z Excel souboru
     df = pd.read_excel(file_path, sheet_name='vystup')
     
+    # Načtení časů rozrážek
+    rozrazka_s = pd.read_excel(rozrazka_file, sheet_name='Sever', usecols="L", skiprows=1)
+    rozrazka_j = pd.read_excel(rozrazka_file, sheet_name='Jih', usecols="L", skiprows=1)
+    data_s = rozrazka_s.iloc[:, 0]
+    data_j = rozrazka_j.iloc[:, 0]
+    
     # Data pro zápis
     output_minus = []
     output_plus = []
@@ -362,25 +334,20 @@ def log_large_differences_to_excel_with_nan_handling(file_path, output_excel_fil
     for i in range(4, len(df) - 5):
         for column in columns_to_check:
             if column in df.columns:
-                # Hledání poslední hodnoty, která není NaN, pokud aktuální hodnota je NaN
                 j = i
                 while j >= 0 and pd.isna(df.loc[j, column]):
                     j -= 1
                 
-                # Pokud se našla platná hodnota, pokračujeme ve výpočtu
                 if j >= 0 and pd.notna(df.loc[j, column]) and pd.notna(df.loc[i + 1, column]):
                     value_diff = abs(df.loc[i + 1, column] - df.loc[j, column])
                     
-                    # Výpočet průměrů pro intervaly
                     avg_recent = df[column].iloc[i+2:i+6].dropna().mean()
                     avg_previous = df[column].iloc[max(0, j-4):j].dropna().mean()
                     
                     if not pd.isna(avg_recent) and not pd.isna(avg_previous):
                         avg_diff = abs(avg_recent - avg_previous)
                         
-                        # Zkontrolovat obě podmínky
                         if value_diff > 3 and avg_diff > 3:
-                            # Přidání do správného seznamu
                             output_data = {
                                 'Čas': df.loc[i + 1, 'cas'],
                                 'Year': df.loc[i + 1, 'Year'],
@@ -401,23 +368,25 @@ def log_large_differences_to_excel_with_nan_handling(file_path, output_excel_fil
                                 output_minus.append(output_data)
                             else:
                                 output_plus.append(output_data)
-
-    # Uložení do Excelu
-    with pd.ExcelWriter(output_excel_file, engine='openpyxl') as writer:
-        if output_minus:
-            pd.DataFrame(output_minus).to_excel(writer, sheet_name='Output_Minus', index=False)
-        if output_plus:
-            pd.DataFrame(output_plus).to_excel(writer, sheet_name='Output_Plus', index=False)
     
-    print(f"Výsledky byly zapsány do Excel souboru {output_excel_file}")
+    # Přidání sloupce "činnost"
+    df['činnost'] = df['cas'].apply(lambda x: 'razba' if any((-0.1 <= x - cas <= 0.3) for cas in data_s) or any((-0.1 <= x - cas <= 0.3) for cas in data_j) else 'nevime')
+    
+    # Uložení do Excelu a CSV
+    with pd.ExcelWriter(output_excel_file, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Output', index=False)
+    
+    df.to_csv(output_csv_file, index=False, sep=';')
+    
+    print(f"Výsledky byly zapsány do Excel souboru {output_excel_file} a CSV souboru {output_csv_file}")
 
 
-
-
-
-# program
+#hlavni program
 # otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
-labels, orientace = read_borehole_config(script_dir/'konfigurace_vrtu.xlsx')
+labels, orientace = read_konfigurace(script_dir/'konfigurace_vrtu.xlsx')
+
+# nacte casy rozrazek, otevře soubor rozrazka
+data_s, data_j = read_rozrazka(script_dir/'rozrazka_nova.xlsx')
 
 # zkopírování souboru na piezo2.xlsx a nahrazením prázdných buněk hodnotou NaN
 input_file = script_dir / 'piezo.xlsx'
@@ -436,27 +405,13 @@ create_new_sheets_from_jz(file_path)
 add_decimal_time_column(file_path, labels)
 columns,data_sets = read_measurement_data(file_path, labels)
 
-# Načtení časů rozrazek
-file_path = script_dir/'rozrazka.xlsx'
-rozrazka_s = pd.read_excel(file_path, sheet_name='Sever')
-data_s = rozrazka_s['cas']
-rozrazka_j = pd.read_excel(file_path, sheet_name='Jih')
-data_j = rozrazka_j['cas']
-print(data_s)
-print(data_j)
-print(f'Data z excelovské tabulky času rozrážek načtena')
-
-# Vytvoří grafy
-plot_pressure_graphs(data_sets, labels, columns, data_s, data_j, orientace)
-
-# Slouceni casů a přidání nového listu "vystup"
-file_path = script_dir /'piezo2.xlsx'
 add_new_sheet(file_path)
 add_unique_sorted_cas_to_vystup(file_path, labels)
-add_date_columns_to_vystup(file_path)
-merge_columns_to_vystup(file_path, labels, columns)
-rename_columns_in_vystup(file_path, labels, columns)
+df_vystup = add_date_columns_to_vystup(file_path)
+df_vystup = merge_columns_to_vystup(df_vystup, file_path, labels, columns)
+df_vystup = rename_columns_in_vystup(df_vystup, labels, columns)
 
 # Nalezeni rozdilu mezi radky
-log_large_differences_and_averages(script_dir /'piezo2.xlsx', script_dir /'output_minus.txt', script_dir /'output_plus.txt')
-log_large_differences_to_excel_with_nan_handling(script_dir / 'piezo2.xlsx', script_dir / 'output_results.xlsx')
+#log_large_differences_to_excel_and_csv(df_vystup, script_dir / 'output_results.xlsx', script_dir / 'output_results.csv', script_dir / 'rozrazka_nova.xlsx')
+#log_large_differences_and_averages(script_dir /'piezo2.xlsx', script_dir /'output_minus.txt', script_dir /'output_plus.txt')
+#log_large_differences_and_averages(df_vystup, script_dir / 'output_minus.txt', script_dir / 'output_plus.txt', script_dir / 'output_results.xlsx')
