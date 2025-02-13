@@ -1,3 +1,7 @@
+venv
+venv_loc
+
+
 endorse_dvc.apps.googleusercontent.com.json
 dvc_secret_config.sh
 

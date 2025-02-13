@@ -81,6 +81,8 @@ function call_container() {
         python3 -m sexec -i $ENDORSE_IMAGE -e "$ENDORSE_SRC_ROOT/venv" endorse_mlmc "$@"
     else
         # docker
+        # docker imply dev environment using endorse_mlmc from venv
+        # TODO: unify better singularity and docker case
         envarg="-euid=$uid -egid=$gid -etheme=$theme -ewho=$uname -ehome=/mnt/$HOME -v/$HOME:/mnt/$HOME"
         docker_path_home_translate $ENDORSE_SRC_ROOT
         local docker_src_root=$RETURN
@@ -97,7 +99,7 @@ function call_container() {
         done
         
         path_env="-eENDORSE_WORKSPACE=$docker_workspace -eWORKDIR=$docker_workdir -ePYTHONPATH=$docker_src_root/submodules/swrap/src/swrap"
-        $CONTAINER_TOOL run $path_env $envarg $bind $ENDORSE_IMAGE "${args[@]}"
+        $CONTAINER_TOOL run $path_env $envarg $bind $ENDORSE_IMAGE  "${args[@]}"
     fi
 }
 
@@ -231,13 +233,13 @@ while [ "${1#-}" != "$1" ]      # arg starts with '-'
   esac
 done
 
-if [ -z "$1" ]; then print_usage; error "Missing command"; fi 
+#if [ -z "$1" ]; then print_usage; error "Missing command"; fi 
 
 
 if [ -z "${QUEUE}" ]
 then
-    # without PBS    
-    cont_call endorse_mlmc "$@"
+    # without PBS, imply docker, imply dev invironment TODO: make more robust
+    call_container "/mnt/$ENDORSE_SRC_ROOT/venv/bin/endorse_mlmc" -w $WORKDIR "$@"
 else
     stdoe="${WORKDIR}/"
     if [ -n "${CLUSTER}" ]
@@ -254,7 +256,7 @@ else
     select="-l select=1:ncpus=8:mem=8gb${cluster_restrict}"
     qsub ${queue} -S /bin/bash -N endorse-main -j oe -o ${stdoe} ${select} ${walltime} \
     -v ENDORSE_WORKSPACE,WORKDIR,ENDORSE_SRC_ROOT,call_swrap - <<PBS_END
-    cont_call endorse_mlmc "$@"
+    call_container endorse_mlmc  -w $WORKDIR "$@"
 PBS_END
 fi
 
