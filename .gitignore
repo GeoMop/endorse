@@ -9,6 +9,7 @@ dvc_secret_config.sh
 .idea/shelf
 .idea/modules.xml
 *.iml
+!.idea/runConfigurations
 
 # auxiliary
 **/*.orig
@@ -37,6 +38,7 @@ experiments/mlmc-modelling-2019/workdir/**
 experiments/repository-model/new_from_bgem/**
 experiments/repository-model/prd/**
 experiments/repository-model/tmp/**
+
 
 # venv
 **/venv/**

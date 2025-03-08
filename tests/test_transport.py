@@ -65,7 +65,7 @@ def test_transport_2d():
 
 def test_fracture_conductivity():
     common.EndorseCache.instance().expire_all()
-    conf_file = os.path.join(script_dir, "test_data/config_fr_Forsmark_repo.yaml")
+    conf_file = os.path.join(script_dir, "test_data/_fr_Forsmark_repo.yaml")
     cfg_fr = common.load_config(conf_file)
 
     rho = 998.

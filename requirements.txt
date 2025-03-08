@@ -1,23 +1,27 @@
-pyvista
-pyyaml
-pyyaml-include
-matplotlib
-scipy
-seaborn
+# Remove these once appropriate versions of packages will be made
+-e ./submodules/bgem
+-e ./submodules/bih
+-e ./submodules/redis-cache
+-e ./submodules/MLMC
+
+# attrs # in setup.py
+# pyvista   # in setup.py
+# pyyaml # in setup.py
+# pyyaml-include # in setup.py
+# matplotlib # in setup.py
+# scipy
+# seaborn
+# importlib-resources # in setup.py
+# pandas==1.3.4  # in setup.py
+# numpy==1.21.4  # in setup.py
+# vtk==9.1.0 # in setup.py
+
+# Testing requirements
 pytest
 tox
 tox-gh-actions
-importlib-resources
 
-#numpy==1.21.4
+# Review following requirements of GUI
 PyQt5==5.15.6
-#vtk==9.1.0
-#bgem # commit 4428b2286b5d1711b3c2fcd9f3651a004d91704f
-pandas==1.3.4
 openpyxl==3.0.9
-#pygimli==1.2.1
 psutil==5.8.0
-attrs==21.2.0
-#obspy==1.2.2
-#pyqtgraph==0.12.3
-#pymeshlab==2021.10
