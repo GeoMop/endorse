@@ -4,8 +4,36 @@ from matplotlib.ticker import MultipleLocator, MaxNLocator
 from datetime import datetime
 import numpy as np
 import pathlib
-script_dir = pathlib.Path(__file__).parent
+script_dir = pathlib.Path(__file__).parent / "measurement_data"
 import os
+from functools import wraps
+
+def save_to_excel_decorator(func):
+    counter = 0  # counter to keep track of how many files were written
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        nonlocal counter
+        # Call the original function and capture its output
+        excel_data = func(*args, **kwargs)
+
+        # Check if the keyword argument 'save_to_excel' is True
+        if kwargs.get("save_to_excel"):
+            counter += 1
+            # Create the output file name using a two-digit counter and the function name
+            output_file = f"{counter:02d}_{func.__name__}.xlsx"
+
+            # Write each dataframe to a separate sheet
+            with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+                for sheet_name, df in excel_data.items():
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+            print(f'Výstup uložen do "{output_file}".')
+
+        return excel_data
+
+    return wrapper
+
 
 # funkce v programu
 # zjištění názvů vrtů a jejich orientace S/J
