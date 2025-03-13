@@ -1,0 +1,5 @@
+tmin: 0
+tmax: 10
+zapis_do_souboru: false
+value_diff: 0.5
+avg_diff: 0.5
