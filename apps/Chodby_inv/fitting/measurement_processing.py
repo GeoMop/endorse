@@ -1,11 +1,13 @@
+import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, MaxNLocator
 from datetime import datetime
 import numpy as np
 import pathlib
-script_dir = pathlib.Path(__file__).parent
 import os
+
+script_dir = pathlib.Path(__file__).parent
 
 # funkce v programu
 # zjištění názvů vrtů a jejich orientace S/J
@@ -51,33 +53,21 @@ def read_rozrazka(file_path):
 
 def read_vstupy(file_path):
     """
-    Načte hodnoty tmin, tmax a zapis_do_souboru ze souboru vstupy.txt.
+    Načte hodnoty tmin, tmax a zapis_do_souboru ze souboru vstup.yaml.
     """
-    tmin, tmax, zapis_do_souboru = None, None, None
-
     with open(file_path, "r", encoding="utf-8") as file:
-        for line in file:
-            parts = line.strip().split("=")
-            if len(parts) == 2:
-                key = parts[0].strip().lower()
-                value = parts[1].strip()
+        data = yaml.safe_load(file)
+    
+    tmin = data.get("tmin")
+    tmax = data.get("tmax")
+    zapis_do_souboru = data.get("zapis_do_souboru", False)
+    v_diff = data.get("value_diff")
+    a_diff = data.get("avg_diff")
 
-                if key == "tmin":
-                    tmin = float(value)
-                elif key == "tmax":
-                    tmax = float(value)
-                elif key == "zapis_do_souboru":
-                    zapis_do_souboru = value.lower() == "true"  # Převod na boolean
-                elif key == "value_diff":
-                    v_diff = float(value)
-                elif key == "avg_diff":
-                    a_diff = float(value)
+    if tmin is None or tmax is None or v_diff is None or a_diff is None:
+        raise ValueError("Soubor neobsahuje platné hodnoty tmin, tmax, value_diff a avg_diff.")
     
-    if tmin is None or tmax is None or zapis_do_souboru is None:
-        raise ValueError("Soubor neobsahuje platné hodnoty tmin, tmax a zapis_do_souboru.")
-    
-    print(f"Načteno: tmin={tmin}, tmax={tmax}, zapis_do_souboru={zapis_do_souboru}")
-    print(f"Načteno: v_diff={v_diff}, a_diff={a_diff}")
+    print(f"Načteno: tmin={tmin}, tmax={tmax}, zapis_do_souboru={zapis_do_souboru}, v_diff={v_diff}, a_diff={a_diff}")
     return tmin, tmax, zapis_do_souboru, v_diff, a_diff
 
 def process_piezo_file(input_file, output_file=None, save_to_excel=True):
@@ -720,7 +710,7 @@ labels, orientace = read_konfigurace(script_dir/'konfigurace_vrtu.xlsx')
 # Nacte casy rozrazek, otevře soubor rozrazka
 data_s, data_j = read_rozrazka(script_dir/'rozrazka_nova.xlsx')
 # Nacte minimální a maximální čas, pro který bude úloha zpracovávána a zda bude zapisovat do excelu
-tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(script_dir/'vstupy.txt')
+tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(script_dir / 'vstup.yaml')
 
 
 # Hlavni program - úprava dat
