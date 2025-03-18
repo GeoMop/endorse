@@ -1,0 +1,10 @@
+name: fit_conda
+channels:
+    - conda-forge
+dependencies:
+    - sqlite 
+    - jupyterlab 
+    - ipykernel 
+    - sympy
+    - numpy
+    - scipy
