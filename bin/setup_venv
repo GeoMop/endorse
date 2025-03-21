@@ -22,7 +22,6 @@ $venv_pip install --upgrade pip
 $venv_pip install -r requirements.txt
 
 $venv_pip install -e submodules/bgem
-$venv_pip install -e submodules/bgem
 $venv_pip install -e submodules/surrDAMH
 $venv_pip install -e submodules/redis-cache
 
