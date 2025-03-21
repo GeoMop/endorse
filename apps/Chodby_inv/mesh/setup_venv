@@ -16,8 +16,9 @@ rm -r venv
 python3 -m venv venv
 
 venv_pip=${SCRIPTPATH}/venv/bin/pip
+$venv_pip install --upgrade pip
 
-$venv_pip install --no-cache-dir -r requirements.txt
+$venv_pip install --no-cache-dir -r ${ENDORSE_SRC_ROOT}/requirements.txt
 
 $venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/redis-cache
 $venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem

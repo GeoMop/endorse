@@ -6,7 +6,7 @@
 
 mesh_name: L5_mesh_6
 boundary_meshfile: ./scan_meshes/L5_local_6.msh
-boundary_brepfile: ./scan_meshes_freecad/L5_mesh_healed2.brep
+boundary_brepfile: ./scan_meshes_freecad_L5_6/L5_mesh_healed2.brep
 
 # 0] preprocess - call heal mesh on laser scan
 # FreeCAD

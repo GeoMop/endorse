@@ -1,2 +1,0 @@
-pyyaml
-pyyaml-include==1.4.1   # version 2.x available, fundamental changes
