@@ -39,6 +39,16 @@ mesh:
       r_inf: 30
       h_inf: 10
 
+    # refinement around borehole chambers
+    borehole_refinement:
+      r_inner: 0.3
+      h_inner: 0.3
+      r_outer: 1
+      h_outer: 1
+      q_outer: 1
+      r_inf: 10
+      h_inf: 30
+
 geometry:
   # Coordinate system
   # X - in direction of storage boreholes

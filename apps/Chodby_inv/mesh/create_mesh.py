@@ -6,6 +6,7 @@ from endorse import common
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
+from boreholes import Boreholes
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -102,6 +103,10 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     tunnel_center_lines = tunnel_lines(factory, cfg_geom)
     print("tunnel_center_lines:\n", tunnel_center_lines)
 
+    # create borehole chamber lines for meshing field
+    bhs = Boreholes("boreholes.yaml")
+    borehole_chamber_lines = bhs.make_gmsh_lines(factory)
+
     # factory.show()
 
     tunnel = tunnel_laser_scan.split_by_dimension()[3]
@@ -163,8 +168,10 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     geometry_set.append(box_fr)
 
     # create refinement fields around drifts
-    line_fields = (line_distance_edz(factory, line, cfg_mesh.line_refinement)
-                   for line in tunnel_center_lines)
+    line_fields = [line_distance_edz(factory, line, cfg_mesh.line_refinement)
+                   for line in tunnel_center_lines]
+    line_fields.extend( [line_distance_edz(factory, line, cfg_mesh.borehole_refinement)
+                   for line in borehole_chamber_lines] )
     common_field = field.minimum(*line_fields)
     factory.set_mesh_step_field(common_field)
 
@@ -172,7 +179,8 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     geometry_final = factory.group(*geometry_set)
     factory.synchronize()
     # need to keep tunnel lines due to refinement fields
-    factory.keep_only(geometry_final, *tunnel_center_lines)
+    all_lines = tunnel_center_lines + borehole_chamber_lines
+    factory.keep_only(geometry_final, *all_lines)
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()
