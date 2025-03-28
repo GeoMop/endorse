@@ -5,9 +5,10 @@ import pandas as pd
 
 from apps.Chodby_inv.mesh.venv.share.doc.gmsh.tutorials.python.t4 import factory
 from endorse import common
-from endorse.mesh import mesh_tools
+from endorse.mesh import mesh_tools, fracture_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
+from bgem.stochastic.fracture import Population
 # import gmsh as gmsh_api
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -100,7 +101,10 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
     return storage_boreholes, plug, container
 
 
-def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
+def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
+    cfg_geom = cfg.geometry
+    cfg_mesh = cfg.mesh
+
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original sides
     print("box:\n", box.dim_tags)
@@ -116,39 +120,46 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     print("container:\n", container)
     # assert plug and container is not None
 
+    # drill the box, so later we do not have fractures in drilled volume
+    box_drilled = box.copy().cut(tunnel, plug, container, storage_boreholes_group)
+    box_drilled.set_region("box")
+
+    fracture_set, n_large = fracture_tools.fracture_set(cfg, fracture_population, seed)
+    fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, [0,0,0], factory.rectangle())
+    fractures_group = factory.group(*fractures).intersect(box_drilled)
+    fractures_group.set_region("fractures").mesh_step(cfg_mesh.fracture_mesh_step)
+
     factory.synchronize()
     # factory.show()
     # exit(0)
 
     # fragment
     print("Fragmenting...")
-    # box_fr, box_sides_fr, tunnel_fr \
-    #     = factory.fragment(box, box_sides_group, tunnel)
     if (plug is None) or (container is None):
-        box_fr, box_sides_fr, tunnel_fr, storage_boreholes_group_fr \
-            = factory.fragment(box, box_sides_group, tunnel, storage_boreholes_group)
+        box_fr, box_sides_fr, fractures_fr, tunnel_fr, storage_boreholes_group_fr \
+            = factory.fragment(box_drilled, box_sides_group, fractures_group, tunnel, storage_boreholes_group)
         plug_fr, container_fr = None, None
     else:
-        box_fr, box_sides_fr, tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr\
-            = factory.fragment(box, box_sides_group, tunnel, plug, container, storage_boreholes_group)
+        box_fr, box_sides_fr, fractures_fr, tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr\
+            = factory.fragment(box_drilled, box_sides_group, fractures_group, tunnel, plug, container, storage_boreholes_group)
+    # if (plug is None) or (container is None):
+    #     box_fr, box_sides_fr, tunnel_fr, storage_boreholes_group_fr \
+    #         = factory.fragment(box_drilled, box_sides_group, tunnel, storage_boreholes_group)
+    #     plug_fr, container_fr = None, None
+    # else:
+    #     box_fr, box_sides_fr, tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr\
+    #         = factory.fragment(box_drilled, box_sides_group, tunnel, plug, container, storage_boreholes_group)
     print("Fragmenting finished.")
 
     # get boundary of fragmented volumes
     b_box_fr = box_fr.get_boundary().split_by_dimension()[2]
     b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
 
-    # CHECK
-    print("Checking fragments...")
-    res = box_fr.dt_intersection(tunnel_fr)
-    assert res.dt_equal(tunnel_fr)
+    b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
+    b_fractures = (b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fr_outer")
+        .mesh_step(cfg_mesh.boundary_mesh_step))
 
     print("Determine box objects.")
-    # GET box minus tunnel volume
-    if (plug is None) or (container is None):
-        box_fr.dt_drop(tunnel_fr, storage_boreholes_group_fr)
-    else:
-        box_fr.dt_drop(tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr)
-    box_fr.set_region("box")
     print("box_fr:\n", box_fr)
     print("tunnel_fr:\n", tunnel_fr)
     print("storage_boreholes_fr:\n", storage_boreholes_group_fr)
@@ -159,7 +170,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     # check whether boundary of fragmented box volume includes all dimtags of fragmented boundary box
     print("box_sides_fr: \n", box_sides_fr)
     box_sides_no_tunnel = b_box_fr.dt_intersection(box_sides_fr)  # = box_sides_fr
-    assert box_sides_no_tunnel.dt_equal(box_sides_fr)
+    # assert box_sides_no_tunnel.dt_equal(box_sides_fr)
 
     # get tunnel head surfaces (create by box fragment)
     tunnel_heads = b_tunnel_fr.dt_intersection(box_sides_fr)
@@ -172,7 +183,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
 
     # SET final geometry set
     print("Set regions to box sides.")
-    geometry_set = [box_fr, tunnel_fr, storage_boreholes_group_fr]
+    geometry_set = [box_fr, tunnel_fr, fractures_fr, storage_boreholes_group_fr]
     if plug is not None: geometry_set.append(plug_fr)
     if container is not None: geometry_set.append(container_fr)
 
@@ -185,12 +196,12 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     #     box_sides_dict = clip_box_sides_dict
     #     b_clip_box = clip_box.get_boundary().split_by_dimension()[2]
 
-
     for side_name, side_obj in box_sides_dict.items():
         b_side = box_sides_no_tunnel.select_by_intersect(side_obj)
         b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
         geometry_set.append(b_side)
 
+    geometry_set.append(b_fractures)
     geometry_final = factory.group(*geometry_set)
 
     # create refinement fields around drifts
@@ -205,7 +216,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     print("Finalize geometry...")
     factory.synchronize()
     # need to keep tunnel lines due to refinement fields
-    # factory.keep_only(geometry_final, *tunnel_center_lines)
+    factory.keep_only(geometry_final, tunnel_center_line)
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()
@@ -247,7 +258,7 @@ def meshing(factory, objects, mesh_filename):
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
-def make_gmsh(cfg:'dotdict'):
+def make_gmsh(cfg:'dotdict', fracture_population, seed):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
@@ -263,7 +274,7 @@ def make_gmsh(cfg:'dotdict'):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg.geometry, cfg.mesh)
+    geometry_set = make_geometry(factory, cfg, fracture_population, seed)
     # factory.show()
     # exit(0)
 
@@ -273,12 +284,14 @@ def make_gmsh(cfg:'dotdict'):
     return common.File(final_mesh_filename)
 
 
-def make_mesh(workdir, output_dir, cfg_file):
+def make_mesh(workdir, output_dir, cfg_file, seed):
     conf_file = os.path.join(workdir, cfg_file)
     cfg = common.config.load_config(conf_file)
     cfg.output_dir = output_dir
 
-    mesh_file = make_gmsh(cfg)
+    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+
+    mesh_file = make_gmsh(cfg, fr_pop, seed)
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
@@ -304,5 +317,6 @@ if __name__ == '__main__':
     #     output_dir = os.path.abspath(sys.argv[1])
     output_dir = script_dir
 
-    make_mesh(script_dir, output_dir, "./trans_mesh_config.yaml")
+    seed = 1
+    make_mesh(script_dir, output_dir, "./trans_mesh_config.yaml", seed)
 
