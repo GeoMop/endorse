@@ -52,17 +52,48 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
     return field.maximum(inner, outer)
 
 
+def create_main_tunnel(factory, cfg_geom:'dotdict'):
+    """
+    Creates main tunnel by extrusion from cross-section points of the L5 tunnel.
+    :param factory:
+    :param cfg_geom:
+    :return:
+        tunnel (ObjectSet)
+    """
+    # Read points defining head of tunnel in XZ plane, Y=0
+    df = pd.read_csv(os.path.join(script_dir, cfg_geom.main_tunnel.csv_points))
+    main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
+
+    # create polygon
+    tunnel_polygon = factory.make_polygon(points=main_tunnel_points)
+    # compute center of polygon
+    tunnel_center = factory.point(np.average(main_tunnel_points, axis=0))
+    tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
+    tunnel_polygon.translate(vector=[0, -cfg_geom.main_tunnel.length / 2, 0])
+    tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_geom.main_tunnel.length, 0])
+    # extrude polygon and its center to get the tunnel and its central line
+    tunnel = tunnel_extrude[3]
+    tunnel_center_line = tunnel_extrude[1]
+    tunnel.set_region("main_tunnel")
+
+    # bottom coordinate of the main tunnel (needed by storage boreholes)
+    tunnel_bottom_z = np.min(main_tunnel_points[:, 2], axis=0)
+
+    return tunnel, tunnel_center_line, tunnel_bottom_z
+
+
 def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_z):
     # make the boreholes longer, sticking out into the main tunnel
     # then cut it by the tunnel
     csb = cfg_geom.storage_borehole
     storage_boreholes = []
-    tunnel_fr, plug, container = None, None, None
-    for i in range(cfg_geom.n_storage_boroholes):
-        d = cfg_geom.storage_borehole_distance
-        s = -((cfg_geom.n_storage_boroholes - 1) / 2.0) * d  # start
+    plug, container = None, None
+    d = cfg_geom.storage_borehole_distance
+    s = -((cfg_geom.n_storage_boroholes - 1) / 2.0) * d  # y coordinate of the first storage
 
+    for i in range(cfg_geom.n_storage_boroholes):
         if i is cfg_geom.damaged_storage_borehole:
+            # damaged storage is split into plug and container
             plug = factory.cylinder(r=csb.radius, axis=[0, 0, -csb.plug + tunnel_bottom_z], center=[0, s + i * d, 0])
             plug = plug.cut(tunnel)
             plug.set_region(f"plug_{i}").mesh_step(csb.mesh_step)
@@ -94,34 +125,18 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
 
 def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     box, box_sides_dict = box_with_sides(factory, cfg_geom.box_dimensions)
-    box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original
-
-    # print("tunnel_laser_scan:\n", tunnel_laser_scan.dim_tags)
-    # print(tunnel_laser_scan.regions)
+    box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original sides
     print("box:\n", box.dim_tags)
     print("box_sides_group:\n", box_sides_group)
 
-    # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(os.path.join(script_dir,cfg_geom.main_tunnel.csv_points))
-    main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
+    tunnel, tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg_geom)
+    print("tunnel:\n", tunnel)
 
-    # create polygon
-    tunnel_polygon = factory.make_polygon(points=main_tunnel_points)
-    # compute center of polygon
-    tunnel_center = factory.point(np.average(main_tunnel_points, axis=0))
-    tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
-    tunnel_polygon.translate(vector=[0, -cfg_geom.main_tunnel.length/2, 0])
-    tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_geom.main_tunnel.length, 0])
-    # extrude polygon and its center to get the tunnel and its central line
-    tunnel = tunnel_extrude[3]
-    tunnel_center_line = tunnel_extrude[1]
-    tunnel.set_region("main_tunnel")
-
-    # make the boreholes longer, sticking out into the main tunnel
-    # then cut it by the tunnel
-    tunnel_bottom_z = np.min(main_tunnel_points[:, 2], axis=0)
     storage_boreholes, plug, container = create_storage_boreholes(factory, cfg_geom, tunnel, tunnel_bottom_z)
     storage_boreholes_group = factory.group(*storage_boreholes)
+    print("storage_boreholes:\n", storage_boreholes)
+    print("plug:\n", plug)
+    print("container:\n", container)
     # assert plug and container is not None
 
     factory.synchronize()
@@ -149,20 +164,19 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     print("Checking fragments...")
     res = box_fr.dt_intersection(tunnel_fr)
     assert res.dt_equal(tunnel_fr)
-    # # res = box_sides_fr.dt_intersection(tunnel_boundary_fr) # is empty
-    # res1 = b_box_fr.dt_intersection(tunnel_boundary_fr)  # 81 dimtags
-    # res2 = b_tunnel_fr.dt_intersection(tunnel_boundary_fr)  # 81 dimtags
-    # assert res1.dt_equal(res2)
 
-    print("Get final geometry objects.")
+    print("Determine box objects.")
     # GET box minus tunnel volume
     if (plug is None) or (container is None):
         box_fr.dt_drop(tunnel_fr, storage_boreholes_group_fr)
     else:
         box_fr.dt_drop(tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr)
     box_fr.set_region("box")
-    print("box minus tunnel:\n", box_fr)
-    print("tunnel:\n", tunnel_fr)
+    print("box_fr:\n", box_fr)
+    print("tunnel_fr:\n", tunnel_fr)
+    print("storage_boreholes_fr:\n", storage_boreholes_group_fr)
+    print("plug_fr:\n", plug_fr)
+    print("container_fr:\n", container_fr)
 
     # GET box sides
     # check whether boundary of fragmented box volume includes all dimtags of fragmented boundary box
@@ -181,20 +195,26 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
 
     # SET final geometry set
     print("Set regions to box sides.")
-    geometry_set = []
+    geometry_set = [box_fr, tunnel_fr, storage_boreholes_group_fr]
+    if plug is not None: geometry_set.append(plug_fr)
+    if container is not None: geometry_set.append(container_fr)
+
+    # if cfg_geom.clip_box_dimensions != cfg_geom.box_dimensions:
+    #     clip_box, clip_box_sides_dict = box_with_sides(factory, cfg_geom.box_dimensions)
+    #     geometry_group = factory.group(*geometry_set)
+    #     clip_geometry = geometry_group.intersect(clip_box)
+    #     geometry_set = [clip_geometry]
+    #
+    #     box_sides_dict = clip_box_sides_dict
+    #     b_clip_box = clip_box.get_boundary().split_by_dimension()[2]
+
+
     for side_name, side_obj in box_sides_dict.items():
         b_side = box_sides_no_tunnel.select_by_intersect(side_obj)
         b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
         geometry_set.append(b_side)
 
-    # storage_boreholes_group_fr.mesh_step(0.2)
-    # box_fr.mesh_step(0)
-    geometry_set.append(box_fr)
-    geometry_set.append(tunnel_fr)
-    if plug is not None: geometry_set.append(plug_fr)
-    if container is not None: geometry_set.append(container_fr)
-    geometry_set.append(storage_boreholes_group_fr)
-    # geometry_set.append(tunnel_heads)
+    geometry_final = factory.group(*geometry_set)
 
     # create refinement fields around drifts
     # tunnel_center_lines = []
@@ -204,8 +224,8 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     common_field = field.minimum(*line_fields)
     factory.set_mesh_step_field(common_field)
 
+    # exit(0)
     print("Finalize geometry...")
-    geometry_final = factory.group(*geometry_set)
     factory.synchronize()
     # need to keep tunnel lines due to refinement fields
     # factory.keep_only(geometry_final, *tunnel_center_lines)
