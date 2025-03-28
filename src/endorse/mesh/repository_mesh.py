@@ -11,32 +11,7 @@ from bgem.stochastic.fracture import Population
 from bgem.stochastic.fracture import FisherOrientation
 import numpy as np
 from endorse.common import dotdict, File, report, memoize
-from endorse.mesh import mesh_tools
-
-
-def create_fractures_rectangles(gmsh_geom, fractures, shift, base_shape: 'ObjectSet'):
-    # From given fracture date list 'fractures'.
-    # transform the base_shape to fracture objects
-    # fragment fractures by their intersections
-    # return dict: fracture.region -> GMSHobject with corresponding fracture fragments
-    if len(fractures) == 0:
-        return []
-
-
-    shapes = []
-    for i, fr in enumerate(fractures):
-        shape = base_shape.copy()
-        print("fr: ", i, "tag: ", shape.dim_tags)
-        shape = shape.scale([fr.rx, fr.ry, 1]) \
-            .rotate(axis=[0,0,1], angle=fr.shape_angle) \
-            .rotate(axis=fr.rotation_axis, angle=fr.rotation_angle) \
-            .translate(fr.center + shift).set_region(fr.region)
-
-        shapes.append(shape)
-
-    fracture_fragments = gmsh_geom.fragment(*shapes)
-    return fracture_fragments
-
+from endorse.mesh import mesh_tools, fracture_tools
 
 # @attrs.define
 # class ThreeTunnelGeom:
@@ -118,7 +93,7 @@ def make_geometry(factory, cfg_geom, fractures, cfg_mesh):
     box_drilled, box, access_tunnels, boreholes = basic_shapes(factory, cfg_geom)
     #box_drilled, box, tunnels = basic_shapes_simple(factory, geom_dict)
 
-    fractures = create_fractures_rectangles(factory, fractures, outer_box_shift(cfg_geom), factory.rectangle())
+    fractures = fracture_tools.create_fractures_rectangles(factory, fractures, outer_box_shift(cfg_geom), factory.rectangle())
     fractures_group = factory.group(*fractures).intersect(box_drilled)
 
     #b_rec = box_drilled.get_boundary()#.set_region(".sides")
@@ -175,7 +150,7 @@ def make_geometry_2d(factory, cfg_geom, fractures, cfg_mesh):
     borehole_side = factory.line([-x/2,  -z/4, 0],  [x/2, -z/4, 0] ).rotate(*XZ_rot).translate([x_shift_vec[0], 0, z/4 + bh_top])
 
     base_shape = factory.line([-0.5, 0, 0], [0.5, 0, 0])
-    fr_shapes = create_fractures_rectangles(factory, fractures, [0,0,0], base_shape)
+    fr_shapes = fracture_tools.create_fractures_rectangles(factory, fractures, [0,0,0], base_shape)
 
     fr_shapes = factory.group(*fr_shapes).rotate(*XZ_rot).translate(x_shift_vec)
     fractures_group = fr_shapes.intersect(box.copy())
@@ -243,45 +218,15 @@ def one_borehole(cfg_geom:dotdict, fractures:List['Fracture'], cfg_mesh:dotdict,
     return File(mesh_file)
 
 
-
-def fr_dict_repr(fr):
-    return dict(r=float(fr.r), normal=fr.normal.tolist(), center=fr.center.tolist(),
-                aspect=float(fr.aspect), shape_angle=float(fr.shape_angle), region=fr.region.name)
-
-
-def fracture_set(cfg, fr_population:Population, seed):
-    main_box_dimensions = cfg.geometry.box_dimensions
-
-    # Fixed large fractures
-    fix_seed = cfg.fractures.fixed_seed
-    large_min_r = cfg.fractures.large_min_r
-    large_box_dimensions = cfg.fractures.large_box
-    fr_limit = cfg.fractures.n_frac_limit
-    logging.info(f"Large fracture seed: {fix_seed}")
-    max_large_size = max([fam.size.diam_range[1] for fam in fr_population.families])
-    fractures = mesh_tools.generate_fractures(fr_population, (large_min_r, max_large_size), fr_limit, large_box_dimensions, fix_seed)
-
-    large_fr_dict=dict(seed=fix_seed, fr_set=[fr_dict_repr(fr) for fr in fractures])
-    with open(f"large_Fr_set.yaml", "w") as f:
-        yaml.dump(large_fr_dict, f, sort_keys=False)
-    n_large = len(fractures)
-    #if n_large == 0:
-    #    raise ValueError()
-    # random small scale fractures
-    small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r), fr_limit, main_box_dimensions, seed)
-    fractures.extend(small_fr)
-    logging.info(f"Generated fractures: {n_large} large, {len(small_fr)} small.")
-    return fractures, n_large
-
 @report
 @memoize
 def fullscale_transport_mesh_3d(cfg, fr_population, seed):
-    fractures, n_large = fracture_set(cfg, fr_population, seed)
+    fractures, n_large = fracture_tools.fracture_set(cfg, fr_population, seed)
     return one_borehole(cfg.geometry, fractures, cfg.mesh, make_geometry), fractures, n_large
 
 
 @report
 @memoize
 def fullscale_transport_mesh_2d(cfg, fr_population, seed):
-    fractures, n_large = fracture_set(cfg, fr_population, seed)
+    fractures, n_large = fracture_tools.fracture_set(cfg, fr_population, seed)
     return one_borehole(cfg.geometry, fractures, cfg.mesh, make_geometry_2d), fractures, n_large
