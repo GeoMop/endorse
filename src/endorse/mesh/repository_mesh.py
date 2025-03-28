@@ -62,26 +62,6 @@ def tunnel(factory, tunnel_dict):
     roof = cylinder.intersect(box.copy().translate([0, 0, height]))
     return box.fuse(roof).translate([0,0,+height / 2])
 
-def box_with_sides(factory, dimensions):
-    """
-    Make a box and dictionary of its sides named: 'side_[xyz][01]'
-    :return: box, sides_dict
-    """
-    box = factory.box(dimensions).set_region("box")
-    side_z = factory.rectangle([dimensions[0], dimensions[1]])
-    side_y = factory.rectangle([dimensions[0], dimensions[2]])
-    side_x = factory.rectangle([dimensions[2], dimensions[1]])
-    sides = dict(
-        side_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
-        side_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
-        side_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        side_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        side_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
-        side_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
-    )
-    for name, side in sides.items():
-        side.modify_regions(name)
-    return box, sides
 
 def make_access_tunnels(factory, geom_dict):
 
@@ -125,7 +105,7 @@ def outer_box_shift(geom_dict):
 def basic_shapes(factory, geom_dict):
     bh_z_pos = geom_dict.borehole.z_pos
 
-    box, sides = box_with_sides(factory, geom_dict.box_dimensions)
+    box, sides = mesh_tools.box_with_sides(factory, geom_dict.box_dimensions)
     box = box.translate(outer_box_shift(geom_dict))
     access_tunnels = make_access_tunnels(factory, geom_dict) #.translate([-bh_length / 2, 0, 0])
     boreholes = boreholes_full(factory, geom_dict).translate([0, 0, bh_z_pos])

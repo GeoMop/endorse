@@ -7,6 +7,27 @@ from bgem.stochastic import fracture
 from endorse.common import dotdict
 
 
+def box_with_sides(factory, dimensions):
+    """
+    Make a box and dictionary of its sides named: 'side_[xyz][01]'
+    :return: box, sides_dict
+    """
+    box = factory.box(dimensions).set_region("box")
+    side_z = factory.rectangle([dimensions[0], dimensions[1]])
+    side_y = factory.rectangle([dimensions[0], dimensions[2]])
+    side_x = factory.rectangle([dimensions[2], dimensions[1]])
+    sides = dict(
+        side_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
+        side_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
+        side_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
+        side_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
+    )
+    for name, side in sides.items():
+        side.modify_regions(name)
+    return box, sides
+
 
 def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_limit, box,  seed) -> List[fracture.Fracture]:
     """
