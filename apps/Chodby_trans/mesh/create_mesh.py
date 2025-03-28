@@ -5,35 +5,12 @@ import pandas as pd
 
 from apps.Chodby_inv.mesh.venv.share.doc.gmsh.tutorials.python.t4 import factory
 from endorse import common
+from endorse.mesh import mesh_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-
-
-def box_with_sides(factory, dimensions):
-    """
-    Make a box and dictionary of its sides named: 'side_[xyz][01]'
-    :return: box, sides_dict
-    """
-    box = factory.box(dimensions).set_region("box")
-    side_z = factory.rectangle([dimensions[0], dimensions[1]])
-    side_y = factory.rectangle([dimensions[0], dimensions[2]])
-    side_x = factory.rectangle([dimensions[2], dimensions[1]])
-    sides = dict(
-        box_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
-        box_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
-        box_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        box_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        box_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
-        box_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
-    )
-    # not necessary - not final objects
-    # for name, side in sides.items():
-    #     side.modify_regions(name)
-    factory.synchronize()
-    return box, sides
 
 
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
@@ -124,7 +101,7 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
 
 
 def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
-    box, box_sides_dict = box_with_sides(factory, cfg_geom.box_dimensions)
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original sides
     print("box:\n", box.dim_tags)
     print("box_sides_group:\n", box_sides_group)
@@ -200,7 +177,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict'):
     if container is not None: geometry_set.append(container_fr)
 
     # if cfg_geom.clip_box_dimensions != cfg_geom.box_dimensions:
-    #     clip_box, clip_box_sides_dict = box_with_sides(factory, cfg_geom.box_dimensions)
+    #     clip_box, clip_box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     #     geometry_group = factory.group(*geometry_set)
     #     clip_geometry = geometry_group.intersect(clip_box)
     #     geometry_set = [clip_geometry]
