@@ -1,0 +1,70 @@
+# repository_mesh.py, 22/11/05 22:45
+# about 4M elements at time about 4 minutes
+# Seems to be on the edge of what is tracktable while providing full resolution of EDZ without anisotropic mesh.
+
+# base of the mesh file name
+
+mesh_name: L5_mesh_6
+boundary_meshfile: ./scan_meshes/L5_local_6.msh
+boundary_brepfile: ./scan_meshes_freecad_L5_6/L5_mesh_healed2.brep
+
+# 0] preprocess - call heal mesh on laser scan
+# FreeCAD
+# 1] GMSH - save msh to stl
+# 2] load stl
+# 3] switch Mesh
+# 4] split by components (button, or Meshes->)
+# 5] select the tunnel component (and/or delete artifacts)
+# 6] switch Part
+# 7] Part->Create shape from mesh
+# 8] Part->Convert to solid
+# 9] Part->Create a copy->Refine shape
+# 10] export to brep
+
+mesh:
+    # mesh step on outer boundary
+    boundary_mesh_step: 20
+
+    # mesh step on outer boundary of EDZ
+    edz_mesh_step: 1
+    main_tunnel_mesh_step: 2
+
+    # refinement around central lines of the laterals
+    line_refinement:
+      r_inner: 2
+      h_inner: 1.5
+      r_outer: 10
+      h_outer: 1.5
+      q_outer: 1
+      r_inf: 30
+      h_inf: 10
+
+geometry:
+  # Coordinate system
+  # X - in direction of storage boreholes
+  # Y - perpendicular horizontal
+  # Z - vertical
+  # origin: floor of the lateral tunnel, center, interface with center borehole.
+
+  # depth of the center of the box and of the coordinate system
+  center: [-61.66, -22.71, 18]
+  orig_x_axis: [9.72, -3.49, 0]
+  # x,y,z dimension
+  box_dimensions: &box [65, 50, 45]
+
+  # Center distance of laterals
+  laterals_distance: 10
+
+  # Main tunnel - main access tunnel L5
+  main_tunnel:
+    # height of side walls (tunnel height minus roof)
+    height: 4
+    width: 4
+    # tunnel length
+    length: 50
+
+  # Lateral short tunnels (drifts)
+  lateral_tunnel:
+    height: 4
+    width: 4
+    length: 10
