@@ -30,6 +30,16 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
     return field.maximum(inner, outer)
 
 
+def rescale_dimension(values, target_range):
+    """Rescale 1D array to have the specified range, keep the center at origin."""
+    min_val = values.min()
+    max_val = values.max()
+    center = (max_val + min_val) / 2
+    current_range = max_val - min_val
+    scale = target_range / current_range if current_range != 0 else 0  # handle constant values
+    return (values - center) * scale # center at zero
+
+
 def create_main_tunnel(factory, cfg_geom:'dotdict'):
     """
     Creates main tunnel by extrusion from cross-section points of the L5 tunnel.
@@ -38,17 +48,22 @@ def create_main_tunnel(factory, cfg_geom:'dotdict'):
     :return:
         tunnel (ObjectSet)
     """
+    cfg_mt = cfg_geom.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(os.path.join(script_dir, cfg_geom.main_tunnel.csv_points))
+    df = pd.read_csv(os.path.join(script_dir, cfg_mt.csv_points))
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
+
+    # rescale points to intended tunnel dimensions (x-width, z-height)
+    main_tunnel_points[:, 0] = rescale_dimension(main_tunnel_points[:, 0], cfg_mt.width)  # x
+    main_tunnel_points[:, 2] = rescale_dimension(main_tunnel_points[:, 2], cfg_mt.height)  # z
 
     # create polygon
     tunnel_polygon = factory.make_polygon(points=main_tunnel_points)
     # compute center of polygon
     tunnel_center = factory.point(np.average(main_tunnel_points, axis=0))
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
-    tunnel_polygon.translate(vector=[0, -cfg_geom.main_tunnel.length / 2, 0])
-    tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_geom.main_tunnel.length, 0])
+    tunnel_polygon.translate(vector=[0, -cfg_mt.length / 2, 0])
+    tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_mt.length, 0])
     # extrude polygon and its center to get the tunnel and its central line
     tunnel = tunnel_extrude[3]
     tunnel_center_line = tunnel_extrude[1]
@@ -72,25 +87,27 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
     for i in range(cfg_geom.n_storage_boroholes):
         if i is cfg_geom.damaged_storage_borehole:
             # damaged storage is split into plug and container
-            plug = factory.cylinder(r=csb.radius, axis=[0, 0, -csb.plug + tunnel_bottom_z], center=[0, s + i * d, 0])
+            plug = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.plug + tunnel_bottom_z],
+                                    center=[0, s + i * d, 0])
             plug = plug.cut(tunnel)
             plug.set_region(f"plug_{i}").mesh_step(csb.mesh_step)
 
-            container = factory.cylinder(r=csb.radius, axis=[0, 0, -(csb.length-csb.plug) + tunnel_bottom_z],
+            container = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -(csb.length-csb.plug)],
                                          center=[0, s + i * d, -csb.plug + tunnel_bottom_z])
             container.set_region(f"container_{i}").mesh_step(csb.mesh_step)
         else:
-            sbh = factory.cylinder(r=csb.radius, axis=[0, 0, -csb.length + tunnel_bottom_z], center=[0, s + i * d, 0])
+            sbh = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.length + tunnel_bottom_z],
+                                   center=[0, s + i * d, 0])
             sbh = sbh.cut(tunnel)
             sbh.set_region(f"storage_{i}").mesh_step(csb.mesh_step)
             storage_boreholes.append(sbh)
 
         # # possibly create plug
         # # for some reason, tunnel does not get meshed this way
-        # sbh = factory.cylinder(r=csb.radius, axis=[0, 0, -csb.length + tunnel_bottom_z], center=[0, s + i * d, 0])
+        # sbh = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.length + tunnel_bottom_z], center=[0, s + i * d, 0])
         # sbh = sbh.cut(tunnel)
         # if i is cfg_geom.damaged_storage_borehole:
-        #     plug_aux = factory.cylinder(r=csb.radius, axis=[0, 0, -csb.plug + tunnel_bottom_z], center=[0, s + i * d, 0])
+        #     plug_aux = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.plug + tunnel_bottom_z], center=[0, s + i * d, 0])
         #     sbh_fr, plug_fr = factory.fragment(sbh, plug_aux)
         #     plug = plug_fr.dt_intersection(sbh_fr).set_region(f"plug_{i}").mesh_step(csb.mesh_step)
         #     container = sbh_fr.dt_drop(plug).set_region(f"container_{i}").mesh_step(csb.mesh_step)
