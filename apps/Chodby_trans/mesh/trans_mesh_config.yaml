@@ -31,7 +31,7 @@ fractures:
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
 
     large_min_r: 40
-    large_box:  [40, 80, 60]
+    large_box:  [60, 60, 60]
     # Would be better to have separate domains for known large fractures close to tunnel and
     # uncertain large fractures, need support in Population
     # main box : [100, 80, 60]
@@ -46,26 +46,27 @@ geometry:
   # origin: floor of the lateral tunnel, center, interface with center borehole.
 
   # x,y,z dimension
-  box_dimensions: &box [40, 72, 40]
+  box_dimensions: &box [40, 40, 40]
+  clip_box_dimensions: [40, 40, 40]
 
 
 
   # Main tunnel - main access tunnel L5
   main_tunnel:
     csv_points: main_tunnel_points.csv
-    height: 4
+    height: 6.700
     width: 4
-    length: 72
+    length: 40
 
-  storage_borehole_distance: 12
+  storage_borehole_distance: 4.750
   n_storage_boroholes: 5
   damaged_storage_borehole: 2
 
   # Storage boreholes
   storage_borehole:
-    radius: 0.6
-    length: 6
-    plug: 2
+    diameter: 1.650
+    length: 6.540
+    plug: 2.000
     mesh_step: 0.25
 
   storage_borehole_refinement:
