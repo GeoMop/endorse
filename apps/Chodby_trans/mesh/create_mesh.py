@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from apps.Chodby_inv.mesh.venv.share.doc.gmsh.tutorials.python.t4 import factory
+from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
 from endorse.mesh import mesh_tools, fracture_tools
 
@@ -118,91 +119,126 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
     return storage_boreholes, plug, container
 
 
+def fragment(factory, object_dict: dict[str, ObjectSet], boundary_object_dict: dict[str, ObjectSet])\
+        -> tuple[dict[str, ObjectSet], dict[str, ObjectSet]]:
+    """
+    :param factory: bgem gmsh factory
+    :param object_dict: "volumetric" objects (of arbitrary dimensions)
+    :param boundary_object_dict: "boundary" objects to determine boundary regions later
+    :return:
+    """
+    # Merge the dictionaries (order preserved since Python 3.7+)
+    merged_inputs = {**object_dict, **boundary_object_dict}
+
+    # determine ObjectSets which are not None
+    enabled_keys = [key for key, value in merged_inputs.items() if value is not None]
+    # create list of ObjectSets for fragmentation
+    input_list = [merged_inputs[key] for key in enabled_keys]
+
+    output_list = factory.fragment(*input_list)
+
+    # Map outputs to "_fr" keys
+    fragmented_all = {f"{key}_fr": val for key, val in zip(enabled_keys, output_list)}
+
+    # Split back into two output dictionaries
+    fragmented_1 = {f"{key}_fr": fragmented_all[f"{key}_fr"]
+                    for key in object_dict if f"{key}_fr" in fragmented_all}
+
+    fragmented_2 = {f"{key}_fr": fragmented_all[f"{key}_fr"]
+                    for key in boundary_object_dict if f"{key}_fr" in fragmented_all}
+
+    return fragmented_1, fragmented_2
+
+
+def safe_group(factory, source_dict: dict[str, ObjectSet], keys: list[str]) -> ObjectSet:
+    """
+    Calls `group` function with values from `source_dict` for the given `keys`,
+    skipping any that are None.
+    """
+    args = [source_dict[k] for k in keys if source_dict[k] is not None]
+    return factory.group(*args)
+
+
 def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
     cfg_geom = cfg.geometry
     cfg_mesh = cfg.mesh
 
-    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
-    box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original sides
-    print("box:\n", box.dim_tags)
-    print("box_sides_group:\n", box_sides_group)
+    # Prepare objects
+    vol_dict = {
+        "box_drilled": None,
+        "fractures_group": None,
+        "tunnel": None,
+        "plug": None,
+        "container": None,
+        "storage_boreholes_group": None,
+    }
+    bnd_dict = {
+        "box_sides_group": None,
+        "drill_surface_group": None,
+    }
 
-    tunnel, tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg_geom)
-    print("tunnel:\n", tunnel)
 
-    storage_boreholes, plug, container = create_storage_boreholes(factory, cfg_geom, tunnel, tunnel_bottom_z)
-    storage_boreholes_group = factory.group(*storage_boreholes)
-    print("storage_boreholes:\n", storage_boreholes)
-    print("plug:\n", plug)
-    print("container:\n", container)
+    vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg_geom)
+
+    storage_boreholes, vol_dict["plug"], vol_dict["container"] \
+        = create_storage_boreholes(factory, cfg_geom, vol_dict["tunnel"], tunnel_bottom_z)
+    vol_dict["storage_boreholes_group"] = factory.group(*storage_boreholes)
     # assert plug and container is not None
 
+    # group everything to drill
+    # drill_group = factory.group(vol_dict["tunnel"], vol_dict["plug"], vol_dict["container"],
+    #                             vol_dict["storage_boreholes_group"])
+    drill_group = safe_group(factory, vol_dict, ["tunnel", "plug", "container", "storage_boreholes_group"])
+    bnd_dict["drill_surface_group"] = drill_group.get_boundary().copy().split_by_dimension()[2]
+
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
+    bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).copy()  # keep the original sides
     # drill the box, so later we do not have fractures in drilled volume
-    box_drilled = box.copy().cut(tunnel, plug, container, storage_boreholes_group)
-    box_drilled.set_region("box")
+    vol_dict["box_drilled"] = box.copy().cut(drill_group)
+    vol_dict["box_drilled"].set_region("box")
 
     fracture_set, n_large = fracture_tools.fracture_set(cfg, fracture_population, seed)
     fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, [0,0,0], factory.rectangle())
-    fractures_group = factory.group(*fractures).intersect(box_drilled)
-    fractures_group.set_region("fractures").mesh_step(cfg_mesh.fracture_mesh_step)
+    vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box_drilled"])
+    vol_dict["fractures_group"].set_region("fractures").mesh_step(cfg_mesh.fracture_mesh_step)
 
+    [print(k, v) for k, v in vol_dict.items()]
     factory.synchronize()
     # factory.show()
     # exit(0)
 
-    # fragment
-    print("Fragmenting...")
-    if (plug is None) or (container is None):
-        box_fr, box_sides_fr, fractures_fr, tunnel_fr, storage_boreholes_group_fr \
-            = factory.fragment(box_drilled, box_sides_group, fractures_group, tunnel, storage_boreholes_group)
-        plug_fr, container_fr = None, None
-    else:
-        box_fr, box_sides_fr, fractures_fr, tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr\
-            = factory.fragment(box_drilled, box_sides_group, fractures_group, tunnel, plug, container, storage_boreholes_group)
-    # if (plug is None) or (container is None):
-    #     box_fr, box_sides_fr, tunnel_fr, storage_boreholes_group_fr \
-    #         = factory.fragment(box_drilled, box_sides_group, tunnel, storage_boreholes_group)
-    #     plug_fr, container_fr = None, None
-    # else:
-    #     box_fr, box_sides_fr, tunnel_fr, plug_fr, container_fr, storage_boreholes_group_fr\
-    #         = factory.fragment(box_drilled, box_sides_group, tunnel, plug, container, storage_boreholes_group)
-    print("Fragmenting finished.")
+    # Step 5: Map results back to their labels
+    fr_dict, fr_bnd_dict = fragment(factory, vol_dict, bnd_dict)
+
+    [print(k, v) for k, v in fr_dict.items()]
+    [print(k, v) for k, v in fr_bnd_dict.items()]
 
     # get boundary of fragmented volumes
-    b_box_fr = box_fr.get_boundary().split_by_dimension()[2]
-    b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
+    b_box_fr_1 = fr_dict.get("box_drilled_fr").get_boundary().split_by_dimension()[1]
+    b_box_fr_2 = fr_dict.get("box_drilled_fr").get_boundary().split_by_dimension()[2]
+    b_tunnel_fr = fr_dict.get("tunnel_fr").get_boundary().split_by_dimension()[2]
+    b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
 
-    b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
     b_fractures = (b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fractures")
         .mesh_step(cfg_mesh.boundary_mesh_step))
-
-    print("Determine box objects.")
-    print("box_fr:\n", box_fr)
-    print("tunnel_fr:\n", tunnel_fr)
-    print("storage_boreholes_fr:\n", storage_boreholes_group_fr)
-    print("plug_fr:\n", plug_fr)
-    print("container_fr:\n", container_fr)
+    # b_fractures = b_box_fr_1.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
+    # .set_region(".fractures").mesh_step(cfg_mesh.boundary_mesh_step)
 
     # GET box sides
     # check whether boundary of fragmented box volume includes all dimtags of fragmented boundary box
-    print("box_sides_fr: \n", box_sides_fr)
-    box_sides_no_tunnel = b_box_fr.dt_intersection(box_sides_fr)  # = box_sides_fr
+    box_sides_no_tunnel = b_box_fr_2.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
     # assert box_sides_no_tunnel.dt_equal(box_sides_fr)
 
     # get tunnel head surfaces (create by box fragment)
-    tunnel_heads = b_tunnel_fr.dt_intersection(box_sides_fr)
-    tunnel_heads.set_region("tunnel_heads")
-    print("tunnel_heads: \n", tunnel_heads)
-    box_sides_no_tunnel.dt_drop(tunnel_heads)
-    print("box_sides_no_tunnel: \n", box_sides_no_tunnel)
+    tunnel_heads = b_tunnel_fr.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
+    tunnel_heads.set_region(".tunnel_heads")
+    print(".tunnel_heads: \n", tunnel_heads)
 
     # factory.show()
 
     # SET final geometry set
+    geometry_set = list(fr_dict.values())
     print("Set regions to box sides.")
-    geometry_set = [box_fr, tunnel_fr, fractures_fr, storage_boreholes_group_fr]
-    if plug is not None: geometry_set.append(plug_fr)
-    if container is not None: geometry_set.append(container_fr)
 
     # if cfg_geom.clip_box_dimensions != cfg_geom.box_dimensions:
     #     clip_box, clip_box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
