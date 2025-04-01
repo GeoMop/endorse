@@ -173,7 +173,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
     b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
 
     b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
-    b_fractures = (b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fr_outer")
+    b_fractures = (b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fractures")
         .mesh_step(cfg_mesh.boundary_mesh_step))
 
     print("Determine box objects.")
@@ -218,6 +218,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
         b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
         geometry_set.append(b_side)
 
+    geometry_set.append(tunnel_heads)
     geometry_set.append(b_fractures)
     geometry_final = factory.group(*geometry_set)
 
