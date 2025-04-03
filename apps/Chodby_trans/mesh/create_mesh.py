@@ -173,7 +173,6 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
         "storage_boreholes_group": None,
     }
     bnd_dict = {
-        "box_sides_group": None,
         "drill_surface_group": None,
     }
 
@@ -192,7 +191,8 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
     bnd_dict["drill_surface_group"] = drill_group.get_boundary().copy().split_by_dimension()[2]
 
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
-    bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).copy()  # keep the original sides
+    # bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).copy()  # keep the original sides
+    bnd_dict = {**bnd_dict, **box_sides_dict}
     # drill the box, so later we do not have fractures in drilled volume
     vol_dict["box_drilled"] = box.copy().cut(drill_group)
     vol_dict["box_drilled"].set_region("box")
@@ -213,49 +213,36 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
     [print(k, v) for k, v in fr_dict.items()]
     [print(k, v) for k, v in fr_bnd_dict.items()]
 
-    # get boundary of fragmented volumes
-    b_box_fr_1 = fr_dict.get("box_drilled_fr").get_boundary().split_by_dimension()[1]
-    b_box_fr_2 = fr_dict.get("box_drilled_fr").get_boundary().split_by_dimension()[2]
-    b_tunnel_fr = fr_dict.get("tunnel_fr").get_boundary().split_by_dimension()[2]
-    b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
-
-    b_fractures = (b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fractures")
-        .mesh_step(cfg_mesh.boundary_mesh_step))
-    # b_fractures = b_box_fr_1.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
-    # .set_region(".fractures").mesh_step(cfg_mesh.boundary_mesh_step)
-
-    # GET box sides
-    # check whether boundary of fragmented box volume includes all dimtags of fragmented boundary box
-    box_sides_no_tunnel = b_box_fr_2.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
-    # assert box_sides_no_tunnel.dt_equal(box_sides_fr)
-
-    # get tunnel head surfaces (create by box fragment)
-    tunnel_heads = b_tunnel_fr.dt_intersection(fr_bnd_dict.get("box_sides_group_fr"))
-    tunnel_heads.set_region(".tunnel_heads")
-    print(".tunnel_heads: \n", tunnel_heads)
-
-    # factory.show()
-
-    # SET final geometry set
+    # include all volumetric fragments
     geometry_set = list(fr_dict.values())
-    print("Set regions to box sides.")
 
-    # if cfg_geom.clip_box_dimensions != cfg_geom.box_dimensions:
-    #     clip_box, clip_box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
-    #     geometry_group = factory.group(*geometry_set)
-    #     clip_geometry = geometry_group.intersect(clip_box)
-    #     geometry_set = [clip_geometry]
-    #
-    #     box_sides_dict = clip_box_sides_dict
-    #     b_clip_box = clip_box.get_boundary().split_by_dimension()[2]
+    # get tunnel head surfaces
+    tunnel_head_y0 = fr_bnd_dict["drill_surface_group_fr"] \
+        .dt_intersection(fr_bnd_dict["side_y0_fr"]) \
+        .set_region(".tunnel_head_y0")
+    tunnel_head_y1 = fr_bnd_dict["drill_surface_group_fr"] \
+        .dt_intersection(fr_bnd_dict["side_y1_fr"]) \
+        .set_region(".tunnel_head_y1")
+    geometry_set.extend([tunnel_head_y0, tunnel_head_y1])
 
-    for side_name, side_obj in box_sides_dict.items():
-        b_side = box_sides_no_tunnel.select_by_intersect(side_obj)
-        b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
-        geometry_set.append(b_side)
+    # get box surface
+    for side_name in box_sides_dict.keys():
+        fr_bnd_dict[side_name+"_fr"] \
+            .dt_drop(tunnel_head_y0, tunnel_head_y1) \
+            .set_region('.'+side_name) \
+            .mesh_step(cfg_mesh.boundary_mesh_step)
+        geometry_set.append(fr_bnd_dict[side_name+"_fr"])
 
-    geometry_set.append(tunnel_heads)
-    geometry_set.append(b_fractures)
+
+    # fractures and its boundary
+    b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
+    b_fractures_out = b_fractures_fr \
+        .select_by_intersect(box.get_boundary().copy()) \
+        .set_region(".fractures_out") \
+        .mesh_step(cfg_mesh.boundary_mesh_step)
+
+    geometry_set.append(b_fractures_out)
+
     geometry_final = factory.group(*geometry_set)
 
     # create refinement fields around drifts
