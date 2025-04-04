@@ -3,19 +3,19 @@ mesh_name: trans_mesh
 
 mesh:
     # mesh step on outer boundary
-    boundary_mesh_step: 20
-    fracture_mesh_step: 10
+    boundary_mesh_step: &boundary_mesh_step 15
+    fracture_mesh_step: 5
     main_tunnel_mesh_step: 1
 
     # refinement around central line of main tunnel
     main_line_refinement:
       r_inner: 2
-      h_inner: 1.5
+      h_inner: 0.5
       r_outer: 10
       h_outer: 1.5
       q_outer: 1
       r_inf: 30
-      h_inf: 20
+      h_inf: *boundary_mesh_step
 
 fractures:
     # SKB fracture population for repository domain
@@ -30,7 +30,7 @@ fractures:
     #  crossing borehole: 3 fracture per 10 km
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
 
-    large_min_r: 40
+    large_min_r: 30
     large_box:  [60, 60, 60]
     # Would be better to have separate domains for known large fractures close to tunnel and
     # uncertain large fractures, need support in Population
@@ -49,7 +49,10 @@ geometry:
   box_dimensions: &box [40, 40, 40]
   clip_box_dimensions: [40, 40, 40]
 
-
+  include: #[]
+    - boreholes
+    - fractures
+    - drilled_volume
 
   # Main tunnel - main access tunnel L5
   main_tunnel:
@@ -60,7 +63,7 @@ geometry:
 
   storage_borehole_distance: 4.750
   n_storage_boroholes: 5
-  damaged_storage_borehole: 2
+  damaged_storage_borehole: 2  # can be negative => no damaged container
 
   # Storage boreholes
   storage_borehole:
@@ -76,4 +79,4 @@ geometry:
     h_outer: 0.6
     q_outer: 1
     r_inf: 30
-    h_inf: 10
+    h_inf: *boundary_mesh_step
