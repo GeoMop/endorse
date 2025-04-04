@@ -5,9 +5,12 @@ from matplotlib.ticker import MultipleLocator, MaxNLocator
 from datetime import datetime
 import numpy as np
 import pathlib
-script_dir = pathlib.Path(__file__).parent / "measurement_data"
+work_dir = pathlib.Path(__file__).parent / "measurement_data"
 import os
 from functools import wraps
+
+
+
 
 def save_to_excel_decorator(func):
     counter = 0  # counter to keep track of how many files were written
@@ -16,7 +19,8 @@ def save_to_excel_decorator(func):
     def wrapper(*args, **kwargs):
         nonlocal counter
         # Call the original function and capture its output
-        excel_data = func(*args, **kwargs)
+        kwargs_ = {k: v for k, v in kwargs.items() if k != "save_to_excel"}
+        excel_data = func(*args, **kwargs_)
 
         # Check if the keyword argument 'save_to_excel' is True
         if kwargs.get("save_to_excel"):
@@ -36,7 +40,7 @@ def save_to_excel_decorator(func):
     return wrapper
 
 
-script_dir = pathlib.Path(__file__).parent
+#script_dir = pathlib.Path(__file__).parent
 
 # funkce v programu
 # zjištění názvů vrtů a jejich orientace S/J
@@ -99,7 +103,8 @@ def read_vstupy(file_path):
     print(f"Načteno: tmin={tmin}, tmax={tmax}, zapis_do_souboru={zapis_do_souboru}, v_diff={v_diff}, a_diff={a_diff}")
     return tmin, tmax, zapis_do_souboru, v_diff, a_diff
 
-def process_piezo_file(input_file, output_file=None, save_to_excel=True):
+@save_to_excel_decorator
+def process_piezo_file(input_file, output_file=None):
     """
     Načte všechny listy ze souboru piezo.xlsx, nahradí prázdné hodnoty NaN 
     a volitelně uloží výsledek do Excelu.
@@ -122,12 +127,12 @@ def process_piezo_file(input_file, output_file=None, save_to_excel=True):
     print(f'Data z "{input_file}" byla načtena a prázdné buňky nahrazeny NaN.')
 
     # Uložení do Excelu pouze pokud je zapnuto `save_to_excel`
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in excel_data.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-        print(f'Výstup uložen do "{output_file}".')
-
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in excel_data.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #     print(f'Výstup uložen do "{output_file}".')
+    #
     return excel_data
 
 def create_new_sheets_from_jz(data_frames, output_file=None, save_to_excel=True):
@@ -571,9 +576,10 @@ def plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, ori
     """
 
     # Vytvoření složky, pokud neexistuje
-    os.makedirs(script_dir, exist_ok=True)
+    os.makedirs(work_dir, exist_ok=True)
 
     for idx, (label, orient, cols) in enumerate(zip(labels, orientace, columns)):
+        print(f"graph:  {label}")
         if label in final_data_frames:
             data = final_data_frames[label]
 
@@ -609,8 +615,8 @@ def plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, ori
                         if tmin <= cas <= tmax:
                             plt.axvline(x=cas, color='blue', linestyle='--', label='Odstřel' if i == 0 else "", linewidth=0.5)
 
-                # Sestavení názvu souboru a uložení do script_dir
-                graph_filename = os.path.join(script_dir, f'PRESSURE_{label}.pdf')
+                # Sestavení názvu souboru a uložení do work_dir
+                graph_filename = os.path.join(work_dir, f'PRESSURE_{label}.pdf')
                 plt.savefig(graph_filename, format='pdf')
                 plt.close()
 
@@ -619,6 +625,22 @@ def plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, ori
                 print(f"Sloupec 'cas' chybí v datech pro {label}.")
         else:
             print(f"Chyba: Data pro {label} nejsou dostupná v final_data_frames.")
+
+
+def chamber_col_name(borehole, depth):
+    return f"{borehole} {depth} m [kPa]"
+
+
+borehole_chambers = {
+    'L5-49DL': ['5,68', '7,67'],
+    'L5-50UL': ['7,72', '9,72', '12,58'],
+    'L5-37R': ['3,69', '6,67', '10,62'],
+    'L5-26R': ['3,74', '7,19', '10,10'],
+    'L5-23UR': ['3,68', '7,18', '10,12'],
+    'L5-24DR': ['2,79', '6,20', '9,15'],
+    'L5-22DR': ['8,65', '11,19', '14,66'],
+    'L5-37UR': ['17,67', '20,75', '22,74']
+}
 
 def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, output_excel_file, output_csv_file):
     """
@@ -635,18 +657,7 @@ def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, outp
     Returns:
         dict: Aktualizovaný `final_data_frames` s přidanými hodnotami.
     """
-    # Seznam sloupců, které chceme porovnávat
-    columns_to_check = [
-        'L5-49DL 7,67 m [kPa]', 'L5-49DL 5,68 m [kPa]', 'L5-50UL 12,58 m [kPa]',
-        'L5-50UL 9,72 m [kPa]', 'L5-50UL 7,72 m [kPa]', 'L5-37R 10,62 m [kPa]',
-        'L5-37R 6,67 m [kPa]', 'L5-37R 3,69 m [kPa]', 'L5-26R 10,10 m [kPa]',
-        'L5-26R 7,19 m [kPa]', 'L5-26R 3,74 m [kPa]', 'L5-23UR 10,12 m [kPa]',
-        'L5-23UR 7,18 m [kPa]', 'L5-23UR 3,68 m [kPa]', 'L5-24DR 9,15 m [kPa]',
-        'L5-24DR 6,20 m [kPa]', 'L5-24DR 2,79 m [kPa]', 'L5-22DR 14,66 m [kPa]',
-        'L5-22DR 11,19 m [kPa]', 'L5-22DR 8,65 m [kPa]', 'L5-37UR 22,74 m [kPa]',
-        'L5-37UR 20,75 m [kPa]', 'L5-37UR 17,67 m [kPa]'
-    ]
-    
+
     # Ověření existence listu "vystup" v datech
     if "vystup" not in final_data_frames:
         raise ValueError("❌ Chyba: List 'vystup' neexistuje v `final_data_frames`.")
@@ -663,56 +674,75 @@ def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, outp
     # Data pro zápis
     output_minus = []
     output_plus = []
-    last_shot_time = {col: None for col in columns_to_check}
-    
-    for i in range(4, len(df) - 5):
-        for column in columns_to_check:
-            if column in df.columns:
-                j = i
-                while j >= 0 and pd.isna(df.loc[j, column]):
-                    j -= 1
-                
-                if j >= 0 and pd.notna(df.loc[j, column]) and pd.notna(df.loc[i + 1, column]):
-                    value_diff = abs(df.loc[i + 1, column] - df.loc[j, column])
-                    
-                    avg_recent = df[column].iloc[i+2:i+6].dropna().mean()
-                    avg_previous = df[column].iloc[max(0, j-4):j].dropna().mean()
-                    
-                    if not pd.isna(avg_recent) and not pd.isna(avg_previous):
-                        avg_diff = abs(avg_recent - avg_previous)
-                        
-                        if value_diff > v_diff and avg_diff > a_diff:
-                            current_time = df.loc[i + 1, 'cas']
-                            if last_shot_time[column] is None and any(abs(current_time - t) <= 0.02 for t in all_rozrazka_times):
-                                change_type = "střílení"
-                                last_shot_time[column] = current_time
-                            elif last_shot_time[column] is not None and current_time - last_shot_time[column] > 0 and current_time - last_shot_time[column] <= 0.05:
-                                change_type = "reakce_na_střílení"
-                            else:
-                                change_type = "nevysvětleno"
-                                last_shot_time[column] = None
-                            
-                            output_data = {
-                                'Čas': current_time,
-                                'Year': df.loc[i + 1, 'Year'],
-                                'Month': df.loc[i + 1, 'Month'],
-                                'Day': df.loc[i + 1, 'Day'],
-                                'Hour': df.loc[i + 1, 'Hour'],
-                                'Minute': df.loc[i + 1, 'Minute'],
-                                'Seconds': df.loc[i + 1, 'Seconds'],
-                                'Čidlo': column,
-                                'Tlak před': df.loc[j, column],
-                                'Tlak po': df.loc[i + 1, column],
-                                'Rozdíl hodnot': value_diff,
-                                'Průměr před': avg_previous,
-                                'Průměr po': avg_recent,
-                                'Rozdíl průměrů': avg_diff,
-                                'Druh změny': change_type
-                            }
-                            if current_time < 0:
-                                output_minus.append(output_data)
-                            else:
-                                output_plus.append(output_data)
+    last_shot_time = {}
+
+    chambers = [
+        (bh, i_chmbr, depth)
+        for bh, chamber_depths in borehole_chambers.items()
+        for i_chmbr, depth in enumerate(chamber_depths)]
+
+    for i_row in range(4, len(df) - 5):
+        for bh_name, i_chmbr, depth in chambers:
+            column = chamber_col_name(bh_name, depth)
+            if column not in df.columns:
+                continue
+
+            # TODO: following split into functions
+            # avoid nested conditions
+            j = i_row
+            while j >= 0 and pd.isna(df.loc[j, column]):
+                j -= 1
+
+            if j >= 0 and pd.notna(df.loc[j, column]) and pd.notna(df.loc[i_row + 1, column]):
+                value_diff = abs(df.loc[i_row + 1, column] - df.loc[j, column])
+
+                avg_recent = df[column].iloc[i_row+2:i_row+6].dropna().mean()
+                avg_previous = df[column].iloc[max(0, j-4):j].dropna().mean()
+
+                if not pd.isna(avg_recent) and not pd.isna(avg_previous):
+                    avg_diff = abs(avg_recent - avg_previous)
+
+                    if value_diff > v_diff and avg_diff > a_diff:
+                        current_time = df.loc[i_row + 1, 'cas']
+                        col_last_shot_time = last_shot_time.get(column, None)
+                        at_blast = any(abs(current_time - t) <= 0.02 for t in all_rozrazka_times)
+                        close_after_blast = False
+                        if col_last_shot_time:
+                            close_after_blast = col_last_shot_time < current_time <= col_last_shot_time + 0.05
+
+                        if col_last_shot_time is None and at_blast:
+                            change_type = "střílení"
+                            last_shot_time[column] = current_time
+                        elif close_after_blast:
+                            change_type = "reakce_na_střílení"
+                        else:
+                            change_type = "nevysvětleno"
+                            last_shot_time[column] = None
+
+                        output_data = {
+                            'sim_time': current_time,
+                            'Year': df.loc[i_row + 1, 'Year'],
+                            'Month': df.loc[i_row + 1, 'Month'],
+                            'Day': df.loc[i_row + 1, 'Day'],
+                            'Hour': df.loc[i_row + 1, 'Hour'],
+                            'Minute': df.loc[i_row + 1, 'Minute'],
+                            'Seconds': df.loc[i_row + 1, 'Seconds'],
+                            'Borehole': bh_name,
+                            'Chamber': i_chmbr,
+                            'depth in borehole': depth,
+                            'pressure': df.loc[i_row + 1, column],
+                            'pressure_window_start': df.loc[j, column],
+                            'pressure_window_end': df.loc[i_row + 1, column],
+                            'pressure_diff': value_diff,
+                            'pressure_avgPrůměr před': avg_previous,
+                            'Průměr po': avg_recent,
+                            'Rozdíl průměrů': avg_diff,
+                            'Druh změny': change_type
+                        }
+                        if current_time < 0:
+                            output_minus.append(output_data)
+                        else:
+                            output_plus.append(output_data)
     
     # Vytvoření DataFrame pouze s relevantními daty
     df_output = pd.DataFrame(output_minus + output_plus)
@@ -735,41 +765,41 @@ def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, outp
 
 # Hlavni program - načtení vstupních dat
 # Otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
-labels, orientace = read_konfigurace(script_dir/'konfigurace_vrtu.xlsx')
+labels, orientace = read_konfigurace(work_dir / 'konfigurace_vrtu.xlsx')
 # Nacte casy rozrazek, otevře soubor rozrazka
-data_s, data_j = read_rozrazka(script_dir/'rozrazka_nova.xlsx')
+data_s, data_j = read_rozrazka(work_dir / 'rozrazka_nova.xlsx')
 # Nacte minimální a maximální čas, pro který bude úloha zpracovávána a zda bude zapisovat do excelu
-tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(script_dir / 'vstup.yaml')
+tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(work_dir / 'vstup.yaml')
 
 
 # Hlavni program - úprava dat
 # Načtení dat do paměti a zároveň uložení do "piezo3.xlsx"
 data_frames = process_piezo_file(
-    script_dir / "piezo.xlsx",
-    output_file=script_dir / "piezo3.xlsx" if zapis_do_souboru else None,
+    work_dir / "piezo.xlsx",
+    output_file=work_dir / "piezo3.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Vytvoříme nové listy z 'JZ' a uložíme do piezo4.xlsx
 data_frames = create_new_sheets_from_jz(
     data_frames, 
-    output_file=script_dir / "piezo4.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo4.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Přidáme dekadický čas do vybraných listů a uložíme do piezo5.xlsx
-# data_frames = add_decimal_time_column(data_frames, labels, output_file=script_dir/"piezo5.xlsx")
+# data_frames = add_decimal_time_column(data_frames, labels, output_file=work_dir/"piezo5.xlsx")
 data_frames = add_decimal_time_column(
     data_frames, labels, 
-    output_file=script_dir / "piezo5.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo5.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Filtrování dat a uložení výsledku do piezo6.xlsx
-# filtered_data_frames = filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file=script_dir/"piezo6.xlsx")
+# filtered_data_frames = filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file=work_dir/"piezo6.xlsx")
 filtered_data_frames = filter_data_by_time_range(
     data_frames, labels, tmin, tmax, 
-    output_file=script_dir / "piezo6.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo6.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
@@ -778,53 +808,55 @@ columns, data_sets = read_measurement_data(filtered_data_frames, labels)
 # Odstranění sloupců 7 až 19 a uložení výsledku do piezo7.xlsx
 final_data_frames = remove_columns_from_labels(
     filtered_data_frames, labels, 
-    output_file=script_dir / "piezo7.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo7.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Přidání unikátních hodnot 'cas' do listu 'vystup' a uložení do "piezo8.xlsx"
 final_data_frames = add_unique_sorted_cas_to_vystup(
     final_data_frames, labels, 
-    output_file=script_dir / "piezo8.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo8.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 # Výpočet "year", "month", "day", "hour, z načtených dekadických časů a zápis do souboru "piezo9.xlsx". 
 final_data_frames = add_date_columns_to_vystup(
     final_data_frames, 
-    output_file=script_dir / "piezo9.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo9.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Zapíše tlaky příšlušným čidlům. Prázdné data jsou nahrazeny NaN 
 final_data_frames = merge_columns_to_vystup(
     final_data_frames, labels, columns, 
-    output_file=script_dir / "piezo10.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo10.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Přejmenuje hlavičky podle názvu vrtu 
 final_data_frames = rename_columns_in_vystup(
     final_data_frames, labels, columns, 
-    output_file=script_dir / "piezo11.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo11.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
+print("plots")
+plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, orientace, tmin, tmax, work_dir)
 
-plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, orientace, tmin, tmax, script_dir)
+print("outputs")
 
 # V data frame zapomene všechny listy až na výstup. Tyto listy již nebudou potřeba a jsou obsaženy ve vystup. 
 final_data_frames = keep_only_vystup(
     final_data_frames, 
-    output_file=script_dir / "piezo12.xlsx" if zapis_do_souboru else None, 
+    output_file=work_dir / "piezo12.xlsx" if zapis_do_souboru else None,
     save_to_excel=zapis_do_souboru
 )
 
 # Nalezeni rozdilu mezi radky
-# log_large_differences_to_excel_and_csv(script_dir / 'piezo2.xlsx', script_dir / 'output_results.xlsx', script_dir / 'output_results.csv', script_dir / 'rozrazka_nova.xlsx')
+# log_large_differences_to_excel_and_csv(work_dir / 'piezo2.xlsx', work_dir / 'output_results.xlsx', work_dir / 'output_results.csv', work_dir / 'rozrazka_nova.xlsx')
 
 final_data_frames = log_large_differences(
     final_data_frames,
     v_diff, a_diff,
-    rozrazka_file=script_dir / 'rozrazka_nova.xlsx',
-    output_excel_file=script_dir / "output_results.xlsx",
-    output_csv_file=script_dir / "output_results.csv"
+    rozrazka_file=work_dir / 'rozrazka_nova.xlsx',
+    output_excel_file=work_dir / "output_results.xlsx",
+    output_csv_file=work_dir / "output_results.csv"
 )
