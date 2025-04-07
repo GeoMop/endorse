@@ -1,16 +1,13 @@
-import math
 import os
 import numpy as np
 import pandas as pd
 
-from apps.Chodby_inv.mesh.venv.share.doc.gmsh.tutorials.python.t4 import factory
 from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
 from endorse.mesh import mesh_tools, fracture_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 from bgem.stochastic.fracture import Population
-# import gmsh as gmsh_api
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
