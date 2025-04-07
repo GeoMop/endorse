@@ -207,7 +207,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
     if "fractures" in cfg_geom.include:
         fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, [0,0,0], factory.rectangle())
         vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box_drilled"])
-        vol_dict["fractures_group"].set_region("fractures").mesh_step(cfg_mesh.fracture_mesh_step)
+        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step)
         # determine fracture outer boundary
         # b_fractures_outer = vol_dict["fractures_group"].get_boundary()[1]
         # bnd_dict["b_fractures_outer"] = b_fractures_outer \
