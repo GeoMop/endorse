@@ -1,6 +1,8 @@
 # base of the mesh file name
 mesh_name: trans_mesh
 
+geometry: &geometry !include _geometry.yaml
+
 mesh:
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 15
@@ -17,7 +19,16 @@ mesh:
       r_inf: 30
       h_inf: *boundary_mesh_step
 
-fractures:
+    storage_borehole_refinement:
+      r_inner: 0.2
+      h_inner: 0.2
+      r_outer: 1.2
+      h_outer: 0.6
+      q_outer: 1
+      r_inf: 30
+      h_inf: *boundary_mesh_step
+
+fractures: &fractures
     # SKB fracture population for repository domain
     population:  !include _fractures.yaml
     # upper limit on the number of (small) fractures
@@ -38,45 +49,3 @@ fractures:
 
 
 
-geometry:
-  # Coordinate system
-  # X - in direction of main tunnel
-  # Y - perpendicular horizontal
-  # Z - vertical
-  # origin: floor of the lateral tunnel, center, interface with center borehole.
-
-  # x,y,z dimension
-  box_dimensions: &box [40, 40, 40]
-  clip_box_dimensions: [40, 40, 40]
-
-  include: #[]
-    - boreholes
-    - fractures
-    - drilled_volume
-
-  # Main tunnel - main access tunnel L5
-  main_tunnel:
-    csv_points: main_tunnel_points.csv
-    height: 6.700
-    width: 4
-    length: 40
-
-  storage_borehole_distance: 4.750
-  n_storage_boroholes: 5
-  damaged_storage_borehole: 2  # can be negative => no damaged container
-
-  # Storage boreholes
-  storage_borehole:
-    diameter: 1.650
-    length: 6.540
-    plug: 2.000
-    mesh_step: 0.25
-
-  storage_borehole_refinement:
-    r_inner: 0.2
-    h_inner: 0.2
-    r_outer: 1.2
-    h_outer: 0.6
-    q_outer: 1
-    r_inf: 30
-    h_inf: *boundary_mesh_step
