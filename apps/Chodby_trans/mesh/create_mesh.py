@@ -4,6 +4,7 @@ import pandas as pd
 
 from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
+from endorse.common import dotdict, File, memoize
 from endorse.mesh import mesh_tools, fracture_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
@@ -38,7 +39,7 @@ def rescale_dimension(values, target_range):
     return (values - center) * scale # center at zero
 
 
-def create_main_tunnel(factory, cfg_geom:'dotdict'):
+def create_main_tunnel(factory, cfg:'dotdict'):
     """
     Creates main tunnel by extrusion from cross-section points of the L5 tunnel.
     :param factory:
@@ -46,9 +47,9 @@ def create_main_tunnel(factory, cfg_geom:'dotdict'):
     :return:
         tunnel (ObjectSet)
     """
-    cfg_mt = cfg_geom.main_tunnel
+    cfg_mt = cfg.geometry.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(os.path.join(script_dir, cfg_mt.csv_points))
+    df = pd.read_csv(os.path.join(cfg._config_root_dir, cfg_mt.csv_points))
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
 
     # rescale points to intended tunnel dimensions (x-width, z-height)
@@ -156,7 +157,7 @@ def safe_list(source_dict: dict[str, ObjectSet], keys: list[str]) -> list[Object
     return new_list
 
 
-def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
+def make_geometry(factory, cfg:'dotdict', fracture_set):
     cfg_geom = cfg.geometry
     cfg_mesh = cfg.mesh
 
@@ -174,7 +175,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
         "b_storage_boreholes_group": None
     }
 
-    vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg_geom)
+    vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg)
 
     if "boreholes" in cfg_geom.include:
         storage_boreholes, vol_dict["plug"], vol_dict["container"] \
@@ -204,7 +205,6 @@ def make_geometry(factory, cfg:'dotdict', fracture_population, seed):
     vol_dict["box_drilled"].set_region("box")
 
     if "fractures" in cfg_geom.include:
-        fracture_set, n_large = fracture_tools.fracture_set(cfg, fracture_population, seed)
         fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, [0,0,0], factory.rectangle())
         vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box_drilled"])
         vol_dict["fractures_group"].set_region("fractures").mesh_step(cfg_mesh.fracture_mesh_step)
@@ -342,14 +342,14 @@ def meshing(factory, objects, mesh_filename):
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
-def make_gmsh(cfg:'dotdict', fracture_population, seed):
+def make_gmsh(cfg:'dotdict', fracture_set):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = os.path.join(cfg.output_dir, cfg.mesh_name + ".msh2")
+    final_mesh_filename = os.path.join(cfg._output_dir, cfg.mesh_name + ".msh2")
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
@@ -358,40 +358,42 @@ def make_gmsh(cfg:'dotdict', fracture_population, seed):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg, fracture_population, seed)
+    geometry_set = make_geometry(factory, cfg, fracture_set)
     # factory.show()
     # exit(0)
 
     meshing(factory, [geometry_set], final_mesh_filename)
     # factory.show()
     del factory
-    return common.File(final_mesh_filename)
+    return File(final_mesh_filename)
 
 
-def make_mesh(workdir, output_dir, cfg_file, seed):
-    conf_file = os.path.join(workdir, cfg_file)
-    cfg = common.config.load_config(conf_file)
-    cfg.output_dir = output_dir
+@memoize
+def make_mesh(cfg, fr_pop, seed):
 
-    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+    if "fractures" in cfg.geometry.include:
+        fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, seed)
+    else:
+        fracture_set, n_large = None, 0
 
-    mesh_file = make_gmsh(cfg, fr_pop, seed)
+    mesh_file = make_gmsh(cfg, fracture_set)
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = os.path.join(cfg.output_dir, cfg.mesh_name + "_healed.msh2")
+    mesh_file_healed = os.path.join(cfg._output_dir, cfg.mesh_name + "_healed.msh2")
     # if not os.path.exists(mesh_file_healed):
     print("HEAL MESH")
     hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
     hm.heal_mesh(gamma_tol=0.02)
-    # hm.stats_to_yaml(os.path.join(output_dir, cfg.mesh_name + "_heal_stats.yaml"))
+    # hm.stats_to_yaml(os.path.join(_output_dir, cfg.mesh_name + "_heal_stats.yaml"))
     hm.write(file_name=mesh_file_healed)
 
-    # print("Mesh file: ", mesh_file_healed)
-    return common.File(mesh_file_healed)
+    print("Final mesh file: ", mesh_file_healed)
+    return File(mesh_file_healed), fracture_set, n_large
+
 
 if __name__ == '__main__':
     # output_dir = None
@@ -401,6 +403,11 @@ if __name__ == '__main__':
     #     output_dir = os.path.abspath(sys.argv[1])
     output_dir = script_dir
 
+    conf_file = os.path.join(script_dir, "../config/trans_mesh_config.yaml")
+    cfg = common.config.load_config(conf_file)
+    cfg._output_dir = output_dir
+
     seed = 101
-    make_mesh(script_dir, output_dir, "./trans_mesh_config.yaml", seed)
+    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+    make_mesh(cfg, fr_pop, seed)
 

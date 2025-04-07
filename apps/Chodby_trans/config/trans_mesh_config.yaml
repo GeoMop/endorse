@@ -4,7 +4,7 @@ mesh_name: trans_mesh
 mesh:
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 15
-    fracture_mesh_step: 5
+    fracture_mesh_step: 4
     main_tunnel_mesh_step: 1
 
     # refinement around central line of main tunnel
@@ -21,7 +21,7 @@ fractures:
     # SKB fracture population for repository domain
     population:  !include _fractures.yaml
     # upper limit on the number of (small) fractures
-    n_frac_limit: 40
+    n_frac_limit: 100
 
     # Experiments for large fr range [50, 200] and large_box: [20,20,20]
     # most seeds have no large fracture at all
@@ -30,7 +30,7 @@ fractures:
     #  crossing borehole: 3 fracture per 10 km
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
 
-    large_min_r: 30
+    large_min_r: 100
     large_box:  [60, 60, 60]
     # Would be better to have separate domains for known large fractures close to tunnel and
     # uncertain large fractures, need support in Population
