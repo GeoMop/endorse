@@ -57,9 +57,5 @@ for bi in range(bhs.n_boreholes):
         points.append((bhs.chamber_start(bi, ci), bhs.chamber_end(bi, ci)))
         sigmas.append(1)
         pressures.append(40)
-# p1 = bhs.chamber_start(0, 0)
-# p2 = bhs.chamber_end(0, 0)
-# p1 = np.array([-32, -25, -22.5])
-# p2 = np.array([32, 25, 22.5])
 
 process_gmsh_tetrahedral_mesh(input_mesh_file, output_mesh_file, points, {'sigma':sigmas, 'p_ref':pressures})
