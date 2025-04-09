@@ -39,14 +39,14 @@ def process_gmsh_tetrahedral_mesh(input_file, output_file, points, values_dict):
     element_data = {name: [values] for name,values in cell_values.items()}
 
     # Write new mesh in VTU format
-    meshio.write(output_file, meshio.Mesh(points=mesh.points, cells=[("tetra", tetrahedra)], cell_data=element_data))
+    meshio.write(output_file, meshio.Mesh(points=mesh.points, cells=[("tetra", tetrahedra)], cell_data=element_data), binary=False)
 
 
 
 
 # Example usage
 input_mesh_file = "L5_mesh_6_healed.msh"
-output_mesh_file = "output.vtu"
+output_mesh_file = "flow_sigma.vtu"
 
 bhs = boreholes.Boreholes('boreholes.yaml')
 points = []
