@@ -39,6 +39,9 @@ mesh:
       r_inf: 30
       h_inf: 10
 
+    # file with borehole and chamber locations
+    borehole_data_file: boreholes.yaml
+
     # refinement around borehole chambers
     borehole_refinement:
       r_inner: 0.3
