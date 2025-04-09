@@ -22,6 +22,7 @@ $venv_pip install --no-cache-dir -r ${ENDORSE_SRC_ROOT}/requirements.txt
 
 $venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/redis-cache
 $venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem
+$venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/meshio
 
 # attrs somehow was broken after gmsh explicit installation, must force its reinstalation
 $venv_pip install --force-reinstall --upgrade attrs
