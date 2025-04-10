@@ -88,7 +88,8 @@ def transport_2d(cfg, seed):
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
 
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, el_to_ifr, fractures, dim=2)
+    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+                                                     el_to_ifr, fractures, dim=2)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 
@@ -105,7 +106,8 @@ def transport_run(cfg, seed):
     el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, el_to_ifr, fractures, dim=3)
+    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+                                                     el_to_ifr, fractures, dim=3)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 def parametrized_run(cfg, large_model, input_fields_file):
@@ -219,7 +221,8 @@ def set_source_limits(cfg):
     return source_params
 
 @report
-def compute_fields(cfg:dotdict, mesh:Mesh,  fr_map: Dict[int, int], fractures:List[Fracture], dim):
+def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
+                   fr_map: Dict[int, Fracture], fractures:List[Fracture], dim):
     """
     :param params: transport parameters dictionary
     :param mesh: GmshIO of the computational mesh (read only)
@@ -238,8 +241,9 @@ def compute_fields(cfg:dotdict, mesh:Mesh,  fr_map: Dict[int, int], fractures:Li
     # Bulk fields
     el_slice_bulk = mesh.el_dim_slice(dim)
     # Bulk fields
-    #bulk_cond, bulk_por = compute_hm_bulk_fields(cfg, cfg_basedir, mesh.el_barycenters()[el_slice_3d])
-    bulk_cond, bulk_por = apply_fields.bulk_fields_mockup(cfg_geom, cfg_bulk_fields, mesh.el_barycenters()[el_slice_bulk])
+    # bulk_cond, bulk_por = apply_fields.bulk_fields_mockup(cfg_geom, cfg_bulk_fields, mesh.el_barycenters()[el_slice_bulk])
+    bulk_cond, bulk_por = bulk_field_func(cfg_geom, cfg_bulk_fields,
+                                          mesh.el_barycenters()[el_slice_bulk])
     conductivity[el_slice_bulk] = bulk_cond
     porosity[el_slice_bulk] = bulk_por
     logging.info(f"bulk slice: {el_slice_bulk}")

@@ -100,6 +100,41 @@ def bulk_fields_mockup(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
 
     return cond_field, por_field
 
+def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
+    X, Y, Z = XYZ.T
+    X = X - cfg_geom.main_tunnel.center[0]
+    Y = Y - cfg_geom.main_tunnel.center[1]
+    Z = Z - cfg_geom.main_tunnel.center[2]
+
+    edz_r = cfg_geom.edz_radius # 2.5
+    in_r = cfg_bulk_fields.inner_radius
+    # axis with respect to EDZ radius
+    # X_rel = X / cfg_bulk_fields.h_axis
+    # Z_rel = Z / cfg_bulk_fields.v_axis
+    X_rel = X / (cfg_geom.main_tunnel.width/2)
+    Z_rel = Z / (cfg_geom.main_tunnel.height/2)
+
+    # distance from center, 1== edz_radius (main tunnel boundary)
+    distance = np.sqrt((X_rel * X_rel + Z_rel * Z_rel)) - in_r
+    theta = distance / (edz_r - in_r)
+    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2, Y <= cfg_geom.main_tunnel.length/2), 1.0, 0.0)
+
+    if cond is None:
+        cond_max = float(cfg_bulk_fields.cond_max)
+        cond_min = float(cfg_bulk_fields.cond_min)
+    else:
+        cond_min, cond_max = cond
+
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
+    cond_field = np.clip(cond_field, cond_min, cond_max)
+
+    por_max = float(cfg_bulk_fields.por_max)
+    por_min = float(cfg_bulk_fields.por_min)
+    por_field = np.exp((1-theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
+    por_field = np.clip(por_field, por_min, por_max)
+
+    return cond_field, por_field
+
 viscosity = 1e-3
 gravity_accel = 10
 density = 1000
