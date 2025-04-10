@@ -59,7 +59,8 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     # create polygon
     tunnel_polygon = factory.make_polygon(points=main_tunnel_points)
     # compute center of polygon
-    tunnel_center = factory.point(np.average(main_tunnel_points, axis=0))
+    cfg.geometry.main_tunnel.center = np.average(main_tunnel_points, axis=0)
+    tunnel_center = factory.point(cfg.geometry.main_tunnel.center)
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
     tunnel_polygon.translate(vector=[0, -cfg_mt.length / 2, 0])
     tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_mt.length, 0])
