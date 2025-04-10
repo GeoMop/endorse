@@ -35,6 +35,10 @@ class Boreholes:
     def bh_id(self, bh_index):
         return self.config.boreholes[bh_index].id
 
+    def bh_index_from_name(self, bh_name):
+        idx = next(i for i,bh in enumerate(self.config.boreholes) if bh.name == bh_name)
+        return idx
+
     def bh_start(self, bh_index):
         bh = self.config.boreholes[bh_index]
         # We detect orientation from borehole id (starts either 'L' or 'P')
@@ -193,7 +197,7 @@ class ObservePointData:
         plt.tight_layout()
         plt.show()
 
-    def plot_chamber_pressure_averages(self, output_file=None):
+    def plot_chamber_pressure_averages(self, output_file=None, print_pressures=False):
         fig, ax = plt.subplots(3, 8, figsize=(60, 15))
         ax = ax.transpose().flatten()
         for ci, cname in enumerate(self._chamber_names):
@@ -204,10 +208,12 @@ class ObservePointData:
             ax[ci].set_title(cname)
             # ax[ci].set_ylim(self._pressure_bounds[ci])
             ax[ci].set_xlim(100, 130)
-            ax[ci].yaxis.set_major_locator(ticker.MultipleLocator(50))
-            ax[ci].yaxis.set_minor_locator(ticker.MultipleLocator(10))
+            #ax[ci].yaxis.set_major_locator(ticker.MultipleLocator(50))
+            #ax[ci].yaxis.set_minor_locator(ticker.MultipleLocator(10))
+            #ax[ci].minorticks_on()
             ax[ci].plot(xx, pressures)
-            print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
+            if print_pressures:
+                print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
 
         plt.tight_layout()
         if output_file is None:
@@ -221,7 +227,7 @@ class ObservePointData:
 def plot_chamber_pressures(boreholes_fname,
                            pressure_fname,
                            output_fname,
-                           pressure_init_fname,
+                           pressure_init_fname=None,
                            output_init_fname=None,
                            pressure_ref_csv_fname=None,
                            output_compared_fname=None
@@ -229,26 +235,44 @@ def plot_chamber_pressures(boreholes_fname,
     bhs = Boreholes(boreholes_fname)
     obs = ObservePointData(bhs, pressure_fname)
     fig, ax = obs.plot_chamber_pressure_averages(output_fname)
-    obs_i = ObservePointData(bhs, pressure_init_fname)
-    fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname)
 
-    # plot both lines to one plot
-    for axis, axis_i in zip(ax, ax_i):
-        for line in axis_i.get_lines():
-            axis.plot(line.get_xdata(), line.get_ydata(), label='enforced initial pressure')
+    # shift time scale and add labels
+    for axis in ax:
+        for line in axis.get_lines():
+            line.set_xdata(line.get_xdata() - 100)
+            line.set_label('model pressure [m]')
+            axis.set_xlim(0,60)
             axis.legend()
+    
+    if pressure_init_fname is not None:
+        obs_i = ObservePointData(bhs, pressure_init_fname)
+        fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname)
+
+        # plot both lines to one plot
+        for axis, axis_i in zip(ax, ax_i):
+            for line in axis_i.get_lines():
+                axis.plot(line.get_xdata() - 100, line.get_ydata(), label='model with enforced initial pressure [m]')
+                axis.legend()
 
     # read and plot reference pressures from measurements
     if pressure_ref_csv_fname is not None:
         df = pd.read_csv(pressure_ref_csv_fname, delimiter=';')
         for axis,cname in zip(ax,obs.chamber_names):
             bhname, _, cidx = cname.rpartition('_ch_')
+            bh_index = bhs.bh_index_from_name(bhname)
+            cstart = bhs.chamber_start(bh_index, int(cidx))
+            cend = bhs.chamber_end(bh_index, int(cidx))
+            bh_start = bhs.bh_start(bh_index)
+            loc_start = np.linalg.norm(cstart-bh_start)
+            loc_end = np.linalg.norm(cend-bh_start)
+            axis.set_title(f"{bhname} chamber {cidx} location {loc_start:.2f}-{loc_end:.2f}")
             filtered_df = df[(df['Borehole'] == bhname) & (df['Chamber'] == int(cidx))]
-            sim_time = filtered_df['sim_time'] #.to_numpy()
-            pressure = filtered_df['pressure'].to_numpy()
+            sim_time = filtered_df['sim_time']
+            pressure = filtered_df['tlak'].to_numpy() / 10 # from kPa to m
+            depth = filtered_df['depth in borehole']
             if pressure.size > 0:
-                p_difference = 0 #pressure[0] - axis.get_lines()[0].get_ydata()[0]
-                axis.plot(sim_time+100, pressure - p_difference, label='measurement')
+                axis.plot(sim_time, pressure, label='measured pressure [m]')
+                axis.set_title(axis.get_title() + f" (depth {depth.values[0]})")
                 axis.legend()
 
     if output_compared_fname is None:
@@ -257,12 +281,16 @@ def plot_chamber_pressures(boreholes_fname,
         fig.savefig(output_compared_fname)
 
 if __name__ == "__main__":
+    # plot comparison of model and measured pressure in chambers
     borehole_fname = 'boreholes.yaml'
     pressure_fname = 'flow_observe_refined.yaml'
     output_fname = 'chamber_pressure_averages_refined.pdf'
     pressure_init_fname = 'flow_observe_refined_init_p.yaml'
     output_init_fname = 'chamber_pressure_averages_refined_init_p.pdf'
-    pressure_ref_fname = 'output_results.csv'
+    pressure_ref_fname = 'output_tlaky.csv'
     output_compared_fname = 'chamber_pressures_refined_compared.pdf'
-    plot_chamber_pressures(borehole_fname, pressure_fname, output_fname, pressure_init_fname, output_init_fname,
-                           pressure_ref_fname, output_compared_fname)
+    plot_chamber_pressures(borehole_fname,
+                           pressure_fname,
+                           output_fname,
+                           pressure_ref_csv_fname=pressure_ref_fname,
+                           output_compared_fname=output_compared_fname)

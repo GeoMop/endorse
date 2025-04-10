@@ -54,6 +54,16 @@ boreholes:
     packer_centers: [2.5, 6, 9]
     length: 12
 
+  - name: L5-37UR
+    id: P +5-25+15
+    stationing: 36.74
+    starting_height: 2.4
+    azimuth: 225.4
+    inclination: 15.7
+    packer_width: 1
+    packer_centers: [1.5, 5, 7.5]
+    length: 10
+
   - name: L5-24DR
     id: P-13+70-15
     stationing: 23.5
@@ -73,15 +83,5 @@ boreholes:
     packer_width: 1
     packer_centers: [7.5, 10, 13.5]
     length: 16
-
-  - name: L5-37UR
-    id: P +5-25+15
-    stationing: 36.74
-    starting_height: 2.4
-    azimuth: 225.4
-    inclination: 15.7
-    packer_width: 1
-    packer_centers: [1.5, 5, 7.5]
-    length: 10
 
 
