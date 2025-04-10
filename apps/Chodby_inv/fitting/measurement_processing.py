@@ -106,11 +106,11 @@ def read_konfigurace(file_path):
 
 def read_rozrazka(file_path):
     # Načtení dat ze severní rozrážky
-    rozrazka_s = pd.read_excel(file_path, sheet_name='Sever', usecols="L", skiprows=1)
+    rozrazka_s = pd.read_excel(file_path, sheet_name='Sever', usecols="L", skiprows=1).dropna()
     data_s = rozrazka_s.iloc[:, 0]  # Pouze první sloupec z vybraného rozsahu
 
     # Načtení dat z jižní rozrážky
-    rozrazka_j = pd.read_excel(file_path, sheet_name='Jih', usecols="L", skiprows=1)
+    rozrazka_j = pd.read_excel(file_path, sheet_name='Jih', usecols="L", skiprows=1).dropna()
     data_j = rozrazka_j.iloc[:, 0]  # Pouze první sloupec z vybraného rozsahu
 
     print('Data ze severní rozrážky:')
@@ -694,7 +694,7 @@ borehole_chambers = {
 }
 
 @common_report
-def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, output_excel_file, output_csv_file):
+def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_dframes, output_excel_file, output_csv_file):
     """
     Analyzuje rozdíly v tlaku mezi řádky v `final_data_frames` a zapisuje pouze významné rozdíly do Excelu a CSV.
 
@@ -717,11 +717,9 @@ def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, outp
     df = final_data_frames["vystup"]
 
     # Načtení časů rozrážek
-    rozrazka_s = pd.read_excel(rozrazka_file, sheet_name='Sever', usecols="L", skiprows=1).dropna()
-    rozrazka_j = pd.read_excel(rozrazka_file, sheet_name='Jih', usecols="L", skiprows=1).dropna()
-    data_s = rozrazka_s.iloc[:, 0].tolist()
-    data_j = rozrazka_j.iloc[:, 0].tolist()
-    all_rozrazka_times = data_s + data_j
+
+    times_s, times_j = rozrazka_dframes
+    all_rozrazka_times = times_s + times_j
 
     # Data pro zápis
     output_minus = []
@@ -863,11 +861,13 @@ def export_all_pressure_readings(final_data_frames, output_excel_file, output_cs
 
 
 def precess_piezo_file():
+    blast_times = input_dir / 'blast_events.xlsx'
+    
     # Hlavni program - načtení vstupních dat
     # Otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
     labels, orientace = read_konfigurace(input_dir / 'konfigurace_vrtu.xlsx')
     # Nacte casy rozrazek, otevře soubor rozrazka
-    data_s, data_j = read_rozrazka(input_dir / 'rozrazka_nova.xlsx')
+    blast_dframes = read_rozrazka(blast_times)
     # Nacte minimální a maximální čas, pro který bude úloha zpracovávána a zda bude zapisovat do excelu
     tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(input_dir / 'vstup.yaml')
 
@@ -930,7 +930,7 @@ def precess_piezo_file():
         save_to_excel=zapis_do_souboru
     )
     print("plots")
-    plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, orientace, tmin, tmax, work_dir)
+    plot_pressure_graphs(final_data_frames, labels, columns, *blast_dframes, orientace, tmin, tmax, work_dir)
 
     print("outputs")
 
@@ -946,7 +946,7 @@ def precess_piezo_file():
     final_data_frames = log_large_differences(
         final_data_frames,
         v_diff, a_diff,
-        rozrazka_file=input_dir / 'rozrazka_nova.xlsx',
+        blast_dframes,
         output_excel_file=work_dir / "pressure_jumps.xlsx",
         output_csv_file=work_dir / "pressure_jumps.csv"
     )
