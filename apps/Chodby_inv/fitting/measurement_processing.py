@@ -1,16 +1,22 @@
+import os
 import yaml
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator, MaxNLocator
+from functools import wraps
 from datetime import datetime
-import numpy as np
 import pathlib
 from time import time
 
-work_dir = pathlib.Path(__file__).parent / "measurement_data"
-import os
-from functools import wraps
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
+from matplotlib.ticker import MultipleLocator, MaxNLocator
+
+import pandas as pd
+
+script_dir = pathlib.Path(__file__).parent
+input_dir = script_dir / "measurement_data"
+work_dir =  script_dir / "workdir"
 
 def save_to_excel_decorator(func):
     counter = 0  # counter to keep track of how many files were written
@@ -26,7 +32,7 @@ def save_to_excel_decorator(func):
         if kwargs.get("save_to_excel"):
             counter += 1
             # Create the output file name using a two-digit counter and the function name
-            output_file = f"{counter:02d}_{func.__name__}.xlsx"
+            output_file = work_dir/f"{counter:02d}_{func.__name__}.xlsx"
 
             # Write each dataframe to a separate sheet
             with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
@@ -58,9 +64,18 @@ def log_function_call(func):
         return result
     return wrapper
 
+def compose_decorators(*decorators):
+    """
+    Compose multiple decorators into a single decorator.
+    Decorators are applied in the order they are passed.
+    """
+    def composed(func):
+        for decorator in reversed(decorators):
+            func = decorator(func)
+        return func
+    return composed
 
-
-
+common_report = compose_decorators(log_function_call, measure_time, save_to_excel_decorator)
 # script_dir = pathlib.Path(__file__).parent
 
 # funkce v programu
@@ -126,11 +141,8 @@ def read_vstupy(file_path):
     print(f"Načteno: tmin={tmin}, tmax={tmax}, zapis_do_souboru={zapis_do_souboru}, v_diff={v_diff}, a_diff={a_diff}")
     return tmin, tmax, zapis_do_souboru, v_diff, a_diff
 
-
-@log_function_call
-@measure_time
-@save_to_excel_decorator
-def process_piezo_file(input_file, output_file=None):
+@common_report
+def process_piezo_file(input_file):
     """
     Načte všechny listy ze souboru piezo.xlsx, nahradí prázdné hodnoty NaN
     a volitelně uloží výsledek do Excelu.
@@ -162,9 +174,8 @@ def process_piezo_file(input_file, output_file=None):
     return excel_data
 
 
-@log_function_call
-@measure_time
-def create_new_sheets_from_jz(data_frames, output_file=None, save_to_excel=True):
+@common_report
+def create_new_sheets_from_jz(data_frames):
     """
     Vytvoří nové listy z listu 'JZ', rozšíří data_frames a uloží do souboru piezo4.xlsx.
 
@@ -205,22 +216,21 @@ def create_new_sheets_from_jz(data_frames, output_file=None, save_to_excel=True)
 
     # Uložení do Excelu
 
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-        print(f"Výstup uložen do {output_file}.")
-
-    print(f"Nové listy byly přidány do data_frames a uloženy do souboru {output_file}")
-
-    # Výpis všech listů po přidání nových
-    print("Listy po rozšíření:", list(data_frames.keys()))
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #     print(f"Výstup uložen do {output_file}.")
+    #
+    # print(f"Nové listy byly přidány do data_frames a uloženy do souboru {output_file}")
+    #
+    # # Výpis všech listů po přidání nových
+    # print("Listy po rozšíření:", list(data_frames.keys()))
 
     return data_frames  # Vrací aktualizovaný slovník
 
-@log_function_call
-@measure_time
-def add_decimal_time_column(data_frames, labels, output_file="piezo5.xlsx", save_to_excel=True):
+@common_report
+def add_decimal_time_column(data_frames, labels):
     """
     Přidá sloupec s dekadickým časem do listů v data_frames a uloží výstup do souboru piezo5.xlsx.
 
@@ -258,15 +268,15 @@ def add_decimal_time_column(data_frames, labels, output_file="piezo5.xlsx", save
                 print(f"Varování: List '{label}' neobsahuje všechny potřebné sloupce.")
 
     # Uložení upravených dat do Excelu
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Sloupec 'cas' byl přidán do listů a výstup byl uložen do {output_file}.")
-
-    # Výpis prvních řádků upraveného listu pro kontrolu
-    print(data_frames["JZ"].head())
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Sloupec 'cas' byl přidán do listů a výstup byl uložen do {output_file}.")
+    #
+    # # Výpis prvních řádků upraveného listu pro kontrolu
+    # print(data_frames["JZ"].head())
 
     return data_frames  # Vrací aktualizovaný slovník
 
@@ -301,9 +311,8 @@ def read_measurement_data(final_data_frames, labels):
     print('Nacteny nazvy sloupcu:', columns)
     return columns, data_sets
 
-@log_function_call
-@measure_time
-def filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file="piezo6.xlsx", save_to_excel=True):
+@common_report
+def filter_data_by_time_range(data_frames, labels, tmin, tmax):
     """
     Filtrovat pouze listy uvedené v `labels` podle časového intervalu (tmin, tmax)
     a uložit výsledek do piezo6.xlsx.
@@ -333,16 +342,16 @@ def filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file="piez
             filtered_data_frames[sheet_name] = df
 
     # Uložení filtrovaných dat do Excelu piezo6.xlsx
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in filtered_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Listy {labels} byly filtrovány podle intervalu ({tmin}, {tmax}) a uloženy do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in filtered_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Listy {labels} byly filtrovány podle intervalu ({tmin}, {tmax}) a uloženy do {output_file}.")
     return filtered_data_frames  # Vrací slovník s filtrovanými daty
 
-
-def remove_columns_from_labels(data_frames, labels, output_file="piezo7.xlsx", save_to_excel=True):
+@common_report
+def remove_columns_from_labels(data_frames, labels):
     """
     Odstraní sloupce 7 až 19 z listů uvedených v `labels` a uloží výsledek do piezo7.xlsx.
 
@@ -366,12 +375,12 @@ def remove_columns_from_labels(data_frames, labels, output_file="piezo7.xlsx", s
         updated_data_frames[sheet_name] = df  # Uložíme zpět do slovníku
 
     # Uložení do Excelu piezo7.xlsx
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in updated_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Upravené listy byly uloženy do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in updated_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Upravené listy byly uloženy do {output_file}.")
     return updated_data_frames  # Vrací aktualizovaný slovník
 
 
@@ -389,8 +398,8 @@ def add_new_sheet(final_data_frames):
     print("Nový list 'vystup' byl přidán do final_data_frames.")
     return final_data_frames
 
-
-def add_unique_sorted_cas_to_vystup(final_data_frames, labels, output_file="piezo8.xlsx", save_to_excel=True):
+@common_report
+def add_unique_sorted_cas_to_vystup(final_data_frames, labels):
     """
     Shromáždí unikátní hodnoty 'cas' z listů v labels, seřadí je a uloží do listu 'vystup'.
     Výsledek se zároveň uloží do souboru 'piezo8.xlsx'.
@@ -421,16 +430,16 @@ def add_unique_sorted_cas_to_vystup(final_data_frames, labels, output_file="piez
     print("Seřazené unikátní hodnoty 'cas' byly přidány do final_data_frames.")
 
     # Uložení výsledku do Excelu piezo8.xlsx
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in final_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Všechna data byla uložena do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in final_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Všechna data byla uložena do {output_file}.")
 
     return final_data_frames
 
-
+@common_report
 def add_date_columns_to_vystup(final_data_frames, output_file="piezo9.xlsx", save_to_excel=True):
     """
     Přidá časové sloupce (Year, Month, Day, Hour, Minute, Seconds) do listu 'vystup'.
@@ -471,16 +480,15 @@ def add_date_columns_to_vystup(final_data_frames, output_file="piezo9.xlsx", sav
     print("Časové sloupce byly přidány do 'vystup'.")
 
     # Uložení do Excelu
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in final_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Výstup byl uložen do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in final_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Výstup byl uložen do {output_file}.")
     return final_data_frames
 
-@log_function_call
-@measure_time
+@common_report
 def merge_columns_to_vystup(final_data_frames, labels, columns, output_file="piezo10.xlsx", save_to_excel=True):
     """
     Sloučí vybrané sloupce z listů v `labels` do listu 'vystup' na základě sloupce 'cas'.
@@ -517,15 +525,15 @@ def merge_columns_to_vystup(final_data_frames, labels, columns, output_file="pie
     print(f"Sloupce z listů {labels} byly přidány do 'vystup'.")
 
     # Uložení do Excelu
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in final_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Výstup byl uložen do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in final_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Výstup byl uložen do {output_file}.")
     return final_data_frames
 
-
+@common_report
 def rename_columns_in_vystup(final_data_frames, labels, columns, output_file="piezo11.xlsx", save_to_excel=True):
     """
     Přejmenuje sloupce v listu 'vystup' na základě názvu listu.
@@ -561,15 +569,15 @@ def rename_columns_in_vystup(final_data_frames, labels, columns, output_file="pi
     print("Sloupce v 'vystup' byly přejmenovány.")
 
     # Uložení do Excelu
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            for sheet_name, df in final_data_frames.items():
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    print(f"Výstup byl uložen do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         for sheet_name, df in final_data_frames.items():
+    #             df.to_excel(writer, sheet_name=sheet_name, index=False)
+    #
+    # print(f"Výstup byl uložen do {output_file}.")
     return final_data_frames
 
-
+@common_report
 def keep_only_vystup(final_data_frames, output_file="piezo12.xlsx", save_to_excel=True):
     """
     Zachová pouze list 'vystup' v final_data_frames a odstraní všechny ostatní.
@@ -591,11 +599,11 @@ def keep_only_vystup(final_data_frames, output_file="piezo12.xlsx", save_to_exce
     print("Všechny listy kromě 'vystup' byly odstraněny.")
 
     # Uložení do Excelu
-    if save_to_excel and output_file:
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            final_data_frames["vystup"].to_excel(writer, sheet_name="vystup", index=False)
-
-    print(f"Výstup byl uložen do {output_file}.")
+    # if save_to_excel and output_file:
+    #     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+    #         final_data_frames["vystup"].to_excel(writer, sheet_name="vystup", index=False)
+    #
+    # print(f"Výstup byl uložen do {output_file}.")
     return final_data_frames
 
 
@@ -685,8 +693,7 @@ borehole_chambers = {
     'L5-37UR': ['17,67', '20,75', '22,74']
 }
 
-@log_function_call
-@measure_time
+@common_report
 def log_large_differences(final_data_frames, v_diff, a_diff, rozrazka_file, output_excel_file, output_csv_file):
     """
     Analyzuje rozdíly v tlaku mezi řádky v `final_data_frames` a zapisuje pouze významné rozdíly do Excelu a CSV.
@@ -855,106 +862,101 @@ def export_all_pressure_readings(final_data_frames, output_excel_file, output_cs
     print(f"📤 Tlaková data exportována do:\n   📁 {output_excel_file}\n   📁 {output_csv_file}")
 
 
+def precess_piezo_file():
+    # Hlavni program - načtení vstupních dat
+    # Otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
+    labels, orientace = read_konfigurace(input_dir / 'konfigurace_vrtu.xlsx')
+    # Nacte casy rozrazek, otevře soubor rozrazka
+    data_s, data_j = read_rozrazka(input_dir / 'rozrazka_nova.xlsx')
+    # Nacte minimální a maximální čas, pro který bude úloha zpracovávána a zda bude zapisovat do excelu
+    tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(input_dir / 'vstup.yaml')
 
-# Hlavni program - načtení vstupních dat
-# Otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
-labels, orientace = read_konfigurace(work_dir / 'konfigurace_vrtu.xlsx')
-# Nacte casy rozrazek, otevře soubor rozrazka
-data_s, data_j = read_rozrazka(work_dir / 'rozrazka_nova.xlsx')
-# Nacte minimální a maximální čas, pro který bude úloha zpracovávána a zda bude zapisovat do excelu
-tmin, tmax, zapis_do_souboru, v_diff, a_diff = read_vstupy(work_dir / 'vstup.yaml')
 
-# Hlavni program - úprava dat
-# Načtení dat do paměti a zároveň uložení do "piezo3.xlsx"
-data_frames = process_piezo_file(
-    work_dir / "piezo.xlsx",
-    output_file=work_dir / "piezo3.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Hlavni program - úprava dat
+    # Načtení dat do paměti a zároveň uložení do "piezo3.xlsx"
+    data_frames = process_piezo_file(
+        input_dir / "piezo.xlsx",
+        save_to_excel=zapis_do_souboru
+    )
 
-# Vytvoříme nové listy z 'JZ' a uložíme do piezo4.xlsx
-data_frames = create_new_sheets_from_jz(
-    data_frames,
-    output_file=work_dir / "piezo4.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Vytvoříme nové listy z 'JZ' a uložíme do piezo4.xlsx
+    data_frames = create_new_sheets_from_jz(
+        data_frames,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Přidáme dekadický čas do vybraných listů a uložíme do piezo5.xlsx
-# data_frames = add_decimal_time_column(data_frames, labels, output_file=work_dir/"piezo5.xlsx")
-data_frames = add_decimal_time_column(
-    data_frames, labels,
-    output_file=work_dir / "piezo5.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Přidáme dekadický čas do vybraných listů a uložíme do piezo5.xlsx
+    # data_frames = add_decimal_time_column(data_frames, labels, output_file=work_dir/"piezo5.xlsx")
+    data_frames = add_decimal_time_column(
+        data_frames, labels,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Filtrování dat a uložení výsledku do piezo6.xlsx
-# filtered_data_frames = filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file=work_dir/"piezo6.xlsx")
-filtered_data_frames = filter_data_by_time_range(
-    data_frames, labels, tmin, tmax,
-    output_file=work_dir / "piezo6.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Filtrování dat a uložení výsledku do piezo6.xlsx
+    # filtered_data_frames = filter_data_by_time_range(data_frames, labels, tmin, tmax, output_file=work_dir/"piezo6.xlsx")
+    filtered_data_frames = filter_data_by_time_range(
+        data_frames, labels, tmin, tmax,
+        save_to_excel=zapis_do_souboru
+    )
 
-columns, data_sets = read_measurement_data(filtered_data_frames, labels)
+    columns, data_sets = read_measurement_data(filtered_data_frames, labels)
 
-# Odstranění sloupců 7 až 19 a uložení výsledku do piezo7.xlsx
-final_data_frames = remove_columns_from_labels(
-    filtered_data_frames, labels,
-    output_file=work_dir / "piezo7.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Odstranění sloupců 7 až 19 a uložení výsledku do piezo7.xlsx
+    final_data_frames = remove_columns_from_labels(
+        filtered_data_frames, labels,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Přidání unikátních hodnot 'cas' do listu 'vystup' a uložení do "piezo8.xlsx"
-final_data_frames = add_unique_sorted_cas_to_vystup(
-    final_data_frames, labels,
-    output_file=work_dir / "piezo8.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
-# Výpočet "year", "month", "day", "hour, z načtených dekadických časů a zápis do souboru "piezo9.xlsx".
-final_data_frames = add_date_columns_to_vystup(
-    final_data_frames,
-    output_file=work_dir / "piezo9.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Přidání unikátních hodnot 'cas' do listu 'vystup' a uložení do "piezo8.xlsx"
+    final_data_frames = add_unique_sorted_cas_to_vystup(
+        final_data_frames, labels,
+        save_to_excel=zapis_do_souboru
+    )
+    # Výpočet "year", "month", "day", "hour, z načtených dekadických časů a zápis do souboru "piezo9.xlsx".
+    final_data_frames = add_date_columns_to_vystup(
+        final_data_frames,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Zapíše tlaky příšlušným čidlům. Prázdné data jsou nahrazeny NaN
-final_data_frames = merge_columns_to_vystup(
-    final_data_frames, labels, columns,
-    output_file=work_dir / "piezo10.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # Zapíše tlaky příšlušným čidlům. Prázdné data jsou nahrazeny NaN
+    final_data_frames = merge_columns_to_vystup(
+        final_data_frames, labels, columns,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Přejmenuje hlavičky podle názvu vrtu
-final_data_frames = rename_columns_in_vystup(
-    final_data_frames, labels, columns,
-    output_file=work_dir / "piezo11.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
-print("plots")
-plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, orientace, tmin, tmax, work_dir)
+    # Přejmenuje hlavičky podle názvu vrtu
+    final_data_frames = rename_columns_in_vystup(
+        final_data_frames, labels, columns,
+        save_to_excel=zapis_do_souboru
+    )
+    print("plots")
+    plot_pressure_graphs(final_data_frames, labels, columns, data_s, data_j, orientace, tmin, tmax, work_dir)
 
-print("outputs")
+    print("outputs")
 
-# V data frame zapomene všechny listy až na výstup. Tyto listy již nebudou potřeba a jsou obsaženy ve vystup.
-final_data_frames = keep_only_vystup(
-    final_data_frames,
-    output_file=work_dir / "piezo12.xlsx" if zapis_do_souboru else None,
-    save_to_excel=zapis_do_souboru
-)
+    # V data frame zapomene všechny listy až na výstup. Tyto listy již nebudou potřeba a jsou obsaženy ve vystup.
+    final_data_frames = keep_only_vystup(
+        final_data_frames,
+        save_to_excel=zapis_do_souboru
+    )
 
-# Nalezeni rozdilu mezi radky
-# log_large_differences_to_excel_and_csv(work_dir / 'piezo2.xlsx', work_dir / 'output_results.xlsx', work_dir / 'output_results.csv', work_dir / 'rozrazka_nova.xlsx')
+    # Nalezeni rozdilu mezi radky
+    # log_large_differences_to_excel_and_csv(work_dir / 'piezo2.xlsx', work_dir / 'output_results.xlsx', work_dir / 'output_results.csv', work_dir / 'rozrazka_nova.xlsx')
 
-final_data_frames = log_large_differences(
-    final_data_frames,
-    v_diff, a_diff,
-    rozrazka_file=work_dir / 'rozrazka_nova.xlsx',
-    output_excel_file=work_dir / "output_results.xlsx",
-    output_csv_file=work_dir / "output_results.csv"
-)
+    final_data_frames = log_large_differences(
+        final_data_frames,
+        v_diff, a_diff,
+        rozrazka_file=input_dir / 'rozrazka_nova.xlsx',
+        output_excel_file=work_dir / "pressure_jumps.xlsx",
+        output_csv_file=work_dir / "pressure_jumps.csv"
+    )
 
-export_all_pressure_readings(
-    final_data_frames,
-    output_excel_file=work_dir / "output_tlaky.xlsx",
-    output_csv_file=work_dir / "output_tlaky.csv"
-)
+    export_all_pressure_readings(
+        final_data_frames,
+        output_excel_file=work_dir / "pressure_filtered.xlsx",
+        output_csv_file=work_dir / "pressure_filtered.csv"
+    )
+    return final_data_frames
+
+if __name__ == '__main__':
+    precess_piezo_file()
