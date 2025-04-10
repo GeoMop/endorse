@@ -8,6 +8,8 @@
 box_dimensions: &box [40, 40, 40]
 clip_box_dimensions: [40, 40, 40]
 
+edz_radius: 2.5
+
 include: #[]
   - boreholes
   - fractures
