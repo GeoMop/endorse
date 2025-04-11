@@ -15,7 +15,7 @@ from endorse.mesh_class import Mesh
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
 
-from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields
+from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
 from apps.Chodby_trans.mesh.create_mesh import make_mesh
 
@@ -44,26 +44,10 @@ def fullscale_transport(cfg_path, seed):
     cfg = common.load_config(cfg_path)
     return transport_run(cfg, seed)
 
-# def time_tuple(item : Union[float, Tuple[float, float]]):
-#     if isinstance(item, (tuple,list)):
-#         return item
-#     else:
-#         return (item, np.inf)
-#
-# def output_times(cfg_fine):
-#     cfg_times, end_time = cfg_fine.output_times, cfg_fine.end_time
-#     cfg_times.append(end_time)
-#     times = []
-#     for item, next in zip(cfg_times[:-1], cfg_times[1:]):
-#         start, step = time_tuple(item)
-#         end, _ = time_tuple(next)
-#         times.extend((t for t in np.arange(start, end, step)))
-#     times.append(end_time)
-#     return times
-
 
 def transport_run(cfg, seed):
-    cfg_basedir = cfg._config_root_dir
+    # large_model = File(os.path.join(cfg._config_root_dir, cfg_fine.piezo_head_input_file))
+    large_model = None
 
     fr_pop = Population.initialize_3d( cfg.fractures.population, cfg.geometry.box_dimensions)
     mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
@@ -77,27 +61,16 @@ def transport_run(cfg, seed):
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
     input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
-    exit(0)
 
-    return parametrized_run(cfg, large_model, input_fields_file)
+    return parametrized_run(cfg, input_fields_file)
 
 def parametrized_run(cfg, large_model, input_fields_file):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
 
-    # estimate times
-    #bulk_vel_est, fr_vel_est = est_velocity
-    #end_time = (50 / bulk_vel_est + 50 / fr_vel_est)
-    #dt = 0.5 / bulk_vel_est
-    # convert to years
-
-    #end_time = end_time / common.year
-    #dt = dt / common.year
-
-    #end_time = 10 * dt
     new_params = dict(
         mesh_file=input_fields_file,
-        piezo_head_input_file=large_model,
+        # piezo_head_input_file=large_model,
         #conc_flux_file=conc_flux,
         input_fields_file = input_fields_file,
         dg_penalty = cfg_fine.dg_penalty,
@@ -182,7 +155,10 @@ if __name__ == '__main__':
     # assert len_argv > 1, "Specify input yaml file and output dir!"
     # if len_argv == 2:
     #     output_dir = os.path.abspath(sys.argv[1])
-    output_dir = script_dir
+    # output_dir = script_dir
+    output_dir = os.path.join(script_dir, "output")
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 
     conf_file = os.path.join(script_dir, "config/trans_mesh_config.yaml")
     cfg = common.config.load_config(conf_file)
