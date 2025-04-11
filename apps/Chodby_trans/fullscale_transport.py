@@ -54,10 +54,13 @@ def transport_run(cfg, seed):
 
 
     # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
-    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=0) # already healed
+    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None) # already healed
 
+    # modifies the regions: fr_large, fr_small
     el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
-    # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
+    mesh_modified_filepath = os.path.join(os.path.dirname(mesh_file.path),
+                                          os.path.splitext(os.path.basename(mesh_file.path))[0] + "_modified.msh2")
+    mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
     input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
