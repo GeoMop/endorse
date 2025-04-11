@@ -1,3 +1,4 @@
+import os
 import logging
 import yaml
 
@@ -46,13 +47,14 @@ def fracture_set(cfg, fr_population:Population, seed):
     fractures = mesh_tools.generate_fractures(fr_population, (large_min_r, max_large_size), fr_limit, large_box_dimensions, fix_seed)
 
     large_fr_dict=dict(seed=fix_seed, fr_set=[fr_dict_repr(fr) for fr in fractures])
-    with open(f"large_Fr_set.yaml", "w") as f:
+    with open(os.path.join(cfg._output_dir, "large_Fr_set.yaml"), "w") as f:
         yaml.dump(large_fr_dict, f, sort_keys=False)
     n_large = len(fractures)
     #if n_large == 0:
     #    raise ValueError()
     # random small scale fractures
-    small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r), fr_limit, main_box_dimensions, seed)
+    small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r),
+                                             fr_limit, main_box_dimensions, seed, id_offset=n_large)
     fractures.extend(small_fr)
     logging.info(f"Generated fractures: {n_large} large, {len(small_fr)} small.")
     return fractures, n_large

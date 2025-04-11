@@ -29,7 +29,8 @@ def box_with_sides(factory, dimensions):
     return box, sides
 
 
-def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_limit, box,  seed) -> List[fracture.Fracture]:
+def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_limit, box,  seed,
+                       id_offset=0) -> List[fracture.Fracture]:
     """
     Generate set of stochastic fractures.
     """
@@ -52,7 +53,7 @@ def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_l
     pos_gen = fracture.UniformBoxPosition(pop.domain)
     fractures = pop.sample(pos_distr=pos_gen, keep_nonempty=True)
     for i, fr in enumerate(fractures):
-        reg = gmsh.Region.get(f"fr_{i}")
+        reg = gmsh.Region.get(f"fr_{id_offset+i}")
         fr.region = reg
 
     # fracture.fr_intersect(fractures)
