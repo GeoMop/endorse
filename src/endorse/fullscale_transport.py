@@ -249,8 +249,8 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     logging.info(f"bulk slice: {el_slice_bulk}")
     c_min, c_max = np.min(conductivity), np.max(conductivity)
     logging.info(f"cond range: {c_min}, {c_max}")
-    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_cond, file="conductivity_yz.pdf")
-    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, file="porosity_yz.pdf")
+    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_cond, cut=(0,2), file="conductivity_yz.pdf")
+    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
     cfg_fr = cfg_trans.fractures

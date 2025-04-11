@@ -350,7 +350,7 @@ def make_gmsh(cfg:'dotdict', fracture_set):
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = os.path.join(cfg._output_dir, cfg.mesh_name + ".msh2")
+    final_mesh_filename = cfg.mesh_name + ".msh2"
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
@@ -402,13 +402,18 @@ if __name__ == '__main__':
     # assert len_argv > 1, "Specify input yaml file and output dir!"
     # if len_argv == 2:
     #     output_dir = os.path.abspath(sys.argv[1])
-    output_dir = script_dir
+    output_dir = os.path.join(script_dir, "output")
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 
     conf_file = os.path.join(script_dir, "../config/trans_mesh_config.yaml")
     cfg = common.config.load_config(conf_file)
-    cfg._output_dir = output_dir
+
+    # common.EndorseCache.instance().expire_all()
 
     seed = 101
-    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
-    make_mesh(cfg, fr_pop, seed)
+    with common.workdir(output_dir, clean=False):
+
+        fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+        make_mesh(cfg, fr_pop, seed)
 

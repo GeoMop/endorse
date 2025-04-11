@@ -165,9 +165,9 @@ if __name__ == '__main__':
 
     conf_file = os.path.join(script_dir, "config/trans_mesh_config.yaml")
     cfg = common.config.load_config(conf_file)
-    cfg._output_dir = output_dir
 
     # common.EndorseCache.instance().expire_all()
 
     seed = 101
-    transport_run(cfg, seed)
+    with common.workdir(output_dir, clean=False):
+        transport_run(cfg, seed)
