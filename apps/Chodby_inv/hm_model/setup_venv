@@ -1,0 +1,33 @@
+#!/bin/bash
+# This would create a development virtual environment
+# - uses requirements.txt
+# - install endorse-experiment itself in development mode.
+set -x
+
+echo "Creating python virtual environment."
+
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+ENDORSE_SRC_ROOT="$SCRIPTPATH/../../.."
+
+cd ${SCRIPTPATH}
+rm -r venv
+#virtualenv venv
+#python3 -m venv --system-site-packages venv
+python3 -m venv venv
+
+venv_pip=${SCRIPTPATH}/venv/bin/pip
+
+$venv_pip install --no-cache-dir -r requirements.txt
+
+# install submodules
+$venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/redis-cache
+#$venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem
+
+# attrs somehow was broken after gmsh explicit installation, must force its reinstalation
+#$venv_pip install --force-reinstall --upgrade attrs
+
+# install endorse
+$venv_pip install -r ${ENDORSE_SRC_ROOT}/requirements.txt
+$venv_pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}
+
+
