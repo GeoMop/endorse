@@ -86,6 +86,9 @@ class Boreholes:
             chamber_end_distance = bh.length
         return self.bh_start(bh_index) + chamber_end_distance * self.bh_direction(bh_index)
 
+    def sensor_position(self, bh_index, chamber_index):
+        return self.config.boreholes[bh_index].sensor_positions[chamber_index]
+
     def make_gmsh_lines(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         lines = []
         for i in range(self.n_boreholes):
@@ -260,19 +263,14 @@ def plot_chamber_pressures(boreholes_fname,
         for axis,cname in zip(ax,obs.chamber_names):
             bhname, _, cidx = cname.rpartition('_ch_')
             bh_index = bhs.bh_index_from_name(bhname)
-            cstart = bhs.chamber_start(bh_index, int(cidx))
-            cend = bhs.chamber_end(bh_index, int(cidx))
-            bh_start = bhs.bh_start(bh_index)
-            loc_start = np.linalg.norm(cstart-bh_start)
-            loc_end = np.linalg.norm(cend-bh_start)
-            axis.set_title(f"{bhname} chamber {cidx} location {loc_start:.2f}-{loc_end:.2f}")
-            filtered_df = df[(df['Borehole'] == bhname) & (df['Chamber'] == int(cidx))]
+            cidx = int(cidx)
+            pos = bhs.sensor_position(bh_index, cidx)
+            axis.set_title(f"{bhname} chamber {cidx+1} position {pos} m")
+            filtered_df = df[(df['Borehole'] == bhname) & (df['Chamber'] == cidx)]
             sim_time = filtered_df['sim_time']
             pressure = filtered_df['tlak'].to_numpy() / 10 # from kPa to m
-            depth = filtered_df['depth in borehole']
             if pressure.size > 0:
                 axis.plot(sim_time, pressure, label='measured pressure [m]')
-                axis.set_title(axis.get_title() + f" (depth {depth.values[0]})")
                 axis.legend()
 
     if output_compared_fname is None:
