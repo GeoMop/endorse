@@ -10,9 +10,10 @@ boreholes:
     starting_height: 0.81
     azimuth: 312.7
     inclination: -17.24
+    length: 9.14
     packer_width: 1
     packer_centers: [2, 4.5, 7]
-    length: 9.14
+    sensor_positions: [3.18, 5.67, 8.14]
 
   - name: L5-50UL
     id: L-9+40+14
@@ -20,9 +21,10 @@ boreholes:
     starting_height: 2.06
     azimuth: 339.7
     inclination: 14.9
+    length: 13.2
     packer_width: 1
     packer_centers: [2.5, 6, 9]
-    length: 13.2
+    sensor_positions: [3.72, 7.22, 10.08]
 
   - name: L5-37R
     id: P +5-09+00
@@ -30,9 +32,10 @@ boreholes:
     starting_height: 2.2
     azimuth: 209
     inclination: -3
+    length: 14.5
     packer_width: 1
     packer_centers: [4.5, 8.5, 12]
-    length: 14.5
+    sensor_positions: [5.69, 9.67, 13.12]
 
   - name: L5-26R
     id: P -6+13+00
@@ -40,9 +43,10 @@ boreholes:
     starting_height: 2.1
     azimuth: 186.6
     inclination: -3
+    length: 12
     packer_width: 1
     packer_centers: [2.5, 6, 9]
-    length: 12
+    sensor_positions: [3.74, 7.19, 10.1]
 
   - name: L5-23UR
     id: P-13+66+12
@@ -50,9 +54,10 @@ boreholes:
     starting_height: 2.79
     azimuth: 133
     inclination: 12.35
+    length: 12
     packer_width: 1
     packer_centers: [2.5, 6, 9]
-    length: 12
+    sensor_positions: [3.68, 7.18, 10.12]
 
   - name: L5-37UR
     id: P +5-25+15
@@ -60,9 +65,10 @@ boreholes:
     starting_height: 2.4
     azimuth: 225.4
     inclination: 15.7
+    length: 10
     packer_width: 1
     packer_centers: [1.5, 5, 7.5]
-    length: 10
+    sensor_positions: [2.67, 6.25, 8.74]
 
   - name: L5-24DR
     id: P-13+70-15
@@ -70,9 +76,10 @@ boreholes:
     starting_height: 0.98
     azimuth: 129.5
     inclination: -15.4
+    length: 11
     packer_width: 1
     packer_centers: [1.5, 5, 8]
-    length: 11
+    sensor_positions: [2.79, 6.2, 9.15]
 
   - name: L5-22DR
     id: P-13+59-12
@@ -80,8 +87,9 @@ boreholes:
     starting_height: 1.18
     azimuth: 140.3
     inclination: -12.7
+    length: 16
     packer_width: 1
     packer_centers: [7.5, 10, 13.5]
-    length: 16
+    sensor_positions: [8.65, 11.19, 14.66]
 
 
