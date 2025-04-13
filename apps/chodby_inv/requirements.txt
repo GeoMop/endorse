@@ -1,0 +1,16 @@
+# "Temporary" dependencies for developing, 
+# for final dependencies use pyproject.toml
+
+PyYAML
+attrs
+numpy
+pytest
+openpyxl
+pandas
+ray
+tinyda
+meshio
+#seaborn
+
+matplotlib
+
