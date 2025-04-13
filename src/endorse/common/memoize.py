@@ -1,56 +1,86 @@
 import logging
 from typing import *
-import redis_cache
+# import redis_cache
+import pathlib
+import joblib
 import hashlib
 from functools import wraps
 import time
 import os
 
-
 """
-TODO: modify redis_simple_cache or our memoize decorator to hash also function code
+Caching of pure function calls currently based on the joblib.
+- File wrapper class allows safe file results with appropriate hashes.
+
+TODO: 
+- support for other storage methods
+- hashing of function implementation and subcalls 
+  (working prototype in endorse-experiment, but does not generilize to more complex programs)
  see https://stackoverflow.com/questions/18134087/how-do-i-check-if-a-python-function-changed-in-live-code
  that one should aslo hash called function .. the whole tree
  more over we should also hash over serialization of classes
+
+- program execution view in browser (? how related to Ray, Dask, ..)
+
 """
 
-class EndorseCache:
-    __instance__ = None
+
+class CallCache:
+    """
+    Global singleton for the function call cache.
+    Configuration is lazy: parameters passed to the instance method
+    are stored and updated by subsequent instance calls, but the actual
+    instance is created during first call of the memoized function.
+    """
+    __instance_args__ = {}
+    __singleton_instance__ = None
+
     @staticmethod
-    def instance(*args, **kwargs):
-        if EndorseCache.__instance__ is None:
-            EndorseCache.__instance__ = EndorseCache(*args, **kwargs)
-        return EndorseCache.__instance__
+    def __instance__():
+        if CallCache.__singleton_instance__ is None:
+            CallCache.__singleton_instance__ = CallCache(**CallCache.__instance_args__)
+        return CallCache.__singleton_instance__
 
-    def __init__(self, host="localhost", port=6379):
+    @staticmethod
+    def instance(**kwargs):
+        """
+        Parameters:
+        workdir - str or Path where to place the cache
+        expire_all - if True, delete whole cache
+
+        parameters passed to joblib.Memory:
+        verbose
+        """
+        CallCache.__instance_args__.update(kwargs)
+
+    def __init__(self, workdir="", expire_all=False, **kwargs):
         # TODO: possibly start redis server
-        self.cache = redis_cache.SimpleCache(10000, hashkeys=True, host=host, port=port)
+        self.workdir = pathlib.Path(workdir)
 
+        self.mem_cache = joblib.Memory(
+            location=self.workdir / "joblib_cache",
+            **kwargs)
+
+        if expire_all:
+            self.mem_cache.clear()
 
     def expire_all(self):
-        self.cache.expire_all_in_set()
+        """
+        Deprecated, call instance with 'expire_all=True' instead.
+        """
+        CallCache.instance(expire_all=True)
 
-# Workaround missing module in the function call key
-# def memoize():
-#     endorse_cache = EndorseCache.__instance__
-#     def decorator(fn):
-#         # redis-simple-cache does not include the function module into the key
-#         # we poss in a functions with additional parameter
-#         def key_fn(fn_id , *args, **kwargs):
-#             return fn(*args, **kwargs)
-#
-#         modif_fn =  redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)(key_fn)
-#
-#         @wraps(fn)
-#         def wrapper(*args, **kwargs):
-#             return modif_fn((fn.__name__, fn.__module__), *args, **kwargs)
-#         return wrapper
-#     return decorator
 
 def memoize(fn):
-    endorse_cache = EndorseCache.instance()
-    redis_cache_deco = redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)
-    return redis_cache_deco(fn)
+    decorated_fn = None
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        nonlocal decorated_fn
+        if decorated_fn is None:
+            mem: joblib.Memory = CallCache.__instance__().mem_cache
+            decorated_fn = mem.cache(fn)
+        return decorated_fn(*args, **kwargs)
+    return wrapper
 
 
 
@@ -98,7 +128,8 @@ class File:
     #     """
     #     return cls(path, postponed=True)
     _hash_fn = hashlib.md5
-    def __init__(self, path: str, files:List['File'] = None):  # , hash:Union[bytes, str]=None) #, postponed=False):
+
+    def __init__(self, path: str, files: List['File'] = None):  # , hash:Union[bytes, str]=None) #, postponed=False):
         """
         For file 'path' create object containing both path and content hash.
         Optionaly the files referenced by the file 'path' could be passed by `files` argument
@@ -150,7 +181,6 @@ class File:
 
     def __str__(self):
         return f"File('{self.path}', hash={self.hash})"
-
 
     """
     Could be used from Python 3.11    
