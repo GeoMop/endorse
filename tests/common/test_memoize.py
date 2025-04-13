@@ -25,8 +25,7 @@ def file_func(f:common.File, out_file:str) -> common.File:
 
 
 def test_file_memoization():
-    cache = common.EndorseCache.instance()
-    cache.expire_all()
+    common.CallCache.instance(expire_all=True)
 
     input_file = "sandbox/memoize_file.txt"
     output_file = "sandbox/output_file.txt"

@@ -1,6 +1,6 @@
 import os.path
 
-from endorse.common import File, workdir,EndorseCache
+from endorse.common import File, workdir,CallCache
 from endorse.indicator import indicators
 from endorse import plots
 

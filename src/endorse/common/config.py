@@ -119,11 +119,12 @@ def _item_update(key:Key, val:dotdict, sub_path:Key, sub:dotdict):
 def deep_update(cfg: dotdict, iter:PathIter, substitute:dotdict):
     if iter.is_leaf():
         return substitute
-    new_cfg = dotdict(cfg)
     if isinstance(cfg, list):
         key, sub_path = iter.idx()
+        new_cfg = list(cfg)
     elif isinstance(cfg, (dict, dotdict)):
         key, sub_path = iter.key()
+        new_cfg = dotdict(cfg)
     else:
         raise TypeError(f"Variant substitution: Unknown type {type(cfg)}")
     new_cfg[key] = deep_update(cfg[key], sub_path, substitute)
@@ -145,11 +146,11 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
     :param variant: dictionary path -> dotdict
     :return:
     """
-    new_cfg = cfg
+    new_cfg = dotdict.create(cfg)
     for path_str, val in variant.items():
         path = tuple(path_str.split('/'))
         assert path
-        new_cfg = deep_update(new_cfg, PathIter(path), val)
+        new_cfg = deep_update(new_cfg, PathIter(path), dotdict.create(val))
     return new_cfg
 
 def is_glob_pattern(s):
