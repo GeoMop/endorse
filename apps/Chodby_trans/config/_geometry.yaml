@@ -24,7 +24,7 @@ main_tunnel:
   center: [0,0,0] # to be filled automatically as center of csv_points
 
 storage_borehole_distance: 4.750
-n_storage_boroholes: 5
+n_storage_boreholes: 5
 damaged_storage_borehole: 2  # can be negative => no damaged container
 
 # Storage boreholes

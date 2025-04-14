@@ -82,9 +82,9 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
     storage_boreholes = []
     plug, container = None, None
     d = cfg_geom.storage_borehole_distance
-    s = -((cfg_geom.n_storage_boroholes - 1) / 2.0) * d  # y coordinate of the first storage
+    s = -((cfg_geom.n_storage_boreholes - 1) / 2.0) * d  # y coordinate of the first storage
 
-    for i in range(cfg_geom.n_storage_boroholes):
+    for i in range(cfg_geom.n_storage_boreholes):
         if i is cfg_geom.damaged_storage_borehole:
             # damaged storage is split into plug and container
             plug = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.plug + tunnel_bottom_z],
