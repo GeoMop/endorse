@@ -126,6 +126,28 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
         cond_min, cond_max = cond
 
     cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
+
+    def cond_boreholes(bid):
+        csb = cfg_geom.storage_borehole
+        r = csb.diameter/2
+        d = cfg_geom.storage_borehole_distance
+        s = -((cfg_geom.n_storage_boreholes - 1) / 2.0) * d + bid*d # y coordinate of the storage
+
+        X_rel = X / r
+        Y_rel = (Y - s) / r
+
+        # distance from center, 1== edz_radius (main tunnel boundary)
+        distance = np.sqrt((X_rel * X_rel + Y_rel * Y_rel)) - in_r
+        theta = distance / (edz_r - in_r)
+        bore_begin = cfg_geom.main_tunnel.center[2] - cfg_geom.main_tunnel.height/2
+        bore_end = bore_begin - csb.length
+        z_scaling = np.where( np.logical_and(Z >= bore_end, Z <= bore_begin), 1.0, 0.0)
+        bore_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * z_scaling
+        return bore_field
+
+    for i in range(cfg_geom.n_storage_boreholes):
+        cond_field = np.maximum(cond_field, cond_boreholes(i))
+
     cond_field = np.clip(cond_field, cond_min, cond_max)
 
     por_max = float(cfg_bulk_fields.por_max)
