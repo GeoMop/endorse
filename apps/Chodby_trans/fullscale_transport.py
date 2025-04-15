@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 from typing import *
 
 import numpy as np
@@ -44,7 +45,7 @@ def fullscale_transport(cfg_path, seed):
     cfg = common.load_config(cfg_path)
     return transport_run(cfg, seed)
 
-
+@memoize
 def transport_run(cfg, seed):
     # large_model = File(os.path.join(cfg._config_root_dir, cfg_fine.piezo_head_input_file))
     large_model = None
@@ -65,7 +66,14 @@ def transport_run(cfg, seed):
     input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
 
-    return parametrized_run(cfg, input_fields_file)
+    # input_fields_file = File("input_fields.msh2")
+    input_msh_filepath = os.path.splitext(input_fields_file.path)[0] + ".msh"
+    shutil.copy2(input_fields_file.path, input_msh_filepath)
+    input_msh = File(input_msh_filepath)
+
+    # input_msh = File("input_fields.msh")
+
+    return parametrized_run(cfg, large_model, input_msh)
 
 def parametrized_run(cfg, large_model, input_fields_file):
     cfg_fine = cfg.transport_fullscale
@@ -74,7 +82,7 @@ def parametrized_run(cfg, large_model, input_fields_file):
     new_params = dict(
         mesh_file=input_fields_file,
         # piezo_head_input_file=large_model,
-        #conc_flux_file=conc_flux,
+        conc_flux_file=os.path.join(cfg._config_root_dir, cfg_fine.conc_flux_file),
         input_fields_file = input_fields_file,
         dg_penalty = cfg_fine.dg_penalty,
         end_time_years = cfg_fine.end_time,
@@ -85,8 +93,8 @@ def parametrized_run(cfg, large_model, input_fields_file):
         #output_step = 10 * dt
     )
     params.update(new_params)
-    params.update(set_source_limits(cfg))
-    template = flow123d_inputs_path.joinpath(cfg_fine.input_template)
+    # params.update(set_source_limits(cfg))
+    template = os.path.join(cfg._config_root_dir, cfg_fine.input_template)
     fo = common.call_flow(cfg.machine_config, template, params)
     return get_indicator(cfg, fo)
 

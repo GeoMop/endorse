@@ -221,6 +221,7 @@ def set_source_limits(cfg):
     return source_params
 
 @report
+@memoize
 def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
                    fr_map: Dict[int, Fracture], fractures:List[Fracture], dim):
     """
