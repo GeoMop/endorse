@@ -45,7 +45,7 @@ Install:
         ```
         bash dvc_secret_config.sh
         ```
-4. Pull the laarge files:
+4. Pull the large files:
         ```
         dvc pull
         ```
