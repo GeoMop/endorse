@@ -2,7 +2,7 @@ import numpy as np
 import meshio
 import pyvista as pv
 import boreholes
-from ..input_data import bh_cfg_file
+from ..input_data import bh_cfg_yaml
 
 
 def process_gmsh_tetrahedral_mesh(input_file, output_file, points, values_dict):
@@ -48,7 +48,7 @@ def process_gmsh_tetrahedral_mesh(input_file, output_file, points, values_dict):
 input_mesh_file = "L5_mesh_6_healed.msh"
 output_mesh_file = "flow_sigma.vtu"
 
-bhs = boreholes.Boreholes(bh_cfg_file)
+bhs = boreholes.Boreholes(bh_cfg_yaml)
 points = []
 sigmas = []
 pressures = []

@@ -88,6 +88,10 @@ def memoize(fn):
 class File:
     """
     An object that should represent a file as a computation result.
+    Use cases:
+    - pass File(file_path) to a memoize function that reads from a file
+    - return File(file_path) from a memoize function that writes to a file
+
     Contains the path and the file content hash.
     The system should also prevent modification of the files that are already created.
     To this end one has to use File.open instead of the standard open().
@@ -100,7 +104,8 @@ class File:
 
     Ideally, the File class could operate as the file handle and context manager.
     However that means calling system open() and then modify its __exit__ method.
-    However I was unable to do that. Seems like __exit__ is changed, but changed to the original one smowere latter as
+    However I was unable to do that. Seems like __exit__ is changed, but changed to the original
+    one smowere latter as
     it is not called. Other possibility is to wrap standard file handle and use it like:
 
     @joblib.task
@@ -109,10 +114,6 @@ class File:
             f.handle.write(content)
         # called File.__exit__ which calls close(self.handle) and performs hashing.
         return f
-
-    TODO: there is an (unsuccessful) effort to provide special handle for writting.
-    TODO: Override deserialization in order to check that the file is unchanged.
-          Seems that caching just returns the object without actuall checking.
     """
 
     # @classmethod

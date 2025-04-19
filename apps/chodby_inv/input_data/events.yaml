@@ -1,0 +1,57 @@
+blasts:
+    -   datetime: "24/03/12 16:00:00"
+        side: "N"
+        face_stationing: 1.8
+
+    -   datetime: "24/03/14 10:36:00"
+        side: "N"
+        face_stationing: 3.6
+
+    -   datetime: "24/03/15 16:00:00"
+        side: "N"
+        face_stationing: 5.8
+
+    -   datetime: "24/03/18 16:00:00"
+        side: "N"
+        face_stationing: 7.1
+
+    -   datetime: "24/03/19 16:00:00"
+        side: "N"
+        face_stationing: 8.5
+
+    -   datetime: "24/03/21 09:06:00"
+        side: "N"
+        face_stationing: 10
+
+    -   datetime: "24/03/23 00:15:00"
+        side: "S"
+        face_stationing: 1.6
+
+    -   datetime: "24/03/26 16:30:00"
+        side: "S"
+        face_stationing: 3.5
+
+    -   datetime: "24/03/28 16:25:00"
+        side: "S"
+        face_stationing: 5.5
+
+    -   datetime: "24/04/03 9:30:00"
+        side: "S"
+        face_stationing: 7.2
+
+    -   datetime: "24/04/05 09:15:00"
+        side: "S"
+        face_stationing: 9.3
+
+    -   datetime: "24/04/09 08:35:00"
+        side: "S"
+        face_stationing: 10
+
+# TODO:
+# Approximate date time positions of the
+# applied pressuarization
+# Details could be get by the search_wpt function.
+water_pressure_tests:
+    -   datetime: "24/03/12 16:00:00"
+
+

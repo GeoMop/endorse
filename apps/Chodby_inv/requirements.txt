@@ -1,9 +1,0 @@
-PyYAML
-attrs
-numpy
-pytest
-pandas
-#seaborn
-
-matplotlib
-

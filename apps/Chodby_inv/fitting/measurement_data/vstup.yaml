@@ -1,6 +1,0 @@
-piezo_source: piezo.xlsx
-tmin: 0
-tmax: 40
-zapis_do_souboru: false
-value_diff: 0.5
-avg_diff: 0.5
