@@ -9,8 +9,12 @@ import yaml
 import matplotlib.animation as animation
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.ticker as ticker
+import pathlib
 
-
+import chodby_inv.input_data as input_data
+work_dir = input_data.work_dir
+module_dir = pathlib.Path(__file__).parent
+from chodby_inv import piezo
 
 class Boreholes:
     def __init__(self, yaml_config_file):
@@ -259,16 +263,17 @@ def plot_chamber_pressures(boreholes_fname,
 
     # read and plot reference pressures from measurements
     if pressure_ref_csv_fname is not None:
-        df = pd.read_csv(pressure_ref_csv_fname, delimiter=';')
+        #df = pd.read_csv(pressure_ref_csv_fname, delimiter=';')
+        df = piezo.excavation_epoch_df()
         for axis,cname in zip(ax,obs.chamber_names):
             bhname, _, cidx = cname.rpartition('_ch_')
             bh_index = bhs.bh_index_from_name(bhname)
             cidx = int(cidx)
             pos = bhs.sensor_position(bh_index, cidx)
             axis.set_title(f"{bhname} chamber {cidx+1} position {pos} m")
-            filtered_df = df[(df['Borehole'] == bhname) & (df['Chamber'] == cidx)]
-            sim_time = filtered_df['sim_time']
-            pressure = filtered_df['tlak'].to_numpy() / 10 # from kPa to m
+            filtered_df = df[(df['borehole'] == bhname) & (df['section'] == cidx)]
+            sim_time = filtered_df['time_days']
+            pressure = filtered_df['pressure'].to_numpy() / 10 # from kPa to m
             if pressure.size > 0:
                 axis.plot(sim_time, pressure, label='measured pressure [m]')
                 axis.legend()
@@ -280,15 +285,15 @@ def plot_chamber_pressures(boreholes_fname,
 
 if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
-    borehole_fname = 'boreholes.yaml'
+
     pressure_fname = 'flow_observe_refined.yaml'
     output_fname = 'chamber_pressure_averages_refined.pdf'
     pressure_init_fname = 'flow_observe_refined_init_p.yaml'
     output_init_fname = 'chamber_pressure_averages_refined_init_p.pdf'
     pressure_ref_fname = 'output_tlaky.csv'
     output_compared_fname = 'chamber_pressures_refined_compared.pdf'
-    plot_chamber_pressures(borehole_fname,
-                           pressure_fname,
-                           output_fname,
-                           pressure_ref_csv_fname=pressure_ref_fname,
-                           output_compared_fname=output_compared_fname)
+    plot_chamber_pressures(input_data.bh_cfg_yaml,
+                           module_dir / pressure_fname,
+                           work_dir / output_fname,
+                           pressure_ref_csv_fname= work_dir / pressure_ref_fname,
+                           output_compared_fname= work_dir / output_compared_fname)

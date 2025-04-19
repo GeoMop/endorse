@@ -401,7 +401,7 @@ def extract_bholes(df, bholes):
 
         tmp['timestamp'] = ts
         tmp['borehole'] = bh
-        tmp['i_int']    = i_int
+        tmp['section']    = i_int - 1
         tmp['q']        = q
         tmp['value']    = df[col]
 
@@ -456,16 +456,16 @@ def full_flat_df(bh_cfg, piezo_file):
     # Check for fuplicities in index
     # 1) Identify any exact duplicate triples
     dup_mask = flat_df.duplicated(
-        subset=['timestamp', 'borehole', 'i_int'],
+        subset=['timestamp', 'borehole', 'section'],
         keep=False
     )
     dupes = flat_df.loc[dup_mask].sort_values(
-        ['timestamp', 'borehole', 'i_int']
+        ['timestamp', 'borehole', 'section']
     )
     if len(dupes) > 0:
-        logger.warning(f"❌ Found {len(dupes)} rows with duplicate (timestamp, borehole, i_int):")
+        logger.warning(f"❌ Found {len(dupes)} rows with duplicate (timestamp, borehole, section):")
         #logger.info(dupes.to_string())
-    #flat_df.set_index(['timestamp', 'borehole', 'i_int'], inplace=True, drop=False)
+    #flat_df.set_index(['timestamp', 'borehole', 'section'], inplace=True, drop=False)
     return flat_df
 
 def to_datetime(series):
@@ -635,7 +635,7 @@ def smooth_preserve_jumps(s: pd.Series,
 
 def filter_noise(full_df):
     # 1) make sure data are sorted by time within each series
-    df = full_df.sort_values(['borehole', 'i_int', 'timestamp'])
+    df = full_df.sort_values(['borehole', 'section', 'timestamp'])
 
     # 2) make timestamp the index (so groupby‐transform sees a DatetimeIndex)
     df = df.set_index('timestamp')
@@ -646,10 +646,10 @@ def filter_noise(full_df):
          #   T=pd.Timedelta('120min'), jump_factor=2.0)
     )
 
-    # 2) apply the filter per (borehole, i_int) group
+    # 2) apply the filter per (borehole, section) group
     df['pressure'] = (
         df
-        .groupby(['borehole', 'i_int'])['pressure']
+        .groupby(['borehole', 'section'])['pressure']
         .transform(smooth_fn)
     )
     df.reset_index(inplace=True)
@@ -660,6 +660,20 @@ def filter_noise(full_df):
 def denoised_df():
     """
     Returns processed piezo measurement.
+    main columns:
+    - timestamp
+    - borehole
+    - section
+    - pressure
+
+    suplementary columns:
+    - battery_voltage
+    - air_pressure
+    - station_temperature
+
+    original data columns, pressure is in fact computed from these in original xlsx
+    - digits
+    - temp
     """
     # Basic test resulting to separated data tables and plots
     bh_cfg = bh_config()
@@ -670,6 +684,18 @@ def denoised_df():
     logger.info("Full pressure table head:\n{full_df.head(n=10).to_string()}")
     return denoised_df
 
+
+def excavation_epoch_df():
+    """
+    Returns the excavation epoch DataFrame.
+    """
+    epoch = "excavation"
+    process_cfg = common.config.load_config(inputs.piezo_filter_yaml)
+
+    epoch_cfg = process_cfg[epoch]
+    epoch_df = get_epoch(denoised_df(), epoch_cfg)
+
+    return epoch_df
 
 if __name__ == '__main__':
     bh_cfg = bh_config()

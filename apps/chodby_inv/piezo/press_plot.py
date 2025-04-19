@@ -12,7 +12,7 @@ import matplotlib.ticker as ticker
 
 def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFrame = None):
     """
-       Plot pressure over time for each borehole and i_int combination,
+       Plot pressure over time for each borehole and section combination,
        with both legends to the right, weekly date ticks, and tight layout.
        """
     unit = df.attrs['units']['pressure']  # e.g. 'kPa'
@@ -24,14 +24,14 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
     palette = sns.color_palette(n_colors=len(boreholes))
     color_map = dict(zip(boreholes, palette))
 
-    # linestyle per chamber (i_int)
-    iints = sorted(df['i_int'].unique())
+    # linestyle per chamber (section)
+    iints = sorted(df['section'].unique())
     styles = ['-', '--', ':', '-.']
     style_map = {i: styles[idx % len(styles)] for idx, i in enumerate(iints)}
 
     # 2) Plot series
     fig, ax = plt.subplots(figsize=(12, 6))
-    for (bh, iint), grp in df.groupby(['borehole', 'i_int']):
+    for (bh, iint), grp in df.groupby(['borehole', 'section']):
         ax.plot(
             grp['timestamp'],
             grp['pressure'],
@@ -40,7 +40,7 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
             linewidth=0.8
         )
         if orig_df is not None:
-            orig_grp = orig_df[(orig_df['borehole'] == bh) & (orig_df['i_int'] == iint)]
+            orig_grp = orig_df[(orig_df['borehole'] == bh) & (orig_df['section'] == iint)]
             ax.plot(
                 orig_grp['timestamp'],
                 orig_grp['pressure'],
@@ -98,7 +98,7 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
         for i in iints
     ]
     ax.legend(
-        proxies_i, [f'i_int={i}' for i in iints],
+        proxies_i, [f'section={i}' for i in iints],
         title='Chamber',
         loc='upper left',
         bbox_to_anchor=(0.7, 1),
@@ -152,7 +152,7 @@ def plot_pressure_graphs(flat_df, epoch, events, work_dir):
             data=bh_df,
             x='time_days',
             y='pressure',
-            hue='i_int',
+            hue='section',
             palette=palette,  # <— your custom palette
             ax=ax
         )
