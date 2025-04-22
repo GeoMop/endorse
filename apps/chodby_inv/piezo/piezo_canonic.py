@@ -25,14 +25,6 @@ input_dir = inputs.input_dir
 work_dir = inputs.work_dir
 
 
-# funkce v programu
-# zjištění názvů vrtů a jejich orientace S/J
-def bh_config():
-    """
-    Načtení souboru Konfigurace vrtu, kde je seznam listu a jejich orientace
-    """
-    return common.config.load_config(inputs.bh_cfg_yaml).boreholes
-
 
 @common_report
 @common.memoize
@@ -433,7 +425,7 @@ def extract_bholes(df, bholes):
     return wide
 
 
-def full_flat_df(bh_cfg, piezo_file):
+def raw_piezo_df(bh_cfg, piezo_file):
     # Hlavni program - načtení vstupních dat
     # Otevře soubor konfigurace_vrtu a zjistí názvy vrtů a jejich orientaci S/J
     #labels, orientace = read_konfigurace(input_dir / 'konfigurace_vrtu.xlsx')
@@ -499,6 +491,11 @@ def get_epoch(df, epoch_cfg):
 
     # compute elapsed time in days from origin
     df_slice['time_days'] = (df_slice['timestamp'] - dt_origin) / pd.Timedelta(days=1)
+
+    if 'borehole' in epoch_cfg:
+        df_slice = df_slice[df_slice['borehole'] == epoch_cfg.borehole]
+    if 'section' in epoch_cfg:
+        df_slice = df_slice[df_slice['section'] == epoch_cfg.section]
     return df_slice
 
 
@@ -656,6 +653,15 @@ def filter_noise(full_df):
     df.sort_values(['timestamp', 'borehole'], inplace=True)
     return df
 
+############################################
+# Helper top level functions.
+
+def full_flat_df():
+    """
+    Returns the full flat DataFrame of piezo measurements.
+    """
+    bh_cfg = common.config.load_config(inputs.bh_cfg_yaml).boreholes
+    return raw_piezo_df(bh_cfg, inputs.piezo_measurement_file)
 
 def denoised_df():
     """
@@ -676,11 +682,9 @@ def denoised_df():
     - temp
     """
     # Basic test resulting to separated data tables and plots
-    bh_cfg = bh_config()
 
-    full_df = full_flat_df(bh_cfg, inputs.piezo_measurement_file)
+    full_df = full_flat_df()
     denoised_df = filter_noise(full_df)
-
     logger.info("Full pressure table head:\n{full_df.head(n=10).to_string()}")
     return denoised_df
 
@@ -698,9 +702,7 @@ def excavation_epoch_df():
     return epoch_df
 
 if __name__ == '__main__':
-    bh_cfg = bh_config()
-    full_df = full_flat_df(bh_cfg, inputs.piezo_measurement_file)
-
+    full_df = full_flat_df()
     denoised = denoised_df()
     plot_pressure_overview(denoised, work_dir / "overview_plot.pdf", orig_df = full_df)
 
