@@ -25,7 +25,6 @@ Hydro-mechanical model of chamber pore pressures affected by the excavation.
 
 
 
-
 ## For developers
 
 **Endorse** package should contain classes and functions with stable, documented API 
@@ -57,6 +56,7 @@ if __name__ == "__main__":
 ```
 from invapp.mesh import processing_fn
 ```
+
 **Functional Approach**
 - Try to write **pure functions**, i.e. not modifying its inputs, 
   avoid methods modifying their objects.
@@ -75,19 +75,12 @@ from invapp.mesh import processing_fn
   then plotting and meshing ...
 
 **Documentation** 
+- maintain README.md files for each directory
+- functions called by other directories should be exposed through `__init__.py` and documented
+  everithing else is "private" to the directory and processing that should be described in README.md
+  
 
 
 
-# Tools for observation processing and Bayes inversion
-
-## Common environment
-
-```
-bash setup_env
-```
-
-Installed packages given by `requirements.txt`.
 
 
-
-**Fitting water pressure tests**
