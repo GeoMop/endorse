@@ -1,0 +1,9 @@
+# Dictionary of separate time epochs defined by start and end date
+# Separate filter parameters may be specified
+
+excavation:
+    start: 24/03/10 0:0:0
+    end: 24/05/18 0:0:0
+    origin: 24/03/12 16:0:0
+    value_diff: 0.5
+    avg_diff: 0.5

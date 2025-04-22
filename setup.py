@@ -44,13 +44,14 @@ setuptools.setup(
     # include_package_data=True, # package includes all files of the package directory
     zip_safe=False,
     install_requires=['numpy>=1.13.4', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'bih', 'gmsh>=4.10.4', 'pyyaml',
-                      'pyyaml-include==1.4.1', 'pyvista', 'importlib-resources'],
+                      'pyyaml-include==1.4.1', 'pyvista', 'importlib-resources', 'joblib', 'bgem'],
     python_requires='>=3',
 
     # according to setuptols documentation
     # the including 'endorse.flow123d_inputs' should not be neccessary,
     # however packege_data 'endorse.flow123d_inputs' doesn't work without it
-    packages=['endorse', 'endorse.common', 'endorse.flow123d_inputs', 'endorse.mesh', 'endorse.mlmc', 'endorse.scripts'],
+    packages=['endorse', 'endorse.common', 'endorse.flow123d_inputs', 'endorse.mesh',
+              'endorse.mlmc', 'endorse.scripts'],
     package_dir={
         "": "src"
     },
