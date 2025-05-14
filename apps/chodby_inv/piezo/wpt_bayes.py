@@ -44,14 +44,19 @@ def exponential_covariance(n, dx, correlation_length, variance):
             cov[i, j] = variance * np.exp(-distance / correlation_length)
     return cov
 
-@common.memoize
-def borehole_section_inversion(inv_cfg):
-    dt = 6*60 * 60  # dt = 6 hours
-    #time_delta = pd.Timedelta(dt, unit='s')
-    dt_days = dt / (24 * 3600)  # Convert to days
+
+def borehole_section_inversion(inv_cfg, ):
     df = piezo.full_flat_df()
     epoch_df = piezo.get_epoch(df, inv_cfg)
     #epoch_df.set_index('time_days', inplace=True)
+    return _run_inversion(inv_cfg, epoch_df)
+
+@common.memoize
+def _run_inversion(inv_cfg, epoch_df):
+
+    dt = 6*60 * 60  # dt = 6 hours
+    #time_delta = pd.Timedelta(dt, unit='s')
+    dt_days = dt / (24 * 3600)  # Convert to days
     time_days = epoch_df.time_days.values
     p_b_measured = epoch_df.pressure.values
     def smooth_fn(x):
@@ -84,7 +89,6 @@ def borehole_section_inversion(inv_cfg):
 
     solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
     compress_prior_mean = solver.estimate_compressibility(biot, phi, E, nu)
-
     def forward_model(param_vec):
         compress, K, p_init, p_far = param_vec
         C = np.exp(compress)  # Convert log(C) to C
@@ -120,14 +124,16 @@ def borehole_section_inversion(inv_cfg):
     param_dim = N
     # Estimate element spacing in the radial direction.
     dx = (R - r_b) / N
-    correlation_length = 0.5  # [m] (adjust as needed)
-    prior_variance = 0.7**2   # Variance of the log(k) field (adjust based on your prior belief)
+    correlation_length = 0.01  # [m] (adjust as needed)
+    prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
         np.full(param_dim, np.log(k_prior)),
         np.array([p_far_prior])
     ])
+    prior_variance = (prior_std_log10 * np.log(10)) ** 2
     cov_prior = block_diag(
-        exponential_covariance(param_dim, dx, correlation_length, prior_variance),
+        exponential_covariance(param_dim, dx, correlation_length,
+                               prior_variance),
         np.array([[p_far_sd**2]])
     )
     prior = multivariate_normal(mean_prior, cov_prior)
@@ -174,7 +180,54 @@ def borehole_section_inversion(inv_cfg):
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
     idata = tda.to_inference_data(my_chains, burnin=burnin)
 
+    return idata, regular_pb_measured
 
+def plot_idata(idata, pressure_obs):
+    import arviz as az
+    az.style.use("arviz-doc")
+
+
+    # 1) pick off all your per‑time PPC variables
+    ppc_ds = idata.posterior_predictive
+    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
+                      key=lambda s: int(s.split("_", 1)[1]))
+
+    # 2) concat them into one DataArray of shape (chain, draw, time)
+    ppc_list = [ppc_ds[v] for v in obs_vars]
+    ppc_arr = xr.concat(ppc_list, dim="time")
+    # give it a name and meaningful coords
+    times = np.arange(len(pressure_obs))
+    ppc_arr = ppc_arr.assign_coords(
+        time=("time", times)  # or whatever your timestamps are
+    )
+
+    ppc_arr.name = "pressure"  # new var name
+
+    # 1) Stack chain & draw into one "sample" dimension
+    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
+
+    # 2) Define integer time steps 0,1,2,...,T-1
+    time = np.arange(ppc_arr.sizes["time"])
+
+    # 3) Plot each posterior draw
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for vals in ppc_stacked.values.T:  # iterate over samples
+        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
+
+    # 4) Overlay your observed (smoothed) series
+    ax.plot(time, pressure_obs, color="k", linewidth=2, label="Observed")
+
+    # 5) Label axes
+    ax.set_xlabel("Time (integer steps)")
+    ax.set_ylabel("Pressure")
+    ax.legend()
+
+    plt.show()
+
+    az.summary(idata)
+
+    az.plot_trace(idata)
+    plt.show()
 
     # # ==============================================================================
     # # 5. Postprocessing and Comparison of Results
@@ -206,55 +259,6 @@ def borehole_section_inversion(inv_cfg):
     # plt.title('Borehole Pressure Relaxation: Measured vs Predicted')
     # plt.grid(True)
     # plt.show()
-    return idata, df_reg
-
-
-def plot_idata(idata, df_obs):
-    import arviz as az
-    az.style.use("arviz-doc")
-
-
-    # 1) pick off all your per‑time PPC variables
-    ppc_ds = idata.posterior_predictive
-    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
-                      key=lambda s: int(s.split("_", 1)[1]))
-
-    # 2) concat them into one DataArray of shape (chain, draw, time)
-    ppc_list = [ppc_ds[v] for v in obs_vars]
-    ppc_arr = xr.concat(ppc_list, dim="time")
-    # give it a name and meaningful coords
-    ppc_arr = ppc_arr.assign_coords(
-        time=("time", df_obs.time_days.values)  # or whatever your timestamps are
-    )
-
-    ppc_arr.name = "pressure"  # new var name
-
-    # 1) Stack chain & draw into one "sample" dimension
-    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
-
-    # 2) Define integer time steps 0,1,2,...,T-1
-    time = np.arange(ppc_arr.sizes["time"])
-
-    # 3) Plot each posterior draw
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for vals in ppc_stacked.values.T:  # iterate over samples
-        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
-
-    # 4) Overlay your observed (smoothed) series
-    p_obs = df_obs.apply(smooth_fn, axis=1).values
-    ax.plot(time, p_obs, color="k", linewidth=2, label="Observed")
-
-    # 5) Label axes
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
-
-    plt.show()
-
-    az.summary(idata)
-
-    az.plot_trace(idata)
-    plt.show()
 
 
 
@@ -262,5 +266,5 @@ def plot_idata(idata, df_obs):
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
-    idata, df_obs = borehole_section_inversion(wpt_cfg)
-    plot_idata(idata, df_obs)
+    idata, p_obs = borehole_section_inversion(wpt_cfg)
+    plot_idata(idata, p_obs)
