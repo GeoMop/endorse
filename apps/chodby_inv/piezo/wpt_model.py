@@ -13,8 +13,6 @@ class PoroElasticSolver:
           N     : Number of finite elements (mesh will have N+1 nodes).
           dt    : Time step [s].
           T_final: Total simulation time [s].
-          p_b0  : Fixed borehole pressure (node 0) [Pa].
-          p_far : Fixed far-field (Dirichlet) pressure (last node) [Pa].
         """
         self.r_b = r_b
         self.R = R
@@ -24,15 +22,18 @@ class PoroElasticSolver:
         self.n_dofs = N + 1  # full number of nodes
         self.r = np.linspace(r_b, R, self.n_dofs)
         self.Nt = int(np.ceil(T_final / dt))
-        self.p_b0 = p_b0
+                # Define water parameters.
+        self.c_f = 4.5e-10  # Water compressibility [Pa⁻¹]
+        self.rho_f = 1e3    # Water density [kg/m³]
+        self.g = 9.81       # m/s^2
 
-    def interior_matrices(self, S, k_array):
+    def interior_matrices(self, s_array, k_array):
         """
         Allocate full (n_dofs×n_dofs) mass and stiffness matrices and fill only the interior
         block (indices 1:n_dofs, 1:n_dofs) using P1 finite elements in cylindrical coordinates.
 
         Parameters:
-          S      : Storage coefficient.
+          s_array: Piecewise constant storativity.
           k_array: 1D array of length N with piecewise constant hydraulic conductivity.
 
         Returns:
@@ -48,7 +49,8 @@ class PoroElasticSolver:
             h_elem = self.r[i + 1] - self.r[i]
             r_mid = 0.5 * (self.r[i] + self.r[i + 1])
             # Consistent element mass matrix.
-            M_local = S * r_mid * h_elem / 6.0 * np.array([[2, 1],
+            s_val = s_array[i]
+            M_local = s_val * r_mid * h_elem / 6.0 * np.array([[2, 1],
                                                            [1, 2]])
             # Element stiffness matrix.
             k_val = k_array[i]
@@ -59,7 +61,7 @@ class PoroElasticSolver:
             K[i:i + 2, i:i + 2] += K_local
         return M, K
 
-    def assembly_matrices(self, S, k_array, C_b, dt):
+    def assembly_matrices(self, s_array, k_array, C_b, dt):
         """
         Use interior_matrices to allocate full matrices and then insert borehole physics.
 
@@ -78,7 +80,7 @@ class PoroElasticSolver:
         """
         n = self.n_dofs
         # Allocate full matrices and fill interior block.
-        M_global, K_global = self.interior_matrices(S, k_array)
+        M_global, K_global = self.interior_matrices(s_array, k_array)
         # For the borehole node (node 0): override its mass row.
         M_global[0, :] = 0.0
         M_global[0, 0] = C_b
@@ -90,7 +92,7 @@ class PoroElasticSolver:
                                                 [-1, 1]])
         return M_global, K_global
 
-    def build_global_system(self, S, k_array, C_b, dt):
+    def build_global_system(self, s_array, k_array, C_b, dt):
         """
         Build the global system.
 
@@ -108,7 +110,7 @@ class PoroElasticSolver:
           b_dirichlet : Dirichlet correction vector (length n_dofs) (with a negative sign).
         """
         n = self.n_dofs
-        M_global, K_global = self.assembly_matrices(S, k_array, C_b, dt)
+        M_global, K_global = self.assembly_matrices(s_array, k_array, C_b, dt)
         # Lump the mass matrix: sum each row divided by dt.
         M_lumped = np.sum(M_global, axis=1) / dt
         A_full = np.diag(M_lumped) + K_global
@@ -123,7 +125,40 @@ class PoroElasticSolver:
         b_dirichlet[n - 1] = self.p_far
         return A_full, M_lumped, b_dirichlet
 
-    def simulate(self, biot, phi, E, nu, p_far, k_array, C_b=None):
+    def estimate_complience(self, biot, phi, E, nu):
+        """
+        # Borehole compliance.
+
+        Parameters:
+          biot : Biot coefficient (dimensionless).
+          phi  : Porosity (dimensionless).
+          E    : Young's modulus [Pa].
+          nu   : Poisson's ratio.
+
+        Returns:
+          c_s  : Rock compressibility [Pa⁻¹].
+        """
+        C_b = np.pi * self.r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+        return C_b
+
+    def estiamte_storativity(self, biot, phi, E, nu):
+        """
+        Estimate the storativity of the rock using Biot's theory.
+
+        Parameters:
+          biot : Biot coefficient (dimensionless).
+          phi  : Porosity (dimensionless).
+          E    : Young's modulus [Pa].
+          nu   : Poisson's ratio.
+
+        Returns:
+          S    : Storativity [Pa⁻¹].
+        """
+        c_s = 3.0 * (1 - 2 * nu) / E
+        S = phi * self.c_f + (biot - phi) * c_s
+        return S
+
+    def simulate(self, biot, phi, E, nu, p_init,  p_far, k_array, C_b_rel=1.0):
         """
         Run the fully implicit simulation.
 
@@ -148,37 +183,31 @@ class PoroElasticSolver:
           full_pressure_history: 2D array (Nt+1 × n_dofs) of pressures.
           p_b_history          : 1D array (length Nt+1) of borehole (node 0) pressures.
         """
-        # Define water compressibility.
-        c_f = 4.5e-10
-        rho_f = 1e3
-        g = 9.81  # m/s^2
+
 
         # Compute rock compressibility.
         c_s = 3.0 * (1 - 2 * nu) / E
-        # Storage coefficient.
+        # Storage coefficient (Is this correct ???)
         S = phi * c_f + (biot - phi) * c_s
-        # Borehole compliance.
-        if C_b is None:
-            C_b = np.pi * self.r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
 
-        # Save parameters.
-        self.phi = phi;
-        self.E = E;
-        self.nu = nu;
-        self.S = S;
-        self.C_b = C_b;
-        self.k_array = k_array / (rho_f * g)
+        # currently just homogeneous storativity
+        s_array = S * np.ones_like(k_array)
+        # Borehole compliance.
+        C_b = np.pi * self.r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+        C_b = C_b * C_b_rel
+
+        k_array = k_array / (self.rho_f * self.g)
         #m/s * m3/N * Pa/m = m/s * m3/N * N/m3 = m/s
 
         self.p_far = p_far
 
         # Build the global system.
-        A_full, M_lumped, b_dirichlet = self.build_global_system(S, k_array, C_b, self.dt)
+        A_full, M_lumped, b_dirichlet = self.build_global_system(s_array, k_array, C_b, self.dt)
 
         n = self.n_dofs
         # Initialize the pressure field: node 0 = p_b0, interior nodes = p_far.
         p = np.ones(n) * self.p_far
-        p[0] = self.p_b0
+        p[0] = p_init
 
         self.time_vec = np.zeros(self.Nt + 1)
         self.p_b_history = np.zeros(self.Nt + 1)

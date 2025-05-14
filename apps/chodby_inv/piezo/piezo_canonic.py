@@ -637,17 +637,12 @@ def filter_noise(full_df):
     # 2) make timestamp the index (so groupby‐transform sees a DatetimeIndex)
     df = df.set_index('timestamp')
 
-    smooth_fn = lambda series: (
-        #smooth_preserve_jumps(
-            denoise_pressure(series)#,
-         #   T=pd.Timedelta('120min'), jump_factor=2.0)
-    )
 
     # 2) apply the filter per (borehole, section) group
     df['pressure'] = (
         df
         .groupby(['borehole', 'section'])['pressure']
-        .transform(smooth_fn)
+        .transform(denoise_pressure)
     )
     df.reset_index(inplace=True)
     df.sort_values(['timestamp', 'borehole'], inplace=True)

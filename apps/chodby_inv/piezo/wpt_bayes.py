@@ -44,6 +44,7 @@ def exponential_covariance(n, dx, correlation_length, variance):
             cov[i, j] = variance * np.exp(-distance / correlation_length)
     return cov
 
+@common.memoize
 def borehole_section_inversion(inv_cfg):
     dt = 6*60 * 60  # dt = 6 hours
     #time_delta = pd.Timedelta(dt, unit='s')
@@ -78,13 +79,22 @@ def borehole_section_inversion(inv_cfg):
     phi = 0.02  # Porosity (dimensionless)
     E = 30e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
-    def forward_model(param_vec):
 
-        k_field = np.exp(param_vec[:-1])  # Convert log(k) to k
-        p_far = param_vec[-1]
-        t,p,p_b = solver.simulate(biot, phi, E, nu, p_far, k_field)
-        return p_b
+
+
+    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
+    compress_prior_mean = solver.estimate_compressibility(biot, phi, E, nu)
+
+    def forward_model(param_vec):
+        compress, K, p_init, p_far = param_vec
+        C = np.exp(compress)  # Convert log(C) to C
+        K = np.exp(K)  # Convert log(K) to K
+        k_field = K * np.ones(N)  # Assuming uniform hydraulic conductivity
+        t,p,p_b = solver.simulate(biot, phi, E, nu, p_init,  p_far, k_field, C)
+        flux = K * (p_init - p_far) * (r_b**2) / (2 * r_b)
+        # This is  over simplification, we should take presurization history to account.
+        output = [flux, *p_b]
+        return output
 
 
     # L = 2     # [m] Length of the borehole section
@@ -196,8 +206,10 @@ def borehole_section_inversion(inv_cfg):
     # plt.title('Borehole Pressure Relaxation: Measured vs Predicted')
     # plt.grid(True)
     # plt.show()
+    return idata, df_reg
 
-def plot_idata(idata, p_obs):
+
+def plot_idata(idata, df_obs):
     import arviz as az
     az.style.use("arviz-doc")
 
@@ -212,7 +224,7 @@ def plot_idata(idata, p_obs):
     ppc_arr = xr.concat(ppc_list, dim="time")
     # give it a name and meaningful coords
     ppc_arr = ppc_arr.assign_coords(
-        time=("time", df_reg.time_days.values)  # or whatever your timestamps are
+        time=("time", df_obs.time_days.values)  # or whatever your timestamps are
     )
 
     ppc_arr.name = "pressure"  # new var name
@@ -229,7 +241,8 @@ def plot_idata(idata, p_obs):
         ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
 
     # 4) Overlay your observed (smoothed) series
-    ax.plot(time, regular_pb_measured, color="k", linewidth=2, label="Observed")
+    p_obs = df_obs.apply(smooth_fn, axis=1).values
+    ax.plot(time, p_obs, color="k", linewidth=2, label="Observed")
 
     # 5) Label axes
     ax.set_xlabel("Time (integer steps)")
@@ -249,4 +262,5 @@ def plot_idata(idata, p_obs):
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
-    borehole_section_inversion(wpt_cfg)
+    idata, df_obs = borehole_section_inversion(wpt_cfg)
+    plot_idata(idata, df_obs)

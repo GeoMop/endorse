@@ -17,9 +17,10 @@
   ```
   
 ## Overview
-`blast_events.xlsx` 
-table with blast events according to excavation diary, contains both original data from diary
-and manual modifications to fit to the pressure measurements
+`events.yaml` 
+Sections for different kinds of events: blast, wpt (water pressure test), spurious (significant jump without clear interpretation).
+Blast events according to excavation diary. WPT According to separate wpt_*.xlsx files.
+Spurious events detected after denoising.
                   
 `boreholes.yaml`
 geometry of the boreholes
