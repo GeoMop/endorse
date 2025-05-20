@@ -236,8 +236,8 @@ def plot_chamber_pressures(boreholes_fname,
                            output_fname,
                            pressure_init_fname=None,
                            output_init_fname=None,
-                           pressure_ref_csv_fname=None,
                            output_compared_fname=None
+                           plot_ref_pressure=True
                           ):
     bhs = Boreholes(boreholes_fname)
     obs = ObservePointData(bhs, pressure_fname)
@@ -262,8 +262,7 @@ def plot_chamber_pressures(boreholes_fname,
                 axis.legend()
 
     # read and plot reference pressures from measurements
-    if pressure_ref_csv_fname is not None:
-        #df = pd.read_csv(pressure_ref_csv_fname, delimiter=';')
+    if plot_ref_pressure:
         df = piezo.excavation_epoch_df()
         for axis,cname in zip(ax,obs.chamber_names):
             bhname, _, cidx = cname.rpartition('_ch_')
@@ -290,10 +289,8 @@ if __name__ == "__main__":
     output_fname = 'chamber_pressure_averages_refined.pdf'
     pressure_init_fname = 'flow_observe_refined_init_p.yaml'
     output_init_fname = 'chamber_pressure_averages_refined_init_p.pdf'
-    pressure_ref_fname = 'output_tlaky.csv'
     output_compared_fname = 'chamber_pressures_refined_compared.pdf'
     plot_chamber_pressures(input_data.bh_cfg_yaml,
                            module_dir / pressure_fname,
                            work_dir / output_fname,
-                           pressure_ref_csv_fname= work_dir / pressure_ref_fname,
                            output_compared_fname= work_dir / output_compared_fname)
