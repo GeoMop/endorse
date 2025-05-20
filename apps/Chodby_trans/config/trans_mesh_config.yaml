@@ -104,14 +104,12 @@ transport_fullscale:
     dg_penalty: 10
 
 
-
-
-    # setup for point source
-    # TODO: max source search, use P0 approximation with space refinement spacing
-    source_params:
-        source_ipos: 2 # ith position of the leaking container from beginning of the borehole
-        source_length: 4 # length of the container [m]
-        source_space: 2
+    # setup for source term
+    sources_params:
+        # UOS geometry
+        diameter: 0.914
+        length: 3.790
+        buffer_thickness: 0.368
 
 
     # The total simulation time as well as the output times are ese are quite dependent on the

@@ -9,9 +9,6 @@ from endorse import common
 
 from endorse.common import dotdict, File, report, memoize
 from endorse.mesh_class import Mesh
-# from . import apply_fields
-# from . import plots
-# from . import flow123d_inputs_path
 # from .indicator import indicator_set, indicators, IndicatorFn
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
@@ -82,7 +79,6 @@ def parametrized_run(cfg, large_model, input_fields_file):
     new_params = dict(
         mesh_file=input_fields_file,
         # piezo_head_input_file=large_model,
-        conc_flux_file=os.path.join(cfg._config_root_dir, cfg_fine.conc_flux_file),
         input_fields_file = input_fields_file,
         dg_penalty = cfg_fine.dg_penalty,
         end_time_years = cfg_fine.end_time,
@@ -93,10 +89,11 @@ def parametrized_run(cfg, large_model, input_fields_file):
         #output_step = 10 * dt
     )
     params.update(new_params)
-    # params.update(set_source_limits(cfg))
+    params.update(set_source_term(cfg))
     template = os.path.join(cfg._config_root_dir, cfg_fine.input_template)
     fo = common.call_flow(cfg.machine_config, template, params)
-    return get_indicator(cfg, fo)
+
+    # return get_indicator(cfg, fo)
 
 
 # def quantity_times(o_times):
@@ -126,24 +123,25 @@ def parametrized_run(cfg, large_model, input_fields_file):
 #     ind_series = np.array([ind.spline(q_times) for ind in inds])
 #     return np.concatenate((ind_time, ind_value, ind_series.flatten()))
 #
-#
-#
-# def set_source_limits(cfg):
-#     geom = cfg.geometry
-#     br = geom.borehole.radius
-#
-#     cfg_trans = cfg.transport_fullscale
-#     cfg_source = cfg_trans.source_params
-#     x_pos = cfg_source.source_ipos * (cfg_source.source_length + cfg_source.source_space)
-#     source_params = dict(
-#         source_y0=-2 * br,
-#         source_y1=2 * br,
-#         source_x0=x_pos,
-#         source_x1=x_pos + cfg_source.source_length,
-#     )
-#     return source_params
-#
-#
+
+
+def set_source_term(cfg):
+    # borehole radius
+    cfg_fine = cfg.transport_fullscale
+    cfg_src = cfg_fine.sources_params
+    cfg_bh = cfg.geometry.storage_borehole
+
+    source_params = dict(
+        # UOS surface: S = pi * du * hu [m2]
+        sources_uos_surface=np.pi * cfg_src.diameter * cfg_src.length,
+        # container region volume: V = pi * dc^2/4 * hc [m3]
+        sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
+        sources_buffer_thickness=cfg_src.buffer_thickness,
+        conc_flux_file=os.path.join(cfg._config_root_dir, cfg_fine.conc_flux_file)
+    )
+    return source_params
+
+
 # def compute_hm_bulk_fields(cfg, cfg_basedir, points):
 #     cfg_geom = cfg.geometry
 #
