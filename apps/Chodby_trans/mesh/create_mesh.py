@@ -75,7 +75,7 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     return tunnel, tunnel_center_line, tunnel_bottom_z
 
 
-def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_z):
+def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_z, mesh_step):
     # make the boreholes longer, sticking out into the main tunnel
     # then cut it by the tunnel
     csb = cfg_geom.storage_borehole
@@ -90,16 +90,16 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
             plug = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.plug + tunnel_bottom_z],
                                     center=[0, s + i * d, 0])
             plug = plug.cut(tunnel)
-            plug.set_region(f"plug_{i}").mesh_step(csb.mesh_step)
+            plug.set_region(f"plug_{i}").mesh_step(mesh_step)
 
             container = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -(csb.length-csb.plug)],
                                          center=[0, s + i * d, -csb.plug + tunnel_bottom_z])
-            container.set_region(f"container_{i}").mesh_step(csb.mesh_step)
+            container.set_region(f"container_{i}").mesh_step(mesh_step)
         else:
             sbh = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.length + tunnel_bottom_z],
                                    center=[0, s + i * d, 0])
             sbh = sbh.cut(tunnel)
-            sbh.set_region(f"storage_{i}").mesh_step(csb.mesh_step)
+            sbh.set_region(f"storage_{i}").mesh_step(mesh_step)
             storage_boreholes.append(sbh)
 
         # # possibly create plug
@@ -180,7 +180,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
 
     if "boreholes" in cfg_geom.include:
         storage_boreholes, vol_dict["plug"], vol_dict["container"] \
-            = create_storage_boreholes(factory, cfg_geom, vol_dict["tunnel"], tunnel_bottom_z)
+            = create_storage_boreholes(factory, cfg_geom, vol_dict["tunnel"], tunnel_bottom_z, cfg_mesh.boreholes_mesh_step)
         vol_dict["storage_boreholes_group"] = factory.group(*storage_boreholes)
 
         # if we drill the boreholes out, we need its boundary to prescribe mesh step

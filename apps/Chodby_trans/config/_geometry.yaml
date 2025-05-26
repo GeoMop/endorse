@@ -32,4 +32,3 @@ storage_borehole:
   diameter: 1.650
   length: 6.540
   plug: 2.000
-  mesh_step: 0.25

@@ -8,11 +8,12 @@ mesh:
     boundary_mesh_step: &boundary_mesh_step 15
     fracture_mesh_step: 4
     main_tunnel_mesh_step: 1
+    boreholes_mesh_step: &boreholes_mesh_step 0.25
 
     # refinement around central line of main tunnel
     main_line_refinement:
       r_inner: 2
-      h_inner: 0.5
+      h_inner: *main_tunnel_mesh_step
       r_outer: 10
       h_outer: 1.5
       q_outer: 1
@@ -21,7 +22,7 @@ mesh:
 
     storage_borehole_refinement:
       r_inner: 0.2
-      h_inner: 0.2
+      h_inner: *boreholes_mesh_step
       r_outer: 1.2
       h_outer: 0.6
       q_outer: 1
