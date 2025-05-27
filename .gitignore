@@ -1,4 +1,6 @@
-**/.dvc/config
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
 
 
 endorse_dvc.apps.googleusercontent.com.json
