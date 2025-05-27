@@ -1,7 +1,7 @@
 import os
 from bgem.gmsh import gmsh,options, field
 from endorse.mesh import mesh_tools
-from endorse.common import EndorseCache, dotdict, workdir, File, call_flow
+from endorse.common import CallCache, dotdict, workdir, File, call_flow
 from endorse import flow123d_inputs_path
 
 
@@ -87,7 +87,7 @@ def edz_2d_mesh():
 
 
 if __name__ == "__main__":
-    EndorseCache.instance().expire_all()
+    CallCache.instance().expire_all()
     with workdir('sandbox/transport_2d'):
         mesh = edz_2d_mesh()
 
