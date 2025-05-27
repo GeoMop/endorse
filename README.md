@@ -52,7 +52,26 @@ Install:
    The browser should open to ask you for the login to your Google account (the TUL one ussually).
    
    
-5. See [large datasets modification doc](https://dvc.org/doc/user-guide/data-management/modifying-large-datasets) for further work.
+See [large datasets modification doc](https://dvc.org/doc/user-guide/data-management/modifying-large-datasets) for further work.
+
+### Adding remote (initialization)
+
+1. Initialize `.dvc` folder. From the repository root run:
+
+```
+dvc init
+``` 
+
+2. Add google drive remote [DZ04_Chodby/Podklady/endorse_large_files](https://drive.google.com/drive/u/1/folders/109cr1pZ8GV5s8yXKgVzl8NPQ8j537E4T)
+
+```
+dvc remote add -d gdrive gdrive://109cr1pZ8GV5s8yXKgVzl8NPQ8j537E4T/dvcstore
+
+```
+
+The hash comes form the link.
+
+
 
 
 
