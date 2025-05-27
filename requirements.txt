@@ -24,7 +24,6 @@ psutil==5.8.0
 #obspy==1.2.2
 #pyqtgraph==0.12.3
 #pymeshlab==2021.10
-submodules/MLMC
 
 #pybind11 # for bih
 attrs # for bgem

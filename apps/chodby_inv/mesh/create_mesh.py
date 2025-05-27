@@ -217,6 +217,7 @@ def make_gmsh(cfg:'dotdict'):
     """
     final_mesh_filename = os.path.join(cfg.output_dir, cfg.mesh_name + ".msh2")
     boundary_brep_filename = os.path.join(cfg.output_dir, cfg.boundary_brepfile)
+    cfg.mesh.borehole_data_file = os.path.join(cfg.output_dir, cfg.mesh.borehole_data_file)
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
