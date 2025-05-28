@@ -38,6 +38,57 @@ def rescale_dimension(values, target_range):
     scale = target_range / current_range if current_range != 0 else 0  # handle constant values
     return (values - center) * scale # center at zero
 
+def merge_along_sequence(points: np.ndarray, tol: float, use_centroid: bool = True) -> np.ndarray:
+    """
+    Merge consecutive 3D points in `points` that lie within `tol` of each other.
+
+    Parameters
+    ----------
+    points : (N,3) array of float
+        Your input point sequence, sorted so that “neighbors” in the array
+        are also spatially neighbors around the ellipse.
+    tol : float
+        Distance threshold. If the gap between two consecutive points
+        is <= tol, they go into the same merge‐cluster.
+    use_centroid : bool, default True
+        If True, each cluster is represented by its centroid.
+        If False, by the first point in that cluster.
+
+    Returns
+    -------
+    merged : (M,3) array of float
+        The reduced set of points after merging.
+    """
+    if points.size == 0:
+        return points.reshape(0, 3)
+
+    clusters = []
+    # start the first cluster
+    current = [points[0]]
+
+    # walk through the rest
+    for p in points[1:]:
+        dist = np.linalg.norm(p - current[-1])
+        if dist <= tol:
+            # still “close enough,” add to current cluster
+            current.append(p)
+        else:
+            # finish the old cluster
+            if use_centroid:
+                clusters.append(np.mean(current, axis=0))
+            else:
+                clusters.append(current[0])
+            # start a new one
+            current = [p]
+
+    # don’t forget the last cluster
+    if use_centroid:
+        clusters.append(np.mean(current, axis=0))
+    else:
+        clusters.append(current[0])
+
+    return np.vstack(clusters)
+
 
 def create_main_tunnel(factory, cfg:'dotdict'):
     """
@@ -56,21 +107,24 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     main_tunnel_points[:, 0] = rescale_dimension(main_tunnel_points[:, 0], cfg_mt.width)  # x
     main_tunnel_points[:, 2] = rescale_dimension(main_tunnel_points[:, 2], cfg_mt.height)  # z
 
+    cluster_tol = (cfg_mt.width+cfg_mt.height)/2 / 15
+    main_tunnel_points_clustered = merge_along_sequence(main_tunnel_points, cluster_tol)
+
     # create polygon
-    tunnel_polygon = factory.make_polygon(points=main_tunnel_points)
+    tunnel_polygon = factory.make_polygon(points=main_tunnel_points_clustered)
     # compute center of polygon
-    cfg.geometry.main_tunnel.center = np.average(main_tunnel_points, axis=0)
-    tunnel_center = factory.point(cfg.geometry.main_tunnel.center)
+    cfg_mt.center = np.average(main_tunnel_points_clustered, axis=0)
+    tunnel_center = factory.point(cfg_mt.center)
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
     tunnel_polygon.translate(vector=[0, -cfg_mt.length / 2, 0])
     tunnel_extrude = tunnel_polygon.extrude(vector=[0, cfg_mt.length, 0])
     # extrude polygon and its center to get the tunnel and its central line
     tunnel = tunnel_extrude[3]
     tunnel_center_line = tunnel_extrude[1]
-    tunnel.set_region("main_tunnel")
+    tunnel.set_region("main_tunnel").mesh_step(cfg.mesh.main_tunnel_mesh_step)
 
     # bottom coordinate of the main tunnel (needed by storage boreholes)
-    tunnel_bottom_z = np.min(main_tunnel_points[:, 2], axis=0)
+    tunnel_bottom_z = np.min(main_tunnel_points_clustered[:, 2], axis=0)
 
     return tunnel, tunnel_center_line, tunnel_bottom_z
 
