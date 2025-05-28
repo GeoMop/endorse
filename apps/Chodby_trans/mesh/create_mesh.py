@@ -463,7 +463,7 @@ if __name__ == '__main__':
     conf_file = os.path.join(script_dir, "../config/trans_mesh_config.yaml")
     cfg = common.config.load_config(conf_file)
 
-    # common.EndorseCache.instance().expire_all()
+    # common.CallCache.instance(expire_all=True)
 
     seed = 101
     with common.workdir(output_dir, clean=False):
