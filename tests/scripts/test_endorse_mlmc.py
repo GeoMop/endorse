@@ -15,7 +15,7 @@ def run_script(args, workdir=None):
     if workdir is None:
         workdir = os.path.join(script_dir, '../sandbox/mlmc_run')
 
-    cfg = common.load_config('../test_data/config.yaml', collect_files=True)
+    cfg = common.load_config('../homogenisation/input/config.yaml', collect_files=True)
     inputs = cfg._file_refs
     with common.workdir(workdir, inputs):
         subprocess.run(script_args + args)

@@ -2,7 +2,7 @@ import numpy as np
 
 from .common import File
 from .mesh_class import Mesh
-from endorse import hm_simulation
+#from endorse import hm_simulation
 
 def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     X, Y, Z = output_mesh.el_barycenters().T
@@ -30,7 +30,7 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     return File(cond_file)
 
 
-def bulk_fields_mockup_from_hm(cfg, interp: hm_simulation.TunnelInterpolator, XYZ):
+def bulk_fields_mockup_from_hm(cfg, interp: 'hm_simulation.TunnelInterpolator', XYZ):
     # use Tunnel Interpolator
     # in X axis it is constant
     # X, Y, Z = XYZ.T

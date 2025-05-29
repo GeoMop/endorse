@@ -4,10 +4,11 @@ import os
 from endorse import macro_flow_model
 from endorse import common
 from endorse import homogenisation
+import pathlib
 
+common.CallCache.instance(verbose=10)
 
-script_dir = script_dir = os.path.dirname(os.path.realpath(__file__))
-
+script_dir = pathlib.Path(__file__).parent
 @pytest.mark.skip
 def test_homogenisation():
     with common.workdir():
@@ -26,7 +27,7 @@ def test_homogenisation():
 def test_macro_transport():
    # with common.workdir("sandbox"):
     #common.EndorseCache.instance().expire_all()
-    conf_file = os.path.join(script_dir, "test_data/config.yaml")
+    conf_file = script_dir / "input/config.yaml"
     cfg = common.load_config(conf_file)
     macro_flow_model.macro_transport(cfg)
     macro_flow_model.fine_macro_transport(cfg)

@@ -1,5 +1,6 @@
 import os
 from typing import List
+from pathlib import Path
 
 import numpy as np
 
@@ -15,10 +16,12 @@ from . import flow123d_inputs_path
 
 def macro_transport(cfg:dotdict):
     work_dir = f"sandbox/run_macro_transport"
+    #input = Path(cfg._config_root_dir) / "input"
     macro_cfg = cfg.transport_macroscale
-    large_model = File(macro_cfg.piezo_head_input_file)
-
-    with common.workdir(work_dir, inputs=[large_model.path]):
+    #pieze_fname = macro_cfg.piezo_head_input_file
+    #arge_model = File()
+    #inputs=[large_model.path]
+    with common.workdir(work_dir, inputs=[]):
         macro_mesh: Mesh = make_macro_mesh(cfg)
         # select elements with homogenized properties
         macro_model_el_indices = homogenized_elements(cfg.geometry, macro_mesh)
@@ -29,7 +32,7 @@ def macro_transport(cfg:dotdict):
         params = dict(
             mesh_file = macro_mesh.file.path,
             input_fields_file = conductivity_file.path,
-            piezo_head_input_file = os.path.basename(large_model.path)
+            #piezo_head_input_file = os.path.basename(large_model.path)
 
         )
         macro_model = common.call_flow(cfg.machine_config, template, params)

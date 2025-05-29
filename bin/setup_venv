@@ -4,20 +4,30 @@
 # - install endorse itself in development mode.
 set -x
 
-echo "Creating python virtual environment."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
-ENDORSE_SRC_ROOT="$SCRIPTPATH/.."
+# Name of the virtual environment folder
+VENV_DIR="$SCRIPT_DIR/../venv"
 
-cd ${ENDORSE_SRC_ROOT}
-rm -r venv
-#virtualenv venv
-python3 -m venv --system-site-packages venv
+if [ "$1" == "-d" ];
+then
+    rm -rf "$VENV_DIR"
+fi
 
-venv_pip=${ENDORSE_SRC_ROOT}/venv/bin/pip
-$venv_pip install wheel
+
+# Check if virtual environment directory already exists
+if [ -d "$VENV_DIR" ]; then
+    echo "Virtual environment already exists."
+else
+    # Create a virtual environment
+    python3 -m venv $VENV_DIR
+    echo "Virtual environment created."
+fi
+
+
+venv_pip="${VENV_DIR}/bin/pip"
+#$venv_pip install wheel
 $venv_pip install --upgrade pip
-#source venv/bin/activate
 
 $venv_pip install -r requirements.txt
 
@@ -29,4 +39,10 @@ $venv_pip install -e submodules/redis-cache
 # attrs somehow was broken after gmsh explicit installation, must force its reinstalation
 
 $venv_pip install --force-reinstall --upgrade attrs
-$venv_pip install -e .
+$venv_pip install -e "${SCRIPT_DIR}/.."
+
+
+
+
+
+

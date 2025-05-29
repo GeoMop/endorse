@@ -97,7 +97,7 @@ def _prepare_inputs(file_in, params):
     main_input, used_params =  substitute_placeholders(file_in, main_input, params)
     return main_input
 
-@memoize
+#@memoize
 def _flow_subprocess(arguments, main_input):
     filebase, ext = os.path.splitext(os.path.basename(main_input.path))
     arguments.append(main_input.path)
