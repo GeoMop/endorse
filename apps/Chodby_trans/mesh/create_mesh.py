@@ -237,10 +237,13 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
             = create_storage_boreholes(factory, cfg_geom, vol_dict["tunnel"], tunnel_bottom_z, cfg_mesh.boreholes_mesh_step)
         vol_dict["storage_boreholes_group"] = factory.group(*storage_boreholes)
 
+        # TODO: For unknown reason, we have to set storages mesh step in create_storage_boreholes
+        # and not later to all_storage_boreholes or bnd_dict["b_storage_boreholes_group"]
         # if we drill the boreholes out, we need its boundary to prescribe mesh step
         all_storage_boreholes = factory.group(*safe_list(vol_dict, ["plug", "container", "storage_boreholes_group"]))
+        # all_storage_boreholes.mesh_step(cfg_mesh.boreholes_mesh_step)
         bnd_dict["b_storage_boreholes_group"] = all_storage_boreholes.get_boundary().copy().split_by_dimension()[2]
-        bnd_dict["b_storage_boreholes_group"].mesh_step(cfg_geom.storage_borehole.mesh_step)
+        bnd_dict["b_storage_boreholes_group"].mesh_step(cfg_mesh.boreholes_mesh_step)
 
         # group and fuse everything to drill,
         # make copies to keep original objects for fragmentation
@@ -340,6 +343,10 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         geometry_set.append(b_fractures_out)
         if "drilled_volume" not in cfg_geom.include:
             geometry_set.append(b_fractures_in)
+
+    if "drilled_volume" in cfg_geom.include:
+        fr_dict["tunnel_fr"].mesh_step(cfg_mesh.main_tunnel_mesh_step)
+        fr_dict["storage_boreholes_group_fr"].mesh_step(cfg_mesh.boreholes_mesh_step)
 
     geometry_final = factory.group(*geometry_set)
 

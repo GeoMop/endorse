@@ -254,17 +254,29 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
-    cfg_fr = cfg_trans.fractures
-    cfg_fr_fields = cfg_trans.fr_field_params
-    el_slice_fr = mesh.el_dim_slice(dim - 1)
-    logging.info(f"fr slice: {el_slice_fr}")
-    i_default = len(fractures)
-    fr_map_slice = [fr_map.get(i, i_default) for i in range(el_slice_fr.start, el_slice_fr.stop)]
-    fr_cond, fr_cross, fr_por = apply_fields.fr_fields_repo(cfg_fr, cfg_fr_fields,
-                                                            mesh.elements[el_slice_fr], fr_map_slice, fractures)
-    conductivity[el_slice_fr] = fr_cond
-    cross_section[el_slice_fr] = fr_cross
-    porosity[el_slice_fr] = fr_por
+    if "fractures" in cfg.geometry.include and fractures is not None:
+        cfg_fr = cfg_trans.fractures
+        cfg_fr_fields = cfg_trans.fr_field_params
+        el_slice_fr = mesh.el_dim_slice(dim - 1)
+        logging.info(f"fr slice: {el_slice_fr}")
+        i_default = len(fractures)
+        fr_map_slice = [fr_map.get(i, i_default) for i in range(el_slice_fr.start, el_slice_fr.stop)]
+        fr_cond, fr_cross, fr_por = apply_fields.fr_fields_repo(cfg_fr, cfg_fr_fields,
+                                                                mesh.elements[el_slice_fr], fr_map_slice, fractures)
+        conductivity[el_slice_fr] = fr_cond
+        cross_section[el_slice_fr] = fr_cross
+        porosity[el_slice_fr] = fr_por
+
+        # estimate velocities on bulk and fracture
+        # for cond range 1e-13 - 1e-9 and porosity about 1, we have velocity 1e-16  to 5.5e-10
+        # i.e velocity about the order of conductivity or one order less
+        # for fracture, cond range:
+        pos_fr = fr_cond > 0
+        est_velocity = (np.quantile(bulk_cond, 0.4) / 10, np.quantile(fr_cond[pos_fr], 0.4))
+    else:
+        est_velocity = (np.quantile(bulk_cond, 0.4) / 10, 0)
+
+
     fields = dict(
         conductivity=conductivity,
         cross_section=cross_section,
@@ -272,13 +284,6 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     )
     cond_file = mesh.write_fields("input_fields.msh2", fields)
 
-    # estimate velocities on bulk and fracture
-    # for cond range 1e-13 - 1e-9 and porosity about 1, we have velocity 1e-16  to 5.5e-10
-    # i.e velocity about the order of conductivity or one order less
-    # for fracture, cond range:
-
-    pos_fr = fr_cond > 0
-    est_velocity = (np.quantile(bulk_cond, 0.4)/10, np.quantile(fr_cond[pos_fr],  0.4))
     return cond_file, est_velocity
 
 def compute_hm_bulk_fields(cfg, cfg_basedir, points):
