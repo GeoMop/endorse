@@ -6,7 +6,7 @@ from endorse import common
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
-from boreholes import Boreholes
+from chodby_inv.hm_model.boreholes import Boreholes
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -104,7 +104,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     print("tunnel_center_lines:\n", tunnel_center_lines)
 
     # create borehole chamber lines for meshing field
-    bhs = Boreholes(cfg_mesh.borehole_data_file)
+    bhs = Boreholes()
     borehole_chamber_lines = bhs.make_gmsh_lines(factory)
 
     # factory.show()
