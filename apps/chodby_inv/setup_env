@@ -2,6 +2,7 @@
 set -x
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENDORSE_SRC_ROOT="$SCRIPT_DIR/../.."
 
 # Name of the virtual environment folder
 VENV_DIR="$SCRIPT_DIR/venv"
@@ -33,6 +34,11 @@ if [ -f "requirements.txt" ]; then
 else
     echo "requirements.txt not found. Skipping dependency installation."
 fi
+
+# install endorse submodules
+pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/redis-cache
+pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem
+pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/meshio
 
 # install endorse
 pip install -e ${SCRIPT_DIR}/../..
