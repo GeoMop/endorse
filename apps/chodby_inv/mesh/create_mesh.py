@@ -220,7 +220,7 @@ def meshing(factory, objects, mesh_filename):
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3)
     print("Meshing finished.")
-    factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
+    factory.write_mesh(filename=str(mesh_filename), format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
 
