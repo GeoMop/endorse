@@ -1,6 +1,6 @@
-import os
 import numpy as np
 import pandas as pd
+from pathlib import Path
 
 from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
@@ -10,7 +10,9 @@ from endorse.mesh import mesh_tools, fracture_tools
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 from bgem.stochastic.fracture import Population
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
+import chodby_trans.input_data as input_data
+input_dir = input_data.input_dir
+work_dir = input_data.work_dir
 
 
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
@@ -100,7 +102,7 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     """
     cfg_mt = cfg.geometry.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(os.path.join(cfg._config_root_dir, cfg_mt.csv_points))
+    df = pd.read_csv(input_dir / cfg_mt.csv_points)
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
 
     # rescale points to intended tunnel dimensions (x-width, z-height)
@@ -445,36 +447,30 @@ def make_mesh(cfg, fr_pop, seed):
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = os.path.join(cfg._output_dir, cfg.mesh_name + "_healed.msh2")
+    mesh_file_healed = cfg.mesh_name + "_healed.msh2"
     # if not os.path.exists(mesh_file_healed):
     print("HEAL MESH")
     hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
     hm.heal_mesh(gamma_tol=0.02)
-    # hm.stats_to_yaml(os.path.join(_output_dir, cfg.mesh_name + "_heal_stats.yaml"))
+    # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
     hm.write(file_name=mesh_file_healed)
 
     print("Final mesh file: ", mesh_file_healed)
     return File(mesh_file_healed), fracture_set, n_large
 
 
-if __name__ == '__main__':
-    # output_dir = None
-    # len_argv = len(sys.argv)
-    # assert len_argv > 1, "Specify input yaml file and output dir!"
-    # if len_argv == 2:
-    #     output_dir = os.path.abspath(sys.argv[1])
-    output_dir = os.path.join(script_dir, "output")
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+def main():
 
-    conf_file = os.path.join(script_dir, "../config/trans_mesh_config.yaml")
-    cfg = common.config.load_config(conf_file)
+    # common.EndorseCache.instance().expire_all()
 
-    # common.CallCache.instance(expire_all=True)
+    conf_file = input_data.transport_config
+    cfg = common.config.load_config(str(conf_file))
 
     seed = 101
-    with common.workdir(output_dir, clean=False):
-
+    with common.workdir(str(work_dir), clean=False):
         fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
         make_mesh(cfg, fr_pop, seed)
 
+
+if __name__ == '__main__':
+    main()

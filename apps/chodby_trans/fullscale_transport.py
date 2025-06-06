@@ -1,7 +1,7 @@
 import logging
-import os
 import shutil
 from typing import *
+from pathlib import Path
 
 import numpy as np
 
@@ -15,9 +15,11 @@ from bgem.stochastic.fracture import Fracture, Population
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
-from apps.Chodby_trans.mesh.create_mesh import make_mesh
+from chodby_trans.mesh.create_mesh import make_mesh
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
+import chodby_trans.input_data as input_data
+input_dir = input_data.input_dir
+work_dir = input_data.work_dir
 
 # @attrs.define
 # class ResultSpec:
@@ -44,7 +46,7 @@ def fullscale_transport(cfg_path, seed):
 
 @memoize
 def transport_run(cfg, seed):
-    # large_model = File(os.path.join(cfg._config_root_dir, cfg_fine.piezo_head_input_file))
+    # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
     fr_pop = Population.initialize_3d( cfg.fractures.population, cfg.geometry.box_dimensions)
@@ -58,15 +60,14 @@ def transport_run(cfg, seed):
     if "fractures" in cfg.geometry.include and fractures is not None:
         # modifies the regions: fr_large, fr_small
         el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
-        mesh_modified_filepath = os.path.join(os.path.dirname(mesh_file.path),
-                                              os.path.splitext(os.path.basename(mesh_file.path))[0] + "_modified.msh2")
+        mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
         mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
     input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
 
     # input_fields_file = File("input_fields.msh2")
-    input_msh_filepath = os.path.splitext(input_fields_file.path)[0] + ".msh"
+    input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
     shutil.copy2(input_fields_file.path, input_msh_filepath)
     input_msh = File(input_msh_filepath)
 
@@ -92,7 +93,7 @@ def parametrized_run(cfg, large_model, input_fields_file):
     )
     params.update(new_params)
     params.update(set_source_term(cfg))
-    template = os.path.join(cfg._config_root_dir, cfg_fine.input_template)
+    template = input_dir / cfg_fine.input_template
     fo = common.call_flow(cfg.machine_config, template, params)
 
     # return get_indicator(cfg, fo)
@@ -139,7 +140,7 @@ def set_source_term(cfg):
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
-        conc_flux_file=os.path.join(cfg._config_root_dir, cfg_fine.conc_flux_file)
+        conc_flux_file= input_dir / cfg_fine.conc_flux_file
     )
     return source_params
 
@@ -159,23 +160,17 @@ def set_source_term(cfg):
 #     # bulk_por = apply_fields.rescale_along_xaxis(cfg_geom, bulk_por, points)
 #     return bulk_cond, bulk_por
 
+def main():
 
-if __name__ == '__main__':
-    # output_dir = None
-    # len_argv = len(sys.argv)
-    # assert len_argv > 1, "Specify input yaml file and output dir!"
-    # if len_argv == 2:
-    #     output_dir = os.path.abspath(sys.argv[1])
-    # output_dir = script_dir
-    output_dir = os.path.join(script_dir, "output")
-    if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+    # common.EndorseCache.instance().expire_all()
 
-    conf_file = os.path.join(script_dir, "config/trans_mesh_config.yaml")
-    cfg = common.config.load_config(conf_file)
-
-    common.CallCache.instance(expire_all=True)
+    conf_file = input_data.transport_config
+    cfg = common.config.load_config(str(conf_file))
 
     seed = 101
-    with common.workdir(output_dir, clean=False):
+    with common.workdir(str(work_dir), clean=False):
         transport_run(cfg, seed)
+
+
+if __name__ == '__main__':
+    main()

@@ -12,7 +12,7 @@ edz_radius: 2.5
 
 include: #[]
   - boreholes
-  - fractures
+#  - fractures
   - drilled_volume
 
 # Main tunnel - main access tunnel L5
