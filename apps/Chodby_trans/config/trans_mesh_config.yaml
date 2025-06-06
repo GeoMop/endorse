@@ -7,15 +7,15 @@ mesh:
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 15
     fracture_mesh_step: 4
-    main_tunnel_mesh_step: 1
-    boreholes_mesh_step: &boreholes_mesh_step 0.25
+    main_tunnel_mesh_step: &main_tunnel_mesh_step 1.25 # 1
+    boreholes_mesh_step: &boreholes_mesh_step 0.5 # 0.25
 
     # refinement around central line of main tunnel
     main_line_refinement:
       r_inner: 2
       h_inner: *main_tunnel_mesh_step
       r_outer: 10
-      h_outer: 1.5
+      h_outer: 3 # 1.5
       q_outer: 1
       r_inf: 30
       h_inf: *boundary_mesh_step
@@ -23,8 +23,8 @@ mesh:
     storage_borehole_refinement:
       r_inner: 0.2
       h_inner: *boreholes_mesh_step
-      r_outer: 1.2
-      h_outer: 0.6
+      r_outer: 2
+      h_outer: 1 # 0.6
       q_outer: 1
       r_inf: 30
       h_inf: *boundary_mesh_step
@@ -72,19 +72,9 @@ transport_fullscale:
 
     # relative to main config
     piezo_head_input_file: "large_model_local.msh2"
-    conc_flux_file: "conc_flux_UOS_kg_y.csv"
+#    conc_flux_file: "conc_flux_UOS_kg_y.csv"
+    conc_flux_file: "conc_flux_UOS.csv"
     conc_name: I
-    mesh:
-        # mesh step on fractures
-        fracture_mesh_step: 10
-        # mesh step on outer boundary
-        boundary_mesh_step: 50
-        # mesh step on outer boundary of EDZ (just around boreholes right now)
-        edz_mesh_step: 1
-        # mesh step on inner boreholes
-        boreholes_mesh_step: 0.3   # haxagon boreholes
-        #boreholes_mesh_step: 0.3   # EDZ minimal resolution
-        main_tunnel_mesh_step: 2
 
     bulk_field_params: *bulk_field_parametric
     fr_field_params:
@@ -128,9 +118,7 @@ transport_fullscale:
     end_time: 160000
 
     flow_solver__a_tol: 1e-15
-    flow_solver__r_tol: 1e-20
-    #flow_solver__options:
-
+    flow_solver__r_tol: 1e-15
 
     trans_solver__a_tol: 1e-15
     trans_solver__r_tol: 1e-8
@@ -189,3 +177,38 @@ transport_fullscale:
     #trans_solver__options: -ksp_type gmres -pc_type ilu -pc_factor_levels 3 -ksp_diagonal_scale -ksp_diagonal_scale_fix -pc_factor_fill 1.0 -ksp_monitor
 
   # edz_phys_group: 77
+
+
+machine_config:
+    # automatic resolution according to the socket.gethostname()
+    # content of the 'machine_config' dict is filled by the particular
+    # machine configuration dict
+    paulie-MSI:  #JB
+        flow_executable:
+        # release
+        - /home/paulie/Workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
+
+        pbs: null
+    __default__: # Assumes running on charon
+        flow_executable:
+        - flow123d
+        pbs:
+            n_cores: 1
+            n_nodes: 1
+            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+            mem: 6Gb
+            queue: charon
+            pbs_name: endorse-flow123d
+            walltime: "04:00:00"
+    #__default__:  # assume flow123d available and no pbs
+    #    flow_executable:
+    #    - flow123d
