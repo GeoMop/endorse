@@ -1,15 +1,15 @@
 import math
-import os
 import numpy as np
+from pathlib import Path
 
 from endorse import common
 from endorse.mesh import mesh_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
-from boreholes import Boreholes
+from chodby_inv.hm_model.boreholes import Boreholes
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
+from cfg import script_dir, workdir, input_dir
 
 
 def tunnel_center_line(factory, tunnel_dict):
@@ -68,7 +68,8 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
     return field.maximum(inner, outer)
 
 
-def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_scan):
+def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
+    cfg_geom = cfg.geometry
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original
 
@@ -82,7 +83,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     print("tunnel_center_lines:\n", tunnel_center_lines)
 
     # create borehole chamber lines for meshing field
-    bhs = Boreholes(cfg_mesh.borehole_data_file)
+    bhs = Boreholes()
     borehole_chamber_lines = bhs.make_gmsh_lines(factory)
 
     # factory.show()
@@ -140,15 +141,15 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     geometry_set = []
     for side_name, side_obj in box_sides_dict.items():
         b_side = box_sides_no_tunnel.select_by_intersect(side_obj)
-        b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
+        b_side.set_region('.'+side_name).mesh_step(cfg.mesh.boundary_mesh_step)
         geometry_set.append(b_side)
     geometry_set.append(tunnel_walls)
     geometry_set.append(box_fr)
 
     # create refinement fields around drifts
-    line_fields = [line_distance_edz(factory, line, cfg_mesh.line_refinement)
+    line_fields = [line_distance_edz(factory, line, cfg.mesh.line_refinement)
                    for line in tunnel_center_lines]
-    line_fields.extend( [line_distance_edz(factory, line, cfg_mesh.borehole_refinement)
+    line_fields.extend( [line_distance_edz(factory, line, cfg.mesh.borehole_refinement)
                    for line in borehole_chamber_lines] )
     common_field = field.minimum(*line_fields)
     factory.set_mesh_step_field(common_field)
@@ -197,16 +198,17 @@ def meshing(factory, objects, mesh_filename):
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3)
     print("Meshing finished.")
-    factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
+    factory.write_mesh(filename=str(mesh_filename), format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
 
 def load_boundary_mesh(filename):
     # gmsh.initialize()
-    if not os.path.isfile(filename):
+    if not Path(filename).is_file():
         raise FileNotFoundError(filename)
     # gmsh.open(filename)
     gmsh.merge(filename)
+
 
 def make_gmsh(cfg:'dotdict'):
     """
@@ -215,9 +217,8 @@ def make_gmsh(cfg:'dotdict'):
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = os.path.join(cfg.output_dir, cfg.mesh_name + ".msh2")
-    boundary_brep_filename = os.path.join(cfg.output_dir, cfg.boundary_brepfile)
-    cfg.mesh.borehole_data_file = os.path.join(cfg.output_dir, cfg.mesh.borehole_data_file)
+    final_mesh_filename = cfg.mesh_name + ".msh2"
+    boundary_brep_filename = input_dir / cfg.boundary_brepfile
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
@@ -225,7 +226,7 @@ def make_gmsh(cfg:'dotdict'):
     # gopt.Tolerance = 0.0001
     # gopt.ToleranceBoolean = 0.001
 
-    tunnel_laser_scan = factory.import_shapes(boundary_brep_filename, highestDimOnly=False)
+    tunnel_laser_scan = factory.import_shapes(str(boundary_brep_filename), highestDimOnly=False)
 
     # print(tunnel_laser_scan.dim_tags)
     # print(tunnel_laser_scan.regions)
@@ -245,7 +246,7 @@ def make_gmsh(cfg:'dotdict'):
     factory.synchronize()
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg.geometry, cfg.mesh, tunnel_group)
+    geometry_set = make_geometry(factory, cfg, tunnel_group)
     # factory.show()
     # exit(0)
 
@@ -255,11 +256,7 @@ def make_gmsh(cfg:'dotdict'):
     return common.File(final_mesh_filename)
 
 
-def make_mesh(workdir, output_dir, cfg_file):
-    conf_file = os.path.join(workdir, cfg_file)
-    cfg = common.config.load_config(conf_file)
-    cfg.output_dir = output_dir
-
+def make_mesh(cfg):
     mesh_file = make_gmsh(cfg)
 
     # the number of elements written by factory logger does not correspond to actual count
@@ -267,24 +264,28 @@ def make_mesh(workdir, output_dir, cfg_file):
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = os.path.join(cfg.output_dir, cfg.mesh_name + "_healed.msh2")
+    mesh_file_healed = cfg.mesh_name + "_healed.msh2"
     # if not os.path.exists(mesh_file_healed):
     print("HEAL MESH")
     hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
     hm.heal_mesh(gamma_tol=0.02)
-    # hm.stats_to_yaml(os.path.join(output_dir, cfg.mesh_name + "_heal_stats.yaml"))
+    # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
     hm.write(file_name=mesh_file_healed)
 
     # print("Mesh file: ", mesh_file_healed)
     return common.File(mesh_file_healed)
 
+
+def main():
+
+    # common.EndorseCache.instance().expire_all()
+
+    conf_file = script_dir / "l5_mesh_config.yaml"
+    cfg = common.config.load_config(conf_file)
+
+    with common.workdir(str(workdir), clean=False):
+        make_mesh(cfg)
+
+
 if __name__ == '__main__':
-    # output_dir = None
-    # len_argv = len(sys.argv)
-    # assert len_argv > 1, "Specify input yaml file and output dir!"
-    # if len_argv == 2:
-    #     output_dir = os.path.abspath(sys.argv[1])
-    output_dir = script_dir
-
-    make_mesh(script_dir, output_dir, "./l5_mesh_config.yaml")
-
+    main()
