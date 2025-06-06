@@ -7,6 +7,6 @@ setup(
     author="Jan Brezina",
     author_email="jan.brezina@tul.cz",
     install_requires = ["PyYAML", "attrs", "numpy"],
-    packages=["Chodby_trans"],
-    package_dir={"Chodby_trans": "."},  # Map the package name to the current directory
+    packages=["chodby_trans"],
+    package_dir={"chodby_trans": "."},  # Map the package name to the current directory
 )
