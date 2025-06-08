@@ -54,7 +54,6 @@ class Element:
 
 
 
-@memoize
 def _load_mesh(mesh_file: File, heal_tol):
 
     if heal_tol is None:
@@ -165,11 +164,11 @@ class Mesh:
     #     return self.elements[self.el_indices[id]].volume()
 
     @property
-    @report
+    #@report
     def el_volumes(self):
         if self._el_volumes is None:
             node_indices = np.array([e.node_indices for e in self.elements], dtype=int)
-            print(f"Compute el volumes: {self.nodes.shape}, {node_indices.shape}")
+            #print(f"Compute el volumes: {self.nodes.shape}, {node_indices.shape}")
             self._el_volumes = mesh_compute_el_volumes(self.nodes, node_indices)
         return self._el_volumes
 

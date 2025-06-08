@@ -1,4 +1,10 @@
 import pytest
+import logging
+
+# Configure the root logger to print INFO+ messages to stderr
+logging.basicConfig(level=logging.INFO,
+                    format='[%(levelname)s] %(name)s: %(message)s')
+
 import os
 
 from endorse import macro_flow_model
@@ -29,5 +35,5 @@ def test_macro_transport():
     #common.EndorseCache.instance().expire_all()
     conf_file = script_dir / "input/config.yaml"
     cfg = common.load_config(conf_file)
-    macro_flow_model.macro_transport(cfg)
     macro_flow_model.fine_macro_transport(cfg)
+    macro_flow_model.macro_transport(cfg)

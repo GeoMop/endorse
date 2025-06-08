@@ -1,7 +1,7 @@
 from typing import *
 import os
 from bgem.gmsh import gmsh
-from endorse.common import File, dotdict
+from endorse.common import File, dotdict, memoize
 from endorse.mesh import mesh_tools
 
 
@@ -17,10 +17,11 @@ homogenization mesh - subset of fine mesh, same geometry, but cut by given cylin
 
 def macro_outer_box(cfg_geom, factory):
     b_cfg = cfg_geom.borehole
-    x_size = 0.9 * b_cfg.length
+    x_size = b_cfg.length
     x_shift = x_size / 2
     yz_size = 5 * cfg_geom.edz_radius
     return factory.box([x_size, yz_size, yz_size]).translate([x_shift, 0, b_cfg.z_pos])
+
 
 def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
     """
@@ -41,6 +42,7 @@ def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
     del factory
     return File(mesh_file)
 
+@memoize
 def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     """
     macro mesh with cut borehole and refined around

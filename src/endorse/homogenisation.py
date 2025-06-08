@@ -91,27 +91,37 @@ class SubMeshSubproblem:
             print(f"Subproblem AABB: {self.aabb} submesh: {repr_aabb(self._submesh.bih.aabb())}")
         return self._submesh
 
-    @property
-    def subdomains(self):
+
+    def subdomains(self, output_mesh):
         """Create subproblem mesh."""
         if self._subdomains is None:
-            self._subdomains = [Subdomain.create(self.macro_el_shape, self.submesh, self.macro_mesh, iel) for iel in self.macro_elements]
+            self._subdomains = [Subdomain.create(self.macro_el_shape, output_mesh, self.macro_mesh, iel) for iel in self.macro_elements]
+        ii = 13
+        sd = self._subdomains[ii]
+        print(self.macro_mesh.elements[sd.macro_el_idx].barycenter(), "macro:", {sd.macro_el_idx}, "N:", len(sd.el_indices))
+        for iel in sd.el_indices:
+            print(iel, " : ", output_mesh.elements[iel].barycenter())
 
         return self._subdomains
 
     @report
-    def assembly_average_matrix(self):
+    def assembly_average_matrix(self, output_mesh):
+        """
+        Create sparse matrix for averaging over subdomains, shape (n_macro_el_subdomains, n_subproblem_elements).
+        """
         rows = []
         cols = []
         vals = []
-        for i_sub, sub in enumerate(self.subdomains):
+        subdomains = self.subdomains(output_mesh)
+        for i_sub, sub in enumerate(subdomains):
             sub_col = sub.el_indices
             sub_val = sub.weights
             rows.append(np.full_like(sub_col, i_sub))
             cols.append(sub_col)
             vals.append(sub_val)
+        n_micro_els = len(output_mesh.elements)
         return sparse.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
-                                 shape=(len(self.subdomains), len(self.micro_elements))).tocsr()
+                                 shape=(len(subdomains), n_micro_els)).tocsr()
 
 
     @property
@@ -122,8 +132,8 @@ class SubMeshSubproblem:
 
 
     def average(self, field:np.array):
-        assert field.shape[0] == len(self.micro_elements)
-        print(f"{self.average_sparse_matrix.shape} @ {field.shape}")
+        #assert field.shape[0] == len(self.micro_elements), f"field shape {field.shape}, nel: {len(self.micro_elements)}"
+        #print(f"{self.average_sparse_matrix.shape} @ {field.shape}")
         return self.average_sparse_matrix @ field
 
 
@@ -204,6 +214,9 @@ class Subproblems:
         return Subproblems(macro_mesh, macro_els, subprobs)
 
     def subdomains_average(self, subprob_avgs):
+        """
+        array
+        """
         subdomain_avg = np.zeros((self.n_subdomains, subprob_avgs[0].shape[1]))
         assert self.n_subdomains == sum((avg.shape[0] for avg in subprob_avgs))
         for subprob, avg in zip(self.subproblems, subprob_avgs):
@@ -217,6 +230,14 @@ class Subproblems:
 
     @staticmethod
     def equivalent_tensor_3d(loads, responses):
+        """
+        Compute single element equivalent tensor from loads and responses.
+        loads and responses have shape (n_loads, 3), where n_loads is the number of loads.
+        Solving LS problem with matrix of shape (3 * n_loads, 6) and right hand side of shape (3 * n_loads,).
+        TODO:
+        - vectorise the loads and responses, so that we can use this for elementsat once.
+        - move/merge with similar code in bgem
+        """
         # tensor pos. def.  <=> load @ response > 0
         # ... we possibly modify responses to satisfy
         unit_loads = loads / np.linalg.norm(loads, axis=1)[:, None]
@@ -234,14 +255,19 @@ class Subproblems:
         ls_mat_vz = np.stack([zeros, zeros, loads[:, 2], loads[:, 1], loads[:, 0], zeros], axis=1)
         rhs_vz = responses_fixed[:, 2]
         ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=0)
+        ls_mat_scale = np.average(ls_mat, axis=1)
+        ls_mat = ls_mat / ls_mat_scale[:, None]
         rhs = np.concatenate([rhs_vx, rhs_vy, rhs_vz], axis=0)
+        rhs = rhs / ls_mat_scale
         assert ls_mat.shape == (3 * n_loads, 6)
         assert rhs.shape == (3 * n_loads,)
         result = np.linalg.lstsq(ls_mat, rhs, rcond=None)
         cond_tn_voigt, residuals, rank, singulars = result
-        condition_number = singulars[0] / singulars[-1]
-        if condition_number > 1e3:
-            logging.warning(f"Badly conditioned inversion. Residual: {residuals}, max/min sing. : {condition_number}")
+        condition_number = singulars[0] / singulars[2]
+        #if condition_number > 10 or singulars[2] / singulars[3] < 10:
+        if residuals[0]/np.max(np.linalg.norm(responses_fixed, axis=1)) > 1.0e-1:
+                logging.warning(f"Badly conditioned inversion. \n cond:{cond_tn_voigt}\nResidual: {residuals}, max/min sing. :\n"
+                            f"    {singulars}\n{loads}\n")
         return cond_tn_voigt
 
     #@report
@@ -290,10 +316,11 @@ class Subdomain:
         assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
+        #print(macro_el.barycenter(), "macro: ", i_el, "\n subdomain:", subdomain_indices, "AABB:", repr_aabb(aabb))
         return Subdomain(micro_mesh, i_el, subdomain_indices)
 
     @property
-    @report
+    #@report
     def weights(self):
         if self._weights is None:
             volumes = self.mesh.el_volumes[self.el_indices]

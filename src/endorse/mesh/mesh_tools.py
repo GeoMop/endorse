@@ -82,8 +82,12 @@ def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: 
 
     n_sampling = int(b_cfg.length / 2)
     dist = field.distance(center_line, sampling = n_sampling)
-    inner = field.geometric(dist, a=(b_cfg.radius, cfg_mesh.edz_mesh_step * 0.9), b=(edz_radius, cfg_mesh.edz_mesh_step))
-    outer = field.polynomial(dist, a=(edz_radius, cfg_mesh.edz_mesh_step), b=(by / 2, cfg_mesh.boundary_mesh_step), q=1.7)
+    inner = field.geometric(dist,
+                            a=(b_cfg.radius, cfg_mesh.edz_mesh_step * 0.9),
+                            b=(edz_radius, cfg_mesh.edz_mesh_step))
+    outer = field.polynomial(dist,
+                             a=(edz_radius, cfg_mesh.edz_mesh_step),
+                             b=(by / 2, cfg_mesh.boundary_mesh_step), q=1.7)
     return field.maximum(inner, outer)
 
 

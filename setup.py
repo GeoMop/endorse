@@ -60,7 +60,9 @@ setuptools.setup(
         "endorse.flow123d_inputs": ['*.yaml']
     },
     entry_points={
-        'console_scripts': ['endorse_gui=endorse.gui.app:main', 'endorse_mlmc=endorse.scripts.endorse_mlmc:main']
+        'console_scripts': [
+            'endorse_gui=endorse.gui.app:main',
+            'endorse_mlmc=endorse.scripts.endorse_mlmc:main']
     }
 )
 

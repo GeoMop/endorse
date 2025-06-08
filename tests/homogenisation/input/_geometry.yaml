@@ -49,7 +49,7 @@ borehole:
     radius: &borehole_radius 1.1
     # Boreholes length
     #length: 300
-    length: 80  # to speedup debugging
+    length: 20  # to speedup debugging
     # Vertical position of the borehole center.
     z_pos: 1.1
     # horizontal gaps between boreholes; (2 * n_side_boreholes) * borehole_distance should be < main_tunnel.length
