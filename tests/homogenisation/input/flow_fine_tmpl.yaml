@@ -47,9 +47,9 @@ problem: !Coupling_Sequential
         - conductivity
     balance: {}
     output_stream:
-      format: !gmsh
-      #format: !vtk
-      #  variant: ascii
+      #format: !gmsh
+      format: !vtk
+        variant: binary
 
 #  solute_equation: !Coupling_OperatorSplitting
 #    substances:

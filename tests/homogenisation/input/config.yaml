@@ -135,10 +135,10 @@ fractures_repo: &fractures_repo
 
 bulk_field_parametric: &bulk_field_parametric
     #cond_bulk: 1e-13 #
-    cond_borehole: 1e-10
+    cond_borehole: 5e-12    # make bentonite slightly more conductive then surrounding rock
     
-    cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)
-    cond_min: 1e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
+    cond_max: 1e-10   # EDZ about 2 order of mag. higher
+    cond_min: 1e-12  # about Bukov rock
     por_max: 0.0025
     por_min: 0.002
 
@@ -166,7 +166,7 @@ transport_microscale:
         #boreholes_mesh_step: 0.3   # EDZ minimal resolution
         #main_tunnel_mesh_step: 2
 
-    pressure_loads: [ [1,0,0], [0,1,0], [0,0,1], [0,1,1], [1,0,1], [1,1,0]]
+    pressure_loads: [ [1,0,0], [0,1,0], [0,0,1]] #, [0,1,1], [1,0,1], [1,1,0]]
     # the mesh regions:
     #   outer - outside of the storage borehole
     #   borehole - the sealed and filled storage borehole

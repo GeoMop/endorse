@@ -23,7 +23,7 @@ problem: !Coupling_Sequential
           value: "<pressure_grad> @ [x,y,z]"
       - region: BULK
         conductivity:  !FieldFE
-            mesh_data_file: <fine_conductivity>
+            mesh_data_file: <mesh_file>
             field_name: conductivity
     n_schurs: 2
     output:

@@ -9,7 +9,7 @@ from .apply_fields import conductivity_mockup
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
 from .homogenisation import MacroSphere, Subproblems
-from .mesh_class import Mesh
+from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
 
@@ -80,14 +80,14 @@ def homogenized_elements(cfg_geometry:dotdict, macro_mesh: Mesh):
 def make_macro_mesh(cfg):
     macro_step = cfg.transport_macroscale.mesh_step
     mesh_file = memoize(container_position_mesh.macro_mesh)(cfg.geometry, macro_step)
-    return Mesh.load_mesh(mesh_file)
+    return load_mesh(mesh_file)
 
 
 def make_micro_mesh(cfg):
     mesh_file = container_position_mesh.fine_mesh(
         cfg.geometry,
         cfg.transport_microscale.mesh_params)
-    return Mesh.load_mesh(mesh_file)
+    return load_mesh(mesh_file)
 
 
 
@@ -107,7 +107,7 @@ def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]
     """
 
     micro_mesh: Mesh = make_micro_mesh(cfg)
-    macro_shape = MacroSphere(rel_radius=0.1)
+    macro_shape = MacroSphere(rel_radius=0.7)
     subdivision = np.array([1, 1, 1])
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
@@ -171,7 +171,7 @@ def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
     both provides averaged values over macro element subdomains
     """
     print("loading mesh:", micro_model.hydro.spatial_file)
-    output_mesh = Mesh.load_mesh(micro_model.hydro.spatial_file)
+    output_mesh = load_mesh(micro_model.hydro.spatial_file)
     avg_matrix = subproblem.assembly_average_matrix(output_mesh)
     response_field = cfg_micro.response_field_p0
 
@@ -188,7 +188,6 @@ def conductivity_micro_problem(cfg, tag, subproblem, fine_conductivity_params, l
         params = dict(
             mesh_file=fine_conductivity_file.path,
             pressure_grad=str(load),
-            fine_conductivity=fine_conductivity_file.path
         )
         template = Path(cfg._config_root_dir) / cfg_micro.input_template
         micro_output = call_flow(cfg.machine_config, template, params)

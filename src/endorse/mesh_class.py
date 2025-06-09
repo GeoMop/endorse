@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, List
+import logging
 
 import attrs
 import bih
@@ -77,12 +78,13 @@ def _load_mesh(mesh_file: File, heal_tol):
 def mesh_compute_el_volumes(nodes:np.array, node_indices :np.array) -> np.array:
     return np.array([element_compute_volume(nodes, ni) for ni in node_indices])
 
+#@memoize
+def load_mesh(mesh_file: File, heal_tol=None) -> 'Mesh':
+    return _load_mesh(mesh_file, heal_tol)
+
 
 class Mesh:
 
-    @staticmethod
-    def load_mesh(mesh_file: File, heal_tol=None) -> 'Mesh':
-        return _load_mesh(mesh_file, heal_tol)
 
     @staticmethod
     def empty(mesh_path) -> 'Mesh':
@@ -101,7 +103,10 @@ class Mesh:
     def reinit(self):
         # bounding interval hierarchy for the mesh elements
         # numbers elements from 0 as they are added
+        logging.info("Mesh reinit ...")
+        logging.info("    nodes reinit ...")
         self._update_nodes()
+        logging.info("    elements reinit ...")
         self._update_elements()
 
         # _boxes: List[bih.AABB]
@@ -144,6 +149,8 @@ class Mesh:
         return self._bih
 
     def _build_bih(self):
+        logging.info("    BIH reinit ...")
+        logging.info("        boxes")
         el_boxes = []
         for el in self.elements:
             node_coords = el.vertices()
@@ -151,6 +158,7 @@ class Mesh:
             el_boxes.append(box)
         _bih = bih.BIH()
         _bih.add_boxes(el_boxes)
+        logging.info("        construct")
         _bih.construct()
         return _bih
 
@@ -167,6 +175,7 @@ class Mesh:
     #@report
     def el_volumes(self):
         if self._el_volumes is None:
+            logging.info("    element volumes reinit ...")
             node_indices = np.array([e.node_indices for e in self.elements], dtype=int)
             #print(f"Compute el volumes: {self.nodes.shape}, {node_indices.shape}")
             self._el_volumes = mesh_compute_el_volumes(self.nodes, node_indices)
@@ -176,6 +185,7 @@ class Mesh:
 
     def el_barycenters(self):
         if self._el_barycenters is None:
+            logging.info("    element barycenters reinit ...")
             self._el_barycenters = np.array([e.barycenter() for e in self.elements])
         return self._el_barycenters
 

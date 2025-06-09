@@ -40,13 +40,13 @@ problem: !Coupling_Sequential
         #- pressure_p0
         #- pressure_p1
         - velocity_p0
-        - region_id        
+        - region_id     
         - anisotropy
     balance: {}
-    output_stream:      
-      format: !gmsh 
-      #format: !vtk
-      #  variant: ascii
+    output_stream:
+      #format: !gmsh
+      format: !vtk
+        variant: binary
 
 #  solute_equation: !Coupling_OperatorSplitting
 #    substances:
