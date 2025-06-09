@@ -2,6 +2,7 @@
 mesh_name: trans_mesh
 
 geometry: &geometry !include _geometry.yaml
+sensitivity: !include _sensitivity.yaml
 
 mesh:
     # mesh step on outer boundary

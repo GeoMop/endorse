@@ -1,0 +1,63 @@
+#n_samples: 512 # must be power of 2 due to salib
+#n_processes: 440
+n_samples: 2 # must be power of 2 due to salib
+n_processes: 1
+# 42 x 31186
+sample_shape: [42, 31186]
+
+collect_only: False
+mesh_only: False
+make_plots: False
+# if True, it removes sample dir right after the sample is collected
+clean_sample_dir: False
+
+second_order_sa: True
+parameters:
+  - name: dfn_geom
+    type: seed
+    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+  - name: dfn_cond
+    type: seed
+    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+#  - name: storativity
+#    type: lognorm
+#    bounds: [-14.5662279378421, 2.0]
+#  - name: young_modulus
+#    type: lognorm
+#    bounds: [24.8176103991685, 0.5]
+#  - name: init_stress_x
+#    type: lognorm
+#    bounds: [ 17.5531801762476, 0.3]
+#  - name: init_stress_y
+#    type: lognorm
+#    bounds: [ 16.7599495371307, 0.3]
+#  - name: init_stress_z
+#    type: lognorm
+#    bounds: [ 16.4545678875795, 0.3]
+##  - name: init_pressure
+##    type: norm
+##    bounds: [ 100, 10 ]
+#  - name: perm_k0
+#    type: lognorm
+#    bounds: [ -44.9530895712128, 2.0]
+##  - name: perm_kr
+##    type: lognorm
+##    bounds: [ -43.7491167668869, 0.5]
+#  - name: perm_eps
+#    type: truncnorm
+#    bounds : [1.1, 1000, 33, 9]
+#  - name: perm_delta
+#    type: lognorm
+#    bounds: [ -36.8413614879047, 0.1]
+#  - name: perm_gamma
+#    type: lognorm
+#    bounds: [ 1.79175946922806, 0.1]
+#  - name: conductivity_a
+#    type: unif
+#    bounds: [ -1, 1 ]
+#  - name: conductivity_b
+#    type: unif
+#    bounds: [ -1, 1 ]
+#  - name: conductivity_c
+#    type: unif
+#    bounds: [ -1, 1 ]
