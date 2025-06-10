@@ -8,7 +8,7 @@ from . import common
 from .apply_fields import conductivity_mockup
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
-from .homogenisation import MacroSphere, Subproblems
+from .homogenisation import MacroSphere, Subproblems, MacroTetra
 from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
@@ -107,7 +107,7 @@ def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]
     """
 
     micro_mesh: Mesh = make_micro_mesh(cfg)
-    macro_shape = MacroSphere(rel_radius=0.7)
+    macro_shape = MacroTetra(rel_radius=1.0)
     subdivision = np.array([1, 1, 1])
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 

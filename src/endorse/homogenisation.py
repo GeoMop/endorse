@@ -56,6 +56,33 @@ class MacroSphere(MacroShapeBase):
         indicate = np.sum(nc * nc, axis=1) < r*r    # shape n - nodes
         return np.any(indicate)
 
+# Macro element shapes, currently just the sphere.
+# Shape works as a factory for actual macro elements
+@attrs.define
+class MacroTetra(MacroShapeBase):
+    # radius relative to average distance of vertices form te barycenter
+    # More nuances could be done about actual placing of the ball of given size to best match the tetrahedral element.
+    rel_radius: float
+
+    # could possibly calculate actual center and radius, but in fact we only needs aabb and interaction indicator for micro mesh elements
+    def aabb(self, macro_el:Element):
+        return np.array([
+            np.min(macro_el.vertices(), axis=0),
+            np.max(macro_el.vertices(), axis=0)])
+
+    def interact(self, macro_el:Element, micro_el: Element):
+        jac = macro_el.vertices()[1:, :] - macro_el.vertices()[0, :]  # jacobian of the macro element
+        inv_jac = np.linalg.inv(self.rel_radius * jac.T)
+        micro_b = micro_el.barycenter()
+        x_rel = micro_b - macro_el.vertices()[0, :]
+        x_loc = inv_jac @ x_rel
+        x_bary = np.array([1.0 - np.sum(x_loc), *x_loc])  # barycentric coordinates
+        micro_r = np.mean(np.linalg.norm(macro_el.vertices() - micro_b[None,:], axis=1))
+        neg_dist = (np.max(x_bary) + micro_r) / (2 * micro_r)
+        w = min(1.0, max(0.0, neg_dist))
+        return w
+
+
 @attrs.define
 class SubMeshSubproblem:
     """
@@ -358,6 +385,7 @@ class Subdomain:
     mesh: Mesh
     macro_el_idx: int
     el_indices: List[int]
+    intersect_weights: List[float]
     _weights : np.array = None
 
     @staticmethod
@@ -375,21 +403,21 @@ class Subdomain:
         aabb = shape.aabb(macro_el)
         candidates = micro_mesh.candidate_indices(aabb)
         assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
-        subdomain_indices = [ie for ie in candidates
-                         if shape.interact(macro_el, micro_mesh.elements[ie])]
+        subdomain_indices = [(ie, w) for ie in candidates
+                         if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
         logging.info(f"Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
         assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
-
+        micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
         #print(macro_el.barycenter(), "macro: ", i_el, "\n subdomain:", subdomain_indices, "AABB:", repr_aabb(aabb))
-        return Subdomain(micro_mesh, i_el, subdomain_indices)
+        return Subdomain(micro_mesh, i_el, list(micro_el_indices), list(intersect_weights))
 
     @property
     #@report
     def weights(self):
         if self._weights is None:
-            volumes = self.mesh.el_volumes[self.el_indices]
+            volumes = self.mesh.el_volumes[self.el_indices] * np.array(self.intersect_weights)
             self._weights = volumes / np.sum(volumes)
         return self._weights
 
