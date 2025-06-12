@@ -5,7 +5,7 @@ import logging
 import numpy as np
 
 from . import common
-from .apply_fields import conductivity_mockup
+from .apply_fields import conductivity_mockup, conductivity_mockup_eval
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
 from .homogenisation import MacroSphere, Subproblems, MacroTetra
@@ -25,8 +25,10 @@ def macro_transport(cfg:dotdict):
         macro_mesh: Mesh = make_macro_mesh(cfg)
         # select elements with homogenized properties
         #macro_model_el_indices = homogenized_elements(cfg.geometry, macro_mesh)
-        macro_model_el_indices = range(len(macro_mesh.elements))
+        macro_model_el_indices = list(range(len(macro_mesh.elements)))
         conductivity_file = macro_conductivity(cfg, macro_mesh, macro_model_el_indices)
+        #conductivity_file = macro_conductivity_avg(cfg, macro_mesh, macro_model_el_indices)
+
         # TODO:  run macro model
 
         template = Path(cfg._config_root_dir) / macro_cfg.input_template
@@ -38,7 +40,8 @@ def macro_transport(cfg:dotdict):
 
         )
         macro_model = common.call_flow(cfg.machine_config, template, params)
-
+        if not macro_model.check_conv_reasons():
+            raise ValueError("Macro simulation failed.")
 
 def fine_macro_transport(cfg):
     with common.workdir("sandbox/fine_flow", clean=False):
@@ -117,7 +120,8 @@ def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]
     #subdomains_mesh(subdomains)
 
     cfg_micro = cfg.transport_microscale
-    gen_load_responses = (micro_load_response(cfg, homo, il, load) for il, load in enumerate(cfg_micro.pressure_loads))
+    gen_load_responses = (micro_load_response(cfg, homo, il, load)
+                          for il, load in enumerate(cfg_micro.pressure_loads))
     loads, responses = zip(*gen_load_responses)
     conductivity_tensors = homo.equivalent_tensor_field(loads, responses)
 
@@ -125,10 +129,132 @@ def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]
     dflt_cond = cfg.transport_macroscale.default_conductivity
     # TODO: possibly get just comutational elements (given computation regions)
     n_elements = len(macro_mesh.elements)
+
     conductivity = np.empty((n_elements, 9))
     conductivity[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
     voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
     conductivity[homogenized_els[:], :] = conductivity_tensors[:, voigt_indices[:]]
+
+
+    input_fields_file = cfg.transport_macroscale.input_fields_file
+    macro_mesh.write_fields(input_fields_file,
+                            dict(conductivity_tn=conductivity))
+    return File(input_fields_file)
+
+
+# Define transformation matrices and index mappings for 2D and 3D refinements
+_transformation_matrices = {
+    3: np.array([
+        [1, 0, 0],  # Vertex 0
+        [0, 1, 0],  # Vertex 1
+        [0, 0, 1],  # Vertex 2
+        [0.5, 0.5, 0],  # Midpoint between vertices 0 and 1
+        [0, 0.5, 0.5],  # Midpoint between vertices 1 and 2
+        [0.5, 0, 0.5],  # Midpoint between vertices 0 and 2
+    ]),
+    4: np.array([
+        [1, 0, 0, 0],  # Vertex 0
+        [0, 1, 0, 0],  # Vertex 1
+        [0, 0, 1, 0],  # Vertex 2
+        [0, 0, 0, 1],  # Vertex 3
+        [0.5, 0.5, 0, 0],  # Midpoint between vertices 0 and 1
+        [0.5, 0, 0.5, 0],  # Midpoint between vertices 0 and 2
+        [0.5, 0, 0, 0.5],  # Midpoint between vertices 0 and 3
+        [0, 0.5, 0.5, 0],  # Midpoint between vertices 1 and 2
+        [0, 0.5, 0, 0.5],  # Midpoint between vertices 1 and 3
+        [0, 0, 0.5, 0.5],  # Midpoint between vertices 2 and 3
+    ])
+}
+
+_index_maps = {
+    3: np.array([
+        [0, 3, 5],  # Triangle 1
+        [3, 1, 4],  # Triangle 2
+        [3, 4, 5],  # Triangle 3
+        [5, 4, 2]  # Triangle 4
+    ]),
+    4: np.array([
+        [0, 4, 5, 6],  # Tetrahedron 1
+        [1, 4, 7, 8],  # Tetrahedron 2
+        [2, 5, 7, 9],  # Tetrahedron 3
+        [3, 6, 8, 9],  # Tetrahedron 4
+        [4, 5, 6, 7],  # Center tetrahedron 1
+        [4, 7, 8, 6],  # Center tetrahedron 2
+        [5, 7, 9, 6],  # Center tetrahedron 3
+        [6, 8, 9, 7],  # Center tetrahedron 4
+    ])
+}
+
+
+def refine_element(element, level):
+    """
+    Recursively refines an element (triangle or tetrahedron) in space using matrix multiplication.
+
+    :param element: A numpy array of shape (1, N, dim), where N is the number of vertices (3 or 4).
+    :param level: Integer, the level of refinement.
+    :return: A numpy array containing the vertices of all refined elements.
+    """
+    if level == 0:
+        return element[None, :, :]  # Return the original element as a single element array
+    num_vertices, dim = element.shape
+    assert num_vertices == dim + 1
+    transformation_matrix = _transformation_matrices[num_vertices]
+    index_map = _index_maps[num_vertices]
+    # Generate all nodes by applying the transformation matrix to the original vertices
+    nodes = np.dot(transformation_matrix, element)
+    # Construct new elements using advanced indexing
+    new_elements = nodes[index_map]
+    # Recursively refine each smaller element
+    result = np.concatenate([
+        refine_element(new_elem[:, :], level - 1) for new_elem in new_elements
+    ], axis=0)
+    return result
+
+def refine_barycenters(element, level):
+    """
+    Produce refinement of given element (triangle or tetrahedra), shape (N, n_vertices, 3)
+    and return barycenters of refined subelements.
+    """
+    refine_els = refine_element(element, level)
+    return np.mean(refine_els, axis=1)
+
+def macro_conductivity_avg(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]) -> File:
+    """
+    - merge default conductvity and homogenized conductivity tensors
+    - convert from voigt to full 3x3 tensor
+    - write to file
+    TOSO: introduce Field class and split these three steps to general functions
+    :type macro_mesh: object
+    :param cfg:
+    :param macro_mesh:
+    :param micro_model_els:
+    :param conductivity_tensors:
+    :return:
+    """
+    level = 2
+    # (n_els, quads_per_el, 3)
+    quad_points = np.stack([refine_barycenters(el.vertices(), level) for el in macro_mesh.elements])
+    cond_field = conductivity_mockup_eval(cfg.geometry, cfg.bulk_field_parametric, quad_points.reshape(-1, 3).T)
+    cond_field = cond_field.reshape(quad_points.shape[0], -1)
+    cond_avg = np.mean(cond_field, axis=1)
+    cond_min = np.min(cond_field, axis=1)
+
+    # normal vec to the conductivity isosurfaces
+    cond_n_vec = np.mean(quad_points, axis=1)
+    cond_n_vec[:, 0] = 0.0
+    cond_n_vec =  cond_n_vec / np.linalg.norm(cond_n_vec, axis=1)[:, None]  # normalize vector
+    cond_tn = cond_avg[:, None, None] * np.eye(3) + (cond_min - cond_avg)[:, None, None] \
+               * cond_n_vec[:, None, :] * cond_n_vec[:, :, None]
+
+    # Heterogeneous conductiity tensor stored in Voigt notation.
+    dflt_cond = cfg.transport_macroscale.default_conductivity
+    # TODO: possibly get just comutational elements (given computation regions)
+    n_elements = len(macro_mesh.elements)
+
+    conductivity = np.empty((n_elements, 9))
+    conductivity[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
+    conductivity[homogenized_els[:], :] = cond_tn[homogenized_els[:]].reshape(-1, 9)
+
 
     input_fields_file = cfg.transport_macroscale.input_fields_file
     macro_mesh.write_fields(input_fields_file,
@@ -154,7 +280,9 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load):
         logging.info(f"    problem {iprob} @ load {i_load}, load: {avg_l}, response: {avg_r}")
         return (avg_l, avg_r)
 
-    subdomain_load, subdomain_response = zip(*[micro(iprob, subprob) for iprob, subprob in enumerate(subprobs.subproblems)])
+    subdomain_load, subdomain_response = zip(*[
+        micro(iprob, subprob) for iprob, subprob in enumerate(subprobs.subproblems)
+    ])
 
     return subprobs.subdomains_average(subdomain_load), subprobs.subdomains_average(subdomain_response)
 
@@ -191,6 +319,8 @@ def conductivity_micro_problem(cfg, tag, subproblem, fine_conductivity_params, l
         )
         template = Path(cfg._config_root_dir) / cfg_micro.input_template
         micro_output = call_flow(cfg.machine_config, template, params)
+        if not micro_output.check_conv_reasons():
+            raise ValueError(f"Subproblem {tag} simulation failed.")
         return micro_postprocess(cfg_micro, subproblem, micro_output)
 
 

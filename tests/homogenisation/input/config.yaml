@@ -143,8 +143,8 @@ bulk_field_parametric: &bulk_field_parametric
     por_min: 0.002
 
     # horizontal and vertical axis length of the EDZ ellipse
-    h_axis: 3
-    v_axis: 3
+    h_axis: 4
+    v_axis: 4
     # radius for c_min
     inner_radius: 1.1
 
@@ -180,7 +180,7 @@ transport_microscale:
 transport_macroscale:
     # Template for the main Flow123d input file. In `endorse/flow123d_inputs`.
     input_template: flow_macro_tmpl.yaml
-    mesh_step: 1.5
+    mesh_step: 1
     default_conductivity: 1e-16
     input_fields_file: "input_fields.msh2"
     #piezo_field: "input/large_model_local.msh2"

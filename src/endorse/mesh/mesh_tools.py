@@ -77,7 +77,7 @@ def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: 
     b_cfg = cfg_geom.borehole
     bx, by, bz = cfg_geom.box_dimensions
     edz_radius = cfg_geom.edz_radius
-    center_line = factory.line([0,0,0], [b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+    center_line = factory.line([0,0,0], [b_cfg.length, 0, 0]).translate([-b_cfg.length/2, 0, 0])
 
 
     n_sampling = int(b_cfg.length / 2)

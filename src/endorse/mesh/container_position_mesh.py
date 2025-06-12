@@ -20,7 +20,7 @@ def macro_outer_box(cfg_geom, factory):
     x_size = b_cfg.length
     x_shift = x_size / 2
     yz_size = 5 * cfg_geom.edz_radius
-    return factory.box([x_size, yz_size, yz_size]).translate([x_shift, 0, b_cfg.z_pos])
+    return factory.box([x_size, yz_size, yz_size]).translate([x_shift, 0, 0])
 
 
 def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
@@ -35,7 +35,8 @@ def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
     """
     base = "macro_borehole"
     factory = gmsh.GeometryOCC(base, verbose=True)
-    box = macro_outer_box(cfg_geom, factory)
+    #box = macro_outer_box(cfg_geom, factory)
+    box = factory.box(cfg_geom.box_dimensions)
     box.mesh_step(macro_mesh_step)
     mesh_file = base + ".msh"
     mesh_tools.edz_meshing(factory, [box], mesh_file)
@@ -52,8 +53,9 @@ def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     base = "fine_borehole"
     mesh_file = base + ".msh"
     factory = gmsh.GeometryOCC(base, verbose=True)
-    box = macro_outer_box(cfg_geom, factory)
-    bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+    box = factory.box(cfg_geom.box_dimensions)
+    bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0], center=[-b_cfg.length / 2, 0, 0])\
+          #.translate([0, 0, b_cfg.z_pos]))
 
     box_cut = box.copy().cut(bh.copy())
     domain = box.copy().fragment(bh.copy())

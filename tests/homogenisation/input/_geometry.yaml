@@ -10,10 +10,10 @@
 # depth of the center of the box and of the coordinate system
 #center_depth: 5000
 # x,y,z dimension
-box_dimensions: [100, 80, 60]
+box_dimensions: [20, 10, 10]
 #box_dimensions: [400, 80, 60]
 
-edz_radius: 2.5
+edz_radius: 4
 
 # shifting the mesh to real in-situ coordinates
 # TODO: do not shift the computation mesh but the input data to the local coordinate system

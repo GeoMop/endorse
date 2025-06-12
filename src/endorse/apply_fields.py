@@ -4,15 +4,14 @@ from .common import File
 from .mesh_class import Mesh
 #from endorse import hm_simulation
 
-def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
-    X, Y, Z = output_mesh.el_barycenters().T
-    cond_file = "fine_conductivity.msh2"
+def conductivity_mockup_eval(cfg_geom, cfg_fields, XYZ):
+    X, Y, Z = XYZ
     cond_max = float(cfg_fields.cond_max)
     cond_min = float(cfg_fields.cond_min)
 
     #edz_r = cfg_geom.edz_radius # 2.5
     in_r = cfg_fields.inner_radius
-    Z = Z - cfg_geom.borehole.z_pos
+    #Z = Z - cfg_geom.borehole.z_pos
     # axis wit respect to EDZ radius
 
     # distance from center, 1== edz_radius
@@ -32,7 +31,11 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
                          np.exp(theta * np.log(cond_min) + (1-theta) * np.log(cond_max))
                                 ))
     cond_field[distance < in_r] = cfg_fields.cond_borehole
-    #print({(i+1):cond for i,cond in enumerate(cond_field)})
+    return cond_field
+
+def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+    cond_field = conductivity_mockup_eval(cfg_geom, cfg_fields, output_mesh.el_barycenters().T)
+    cond_file = "fine_conductivity.msh2"
     output_mesh.write_fields(cond_file,
                             dict(conductivity=cond_field))
     return File(cond_file)
