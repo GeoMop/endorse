@@ -1,6 +1,6 @@
 import math
-import os
 import numpy as np
+from pathlib import Path
 
 from endorse import common
 
@@ -220,7 +220,7 @@ def meshing(factory, objects, mesh_filename):
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3)
     print("Meshing finished.")
-    factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
+    factory.write_mesh(filename=str(mesh_filename), format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
 
@@ -239,7 +239,7 @@ def make_gmsh(cfg:'dotdict'):
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = input_dir / (cfg.mesh_name + ".msh2")
+    final_mesh_filename = cfg.mesh_name + ".msh2"
     boundary_brep_filename = input_dir / cfg.boundary_brepfile
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
