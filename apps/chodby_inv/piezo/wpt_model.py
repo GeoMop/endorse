@@ -26,13 +26,13 @@ class PoroElasticSolver:
         self.Nt = int(np.ceil(T_final / dt))
         self.p_b0 = p_b0
 
-    def interior_matrices(self, S, k_array):
+    def interior_matrices(self, S_array, k_array):
         """
         Allocate full (n_dofs×n_dofs) mass and stiffness matrices and fill only the interior
         block (indices 1:n_dofs, 1:n_dofs) using P1 finite elements in cylindrical coordinates.
 
         Parameters:
-          S      : Storage coefficient.
+          S_array: 1D array of length N with piecewise constant storage coefficient.
           k_array: 1D array of length N with piecewise constant hydraulic conductivity.
 
         Returns:
@@ -48,7 +48,8 @@ class PoroElasticSolver:
             h_elem = self.r[i + 1] - self.r[i]
             r_mid = 0.5 * (self.r[i] + self.r[i + 1])
             # Consistent element mass matrix.
-            M_local = S * r_mid * h_elem / 6.0 * np.array([[2, 1],
+            S_val = S_array[i]
+            M_local = S_val * r_mid * h_elem / 6.0 * np.array([[2, 1],
                                                            [1, 2]])
             # Element stiffness matrix.
             k_val = k_array[i]
@@ -59,7 +60,7 @@ class PoroElasticSolver:
             K[i:i + 2, i:i + 2] += K_local
         return M, K
 
-    def assembly_matrices(self, S, k_array, C_b, dt):
+    def assembly_matrices(self, S_array, k_array, C_b, dt):
         """
         Use interior_matrices to allocate full matrices and then insert borehole physics.
 
@@ -78,10 +79,10 @@ class PoroElasticSolver:
         """
         n = self.n_dofs
         # Allocate full matrices and fill interior block.
-        M_global, K_global = self.interior_matrices(S, k_array)
+        M_global, K_global = self.interior_matrices(S_array, k_array)
         # For the borehole node (node 0): override its mass row.
         M_global[0, :] = 0.0
-        M_global[0, 0] = C_b
+        M_global[0, 0] = C_b[0]
         # Compute alpha using the first element (connecting node 0 and node 1).
         h0 = self.r[1] - self.r[0]
         alpha = (2 * np.pi * self.r[0] * k_array[0]) / h0
@@ -90,7 +91,7 @@ class PoroElasticSolver:
                                                 [-1, 1]])
         return M_global, K_global
 
-    def build_global_system(self, S, k_array, C_b, dt):
+    def build_global_system(self, S_array, k_array, C_b, dt):
         """
         Build the global system.
 
@@ -108,7 +109,7 @@ class PoroElasticSolver:
           b_dirichlet : Dirichlet correction vector (length n_dofs) (with a negative sign).
         """
         n = self.n_dofs
-        M_global, K_global = self.assembly_matrices(S, k_array, C_b, dt)
+        M_global, K_global = self.assembly_matrices(S_array, k_array, C_b, dt)
         # Lump the mass matrix: sum each row divided by dt.
         M_lumped = np.sum(M_global, axis=1) / dt
         A_full = np.diag(M_lumped) + K_global
@@ -123,7 +124,7 @@ class PoroElasticSolver:
         b_dirichlet[n - 1] = self.p_far
         return A_full, M_lumped, b_dirichlet
 
-    def simulate(self, biot, phi, E, nu, p_far, k_array, C_b=None):
+    def simulate(self, biot: float, phi: float, E: np.array, nu: np.array, p_far: float, k_array: np.array, C_b: np.array = None):
         """
         Run the fully implicit simulation.
 
@@ -250,9 +251,9 @@ if __name__ == '__main__':
     # Rock and fluid parameters.
     biot = 0.3
     phi = 0.05  # Porosity (e.g., 2%)
-    E = 30e9  # Young's modulus (e.g., 50 GPa)
+    E_array = 30e9 * np.ones(N) # Young's modulus (e.g., 50 GPa)
     nu = 0.25  # Poisson's ratio
-    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E_array)
 
     # Hydraulic conductivity: piecewise constant (array of length N).
     conductivity_array = 1e-16 * np.ones(N)
@@ -261,7 +262,7 @@ if __name__ == '__main__':
 
     # Run simulation.
     time_vec, full_pressure_history, p_b_history \
-        = solver.simulate(biot, phi, E, nu, p_far, conductivity_array)
+        = solver.simulate(biot, phi, E_array, nu, p_far, conductivity_array)
 
     # Plot results.
     solver.plot_results()
