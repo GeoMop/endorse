@@ -1,6 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from typing import TypedDict, List
+
+# Data type for passing results to plotting functions
+class DataItem(TypedDict):
+    p_b_results: np.ndarray
+    full_pressure_history: np.ndarray
+    label: str
+
 
 class PoroElasticSolver:
     def __init__(self, r_b, R, N, dt, T_final, p_b0):
@@ -199,22 +207,30 @@ class PoroElasticSolver:
             self.full_pressure_history[t + 1, :] = p.copy()
         return self.time_vec, self.full_pressure_history, self.p_b_history
 
-    def plot_results(self):
+    def plot_results(self, data: List[DataItem] = None):
+        if data is None:
+            data = [ { 'p_b_history': self.p_b_history,
+                     'full_pressure_history': self.full_pressure_history,
+                     'label': 'Borehole Pressure' } ]
+
         """ Plot borehole pressure history and final radial pressure distribution. """
         plt.figure(figsize=(10, 6))
-        plt.plot(self.time_vec / 3600, self.p_b_history, label='Borehole Pressure p(0)')
+        for d in data:
+            plt.plot(self.time_vec / 3600, d['p_b_history'], label=d['label'])
         plt.xlabel('Time (hours)')
         plt.ylabel('Pressure (Pa)')
-        plt.title('Borehole Pressure vs Time')
+        plt.title('Borehole Pressure p(0) vs Time')
         plt.legend()
         plt.grid(True)
         plt.show()
 
         plt.figure(figsize=(10, 6))
-        plt.plot(self.r, self.full_pressure_history[-1, :], marker='o')
+        for d in data:
+            plt.plot(self.r, d['full_pressure_history'][-1, :], marker='o', label=d['label'])
         plt.xlabel('Radial Distance r (m)')
         plt.ylabel('Pressure (Pa)')
         plt.title('Pressure Distribution at Final Time')
+        plt.legend()
         plt.grid(True)
         plt.show()
 
