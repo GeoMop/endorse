@@ -10,7 +10,7 @@ import pandas as pd
 
 
 # Import the borehole pressure model module.
-from . import PoroElasticSolver
+from wpt_model import PoroElasticSolver
 from chodby_inv import input_data, piezo
 from endorse import common
 
@@ -82,13 +82,14 @@ def _run_inversion(inv_cfg, epoch_df):
     # Rock and fluid parameters.
     biot = 0.2
     phi = 0.02  # Porosity (dimensionless)
-    E = 30e9  # Young's modulus [Pa]
+    E_prior = 30e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
     solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
     def forward_model(param_vec):
-        k_field = np.exp(param_vec[:-1])  # Convert log(k) to k
+        k_field = np.exp(param_vec[:N])  # Convert log(k) to k
+        E_field = np.exp(param_vec[N:2*N])
         p_far = param_vec[-1]
-        t,p,p_b = solver.simulate(biot, phi, E, nu, p_far, k_field)
+        t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
         return p_b
 
 
@@ -115,16 +116,22 @@ def _run_inversion(inv_cfg, epoch_df):
     param_dim = N
     # Estimate element spacing in the radial direction.
     dx = (R - r_b) / N
-    correlation_length = 0.01  # [m] (adjust as needed)
-    prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
+    k_correlation_length = 0.01  # [m] (adjust as needed)
+    k_prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
+    E_correlation_length = 0.01  # [m] (adjust as needed)
+    E_prior_std_log10 = 0.5  # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
         np.full(param_dim, np.log(k_prior)),
+        np.full(param_dim, np.log(E_prior)),
         np.array([p_far_prior])
     ])
-    prior_variance = (prior_std_log10 * np.log(10)) ** 2
+    k_prior_variance = (k_prior_std_log10 * np.log(10)) ** 2
+    E_prior_variance = (E_prior_std_log10 * np.log(10)) ** 2
     cov_prior = block_diag(
-        exponential_covariance(param_dim, dx, correlation_length,
-                               prior_variance),
+        exponential_covariance(param_dim, dx, k_correlation_length,
+                               k_prior_variance),
+        exponential_covariance(param_dim, dx, E_correlation_length,
+                               E_prior_variance),
         np.array([[p_far_sd**2]])
     )
     prior = multivariate_normal(mean_prior, cov_prior)
