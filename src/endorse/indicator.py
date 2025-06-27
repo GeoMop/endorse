@@ -31,11 +31,40 @@ class Extractor:
     def from_cell_data(cls, attr_name, z_loc):
         return cls(attr_name, z_loc, cls._extract_cell_data)
 
-    def __call__(self, dataset):
+    def __call__(self, dataset, grid=None, i = None):
         plane1 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[0]])
         plane2 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[1]])
         surface = plane1[0].merge(plane2[0])
-        return self._extract_data(surface, self.attr_name)
+
+        if grid is None:
+            return self._extract_data(surface, self.attr_name)
+        else: # interpolate
+            # print(plane1[0].point_data.keys())  # for point-based fields
+            # print(plane1[0].cell_data.keys())  # for cell-based fields
+            #
+            # plane1[0].save(f"slice_1_{i:02d}.vtp", binary=False)
+            # surface.save(f"slice_surface_{i:02d}.vtp", binary=False)
+            #
+            # interpolated1 = grid.sample(plane1[0])
+            # interpolated2 = grid.sample(plane2[0])
+            # interpolated = grid.resample_with_dataset(slice_data)
+            # print(interpolated1.point_data.keys())  # for point-based fields
+            # print(interpolated1.cell_data.keys())  # for cell-based fields
+            # interpolated1_cd = interpolated1.point_data_to_cell_data()
+            # interpolated1_cd.save(f"slice_intp1_{i:02d}.vti", binary=False)
+            #
+            # interpolated = interpolated1.merge(interpolated2)
+            # interpolated = interpolated.point_data_to_cell_data()
+            # print(interpolated.point_data.keys())  # for point-based fields
+            # print(interpolated.cell_data.keys())  # for cell-based fields
+            #
+            # interpolated.save(f"slice_intp_{i:02d}.vtu", binary=False)
+
+            # interpolated = grid.sample(surface, snap_to_closest_point=True)
+            interpolated = grid.sample(dataset[0], snap_to_closest_point=True)
+            interpolated = interpolated.point_data_to_cell_data()
+            interpolated.save(f"slice_intp_{i:02d}.vtu", binary=False)
+            return self._extract_data(interpolated, self.attr_name)
 
 @attrs.define
 class Indicator:

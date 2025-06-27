@@ -4,12 +4,13 @@ from typing import *
 from pathlib import Path
 
 import numpy as np
+import pyvista as pv
 
 from endorse import common
 
 from endorse.common import dotdict, File, report, memoize
 from endorse.mesh_class import Mesh
-# from .indicator import indicator_set, indicators, IndicatorFn
+from endorse.indicator import Extractor
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
 
@@ -94,11 +95,76 @@ def parametrized_run(cfg, large_model, input_fields_file):
     params.update(new_params)
     params.update(set_source_term(cfg))
     template = input_dir / cfg_fine.input_template
-    fo = common.call_flow(cfg.machine_config, template, params)
 
-    # return get_indicator(cfg, fo)
+    stdout_path = Path('.') / 'transport_fullscale_stdout'
+    stderr_path = Path('.') / 'transport_fullscale_stderr'
+    if stdout_path.exists():
+        import subprocess
+        completed = subprocess.CompletedProcess([], 0, None, None)
+        fo = common.FlowOutput(completed, stdout_path, stderr_path)
+    else:
+        fo = common.call_flow(cfg.machine_config, template, params)
 
 
+    return get_indicator(cfg, fo)
+
+# @report
+def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
+    #extractor = Extractor.from_point_data(attr_name, z_loc)
+    extractor = Extractor.from_cell_data(attr_name, z_loc)
+    pvd_content = pv.get_reader(pvd_in.path)
+    times = np.asarray(pvd_content.time_values)
+    print(times)
+
+    # indicators = indicator_set()
+    # ind_functions = [IndicatorFn(ind, times) for ind in indicators]
+
+    for i, t in enumerate(times):
+        pvd_content.set_active_time_point(i)
+        dataset = pvd_content.read()
+        values = extractor(dataset, grid, i)
+
+        vtu_file = f"slice_t{i:04d}.vtu"
+    #     for i in ind_functions:
+    #         i.append(values)
+    #
+    # return ind_functions
+    return times
+
+def create_structured_grid(cfg_geom: dotdict, z_cuts):
+    # Define grid resolution
+    nx, ny = 20, 20  # number of elements in x and y
+    bx, by, bz = cfg_geom.box_dimensions
+    tol = 1e-6
+    bx, by = bx-tol, by-tol
+    origin_x, origin_y = -bx/2, -by/2
+
+    # Compute spacing
+    dx = bx / nx
+    dy = by / ny
+
+    # Create 2D grid in the XY plane (z=0)
+    # Set grid dimensions and spacing
+    # grid = pv.ImageData()
+    # grid.dimensions = [nx+1, ny+1, 1]
+    # grid.origin = (origin_x, origin_y, 0.0)
+    # grid.spacing = (dx, dy, 1.0)  # spacing in z doesn't matter for 2D
+
+    grid1 = pv.ImageData(dimensions=[nx + 1, ny + 1, 1],
+                         origin=(origin_x, origin_y, z_cuts[0]),
+                         spacing=(dx, dy, 1.0)  # spacing in z doesn't matter for 2D
+                        )
+    grid2 = pv.ImageData(dimensions=[nx + 1, ny + 1, 1],
+                         origin=(origin_x, origin_y, z_cuts[1]),
+                         spacing=(dx, dy, 1.0)  # spacing in z doesn't matter for 2D
+                         )
+    grid1["cell_id"] = np.arange(grid1.n_cells)
+    grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
+    grid1.save(f"slice_grid1.vti", binary=False)
+    grid = grid1.merge(grid2)
+    grid.save(f"slice_grid.vtu", binary=False)
+
+    return grid
 # def quantity_times(o_times):
 #     """
 #     Denser times set.
@@ -110,12 +176,16 @@ def parametrized_run(cfg, large_model, input_fields_file):
 #     return times
 #
 # @report
-# def get_indicator(cfg, fo):
-#     cfg_fine = cfg.transport_fullscale
-#     z_dim = 0.9 * 0.5 * cfg.geometry.box_dimensions[2]
-#     z_shift = cfg.geometry.borehole.z_pos
-#     z_cuts = (z_shift - z_dim, z_shift + z_dim)
-#     inds = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts)
+def get_indicator(cfg, fo):
+    cfg_fine = cfg.transport_fullscale
+    z_dim = 0.9 * 0.5 * cfg.geometry.box_dimensions[2]
+    # z_shift = cfg.geometry.borehole.z_pos
+    # z_shift = cfg.geometry.main_tunnel.center[2] - cfg.geometry.main_tunnel.height/2 - cfg.geometry.storage_borehole.length/2
+    z_shift = 0
+    z_cuts = (z_shift - z_dim, z_shift + z_dim)
+    grid = create_structured_grid(cfg.geometry, z_cuts)
+    inds = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
+    return inds
 #     plots.plot_indicators(inds)
 #     #itime = IndicatorFn.common_max_time(inds)  # not splined version, need slice data
 #     #plots.plot_slices(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, [itime-1, itime, itime+1])
@@ -125,7 +195,6 @@ def parametrized_run(cfg, large_model, input_fields_file):
 #     ind_time = [ind.time_max()[0] for ind in inds]
 #     ind_series = np.array([ind.spline(q_times) for ind in inds])
 #     return np.concatenate((ind_time, ind_value, ind_series.flatten()))
-#
 
 
 def set_source_term(cfg):
