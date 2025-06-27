@@ -13,10 +13,27 @@ clean_sample_dir: False
 
 second_order_sa: True
 parameters:
-  - name: dfn_geom
+  - name: dfn_geom  # seed for `p_32` and `power`
+    type: seed
+#    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+    parameters:
+      - name: p_32
+        type: norm
+        bounds: [ 0, 0.1 ]
+      - name: power
+        type: norm
+        bounds: [ 0, 0.1 ]
+  - name: dfn_cond # seed for `tr_a` and `tr_b`
     type: seed
     bounds: [ 0.1 ] # std = 0.1*<par_mean>
-  - name: dfn_cond
+    parameters:
+      - name: tr_a
+        type: lognorm
+        bounds: [ 0, 0.5 ]
+      - name: tr_b
+        type: norm
+        bounds: [ 0, 0.1 ]
+  - name: dfn_macro # seed for large fractures
     type: seed
     bounds: [ 0.1 ] # std = 0.1*<par_mean>
 #  - name: storativity

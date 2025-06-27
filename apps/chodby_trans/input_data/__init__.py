@@ -10,4 +10,9 @@ input_dir = __script_dir__.parent / "input_data"
 
 transport_config = input_dir / "trans_mesh_config.yaml"
 
+sensitivity_dirname = "sensitivity"
+param_dirname = "parameters"
+empty_hdf_dirname = "empty_hdfs"
+pbs_job_dirname = "pbs_jobs"
+
 
