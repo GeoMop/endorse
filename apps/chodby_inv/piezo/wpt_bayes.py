@@ -1,9 +1,14 @@
 import numpy as np
 import yaml
+import arviz as az
 import matplotlib.pyplot as plt
-from scipy.stats import multivariate_normal
+from matplotlib.ticker import ScalarFormatter
+from scipy.stats import multivariate_normal, norm
 from scipy.linalg import block_diag
 import pandas as pd
+from pprint import pprint
+import logging
+
 """
 
 """
@@ -69,12 +74,17 @@ def _run_inversion(inv_cfg, epoch_df):
     })
     regular_pb_measured = df_reg.apply(smooth_fn, axis=1).values
 
+    tests = load_pressure_tests()
+    selected_test = tests[inv_cfg["section"]]
+
     # Geometry and time-stepping parameters.
     r_b = 0.076  # Borehole radius [m]
     R = 2  # Outer domain radius [m]
     N = 10  # Number of finite elements (⇒ N+1 nodes)
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
-    p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    p_b0_prior = selected_test["tlak"]
+    p_b0_sd = 20000
     p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
     p_far_sd = 5000 # 5kPa
     k_prior = 1e-13
@@ -85,10 +95,9 @@ def _run_inversion(inv_cfg, epoch_df):
     E = 30e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
 
+    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0_prior)
+    compress_prior_mean = solver.estimate_complience(biot, phi, E, nu)
 
-
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
-    compress_prior_mean = solver.estimate_compressibility(biot, phi, E, nu)
     def forward_model(param_vec):
         compress, K, p_init, p_far = param_vec
         C = np.exp(compress)  # Convert log(C) to C
@@ -98,7 +107,7 @@ def _run_inversion(inv_cfg, epoch_df):
         flux = K * (p_init - p_far) * (r_b**2) / (2 * r_b)
         # This is  over simplification, we should take presurization history to account.
         output = [flux, *p_b]
-        return output
+        return np.array(output)
 
 
     # L = 2     # [m] Length of the borehole section
@@ -126,16 +135,32 @@ def _run_inversion(inv_cfg, epoch_df):
     dx = (R - r_b) / N
     correlation_length = 0.01  # [m] (adjust as needed)
     prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
-    mean_prior = np.concatenate([
-        np.full(param_dim, np.log(k_prior)),
-        np.array([p_far_prior])
+    # mean_prior = np.concatenate([
+    #     np.full(param_dim, np.log(k_prior)),
+    #     np.array([p_far_prior])
+    # ])
+    # prior_variance = (prior_std_log10 * np.log(10)) ** 2
+    # cov_prior = block_diag(
+    #     exponential_covariance(param_dim, dx, correlation_length,
+    #                            prior_variance),
+    #     np.array([[p_far_sd**2]])
+    # )
+
+    mean_prior = np.array([
+        compress_prior_mean, # C?
+        np.log(k_prior), # K
+        p_b0_prior, # P_init
+        p_far_prior # P_far
     ])
+
     prior_variance = (prior_std_log10 * np.log(10)) ** 2
     cov_prior = block_diag(
-        exponential_covariance(param_dim, dx, correlation_length,
-                               prior_variance),
-        np.array([[p_far_sd**2]])
+        prior_variance, # C?
+        prior_variance, # K?
+        p_b0_sd, # P_init
+        p_far_sd # P_far
     )
+
     prior = multivariate_normal(mean_prior, cov_prior)
 
 
@@ -144,9 +169,23 @@ def _run_inversion(inv_cfg, epoch_df):
     # cov_prior = np.diag([0.5**2, 5000**2])
     # prior = multivariate_normal(mean_prior, cov_prior)
 
-    sigma = 2000 # 2 kPa
-    cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
-    loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
+    flow_rate_observed = np.array([selected_test["spotreba"]])
+    flow_rate_sigma = np.array([1e-7])
+    pressure_output_sigma = 2000 # 2 kPa
+
+    observed = np.concatenate([
+        flow_rate_observed,
+        regular_pb_measured
+    ])
+
+    sigma = np.concatenate([
+        flow_rate_sigma, 
+        np.full(len(regular_pb_measured), pressure_output_sigma) # 2 kPa
+    ])
+
+    cov_likelihood = sigma ** 2 * np.eye(len(observed))
+    
+    loglike = tda.GaussianLogLike(observed, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
 
     # ==============================================================================
@@ -178,56 +217,28 @@ def _run_inversion(inv_cfg, epoch_df):
     iterations = 2000
     burnin = 50
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
-    idata = tda.to_inference_data(my_chains, burnin=burnin)
 
-    return idata, regular_pb_measured
+    # define input variable names for inferencedata
+    #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
+    parameter_names = [
+        "C",  # Compliance
+        "K",  # Hydraulic conductivity
+        "P_init",  # Initial borehole pressure
+        "P_far"  # Far-field pressure
+    ]
 
-def plot_idata(idata, pressure_obs):
-    import arviz as az
-    az.style.use("arviz-doc")
+    # construct idata object from the chains
+    idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
 
+    # add the observed data to the InferenceData object
+    idata["sample_stats"].attrs["observed_data"] = regular_pb_measured
+    idata["sample_stats"].attrs["observed_cov"] = cov_likelihood
 
-    # 1) pick off all your per‑time PPC variables
-    ppc_ds = idata.posterior_predictive
-    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
-                      key=lambda s: int(s.split("_", 1)[1]))
+    # add prior information to the InferenceData object
+    idata["posterior"].attrs["prior_mean"] = mean_prior
+    idata["posterior"].attrs["prior_cov"] = cov_prior
 
-    # 2) concat them into one DataArray of shape (chain, draw, time)
-    ppc_list = [ppc_ds[v] for v in obs_vars]
-    ppc_arr = xr.concat(ppc_list, dim="time")
-    # give it a name and meaningful coords
-    times = np.arange(len(pressure_obs))
-    ppc_arr = ppc_arr.assign_coords(
-        time=("time", times)  # or whatever your timestamps are
-    )
-
-    ppc_arr.name = "pressure"  # new var name
-
-    # 1) Stack chain & draw into one "sample" dimension
-    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
-
-    # 2) Define integer time steps 0,1,2,...,T-1
-    time = np.arange(ppc_arr.sizes["time"])
-
-    # 3) Plot each posterior draw
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for vals in ppc_stacked.values.T:  # iterate over samples
-        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
-
-    # 4) Overlay your observed (smoothed) series
-    ax.plot(time, pressure_obs, color="k", linewidth=2, label="Observed")
-
-    # 5) Label axes
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
-
-    plt.show()
-
-    az.summary(idata)
-
-    az.plot_trace(idata)
-    plt.show()
+    return idata
 
     # # ==============================================================================
     # # 5. Postprocessing and Comparison of Results
@@ -260,11 +271,205 @@ def plot_idata(idata, pressure_obs):
     # plt.grid(True)
     # plt.show()
 
+def plot_idata(idata):
+
+    #az.style.use("arviz-doc")
 
 
+    plot_observe(idata, bins=80)
+    plt.savefig("observe_plot.pdf", dpi=300)
+    #plt.show()
+
+    az.summary(idata)
+
+    # plot trace and force axis to use scientitic notation
+    plot_trace_modified(idata, figsize=(16, 18))
+    plt.savefig("trace_plot.pdf", dpi=300)
+
+    # plot posterior distributions and corresponding prior distributions
+    plot_posterior_modified(idata, figsize=(16, 18))
+
+    plt.savefig("posterior_plot.pdf", dpi=300)
+    plot_observe(idata)
+
+def load_pressure_tests(path=input_data.wpt_multipacker):
+    try:
+        df = pd.read_excel(path, sheet_name="data (2)")
+    except Exception as e:
+        print(f"Error loading data from {path}: {e}")
+        return None
+
+    col_keys = df.columns.tolist()
+    
+    zkouska_starts = df[df["čas"] == 0].index.tolist()
+
+    vodivost_true_idx = int(df.columns.get_loc("hydraulická vodivost") + 1)
+
+    zkousky = []
+    minule_datum = None
+
+    for i, start in enumerate(zkouska_starts):
+        if i < len(zkouska_starts) - 1:
+            end = zkouska_starts[i + 1] - 1
+        else:
+            end = len(df) - 1
+        
+        while np.any([
+            pd.isna(df.iloc[end]["čas"]),
+            pd.isna(df.iloc[end]["spotřeba"]),
+            pd.isna(df.iloc[end]["hydraulická vodivost"])
+        ]):
+            # If the end row has NaN values, adjust the end index
+            end -= 1
+            if end < start or end <= 0:
+                print(f"Skipping invalid section from {start} to {end}.")
+                continue
+
+        spotreba = df.iloc[end]["spotřeba.1"]
+        vodivost = df.iloc[end]["hydraulická vodivost"]
+        vodivost_true = df.iloc[end][vodivost_true_idx]
+        etaz = df.iloc[start]["etáž"]
+        vrt = df.iloc[start]["vrt"]
+        tlak = df.iloc[end]["tlak v intervalu"] * 1e3 # convert from kPa to Pa
+
+        datum = df.iloc[start]["datum a čas"]
+        if not pd.isna(datum):
+            datum = pd.to_datetime(datum, format="%m.%d.%Y %H:%M:%S")
+        else:
+            datum = minule_datum
+
+
+        zkousky.append({
+            "date": datum,
+            "vrt": vrt,
+            "etaz": etaz,
+            "spotreba": spotreba,
+            "tlak": tlak,
+            "vodivost": vodivost,
+            "vodivost_true": vodivost_true
+        })
+
+        minule_datum = datum
+
+    return zkousky
+
+def plot_observe(idata, p_obs=None, ax=None, bins=100):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(16, 9))
+
+    if p_obs is None:
+        # attempt to load data directly from idata
+        if idata.sample_stats.attrs["observed_data"] is not None:
+            p_obs = idata.sample_stats.attrs["observed_data"]
+
+    observe = idata.posterior_predictive
+    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_")],
+                      key=lambda s: int(s.split("_", 1)[1]))
+
+    observe_list = [observe[v] for v in observe_vars]
+    observe_arr = xr.concat(observe_list, dim="time")
+    chains = observe_arr.sizes["chain"]
+    draws = observe_arr.sizes["draw"]
+
+    observe_arr = observe_arr.stack(flat_dim=("time", "chain", "draw")).reset_index("flat_dim", drop=True)
+    observe_length = len(observe_list)
+
+    #print(observe_arr.shape)
+
+    hist2d_x = np.repeat(np.arange(observe_length), chains * draws)
+
+    ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-10)
+    ax.plot(np.arange(observe_length - 1), p_obs, "r-", label="Predicted observation", lw=2)
+    ax.set_ylim(
+        [
+            np.min([observe_arr.min(), p_obs.min()]),
+            np.max([observe_arr.max(), p_obs.max()])
+        ]
+    )
+    ax.set_xlabel("Time (integer steps)")
+    ax.set_ylabel("Pressure")
+    ax.legend()
+    plt.colorbar(ax.collections[0], ax=ax, label="Counts")
+
+    return ax
+
+def plot_trace_modified(idata, *args, **kwargs):
+    axes = az.plot_trace(idata, *args, **kwargs)
+
+    for ax_row in axes:
+        for ax in ax_row:
+            ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3, 3))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+
+    fig = plt.gcf()
+    fig.set_constrained_layout(True)
+
+    return axes
+
+def plot_posterior_modified(idata, *args, **kwargs):
+    axes = az.plot_posterior(idata, *args, **kwargs)
+
+    # add prior, if available
+    if np.all([
+        idata.posterior.attrs["prior_mean"] is not None,
+        idata.posterior.attrs["prior_cov"] is not None
+    ]):
+        prior_mean = idata.posterior.attrs["prior_mean"]
+        prior_cov = idata.posterior.attrs["prior_cov"]
+
+        assert isinstance(prior_mean, np.ndarray), "Prior mean should be a numpy array."
+        assert isinstance(prior_cov, np.ndarray), "Prior covariance should be a numpy array."
+        assert prior_mean.ndim == 1, "Prior mean should be a 1D array."
+        assert prior_cov.ndim == 2, "Prior covariance should be a 2D array."
+        assert prior_mean.shape[0] == prior_cov.shape[0] == prior_cov.shape[1], \
+            "Prior mean and covariance dimensions do not match."
+        
+        prior_sd = np.sqrt(np.diag(prior_cov))
+
+        # iterate across axes and add corresponding prior plots
+        for x, ax_row in enumerate(axes):
+            if isinstance(ax_row, list):
+                for y, ax in enumerate(ax_row):
+                    idx = x * len(ax_row) + y
+                    # if empty axis, skip
+                    if not (ax.lines or ax.images or ax.collections or ax.patches):
+                        continue
+                    mean = prior_mean[idx]
+                    sd = prior_sd[idx]
+                    xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
+                    yvals = norm.pdf(xvals, mean, sd)
+                    ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+            else:
+                idx = x
+                # if empty axis, skip
+                if not (ax_row.lines or ax_row.images or ax_row.collections or ax_row.patches):
+                    continue
+                mean = prior_mean[idx]
+                sd = prior_sd[idx]
+                xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
+                yvals = norm.pdf(xvals, mean, sd)
+                ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+
+    # set scientific notation for axes
+    for ax_row in axes:
+        if isinstance(ax_row, list):
+            for ax in ax_row:
+                ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+        else:
+            # single axis
+            ax_row.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax_row.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+
+    # constrained layout for better spacing
+    fig = plt.gcf()
+    fig.set_constrained_layout(True)
+
+    return axes
 
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
-    idata, p_obs = borehole_section_inversion(wpt_cfg)
-    plot_idata(idata, p_obs)
+    idata = borehole_section_inversion(wpt_cfg)
+    plot_idata(idata)
