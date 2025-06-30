@@ -1,9 +1,14 @@
 import numpy as np
 import yaml
+import arviz as az
 import matplotlib.pyplot as plt
-from scipy.stats import multivariate_normal
+from matplotlib.ticker import ScalarFormatter
+from scipy.stats import multivariate_normal, norm
 from scipy.linalg import block_diag
 import pandas as pd
+from pprint import pprint
+import logging
+
 """
 
 """
@@ -69,12 +74,17 @@ def _run_inversion(inv_cfg, epoch_df):
     })
     regular_pb_measured = df_reg.apply(smooth_fn, axis=1).values
 
+    tests = load_pressure_tests()
+    selected_test = tests[inv_cfg["section"]]
+
     # Geometry and time-stepping parameters.
     r_b = 0.076  # Borehole radius [m]
     R = 2  # Outer domain radius [m]
     N = 10  # Number of finite elements (⇒ N+1 nodes)
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
-    p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    p_b0_prior = selected_test["tlak"]
+    p_b0_sd = 20000
     p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
     p_far_sd = 5000 # 5kPa
     k_prior = 1e-13
@@ -85,10 +95,9 @@ def _run_inversion(inv_cfg, epoch_df):
     E = 30e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
 
+    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0_prior)
+    compress_prior_mean = solver.estimate_complience(biot, phi, E, nu)
 
-
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
-    compress_prior_mean = solver.estimate_compressibility(biot, phi, E, nu)
     def forward_model(param_vec):
         compress, K, p_init, p_far = param_vec
         C = np.exp(compress)  # Convert log(C) to C
@@ -98,7 +107,7 @@ def _run_inversion(inv_cfg, epoch_df):
         flux = K * (p_init - p_far) * (r_b**2) / (2 * r_b)
         # This is  over simplification, we should take presurization history to account.
         output = [flux, *p_b]
-        return output
+        return np.array(output)
 
 
     # L = 2     # [m] Length of the borehole section
@@ -126,16 +135,32 @@ def _run_inversion(inv_cfg, epoch_df):
     dx = (R - r_b) / N
     correlation_length = 0.01  # [m] (adjust as needed)
     prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
-    mean_prior = np.concatenate([
-        np.full(param_dim, np.log(k_prior)),
-        np.array([p_far_prior])
+    # mean_prior = np.concatenate([
+    #     np.full(param_dim, np.log(k_prior)),
+    #     np.array([p_far_prior])
+    # ])
+    # prior_variance = (prior_std_log10 * np.log(10)) ** 2
+    # cov_prior = block_diag(
+    #     exponential_covariance(param_dim, dx, correlation_length,
+    #                            prior_variance),
+    #     np.array([[p_far_sd**2]])
+    # )
+
+    mean_prior = np.array([
+        compress_prior_mean, # C?
+        np.log(k_prior), # K
+        p_b0_prior, # P_init
+        p_far_prior # P_far
     ])
+
     prior_variance = (prior_std_log10 * np.log(10)) ** 2
     cov_prior = block_diag(
-        exponential_covariance(param_dim, dx, correlation_length,
-                               prior_variance),
-        np.array([[p_far_sd**2]])
+        prior_variance, # C?
+        prior_variance, # K?
+        p_b0_sd, # P_init
+        p_far_sd # P_far
     )
+
     prior = multivariate_normal(mean_prior, cov_prior)
 
 
@@ -144,9 +169,23 @@ def _run_inversion(inv_cfg, epoch_df):
     # cov_prior = np.diag([0.5**2, 5000**2])
     # prior = multivariate_normal(mean_prior, cov_prior)
 
-    sigma = 2000 # 2 kPa
-    cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
-    loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
+    flow_rate_observed = np.array([selected_test["spotreba"]])
+    flow_rate_sigma = np.array([1e-7])
+    pressure_output_sigma = 2000 # 2 kPa
+
+    observed = np.concatenate([
+        flow_rate_observed,
+        regular_pb_measured
+    ])
+
+    sigma = np.concatenate([
+        flow_rate_sigma, 
+        np.full(len(regular_pb_measured), pressure_output_sigma) # 2 kPa
+    ])
+
+    cov_likelihood = sigma ** 2 * np.eye(len(observed))
+    
+    loglike = tda.GaussianLogLike(observed, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
 
     # ==============================================================================
@@ -178,56 +217,28 @@ def _run_inversion(inv_cfg, epoch_df):
     iterations = 2000
     burnin = 50
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
-    idata = tda.to_inference_data(my_chains, burnin=burnin)
 
-    return idata, regular_pb_measured
+    # define input variable names for inferencedata
+    #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
+    parameter_names = [
+        "C",  # Compliance
+        "K",  # Hydraulic conductivity
+        "P_init",  # Initial borehole pressure
+        "P_far"  # Far-field pressure
+    ]
 
-def plot_idata(idata, pressure_obs):
-    import arviz as az
-    az.style.use("arviz-doc")
+    # construct idata object from the chains
+    idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
 
+    # add the observed data to the InferenceData object
+    idata["sample_stats"].attrs["observed_data"] = regular_pb_measured
+    idata["sample_stats"].attrs["observed_cov"] = cov_likelihood
 
-    # 1) pick off all your per‑time PPC variables
-    ppc_ds = idata.posterior_predictive
-    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
-                      key=lambda s: int(s.split("_", 1)[1]))
+    # add prior information to the InferenceData object
+    idata["posterior"].attrs["prior_mean"] = mean_prior
+    idata["posterior"].attrs["prior_cov"] = cov_prior
 
-    # 2) concat them into one DataArray of shape (chain, draw, time)
-    ppc_list = [ppc_ds[v] for v in obs_vars]
-    ppc_arr = xr.concat(ppc_list, dim="time")
-    # give it a name and meaningful coords
-    times = np.arange(len(pressure_obs))
-    ppc_arr = ppc_arr.assign_coords(
-        time=("time", times)  # or whatever your timestamps are
-    )
-
-    ppc_arr.name = "pressure"  # new var name
-
-    # 1) Stack chain & draw into one "sample" dimension
-    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
-
-    # 2) Define integer time steps 0,1,2,...,T-1
-    time = np.arange(ppc_arr.sizes["time"])
-
-    # 3) Plot each posterior draw
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for vals in ppc_stacked.values.T:  # iterate over samples
-        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
-
-    # 4) Overlay your observed (smoothed) series
-    ax.plot(time, pressure_obs, color="k", linewidth=2, label="Observed")
-
-    # 5) Label axes
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
-
-    plt.show()
-
-    az.summary(idata)
-
-    az.plot_trace(idata)
-    plt.show()
+    return idata
 
     # # ==============================================================================
     # # 5. Postprocessing and Comparison of Results
@@ -460,5 +471,5 @@ def plot_posterior_modified(idata, *args, **kwargs):
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
-    idata, p_obs = borehole_section_inversion(wpt_cfg)
-    plot_idata(idata, p_obs)
+    idata = borehole_section_inversion(wpt_cfg)
+    plot_idata(idata)
