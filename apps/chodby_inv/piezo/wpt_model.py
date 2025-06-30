@@ -138,7 +138,7 @@ class PoroElasticSolver:
         Returns:
           c_s  : Rock compressibility [Pa⁻¹].
         """
-        C_b = np.pi * self.r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+        C_b = np.pi * self.r_b ** 2 * (self.c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
         return C_b
 
     def estiamte_storativity(self, biot, phi, E, nu):
@@ -188,12 +188,12 @@ class PoroElasticSolver:
         # Compute rock compressibility.
         c_s = 3.0 * (1 - 2 * nu) / E
         # Storage coefficient (Is this correct ???)
-        S = phi * c_f + (biot - phi) * c_s
+        S = phi * self.c_f + (biot - phi) * c_s
 
         # currently just homogeneous storativity
         s_array = S * np.ones_like(k_array)
         # Borehole compliance.
-        C_b = np.pi * self.r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+        C_b = np.pi * self.r_b ** 2 * (self.c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
         C_b = C_b * C_b_rel
 
         k_array = k_array / (self.rho_f * self.g)
