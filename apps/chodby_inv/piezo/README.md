@@ -1,11 +1,14 @@
 # Borehole Pressures Processing
 
 Provides basic processing of the raw measurement data provided by SG-Geotechnika, all in 
-the `input_data` dir. Essential datasets are `piezo*.xlsx` continuous data series in multi-packers.
-Complementary water pressure tests with measured injected water mass are covered by `wpt*.xlsx` files.
-Metadata about boreholes and *packer sections* are in `boreholes.yaml`. 
-Metadata about events affecting the measurement should be collected in `events.yaml`, 
-blasts, injections, etc. 
+the `input_data` dir. 
+
+## Inputs
+
+   - **`piezo*.xlsx`** continuous pressure data series in multi-packers, continuous measurement over WPTs and excavation.
+   - **`wpt*.xlsx`** complementary WPT (water pressure tests) data with measured injected water mass
+   - **`boreholes.yaml`** metadata about boreholes and *packer sections*
+   - **`events.yaml`** eetadata about events affecting the measurement (todo: add wpt times)
 The file `piezo_filtering.yaml` is meant to define different processing intervals,
 not fixed yet.
 
@@ -17,6 +20,9 @@ Running the module produces the overview plot (of both  original and denoised df
 and plots of individual BHs for the excavation period.
 
 TODO:
+1. add WPT events to events.yaml
+2. generate Bayes report documents for individual sections, first page summary indicators:
+   - best fit L1 norm + variance of the L1 norm
 Current filtering is better than nothing, but not great, if the local fitting appears viable, we should 
 return to it and improve it.
 2. better detection of essential jumps. Current approach compare jump with both sides, but 
