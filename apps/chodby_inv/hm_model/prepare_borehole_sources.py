@@ -2,13 +2,17 @@ import numpy as np
 import meshio
 import pyvista as pv
 import boreholes
-from ..input_data import bh_cfg_yaml
+import pathlib
+
+import chodby_inv.input_data as input_data
+work_dir = input_data.work_dir
+module_dir = pathlib.Path(__file__).parent
 
 
 def process_gmsh_tetrahedral_mesh(input_file, output_file, points, values_dict):
     """
-    Loads a GMSH tetrahedral mesh, finds elements crossing the line (p1, p2),
-    and writes a new VTU file with an additional element data field 'sigma'.
+    Loads a GMSH tetrahedral mesh, finds elements crossing the lines (p1, p2) from points array,
+    and writes a new VTU file with an additional element data fields in values_dict.
     """
     # Load the mesh
     mesh = meshio.read(input_file)
@@ -39,16 +43,19 @@ def process_gmsh_tetrahedral_mesh(input_file, output_file, points, values_dict):
     element_data = {name: [values] for name,values in cell_values.items()}
 
     # Write new mesh in VTU format
-    meshio.write(output_file, meshio.Mesh(points=mesh.points, cells=[("tetra", tetrahedra)], cell_data=element_data), binary=False)
+    meshio.write(output_file, meshio.Mesh(points=mesh.points, cells=[("tetra", tetrahedra)], cell_data=element_data), binary=True)
 
 
 
 
-# Example usage
-input_mesh_file = "L5_mesh_6_healed.msh"
-output_mesh_file = "flow_sigma.vtu"
+# Example usage - create a VTU file that contains two constant fields:
+# sigma=1 and p_ref=40 in elements intersecting borehole chambers.
 
-bhs = boreholes.Boreholes(bh_cfg_yaml)
+input_mesh_file = module_dir / "L5_mesh_6_healed.msh"
+output_mesh_file = work_dir / "flow_sigma.vtu"
+
+# Initialize point and field lists
+bhs = boreholes.Boreholes()
 points = []
 sigmas = []
 pressures = []
@@ -58,4 +65,5 @@ for bi in range(bhs.n_boreholes):
         sigmas.append(1)
         pressures.append(40)
 
+# Create the VTU file
 process_gmsh_tetrahedral_mesh(input_mesh_file, output_mesh_file, points, {'sigma':sigmas, 'p_ref':pressures})
