@@ -1,6 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from typing import TypedDict, List
+
+# Data type for passing results to plotting functions
+class DataItem(TypedDict):
+    p_b_results: np.ndarray
+    full_pressure_history: np.ndarray
+    label: str
+
 
 class PoroElasticSolver:
     def __init__(self, r_b, R, N, dt, T_final, p_b0):
@@ -83,7 +91,7 @@ class PoroElasticSolver:
         M_global, K_global = self.interior_matrices(s_array, k_array)
         # For the borehole node (node 0): override its mass row.
         M_global[0, :] = 0.0
-        M_global[0, 0] = C_b
+        M_global[0, 0] = C_b[0]
         # Compute alpha using the first element (connecting node 0 and node 1).
         h0 = self.r[1] - self.r[0]
         alpha = (2 * np.pi * self.r[0] * k_array[0]) / h0
@@ -227,22 +235,30 @@ class PoroElasticSolver:
             self.full_pressure_history[t + 1, :] = p.copy()
         return self.time_vec, self.full_pressure_history, self.p_b_history
 
-    def plot_results(self):
+    def plot_results(self, data: List[DataItem] = None):
+        if data is None:
+            data = [ { 'p_b_history': self.p_b_history,
+                     'full_pressure_history': self.full_pressure_history,
+                     'label': 'Borehole Pressure' } ]
+
         """ Plot borehole pressure history and final radial pressure distribution. """
         plt.figure(figsize=(10, 6))
-        plt.plot(self.time_vec / 3600, self.p_b_history, label='Borehole Pressure p(0)')
+        for d in data:
+            plt.plot(self.time_vec / 3600, d['p_b_history'], label=d['label'])
         plt.xlabel('Time (hours)')
         plt.ylabel('Pressure (Pa)')
-        plt.title('Borehole Pressure vs Time')
+        plt.title('Borehole Pressure p(0) vs Time')
         plt.legend()
         plt.grid(True)
         plt.show()
 
         plt.figure(figsize=(10, 6))
-        plt.plot(self.r, self.full_pressure_history[-1, :], marker='o')
+        for d in data:
+            plt.plot(self.r, d['full_pressure_history'][-1, :], marker='o', label=d['label'])
         plt.xlabel('Radial Distance r (m)')
         plt.ylabel('Pressure (Pa)')
         plt.title('Pressure Distribution at Final Time')
+        plt.legend()
         plt.grid(True)
         plt.show()
 
@@ -279,9 +295,9 @@ if __name__ == '__main__':
     # Rock and fluid parameters.
     biot = 0.3
     phi = 0.05  # Porosity (e.g., 2%)
-    E = 30e9  # Young's modulus (e.g., 50 GPa)
+    E_array = 30e9 * np.ones(N) # Young's modulus (e.g., 50 GPa)
     nu = 0.25  # Poisson's ratio
-    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E_array)
 
     # Hydraulic conductivity: piecewise constant (array of length N).
     conductivity_array = 1e-16 * np.ones(N)
@@ -290,7 +306,7 @@ if __name__ == '__main__':
 
     # Run simulation.
     time_vec, full_pressure_history, p_b_history \
-        = solver.simulate(biot, phi, E, nu, p_far, conductivity_array)
+        = solver.simulate(biot, phi, E_array, nu, p_far, conductivity_array)
 
     # Plot results.
     solver.plot_results()

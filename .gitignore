@@ -1,4 +1,6 @@
-**/.dvc/config
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
 
 
 endorse_dvc.apps.googleusercontent.com.json
@@ -90,4 +92,4 @@ metodika_vypoctu_indikatoru/*.out
 metodika_vypoctu_indikatoru/main.pdf
 
 endorse.sif
-
+/.python-version
