@@ -26,8 +26,10 @@ OLD_PWD="$(pwd)"
 ABS_FLOW_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 REL_FLOW_DIR=$(realpath --relative-to=$(pwd) $ABS_FLOW_DIR)
 
-image_name=endorse_ci
-image_tag=e67f54
+#image_name=endorse_ci
+#image_tag=e67f54
+image_name=ci-gnu
+image_tag=4.0.3dev_208e9b
 
 function get_base_image() {
     local image=flow123d/$image_name:$image_tag
