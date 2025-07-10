@@ -4,6 +4,8 @@ from typing import *
 import csv
 import os
 from pathlib import Path
+import pandas as pd
+import time
 
 import numpy as np
 
@@ -13,6 +15,8 @@ from endorse.sa import sample, analyze
 
 import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
+import chodby_trans.transport_wrapper as transport_wrapper
+
 input_dir = input_data.input_dir
 work_dir = input_data.work_dir
 
@@ -168,6 +172,7 @@ def prepare_sets_of_params(cfg_sens: dotdict, parameters, output_dir_in, par_nam
     #     print(f"Saved {output_file}")
 
 
+@memoize
 def salib_samples(cfg: dotdict, seed):
     cfg_sens = cfg.sensitivity
     # Define the problem for SALib
@@ -189,15 +194,70 @@ def salib_samples(cfg: dotdict, seed):
         shutil.rmtree(sensitivity_dir)
     sensitivity_dir.mkdir()
 
+    # TODO: write parameters
+    N = param_values.shape[0]  # number of rows
+    row_idx = np.arange(N).reshape(-1, 1)  # column vector [[0], [1], …]
+    params_with_idx = np.hstack((row_idx, param_values))
+    return params_with_idx
+
     # plan sample parameters a prepare them in CSV
-    prepare_sets_of_params(cfg_sens, param_values, sensitivity_dir, problem["names"])
+    # prepare_sets_of_params(cfg_sens, param_values, sensitivity_dir, problem["names"])
     # exit(0)
 
     # plan parallel sampling, prepare PBS jobs
-    if cfg.machine_config.pbs is not None:
-        pbs_file_list = prepare_pbs_scripts(cfg, sensitivity_dir)
-    else:
-        pass
+    # if cfg.machine_config.pbs is not None:
+    #     pbs_file_list = prepare_pbs_scripts(cfg, sensitivity_dir)
+    # else:
+    #     pass
+
+
+def single_sample(args):
+    sample_dir, parameters = args
+
+    idx = int(parameters[0])
+
+    # read config file
+    conf_file = work_dir / input_data.transport_config.parent.name / input_data.transport_config.name
+    cfg = common.config.load_config(str(conf_file))
+
+
+    logging.info("=========================== RUNNING CALCULATION " +
+                 "sample {} ===========================".format(idx).zfill(3))
+    logging.info(sample_dir)
+
+    wrap = transport_wrapper.Wrapper(cfg=cfg)
+    with common.workdir(str(sample_dir), clean=False):
+        wrap.set_parameters(data_par=parameters[1:])
+        t = time.time()
+        res, sample_data = wrap.get_observations()
+
+        print("Flow123d res: ", res)
+
+        # print("LEN:", len(obs_data))
+        print("TIME:", time.time() - t)
+
+
+def all_samples(workdir, cfg, parameters, map_fn):
+
+    n_params = parameters.shape[0]
+    # Set directories to avoid NFS IO errors
+
+    # create sample dir
+    sensitivity_dir = work_dir / input_data.sensitivity_dirname
+    sample_subdir = sensitivity_dir / "samples"
+
+    bh_args = []
+    for ip in range(n_params):
+        idx = int(parameters[ip,0])
+        sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
+        sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
+
+        bh_args.append((sample_dir, parameters[ip]))
+
+    results = list(map_fn(single_sample, bh_args))
+    print("Results collected: ", str(results)[:200])
+    # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
+
 
 def main():
     # common.EndorseCache.instance().expire_all()
@@ -209,7 +269,8 @@ def main():
     with common.workdir(str(work_dir), clean=False):
 
         shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
-        salib_samples(cfg, seed)
+        parameters = salib_samples(cfg, seed)
+        all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=map)
 
 
 if __name__ == '__main__':
