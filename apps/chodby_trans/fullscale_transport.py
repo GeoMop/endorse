@@ -116,20 +116,14 @@ def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
     times = np.asarray(pvd_content.time_values)
     print(times)
 
-    # indicators = indicator_set()
-    # ind_functions = [IndicatorFn(ind, times) for ind in indicators]
-
+    result = np.empty((len(times), grid.n_cells), dtype=np.float64)
     for i, t in enumerate(times):
         pvd_content.set_active_time_point(i)
         dataset = pvd_content.read()
         values = extractor(dataset, grid, i)
+        result[i, :] = values
 
-        vtu_file = f"slice_t{i:04d}.vtu"
-    #     for i in ind_functions:
-    #         i.append(values)
-    #
-    # return ind_functions
-    return times
+    return result
 
 def create_structured_grid(cfg_geom: dotdict, z_cuts):
     # Define grid resolution
@@ -160,7 +154,6 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts):
                          )
     grid1["cell_id"] = np.arange(grid1.n_cells)
     grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
-    grid1.save(f"slice_grid1.vti", binary=False)
     grid = grid1.merge(grid2)
     grid.save(f"slice_grid.vtu", binary=False)
 

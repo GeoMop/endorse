@@ -76,9 +76,10 @@ class Wrapper:
     def get_observations(self):
         try:
             print("get observations from transport_wrapper")
-            res = self.calculate(self._config)
-            return res
-        except ValueError:
+            # res = self.calculate(self._config)
+            res = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro)
+            return 0, res
+        except:
             print("transport_wrapper failed for unknown reason.")
             return -1000, []
 
@@ -102,7 +103,7 @@ class Wrapper:
         # logging.info(self.sample_dir)
 
         # with common.workdir(str(self.sample_dir), clean=False):
-        transport.transport_run(cfg, cfg.transport_fullscale.dfn_macro)
+        # transport.transport_run(cfg, cfg.transport_fullscale.dfn_macro)
 
         # os.chdir(self.sample_dir)
         #

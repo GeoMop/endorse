@@ -32,11 +32,10 @@ class Extractor:
         return cls(attr_name, z_loc, cls._extract_cell_data)
 
     def __call__(self, dataset, grid=None, i = None):
-        plane1 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[0]])
-        plane2 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[1]])
-        surface = plane1[0].merge(plane2[0])
-
         if grid is None:
+            plane1 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[0]])
+            plane2 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, self.z_loc[1]])
+            surface = plane1[0].merge(plane2[0])
             return self._extract_data(surface, self.attr_name)
         else: # interpolate
             # print(plane1[0].point_data.keys())  # for point-based fields

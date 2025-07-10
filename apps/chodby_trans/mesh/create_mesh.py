@@ -399,7 +399,7 @@ def meshing(factory, objects, mesh_filename):
     # mesh.CharacteristicLengthMax = max_el_size
     # factory.mesh_options.CharacteristicLengthMax = 1
 
-    factory.show()
+    # factory.show()
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3, eliminate=False)
     print("Meshing finished.")
