@@ -180,86 +180,214 @@ def _run_inversion(inv_cfg, epoch_df):
 
     return idata, regular_pb_measured
 
-def plot_idata(idata, pressure_obs):
-    import arviz as az
-    az.style.use("arviz-doc")
+def plot_idata(idata):
+
+    #az.style.use("arviz-doc")
 
 
-    # 1) pick off all your per‑time PPC variables
-    ppc_ds = idata.posterior_predictive
-    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
-                      key=lambda s: int(s.split("_", 1)[1]))
-
-    # 2) concat them into one DataArray of shape (chain, draw, time)
-    ppc_list = [ppc_ds[v] for v in obs_vars]
-    ppc_arr = xr.concat(ppc_list, dim="time")
-    # give it a name and meaningful coords
-    times = np.arange(len(pressure_obs))
-    ppc_arr = ppc_arr.assign_coords(
-        time=("time", times)  # or whatever your timestamps are
-    )
-
-    ppc_arr.name = "pressure"  # new var name
-
-    # 1) Stack chain & draw into one "sample" dimension
-    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
-
-    # 2) Define integer time steps 0,1,2,...,T-1
-    time = np.arange(ppc_arr.sizes["time"])
-
-    # 3) Plot each posterior draw
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for vals in ppc_stacked.values.T:  # iterate over samples
-        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
-
-    # 4) Overlay your observed (smoothed) series
-    ax.plot(time, pressure_obs, color="k", linewidth=2, label="Observed")
-
-    # 5) Label axes
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
-
-    plt.show()
+    plot_observe(idata, bins=80)
+    plt.savefig("observe_plot.pdf", dpi=300)
+    #plt.show()
 
     az.summary(idata)
 
-    az.plot_trace(idata)
-    plt.show()
+    # plot trace and force axis to use scientitic notation
+    plot_trace_modified(idata, figsize=(16, 18))
+    plt.savefig("trace_plot.pdf", dpi=300)
 
-    # # ==============================================================================
-    # # 5. Postprocessing and Comparison of Results
-    # # ==============================================================================
-    #
-    # # Convert the MAP estimate from log space to the physical conductivity field.
-    # estimated_k_field = np.exp(posterior_mean)
-    #
-    # # Plot the true versus estimated conductivity field.
-    # plt.figure(figsize=(10, 6))
-    # element_indices = np.arange(1, N+1)  # element numbering (or use radial midpoints if desired)
-    # plt.plot(element_indices, conductivity_true, label='True Conductivity')
-    # plt.plot(element_indices, estimated_k_field, label='Estimated Conductivity', linestyle='--')
-    # plt.xlabel('Element Index')
-    # plt.ylabel('Hydraulic Conductivity [m²/s]')
-    # plt.legend()
-    # plt.title('True vs Estimated Hydraulic Conductivity Field')
-    # plt.grid(True)
-    # plt.show()
-    #
-    # # Compare the measured borehole pressure history with the model prediction using the MAP estimate.
-    # p_b_estimated = forward_model(posterior_mean)
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(time_vec / 3600, p_b_measured, 'o', label='Measured Borehole Pressure')
-    # plt.plot(time_vec / 3600, p_b_estimated, '-', label='Model Prediction (MAP)')
-    # plt.xlabel('Time (hours)')
-    # plt.ylabel('Borehole Pressure (Pa)')
-    # plt.legend()
-    # plt.title('Borehole Pressure Relaxation: Measured vs Predicted')
-    # plt.grid(True)
-    # plt.show()
+    # plot posterior distributions and corresponding prior distributions
+    plot_posterior_modified(idata, figsize=(16, 18))
+
+    plt.savefig("posterior_plot.pdf", dpi=300)
+    plot_observe(idata)
+
+def load_pressure_tests(path=input_data.wpt_multipacker):
+    try:
+        df = pd.read_excel(path, sheet_name="data (2)")
+    except Exception as e:
+        print(f"Error loading data from {path}: {e}")
+        return None
+
+    col_keys = df.columns.tolist()
+    
+    zkouska_starts = df[df["čas"] == 0].index.tolist()
+
+    vodivost_true_idx = int(df.columns.get_loc("hydraulická vodivost") + 1)
+
+    zkousky = []
+    minule_datum = None
+
+    for i, start in enumerate(zkouska_starts):
+        if i < len(zkouska_starts) - 1:
+            end = zkouska_starts[i + 1] - 1
+        else:
+            end = len(df) - 1
+        
+        while np.any([
+            pd.isna(df.iloc[end]["čas"]),
+            pd.isna(df.iloc[end]["spotřeba"]),
+            pd.isna(df.iloc[end]["hydraulická vodivost"])
+        ]):
+            # If the end row has NaN values, adjust the end index
+            end -= 1
+            if end < start or end <= 0:
+                print(f"Skipping invalid section from {start} to {end}.")
+                continue
+
+        spotreba = df.iloc[end]["spotřeba.1"]
+        vodivost = df.iloc[end]["hydraulická vodivost"]
+        vodivost_true = df.iloc[end][vodivost_true_idx]
+        etaz = df.iloc[start]["etáž"]
+        vrt = df.iloc[start]["vrt"]
+        sekce = df.iloc[start]["sekce"]
+        tlak = df.iloc[end]["tlak v intervalu"] * 1e3 # convert from kPa to Pa
+
+        datum = df.iloc[start]["datum a čas"]
+        if not pd.isna(datum):
+            datum = pd.to_datetime(datum, format="%m.%d.%Y %H:%M:%S")
+        else:
+            datum = minule_datum
 
 
+        zkousky.append({
+            "date": datum,
+            "vrt": vrt,
+            "sekce": sekce,
+            "etaz": etaz,
+            "spotreba": spotreba,
+            "tlak": tlak,
+            "vodivost": vodivost,
+            "vodivost_true": vodivost_true
+        })
 
+        minule_datum = datum
+
+    return zkousky
+
+def plot_observe(idata, p_obs=None, ax=None, bins=100):
+    if ax is None:
+        _, ax = plt.subplots(figsize=(16, 9))
+
+    if p_obs is None:
+        # attempt to load data directly from idata
+        if idata.sample_stats.attrs["observed_data"] is not None:
+            p_obs = idata.sample_stats.attrs["observed_data"]
+
+    observe = idata.posterior_predictive
+    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_")],
+                      key=lambda s: int(s.split("_", 1)[1]))
+
+    observe_list = [observe[v] for v in observe_vars]
+    observe_arr = xr.concat(observe_list, dim="time")
+    print(observe_arr)
+    chains = observe_arr.sizes["chain"]
+    draws = observe_arr.sizes["draw"]
+
+    observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
+    observe_length = len(observe_list)
+    print(observe_length)
+
+    #print(idata.sample_stats)
+    likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
+    best_fit_idx = np.argmax(likelihood_data)
+    #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
+    #print(posterior_data[best_fit_idx])
+    best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
+    print(best_fit)
+    print()
+
+    hist2d_x = np.tile(np.arange(observe_length), chains * draws)
+
+    ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
+    ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
+    ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=2)
+    ax.set_ylim(
+        [
+            np.min([observe_arr.min(), p_obs.min()]),
+            np.max([observe_arr.max(), p_obs.max()])
+        ]
+    )
+    ax.set_xlabel("Time (integer steps)")
+    ax.set_ylabel("Pressure")
+    ax.legend()
+    plt.colorbar(ax.collections[0], ax=ax, label="Counts")
+
+    return ax
+
+def plot_trace_modified(idata, *args, **kwargs):
+    axes = az.plot_trace(idata, *args, **kwargs)
+
+    for ax_row in axes:
+        for ax in ax_row:
+            ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-3, 3))
+            ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+
+    fig = plt.gcf()
+    fig.set_constrained_layout(True)
+
+    return axes
+
+def plot_posterior_modified(idata, *args, **kwargs):
+    axes = az.plot_posterior(idata, *args, **kwargs)
+
+    # add prior, if available
+    if np.all([
+        idata.posterior.attrs["prior_mean"] is not None,
+        idata.posterior.attrs["prior_cov"] is not None
+    ]):
+        prior_mean = idata.posterior.attrs["prior_mean"]
+        prior_cov = idata.posterior.attrs["prior_cov"]
+
+        assert isinstance(prior_mean, np.ndarray), "Prior mean should be a numpy array."
+        assert isinstance(prior_cov, np.ndarray), "Prior covariance should be a numpy array."
+        assert prior_mean.ndim == 1, "Prior mean should be a 1D array."
+        assert prior_cov.ndim == 2, "Prior covariance should be a 2D array."
+        assert prior_mean.shape[0] == prior_cov.shape[0] == prior_cov.shape[1], \
+            "Prior mean and covariance dimensions do not match."
+        
+        prior_sd = np.sqrt(np.diag(prior_cov))
+
+        # iterate across axes and add corresponding prior plots
+        for x, ax_row in enumerate(axes):
+            if isinstance(ax_row, list):
+                for y, ax in enumerate(ax_row):
+                    idx = x * len(ax_row) + y
+                    # if empty axis, skip
+                    if not (ax.lines or ax.images or ax.collections or ax.patches):
+                        continue
+                    mean = prior_mean[idx]
+                    sd = prior_sd[idx]
+                    xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
+                    yvals = norm.pdf(xvals, mean, sd)
+                    ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+            else:
+                idx = x
+                # if empty axis, skip
+                if not (ax_row.lines or ax_row.images or ax_row.collections or ax_row.patches):
+                    continue
+                mean = prior_mean[idx]
+                sd = prior_sd[idx]
+                xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
+                yvals = norm.pdf(xvals, mean, sd)
+                ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+
+    # set scientific notation for axes
+    for ax_row in axes:
+        if isinstance(ax_row, list):
+            for ax in ax_row:
+                ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+        else:
+            # single axis
+            ax_row.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+            ax_row.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+
+    # constrained layout for better spacing
+    fig = plt.gcf()
+    fig.set_constrained_layout(True)
+
+    return axes
 
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
