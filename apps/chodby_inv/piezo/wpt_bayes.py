@@ -155,12 +155,25 @@ def _run_inversion(inv_cfg, epoch_df):
     # where you can pass the forward model, measured data, prior mean/covariance, 
     # and noise covariance. The exact API may differ; adjust according to your TinyDA version.
 
-    rwmh_cov = np.eye(len(mean_prior)) * 0.2
-    rmwh_scaling = 0.1
-    rwmh_adaptive = True
-    my_proposal = tda.AdaptiveMetropolis(C0=rwmh_cov,
-                                         period=50,
-                                         adaptive=rwmh_adaptive)
+    # rwmh_cov = np.eye(len(mean_prior)) * 0.2
+    # rmwh_scaling = 0.1
+    # rwmh_adaptive = True
+    # my_proposal = tda.AdaptiveMetropolis(C0=rwmh_cov,
+    #                                      period=50,
+    #                                      adaptive=rwmh_adaptive)
+
+    m0 = 1000 # initial archive size
+    delta = 5 # number of pairs to compute jump vector
+    adaptive = True
+    adaptivity_period = 50  # Period for adaptation
+    nCR = 4 # up to how many parameters can change in a proposal
+    my_proposal = tda.DREAMZ(
+        m0,
+        delta,
+        nCR=nCR,
+        adaptive=adaptive,
+        period=adaptivity_period
+    )
 
     # pcn_scaling = 0.1
     # pcn_adaptive = False
