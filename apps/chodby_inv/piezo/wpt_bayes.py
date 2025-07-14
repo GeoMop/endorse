@@ -195,12 +195,12 @@ def _run_inversion(inv_cfg, epoch_df):
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
       # define input variable names for inferencedata
     #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
-    parameter_names = [
-        "C",  # Compliance
-        "K",  # Hydraulic conductivity
-        "P_init",  # Initial borehole pressure
-        "P_far"  # Far-field pressure
-    ]
+    parameter_names = \
+        [f"log_k_{n}" for n in range(param_dim)] + \
+        [f"log_E_{n}" for n in range(param_dim)] + \
+        ["p_far"]
+
+    print(parameter_names)
 
     # construct idata object from the chains
     idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
