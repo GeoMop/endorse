@@ -52,7 +52,7 @@ blasts:
 # applied pressuarization
 # Details could be get by the search_wpt function.
 water_pressure_tests:
-    -   start: "25/03/25 15:40:00"
+    -   start: "25/03/26 10:40:00"
         # start of extracted window
         #origin: "24/03/06 15:03:00"
         # origin = time zero after extraction (shift)
