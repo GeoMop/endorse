@@ -73,6 +73,12 @@ def _run_inversion(inv_cfg, epoch_df):
     })
     regular_pb_measured = df_reg.apply(smooth_fn, axis=1).values
 
+    tests = load_pressure_tests()
+    #selected_test = tests[inv_cfg["section"]]
+    selected_test = next((t for t in tests if t["vrt"] == inv_cfg["borehole"] and t["sekce"] == inv_cfg["section"]), None)
+    if selected_test is None:
+        return None
+
     # Geometry and time-stepping parameters.
     r_b = 0.076  # Borehole radius [m]
     R = 2  # Outer domain radius [m]
