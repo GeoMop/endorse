@@ -189,9 +189,27 @@ def _run_inversion(inv_cfg, epoch_df):
     iterations = 2000
     burnin = 50
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
-    idata = tda.to_inference_data(my_chains, burnin=burnin)
+      # define input variable names for inferencedata
+    #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
+    parameter_names = [
+        "C",  # Compliance
+        "K",  # Hydraulic conductivity
+        "P_init",  # Initial borehole pressure
+        "P_far"  # Far-field pressure
+    ]
 
-    return idata, regular_pb_measured
+    # construct idata object from the chains
+    idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
+
+    # add the observed data to the InferenceData object
+    idata["sample_stats"].attrs["observed_data"] = regular_pb_measured
+    idata["sample_stats"].attrs["observed_cov"] = cov_likelihood
+
+    # add prior information to the InferenceData object
+    idata["posterior"].attrs["prior_mean"] = mean_prior
+    idata["posterior"].attrs["prior_cov"] = cov_prior
+
+    return idata
 
 def plot_idata(idata):
 
