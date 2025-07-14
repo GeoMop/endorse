@@ -52,10 +52,23 @@ blasts:
 # applied pressuarization
 # Details could be get by the search_wpt function.
 water_pressure_tests:
-    -   start: "24/03/06 15:03:00"
+    -   start: "25/03/25 15:40:00"
+        # start of extracted window
         #origin: "24/03/06 15:03:00"
-        end: "24/06/04 00:00:00"
-        borehole: L5-22DR
-        section: 2
+        # origin = time zero after extraction (shift)
+        # assume same as start and corresponding to the end of the WPT pressurisation
+        end: "25/08/25 00:00:00"
+        # end of extracted window
+        borehole: L5-26R
+        section: 0
 
+    -   start: "25/03/26 11:00:00"
+        # start of extracted window
+        #origin: "24/03/06 15:03:00"
+        # origin = time zero after extraction (shift)
+        # assume same as start and corresponding to the end of the WPT pressurisation
+        end: "25/03/30 00:00:00"
+        # end of extracted window
+        borehole: L5-37UR
+        section: 1
 
