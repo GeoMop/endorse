@@ -322,13 +322,11 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
 
     observe_list = [observe[v] for v in observe_vars]
     observe_arr = xr.concat(observe_list, dim="time")
-    print(observe_arr)
     chains = observe_arr.sizes["chain"]
     draws = observe_arr.sizes["draw"]
 
     observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
     observe_length = len(observe_list)
-    print(observe_length)
 
     #print(idata.sample_stats)
     likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
@@ -336,8 +334,6 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
     #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
-    print(best_fit)
-    print()
 
     hist2d_x = np.tile(np.arange(observe_length), chains * draws)
 
