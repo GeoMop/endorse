@@ -235,7 +235,7 @@ def plot_idata(idata):
     az.summary(idata)
 
     # plot trace and force axis to use scientitic notation
-    plot_trace_modified(idata, figsize=(16, 18))
+    plot_trace_modified(idata, figsize=(16, 36))
     plt.savefig("trace_plot.pdf", dpi=300)
 
     # plot posterior distributions and corresponding prior distributions
