@@ -3,4 +3,5 @@
 
 salib
 # matplotlib
+scoop
 

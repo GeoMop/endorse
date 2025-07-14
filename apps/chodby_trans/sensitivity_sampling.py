@@ -2,10 +2,12 @@ import logging
 import shutil
 from typing import *
 import csv
-import os
+import os, sys
 from pathlib import Path
 import pandas as pd
 import time
+import subprocess
+from scoop import futures
 
 import numpy as np
 
@@ -19,6 +21,7 @@ import chodby_trans.transport_wrapper as transport_wrapper
 
 input_dir = input_data.input_dir
 work_dir = input_data.work_dir
+script_path = Path(__file__).absolute()
 
 
 def solver_id(i):
@@ -259,6 +262,57 @@ def all_samples(workdir, cfg, parameters, map_fn):
     # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
 
 
+pbs_script_template = """
+#!/bin/bash
+#PBS -S /bin/bash
+#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=17gb"
+#PBS -l walltime={walltime}
+#PBS -q {queue}
+#PBS -N {job_name}
+#PBS -o {out_log}
+#PBS -j oe
+#PBS -m e
+
+set -x
+env | grep PBS_
+export TMPDIR=$SCRATCHDIR
+output_dir={work_dir}
+workdir=$SCRATCHDIR
+cd $output_dir
+
+#umask 0007
+echo "===="
+{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} {workdir}
+"""
+
+def submit_pbs(workdir, cfg):
+    cfg_pbs = cfg.machine_config.pbs
+    # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
+    pbs_filename = workdir / "process_boreholes.pbs"
+    n_workers = cfg_pbs.n_nodes * (cfg_pbs.n_cores-1) # Not sure if we need reserve for the master scoop process
+    parameters = dict(
+        n_chunks=cfg_pbs.n_nodes,
+        n_cpus=cfg_pbs.n_cores,
+        queue=cfg_pbs.queue,
+        mem=cfg_pbs.mem,
+        walltime=cfg_pbs.walltime,
+        job_name=cfg_pbs.pbs_name,
+
+        python=sys.executable,
+        n_workers=n_workers,
+        script_path=script_path,
+        workdir=workdir,
+        out_log=(workdir / (cfg_pbs.pbs_name + '.out'))
+    )
+    print(parameters['python'])
+    pbs_script = pbs_script_template.format(**parameters)
+    with open(pbs_filename, "w") as f:
+        f.write(pbs_script)
+
+    cmd = ['qsub', pbs_filename]
+    subprocess.run(cmd, check=True)
+
+
 def main():
     # common.EndorseCache.instance().expire_all()
 
@@ -270,8 +324,17 @@ def main():
 
         shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
         parameters = salib_samples(cfg, seed)
-        all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=map)
 
+        if len(sys.argv) > 1 and (sys.argv[1] == 'submit'):
+            submit_pbs(work_dir, cfg)
+            pass
+        elif len(sys.argv) > 1 and (sys.argv[1] == 'local'):
+            all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=map)
+        # elif len(sys.argv) > 1:
+        #     i_bh = int(sys.argv[1])
+        #     single_borehole((workdir, i_bh))
+        else:
+            all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=futures.map)
 
 if __name__ == '__main__':
     main()

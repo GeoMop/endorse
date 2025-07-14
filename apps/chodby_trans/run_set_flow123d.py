@@ -97,8 +97,8 @@ def run_samples(cfg, params_in, output_dir_in, solver_id):
             #     line = str(idx) + ',' + ','.join([str(s) for s in obs_data])
             #     file.write(line + "\n")
 
-            output_file = os.path.join(output_dir_in, 'sampled_data_' + str(solver_id) + '.h5')
-            sample_storage.set_sample_data(output_file, sample_data, idx)
+            # output_file = os.path.join(output_dir_in, 'sampled_data_' + str(solver_id) + '.h5')
+            # sample_storage.set_sample_data(output_file, sample_data, idx)
 
 
 def add_output_keys(config_dict):
