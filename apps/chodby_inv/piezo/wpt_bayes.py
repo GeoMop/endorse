@@ -393,4 +393,4 @@ if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
     idata, p_obs = borehole_section_inversion(wpt_cfg)
-    plot_idata(idata, p_obs)
+    plot_idata(idata)
