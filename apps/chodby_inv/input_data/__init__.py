@@ -19,3 +19,5 @@ events_yaml = input_dir / "events.yaml"
 piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
 # configuration of the filtering sections
 # named sections of the data corresponding to interesting time intervals
+
+wpt_multipacker = input_dir / "wpt_2025_04_with_flux_on_multipacker.xlsx"
