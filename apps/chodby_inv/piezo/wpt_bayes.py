@@ -10,7 +10,7 @@ import pandas as pd
 
 
 # Import the borehole pressure model module.
-from wpt_model import PoroElasticSolver
+from . import PoroElasticSolver
 from chodby_inv import input_data, piezo
 from endorse import common
 
@@ -201,68 +201,68 @@ def plot_idata(idata):
     plt.savefig("posterior_plot.pdf", dpi=300)
     plot_observe(idata)
 
-def load_pressure_tests(path=input_data.wpt_multipacker):
-    try:
-        df = pd.read_excel(path, sheet_name="data (2)")
-    except Exception as e:
-        print(f"Error loading data from {path}: {e}")
-        return None
+# def load_pressure_tests(path=input_data.wpt_multipacker):
+#     try:
+#         df = pd.read_excel(path, sheet_name="data (2)")
+#     except Exception as e:
+#         print(f"Error loading data from {path}: {e}")
+#         return None
 
-    col_keys = df.columns.tolist()
+#     col_keys = df.columns.tolist()
     
-    zkouska_starts = df[df["čas"] == 0].index.tolist()
+#     zkouska_starts = df[df["čas"] == 0].index.tolist()
 
-    vodivost_true_idx = int(df.columns.get_loc("hydraulická vodivost") + 1)
+#     vodivost_true_idx = int(df.columns.get_loc("hydraulická vodivost") + 1)
 
-    zkousky = []
-    minule_datum = None
+#     zkousky = []
+#     minule_datum = None
 
-    for i, start in enumerate(zkouska_starts):
-        if i < len(zkouska_starts) - 1:
-            end = zkouska_starts[i + 1] - 1
-        else:
-            end = len(df) - 1
+#     for i, start in enumerate(zkouska_starts):
+#         if i < len(zkouska_starts) - 1:
+#             end = zkouska_starts[i + 1] - 1
+#         else:
+#             end = len(df) - 1
         
-        while np.any([
-            pd.isna(df.iloc[end]["čas"]),
-            pd.isna(df.iloc[end]["spotřeba"]),
-            pd.isna(df.iloc[end]["hydraulická vodivost"])
-        ]):
-            # If the end row has NaN values, adjust the end index
-            end -= 1
-            if end < start or end <= 0:
-                print(f"Skipping invalid section from {start} to {end}.")
-                continue
+#         while np.any([
+#             pd.isna(df.iloc[end]["čas"]),
+#             pd.isna(df.iloc[end]["spotřeba"]),
+#             pd.isna(df.iloc[end]["hydraulická vodivost"])
+#         ]):
+#             # If the end row has NaN values, adjust the end index
+#             end -= 1
+#             if end < start or end <= 0:
+#                 print(f"Skipping invalid section from {start} to {end}.")
+#                 continue
 
-        spotreba = df.iloc[end]["spotřeba.1"]
-        vodivost = df.iloc[end]["hydraulická vodivost"]
-        vodivost_true = df.iloc[end][vodivost_true_idx]
-        etaz = df.iloc[start]["etáž"]
-        vrt = df.iloc[start]["vrt"]
-        sekce = df.iloc[start]["sekce"]
-        tlak = df.iloc[end]["tlak v intervalu"] * 1e3 # convert from kPa to Pa
+#         spotreba = df.iloc[end]["spotřeba.1"]
+#         vodivost = df.iloc[end]["hydraulická vodivost"]
+#         vodivost_true = df.iloc[end][vodivost_true_idx]
+#         etaz = df.iloc[start]["etáž"]
+#         vrt = df.iloc[start]["vrt"]
+#         sekce = df.iloc[start]["sekce"]
+#         tlak = df.iloc[end]["tlak v intervalu"] * 1e3 # convert from kPa to Pa
 
-        datum = df.iloc[start]["datum a čas"]
-        if not pd.isna(datum):
-            datum = pd.to_datetime(datum, format="%m.%d.%Y %H:%M:%S")
-        else:
-            datum = minule_datum
+#         datum = df.iloc[start]["datum a čas"]
+#         if not pd.isna(datum):
+#             datum = pd.to_datetime(datum, format="%m.%d.%Y %H:%M:%S")
+#         else:
+#             datum = minule_datum
 
 
-        zkousky.append({
-            "date": datum,
-            "vrt": vrt,
-            "sekce": sekce,
-            "etaz": etaz,
-            "spotreba": spotreba,
-            "tlak": tlak,
-            "vodivost": vodivost,
-            "vodivost_true": vodivost_true
-        })
+#         zkousky.append({
+#             "date": datum,
+#             "vrt": vrt,
+#             "sekce": sekce,
+#             "etaz": etaz,
+#             "spotreba": spotreba,
+#             "tlak": tlak,
+#             "vodivost": vodivost,
+#             "vodivost_true": vodivost_true
+#         })
 
-        minule_datum = datum
+#         minule_datum = datum
 
-    return zkousky
+#     return zkousky
 
 def plot_observe(idata, p_obs=None, ax=None, bins=100):
     if ax is None:
