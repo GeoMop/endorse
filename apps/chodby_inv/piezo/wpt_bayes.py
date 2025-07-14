@@ -385,7 +385,7 @@ def plot_posterior_modified(idata, *args, **kwargs):
 
         # iterate across axes and add corresponding prior plots
         for x, ax_row in enumerate(axes):
-            if isinstance(ax_row, list):
+            if isinstance(ax_row, np.ndarray):
                 for y, ax in enumerate(ax_row):
                     idx = x * len(ax_row) + y
                     # if empty axis, skip
@@ -409,7 +409,7 @@ def plot_posterior_modified(idata, *args, **kwargs):
 
     # set scientific notation for axes
     for ax_row in axes:
-        if isinstance(ax_row, list):
+        if isinstance(ax_row, np.ndarray):
             for ax in ax_row:
                 ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
                 ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
