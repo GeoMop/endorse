@@ -173,7 +173,7 @@ def _run_inversion(inv_cfg, epoch_df):
     #                                      period=50,
     #                                      adaptive=rwmh_adaptive)
 
-    m0 = 1000 # initial archive size
+    m0 = 200 # initial archive size
     delta = 5 # number of pairs to compute jump vector
     adaptive = True
     adaptivity_period = 50  # Period for adaptation
