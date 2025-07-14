@@ -1,9 +1,13 @@
 import numpy as np
 import yaml
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+from scipy.stats import norm
 from scipy.stats import multivariate_normal
 from scipy.linalg import block_diag
 import pandas as pd
+import xarray as xr
+import arviz as az
 """
 
 """
