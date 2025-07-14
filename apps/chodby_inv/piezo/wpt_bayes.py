@@ -84,10 +84,11 @@ def _run_inversion(inv_cfg, epoch_df):
     R = 2  # Outer domain radius [m]
     N = 10  # Number of finite elements (⇒ N+1 nodes)
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
-    p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
-    p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_sd = 5000 # 5kPa
-    k_prior = 1e-13
+    #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    p_b0 = selected_test["tlak"]
+    p_far_prior = 100* 1000  # Far-field Dirichlet pressure (last node) [Pa]
+    p_far_sd = 40* 1000 # 5kPa
+    k_prior = 1e-15
 
     # Rock and fluid parameters.
     biot = 0.2
@@ -127,9 +128,9 @@ def _run_inversion(inv_cfg, epoch_df):
     # Estimate element spacing in the radial direction.
     dx = (R - r_b) / N
     k_correlation_length = 0.01  # [m] (adjust as needed)
-    k_prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
+    k_prior_std_log10 = 2   # Variance of the log(k) field (adjust based on your prior belief)
     E_correlation_length = 0.01  # [m] (adjust as needed)
-    E_prior_std_log10 = 0.5  # Variance of the log(k) field (adjust based on your prior belief)
+    E_prior_std_log10 = 20  # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
         np.full(param_dim, np.log(k_prior)),
         np.full(param_dim, np.log(E_prior)),
@@ -152,7 +153,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # cov_prior = np.diag([0.5**2, 5000**2])
     # prior = multivariate_normal(mean_prior, cov_prior)
 
-    sigma = 10000 # 2 kPa
+    sigma = 2000 # 2 kPa
     cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
     loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
