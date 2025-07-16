@@ -198,7 +198,7 @@ def _run_inversion(inv_cfg, epoch_df):
 
     #my_proposal = tda.MultipleTry(my_kernel, 3)
     iterations = 2000
-    burnin = 50
+    burnin = 0
     chains = 20
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=chains)
       # define input variable names for inferencedata
