@@ -226,7 +226,7 @@ def _run_inversion(inv_cfg, epoch_df):
 def plot_idata(idata):
 
     #az.style.use("arviz-doc")
-
+    az.rcParams["plot.max_subplots"] = 50
 
     plot_observe(idata, bins=80)
     plt.savefig("observe_plot.pdf", dpi=300)
