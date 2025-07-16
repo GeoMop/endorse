@@ -15,12 +15,12 @@ from endorse import common
 from endorse.common import dotdict, File, report, memoize
 from endorse.sa import sample, analyze
 
-import chodby_trans.sample_storage as sample_storage
+# import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
 
 input_dir = input_data.input_dir
-work_dir = input_data.work_dir
+#work_dir = input_data.work_dir
 script_path = Path(__file__).absolute()
 
 
@@ -216,11 +216,12 @@ def salib_samples(cfg: dotdict, seed):
 
 def single_sample(args):
     sample_dir, parameters = args
+    workdir = sample_dir.parents[2]
 
     idx = int(parameters[0])
 
     # read config file
-    conf_file = work_dir / input_data.transport_config.parent.name / input_data.transport_config.name
+    conf_file = workdir / input_data.transport_config.parent.name / input_data.transport_config.name
     cfg = common.config.load_config(str(conf_file))
 
 
@@ -246,7 +247,7 @@ def all_samples(workdir, cfg, parameters, map_fn):
     # Set directories to avoid NFS IO errors
 
     # create sample dir
-    sensitivity_dir = work_dir / input_data.sensitivity_dirname
+    sensitivity_dir = workdir / input_data.sensitivity_dirname
     sample_subdir = sensitivity_dir / "samples"
 
     bh_args = []
@@ -265,7 +266,8 @@ def all_samples(workdir, cfg, parameters, map_fn):
 pbs_script_template = """
 #!/bin/bash
 #PBS -S /bin/bash
-#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=17gb"
+#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=17gb
+#PBS -l place=scatter
 #PBS -l walltime={walltime}
 #PBS -q {queue}
 #PBS -N {job_name}
@@ -276,19 +278,38 @@ pbs_script_template = """
 set -x
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
-output_dir={work_dir}
-workdir=$SCRATCHDIR
-cd $output_dir
+output_dir={workdir}
+work_dir=$SCRATCHDIR
 
-#umask 0007
-echo "===="
-{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} {workdir}
+# copy to scratch
+echo "Staging data to scratch ..."
+# copy to scratchdir on all nodes (unique line in pbs nodefile)
+for node in $(sort -u "$PBS_NODEFILE"); do
+    pbsdsh -vh "$node" -- rsync -av --info=progress2 --delete "$output_dir/" "$work_dir/" &
+done
+wait
+
+cd "$work_dir"
+
+echo "START SAMPLING"
+{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} meta $work_dir
+echo "FINISHED SAMPLING"
+
+ls -la
+echo "Copying results back ..."
+for node in $(sort -u "$PBS_NODEFILE"); do
+    pbsdsh -vh "$node" -- rsync -av --info=progress2 "$work_dir/" "$output_dir/" &
+done
+wait
+
+clean_scratch
+echo "FINISHED"
 """
 
 def submit_pbs(workdir, cfg):
     cfg_pbs = cfg.machine_config.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
-    pbs_filename = workdir / "process_boreholes.pbs"
+    pbs_filename = workdir / "sensitivity_sampling.pbs"
     n_workers = cfg_pbs.n_nodes * (cfg_pbs.n_cores-1) # Not sure if we need reserve for the master scoop process
     parameters = dict(
         n_chunks=cfg_pbs.n_nodes,
@@ -316,25 +337,34 @@ def submit_pbs(workdir, cfg):
 def main():
     # common.EndorseCache.instance().expire_all()
 
+    if len(sys.argv) == 2:
+        cmd = sys.argv[1]
+        workdir = input_data.work_dir
+    elif len(sys.argv) == 3:
+        cmd = sys.argv[1]
+        workdir = Path(sys.argv[2]).absolute()
+    else:
+      sys.exit("Provide command (local|meta|submit) and optionaly workdir path (overrides default).")
+
+
     conf_file = input_data.transport_config
     cfg = common.config.load_config(str(conf_file))
 
     seed = 101
-    with common.workdir(str(work_dir), clean=False):
+    with common.workdir(str(workdir), clean=False):
 
-        shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
-        parameters = salib_samples(cfg, seed)
+        shutil.copytree(input_dir, workdir / input_dir.name, dirs_exist_ok=True)
 
-        if len(sys.argv) > 1 and (sys.argv[1] == 'submit'):
-            submit_pbs(work_dir, cfg)
-            pass
-        elif len(sys.argv) > 1 and (sys.argv[1] == 'local'):
-            all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=map)
-        # elif len(sys.argv) > 1:
-        #     i_bh = int(sys.argv[1])
-        #     single_borehole((workdir, i_bh))
+        if cmd == 'submit':
+            submit_pbs(workdir, cfg)
+        elif cmd == 'local':
+            parameters = salib_samples(cfg, seed)
+            all_samples(workdir=workdir, cfg=cfg, parameters=parameters, map_fn=map)
+        elif cmd == 'meta':
+            parameters = salib_samples(cfg, seed)
+            all_samples(workdir=workdir, cfg=cfg, parameters=parameters, map_fn=futures.map)
         else:
-            all_samples(workdir=work_dir, cfg=cfg, parameters=parameters, map_fn=futures.map)
+            sys.exit(f"Unkown command provided: '{cmd}'!")
 
 if __name__ == '__main__':
     main()
