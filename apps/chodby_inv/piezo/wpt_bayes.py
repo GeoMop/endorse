@@ -90,7 +90,7 @@ def _run_inversion(inv_cfg, epoch_df):
     p_b0 = selected_test["tlak"]
     p_far_prior = 70* 1000  # Far-field Dirichlet pressure (last node) [Pa]
     p_far_sd = 20* 1000 # 40kPa
-    k_prior = 1e-15
+    k_prior = 1e-13
 
     # Rock and fluid parameters.
     biot = 0.2
