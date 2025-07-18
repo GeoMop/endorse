@@ -1,7 +1,9 @@
 import numpy as np
 import yaml
+import logging
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
+from matplotlib.backends.backend_pdf import PdfPages
 from scipy.stats import norm
 from scipy.stats import multivariate_normal
 from scipy.linalg import block_diag
@@ -86,8 +88,8 @@ def _run_inversion(inv_cfg, epoch_df):
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
     #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
     p_b0 = selected_test["tlak"]
-    p_far_prior = 100* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_sd = 40* 1000 # 5kPa
+    p_far_prior = 70* 1000  # Far-field Dirichlet pressure (last node) [Pa]
+    p_far_sd = 20* 1000 # 40kPa
     k_prior = 1e-15
 
     # Rock and fluid parameters.
@@ -243,6 +245,8 @@ def plot_idata(idata):
 
     plt.savefig("posterior_plot.pdf", dpi=300)
     plot_observe(idata)
+
+    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata))
 
 def load_pressure_tests(path=input_data.wpt_multipacker):
     try:
@@ -427,6 +431,71 @@ def plot_posterior_modified(idata, *args, **kwargs):
     fig.set_constrained_layout(True)
 
     return axes
+
+def plot_likelihood(idata: az.InferenceData, cutoff=None):
+    if cutoff is None:
+        cutoff = -1e8
+    draws = idata.posterior.sizes["draw"]
+    chains = idata.posterior.sizes["chain"]
+    likelihoods = np.clip(idata["sample_stats"]["likelihood"], cutoff, None)
+    prior = np.clip(idata["sample_stats"]["prior"], cutoff, None)
+    posterior = np.clip(idata["sample_stats"]["posterior"], cutoff, None)
+    datasets = [likelihoods, prior, posterior]
+    labels = ["log-likelihood", "log-prior", "log-posterior"]
+    x_axis = np.arange(0, draws)
+
+    figs = []
+
+    for dataset, label in zip(datasets, labels):
+        fig_progression, axes_progression = plt.subplots(2, 1, figsize=(16, 9))
+        fig_progression.suptitle(f"Vývoj {label} v čase (hodnoty pod {cutoff} oříznuty)")
+        axes_progression[0].set_xlabel("Iterace v chainu")
+        axes_progression[0].set_ylabel(f"{label}")
+        for chain in np.arange(0, chains):
+            axes_progression[0].plot(x_axis, dataset[chain, :], label=f"Chain {chain}")
+
+        mean = np.mean(dataset, axis=0)
+        median = np.median(dataset, axis=0)
+        min = np.min(dataset, axis=0)
+        axes_progression[0].legend(ncol=2, loc="lower right")
+        axes_progression[0].grid(True)
+
+        axes_progression[1].set_xlabel("Iterace v chainu")
+        axes_progression[1].set_ylabel(f"")
+        axes_progression[1].plot(x_axis, mean, label=f"Průměrná {label}")
+        axes_progression[1].plot(x_axis, median, label=f"Medián {label}")
+        axes_progression[1].plot(x_axis, min, label=f"Minimum {label}")
+        axes_progression[1].legend(ncol=2, loc="lower right")
+        axes_progression[1].grid(True)
+
+        figs += [fig_progression]
+
+        fig_hist, axes_hist = plt.subplots(figsize=(16, 9))
+        fig_hist.suptitle(f"Histogram {label} (hodnoty pod {cutoff} oříznuty)")
+        axes_hist.set_xlabel(f"{label}")
+        axes_hist.set_ylabel("Počet")
+        axes_hist.hist(dataset.values.flatten(), bins=100)
+
+        figs += [fig_hist]
+
+    return figs
+
+def save_plots_pdf_pages(
+        filename: str,
+        figs: list) -> None:
+
+    if not figs:
+        return
+
+    try:
+        with PdfPages(filename) as pdf:
+            for fig in figs:
+                pdf.savefig(fig)
+                plt.close(fig)
+        logging.info("Succesfully saved plot %s", filename)
+    except:
+        logging.error("Failed to save plot at %s", filename)
+
 
 if __name__ == '__main__':
     wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
