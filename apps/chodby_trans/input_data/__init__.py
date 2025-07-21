@@ -9,6 +9,8 @@ work_dir.mkdir(parents=True, exist_ok=True)
 input_dir = __script_dir__.parent / "input_data"
 
 transport_config = input_dir / "trans_mesh_config.yaml"
+data_schema_yaml = input_dir / "data_schema.yaml"
+data_schema_empty_yaml = input_dir / "data_schema_empty.yaml"
 
 sensitivity_dirname = "sensitivity"
 param_dirname = "parameters"

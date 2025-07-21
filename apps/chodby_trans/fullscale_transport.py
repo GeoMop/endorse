@@ -1,5 +1,6 @@
 import logging
 import shutil
+import time
 from typing import *
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from endorse.mesh_class import Mesh
 from endorse.indicator import Extractor
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
+import zarr_fuse
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
@@ -79,6 +81,7 @@ def transport_run(cfg, seed):
 def parametrized_run(cfg, large_model, input_fields_file):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
+    times = output_times(cfg_fine)
 
     new_params = dict(
         mesh_file=input_fields_file,
@@ -88,7 +91,7 @@ def parametrized_run(cfg, large_model, input_fields_file):
         end_time_years = cfg_fine.end_time,
         trans_solver__a_tol= cfg_fine.trans_solver__a_tol,
         trans_solver__r_tol= cfg_fine.trans_solver__r_tol,
-        output_times = [[t, 'y'] for t in output_times(cfg_fine)]
+        output_times = [[t, 'y'] for t in times]
         #max_time_step = dt,
         #output_step = 10 * dt
     )
@@ -105,8 +108,14 @@ def parametrized_run(cfg, large_model, input_fields_file):
     else:
         fo = common.call_flow(cfg.machine_config, template, params)
 
+    # TODO: get grid, output times, values -> zarr_fuse
+    # times
+    schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
+    root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
+    current_node = root_node[cfg.data_scheme_key]
+    grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
 
-    return get_indicator(cfg, fo)
+    return values
 
 # @report
 def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
@@ -125,9 +134,9 @@ def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
 
     return result
 
-def create_structured_grid(cfg_geom: dotdict, z_cuts):
+def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     # Define grid resolution
-    nx, ny = 20, 20  # number of elements in x and y
+    nx, ny = grid_step  # number of elements in x and y
     bx, by, bz = cfg_geom.box_dimensions
     tol = 1e-6
     bx, by = bx-tol, by-tol
@@ -169,16 +178,16 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts):
 #     return times
 #
 # @report
-def get_indicator(cfg, fo):
+def get_indicator(cfg, fo, grid_step):
     cfg_fine = cfg.transport_fullscale
     z_dim = 0.9 * 0.5 * cfg.geometry.box_dimensions[2]
     # z_shift = cfg.geometry.borehole.z_pos
     # z_shift = cfg.geometry.main_tunnel.center[2] - cfg.geometry.main_tunnel.height/2 - cfg.geometry.storage_borehole.length/2
     z_shift = 0
     z_cuts = (z_shift - z_dim, z_shift + z_dim)
-    grid = create_structured_grid(cfg.geometry, z_cuts)
-    inds = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
-    return inds
+    grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
+    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
+    return grid, values
 #     plots.plot_indicators(inds)
 #     #itime = IndicatorFn.common_max_time(inds)  # not splined version, need slice data
 #     #plots.plot_slices(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, [itime-1, itime, itime+1])

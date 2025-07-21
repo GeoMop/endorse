@@ -6,7 +6,11 @@ import os, sys
 from pathlib import Path
 import pandas as pd
 import time
+from datetime import datetime
+import copy
 import subprocess
+
+import yaml
 from scoop import futures
 
 import numpy as np
@@ -215,7 +219,7 @@ def salib_samples(cfg: dotdict, seed):
 
 
 def single_sample(args):
-    sample_dir, parameters = args
+    sample_dir, data_scheme_key, parameters = args
     workdir = sample_dir.parents[2]
 
     idx = int(parameters[0])
@@ -223,7 +227,7 @@ def single_sample(args):
     # read config file
     conf_file = workdir / input_data.transport_config.parent.name / input_data.transport_config.name
     cfg = common.config.load_config(str(conf_file))
-
+    cfg["data_scheme_key"] = data_scheme_key
 
     logging.info("=========================== RUNNING CALCULATION " +
                  "sample {} ===========================".format(idx).zfill(3))
@@ -235,14 +239,14 @@ def single_sample(args):
         t = time.time()
         res, sample_data = wrap.get_observations()
 
-        print("Flow123d res: ", res)
+        print("Flow123d res: ", res, np.shape(sample_data))
 
         # print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
 
 
 def all_samples(workdir, cfg, parameters, map_fn):
-
+    setup_data_storage(cfg)
     n_params = parameters.shape[0]
     # Set directories to avoid NFS IO errors
 
@@ -256,11 +260,30 @@ def all_samples(workdir, cfg, parameters, map_fn):
         sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
         sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-        bh_args.append((sample_dir, parameters[ip]))
+        bh_args.append((sample_dir, data_scheme_key, parameters[ip]))
 
     results = list(map_fn(single_sample, bh_args))
     print("Results collected: ", str(results)[:200])
     # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
+
+
+def setup_data_storage(cfg):
+    # prepare data scheme for zarr storage
+    # add current scheme for current sampling run
+    path = Path(input_data.data_schema_yaml)
+    if not path.exists():
+        shutil.copy2(input_data.data_schema_empty_yaml, input_data.data_schema_yaml)
+
+    with path.open("r", encoding="utf-8") as file:
+        content = file.read()
+        data_scheme = yaml.safe_load(content)
+
+    now = datetime.now().strftime("%Y%m%d%H%M%S")
+    data_scheme_key = f"run_{now}"
+    data_scheme[data_scheme_key] = copy.deepcopy(data_scheme["run_timestamp"])
+
+    with Path(input_data.data_schema_yaml).open("w", encoding="utf-8") as file:
+        yaml.dump(data_scheme, file, sort_keys=False)
 
 
 pbs_script_template = """
