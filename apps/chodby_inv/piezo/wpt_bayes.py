@@ -282,6 +282,7 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
                 continue
 
         spotreba = df.iloc[end]["spotřeba.1"]
+        spotreba_sigma = df.iloc[end]["spotřeba sigma"]
         vodivost = df.iloc[end]["hydraulická vodivost"]
         vodivost_true = df.iloc[end][vodivost_true_idx]
         etaz = df.iloc[start]["etáž"]
@@ -302,6 +303,7 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
             "sekce": sekce,
             "etaz": etaz,
             "spotreba": spotreba,
+            "spotreba_sigma": spotreba_sigma,
             "tlak": tlak,
             "vodivost": vodivost,
             "vodivost_true": vodivost_true
