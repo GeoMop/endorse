@@ -1,6 +1,6 @@
 # Configuration of the ZARR-FUSE storage
 ATTRS:
-    store_url: "surface.zarr"
+    store_url: "transport.zarr"
     store_type: 'local'                 # 'guess' type is default
 
 run_timestamp:

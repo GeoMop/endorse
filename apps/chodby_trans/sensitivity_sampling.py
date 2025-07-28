@@ -17,7 +17,11 @@ import numpy as np
 
 from endorse import common
 from endorse.common import dotdict, File, report, memoize
-from endorse.sa import sample, analyze
+# from endorse.sa import sample, analyze
+import endorse.sa as sa
+
+import xarray as xr
+import zarr
 
 # import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
@@ -184,11 +188,11 @@ def salib_samples(cfg: dotdict, seed):
     cfg_sens = cfg.sensitivity
     # Define the problem for SALib
     # Bayes Inversion borehole_V1/sim_A04hm_V1_04_20230713a
-    problem = sample.prepare_problem_defition(cfg_sens.parameters)
+    problem = sa.sample.prepare_problem_defition(cfg_sens.parameters)
     print(problem)
 
     # Generate Saltelli samples
-    param_values = sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
+    param_values = sa.sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
     # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
     print(param_values.shape)
 
@@ -201,11 +205,12 @@ def salib_samples(cfg: dotdict, seed):
         shutil.rmtree(sensitivity_dir)
     sensitivity_dir.mkdir()
 
+    return param_values
     # TODO: write parameters
-    N = param_values.shape[0]  # number of rows
-    row_idx = np.arange(N).reshape(-1, 1)  # column vector [[0], [1], …]
-    params_with_idx = np.hstack((row_idx, param_values))
-    return params_with_idx
+    # N = param_values.shape[0]  # number of rows
+    # row_idx = np.arange(N).reshape(-1, 1)  # column vector [[0], [1], …]
+    # params_with_idx = np.hstack((row_idx, param_values))
+    # return params_with_idx
 
     # plan sample parameters a prepare them in CSV
     # prepare_sets_of_params(cfg_sens, param_values, sensitivity_dir, problem["names"])
@@ -219,10 +224,8 @@ def salib_samples(cfg: dotdict, seed):
 
 
 def single_sample(args):
-    sample_dir, data_scheme_key, parameters = args
+    sample_dir, data_scheme_key, tags, parameters = args
     workdir = sample_dir.parents[2]
-
-    idx = int(parameters[0])
 
     # read config file
     conf_file = workdir / input_data.transport_config.parent.name / input_data.transport_config.name
@@ -230,14 +233,14 @@ def single_sample(args):
     cfg["data_scheme_key"] = data_scheme_key
 
     logging.info("=========================== RUNNING CALCULATION " +
-                 "sample {} ===========================".format(idx).zfill(3))
+                 "sample {} ===========================".format(tags[0]).zfill(3))
     logging.info(sample_dir)
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
-        wrap.set_parameters(data_par=parameters[1:])
+        wrap.set_parameters(data_par=parameters)
         t = time.time()
-        res, sample_data = wrap.get_observations()
+        res, sample_data = wrap.get_observations(tags)
 
         print("Flow123d res: ", res, np.shape(sample_data))
 
@@ -246,28 +249,36 @@ def single_sample(args):
 
 
 def all_samples(workdir, cfg, parameters, map_fn):
-    setup_data_storage(cfg)
-    n_params = parameters.shape[0]
+    data_scheme_key = setup_data_storage(workdir, cfg)
+    n_samples, n_params = parameters.shape
     # Set directories to avoid NFS IO errors
 
     # create sample dir
     sensitivity_dir = workdir / input_data.sensitivity_dirname
     sample_subdir = sensitivity_dir / "samples"
 
+    cfg_sens = cfg.sensitivity
+    qmc_idx = sa.sample.saltelli_qmc_index(N=cfg_sens.n_samples,
+                                           D=n_params,
+                                           calc_second_order=cfg_sens.second_order_sa)
+    block_idx = sa.sample.saltelli_block_labels(N=cfg_sens.n_samples,
+                                                D=n_params,
+                                                calc_second_order=cfg_sens.second_order_sa)
+    tags = np.column_stack((range(n_samples), qmc_idx, block_idx))
+
     bh_args = []
-    for ip in range(n_params):
-        idx = int(parameters[ip,0])
+    for idx in range(n_samples):
         sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
         sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-        bh_args.append((sample_dir, data_scheme_key, parameters[ip]))
+        bh_args.append((sample_dir, data_scheme_key, tags[idx], parameters[idx]))
 
     results = list(map_fn(single_sample, bh_args))
     print("Results collected: ", str(results)[:200])
     # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
 
 
-def setup_data_storage(cfg):
+def setup_data_storage(workdir, cfg):
     # prepare data scheme for zarr storage
     # add current scheme for current sampling run
     path = Path(input_data.data_schema_yaml)
@@ -284,6 +295,78 @@ def setup_data_storage(cfg):
 
     with Path(input_data.data_schema_yaml).open("w", encoding="utf-8") as file:
         yaml.dump(data_scheme, file, sort_keys=False)
+
+    # temporary shortcut for direct zarr
+    qmc_size = cfg.sensitivity.n_samples
+    block_size = 4 if cfg.sensitivity.second_order_sa else 3
+    grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
+    init_zarr_store(workdir / "transport_sampling",
+                    qmc_size=qmc_size,
+                    time_size=18,
+                    block_size=block_size,
+                    x_size=grid_size[0],
+                    y_size=grid_size[1])
+
+    return data_scheme_key
+
+def init_zarr_store(store_path: str,
+                    qmc_size: int,
+                    block_size: int,
+                    time_size: int,
+                    x_size: int,
+                    y_size: int,
+                    dtype=np.float32,
+                    compressor=None) -> None:
+    """
+    Initialize an empty Zarr store with the specified dimensions and chunking.
+
+    Parameters
+    ----------
+    store_path : str
+        Path to the Zarr store (directory or Zarr URL).
+    qmc_size : int
+        Length of the 'qmc' dimension.
+    block_size : int
+        Number of blocks: A, B, AB, (BA).
+    x_size : int
+        Length of the 'X' dimension.
+    y_size : int
+        Length of the 'Y' dimension.
+    time_size : int
+        Length of the 'time' dimension.
+    dtype : NumPy dtype, optional
+        Data type of the array (default: np.float32).
+    compressor : zarr compressor, optional
+        Compressor to use (default: None).
+    """
+    # Define dimensions: 'sample' is unlimited/appendable
+    dims = ('sample', 'qmc', 'block', 'time', 'X', 'Y', 'Z')
+    shape = (0, qmc_size, block_size, time_size, x_size, y_size, 2)
+
+    # Create an empty DataArray with 0 length sample dimension
+    data = xr.DataArray(
+        np.zeros(shape, dtype=dtype),
+        dims=dims,
+        coords={
+            'qmc': np.arange(qmc_size),
+            'block': np.arange(block_size),
+            'time': np.arange(time_size),
+            'X': np.arange(x_size),
+            'Y': np.arange(y_size),
+            'Z': np.arange(2),
+        }
+    )
+
+    ds = xr.Dataset({'data': data})
+
+    # Set encoding for chunking and compression
+    ds.encoding['data'] = {
+        'chunks': (1, qmc_size, block_size, time_size, x_size, y_size, 2),
+        'compressor': compressor
+    }
+
+    # Write to Zarr, overwrite if exists
+    ds.to_zarr(store_path, mode='w')
 
 
 pbs_script_template = """

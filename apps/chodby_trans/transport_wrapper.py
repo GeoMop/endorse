@@ -73,14 +73,14 @@ class Wrapper:
                 assert pname in cfg.transport_fullscale, pname + " not in transport_fullscale"
                 cfg.transport_fullscale[pname] = data_par[idx]
 
-    def get_observations(self):
+    def get_observations(self, tags):
         try:
             print("get observations from transport_wrapper")
             # res = self.calculate(self._config)
-            res = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro)
+            res = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
             return 0, res
-        except:
-            print("transport_wrapper failed for unknown reason.")
+        except Exception as e:
+            print(f"transport_wrapper failed with exception: {e}")
             return -1000, []
 
     def calculate(self, cfg):

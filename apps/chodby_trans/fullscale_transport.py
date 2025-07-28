@@ -14,7 +14,10 @@ from endorse.mesh_class import Mesh
 from endorse.indicator import Extractor
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
+
 import zarr_fuse
+import xarray as xr
+import zarr
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
@@ -47,17 +50,14 @@ def fullscale_transport(cfg_path, seed):
     cfg = common.load_config(cfg_path)
     return transport_run(cfg, seed)
 
-@memoize
-def transport_run(cfg, seed):
-    # large_model = input_dir / cfg_fine.piezo_head_input_file
-    large_model = None
 
-    fr_pop = Population.initialize_3d( cfg.fractures.population, cfg.geometry.box_dimensions)
+@memoize
+def prepare_msh_input(cfg, seed):
+    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
     mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
 
-
     # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
-    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None) # already healed
+    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
 
     el_to_ifr = None
     if "fractures" in cfg.geometry.include and fractures is not None:
@@ -73,12 +73,21 @@ def transport_run(cfg, seed):
     input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
     shutil.copy2(input_fields_file.path, input_msh_filepath)
     input_msh = File(input_msh_filepath)
+    return input_msh
 
+
+# @memoize
+def transport_run(cfg, seed, tags):
+    # large_model = input_dir / cfg_fine.piezo_head_input_file
+    large_model = None
+
+    input_msh = prepare_msh_input(cfg, seed)
     # input_msh = File("input_fields.msh")
 
-    return parametrized_run(cfg, large_model, input_msh)
+    return parametrized_run(cfg, large_model, input_msh, tags)
 
-def parametrized_run(cfg, large_model, input_fields_file):
+
+def parametrized_run(cfg, large_model, input_fields_file, tags):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
     times = output_times(cfg_fine)
@@ -115,7 +124,77 @@ def parametrized_run(cfg, large_model, input_fields_file):
     current_node = root_node[cfg.data_scheme_key]
     grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
 
+    workdir = Path('.').absolute()
+    workdir = workdir.parents[2]
+    write_zarr_slice(store_path=str(workdir / "transport_sampling"),
+                     sample_idx=tags[0],
+                     qmc_idx=tags[1],
+                     block_idx=tags[2],
+                     slice_array=values)
+
     return values
+
+
+def write_zarr_slice(store_path: str,
+                     sample_idx: int,
+                     qmc_idx: int,
+                     block_idx: int,
+                     slice_array: np.ndarray) -> None:
+    """
+    Write a slice of data into an existing Zarr store for given sample and qmc indices.
+
+    Parameters
+    ----------
+    store_path : str
+        Path to the Zarr store.
+    sample_idx : int
+        Index along the 'sample' dimension where data will be written.
+    qmc_idx : int
+        Index along the 'qmc' dimension where data will be written.
+    block_idx : int
+        Index along the 'block' dimension where data will be written.
+    slice_array : np.ndarray
+        NumPy array of shape (time, X, Y, Z) matching the store dimensions.
+    """
+    # Open the existing Zarr store as an Xarray dataset
+    ds = xr.open_zarr(store_path, consolidated=True)
+
+    # Validate slice_array shape
+    expected_shape = (ds.sizes['time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])
+    if slice_array.shape != expected_shape:
+        raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
+
+    # Wrap slice_array into a DataArray with new sample and qmc coords
+    da = xr.DataArray(
+        slice_array[np.newaxis, np.newaxis, np.newaxis, ...],  # add sample, qmc and block dims
+        dims=('sample', 'qmc', 'block', 'time', 'X', 'Y', 'Z'),
+        coords={
+            'sample': [sample_idx],
+            'qmc': [qmc_idx],
+            'block': [block_idx],
+            'time': ds.coords['time'],
+            'X': ds.coords['X'],
+            'Y': ds.coords['Y'],
+            'Z': ds.coords['Z'],
+        }
+    )
+
+    # Write the slice by specifying the region to overwrite
+    da.to_dataset(name='data').to_zarr(
+    # da.to_dataset(name='data').drop_vars(['time', 'X', 'Y', 'Z']).to_zarr(
+        store_path,
+        mode='a',
+        region={
+            'sample': slice(sample_idx, sample_idx + 1),
+            'qmc': slice(qmc_idx, qmc_idx + 1),
+            'block': slice(block_idx, block_idx + 1)
+            # 'data': {
+            #     'sample': slice(sample_idx, sample_idx + 1),
+            #     'qmc': slice(qmc_idx, qmc_idx + 1),
+            #     'block': slice(block_idx, block_idx + 1)
+            # }
+        }
+    )
 
 # @report
 def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
@@ -187,7 +266,11 @@ def get_indicator(cfg, fo, grid_step):
     z_cuts = (z_shift - z_dim, z_shift + z_dim)
     grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
     values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
-    return grid, values
+    print(np.shape(values))
+    n_times = np.shape(values)[0]
+    block = values.reshape(n_times, *grid_step, 2)
+    print(np.shape(block))
+    return grid, block
 #     plots.plot_indicators(inds)
 #     #itime = IndicatorFn.common_max_time(inds)  # not splined version, need slice data
 #     #plots.plot_slices(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, [itime-1, itime, itime+1])
