@@ -155,7 +155,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # cov_prior = np.diag([0.5**2, 5000**2])
     # prior = multivariate_normal(mean_prior, cov_prior)
 
-    sigma = 2000 # 2 kPa
+    sigma = 1000 # 2 kPa
     cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
     loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
@@ -199,9 +199,9 @@ def _run_inversion(inv_cfg, epoch_df):
     # my_kernel = tda.AdaptiveMetropolis(C0=am_cov, t0=am_t0, sd=am_sd, epsilon=am_epsilon)
 
     #my_proposal = tda.MultipleTry(my_kernel, 3)
-    iterations = 2000
+    iterations = 20000
     burnin = 0
-    chains = 20
+    chains = 8
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=chains)
       # define input variable names for inferencedata
     #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
