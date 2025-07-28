@@ -238,7 +238,7 @@ def plot_idata(idata):
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 
-    plot_observe(idata, bins=80)
+    plot_observe(idata, bins=150)
     plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
