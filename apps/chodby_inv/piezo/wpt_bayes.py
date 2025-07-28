@@ -224,6 +224,8 @@ def _run_inversion(inv_cfg, epoch_df):
     idata["sample_stats"].attrs["observed_data"] = regular_pb_measured
     idata["sample_stats"].attrs["observed_cov"] = cov_likelihood
 
+    idata["sample_stats"]["observed_extended"] = regular_pb_measured_extended
+
     # add prior information to the InferenceData object
     idata["posterior"].attrs["prior_mean"] = mean_prior
     idata["posterior"].attrs["prior_cov"] = cov_prior
