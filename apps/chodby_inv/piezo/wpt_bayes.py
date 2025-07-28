@@ -328,18 +328,21 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
         # attempt to load data directly from idata
         if idata.sample_stats.attrs["observed_data"] is not None:
             p_obs = idata.sample_stats.attrs["observed_data"]
+            p_obs_extended = idata.sample_stats["observed_extended"].values
 
     observe = idata.posterior_predictive
-    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_")],
+    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_") and v not in ["obs_0"]],
                       key=lambda s: int(s.split("_", 1)[1]))
 
     observe_list = [observe[v] for v in observe_vars]
     observe_arr = xr.concat(observe_list, dim="time")
+    print(observe_arr)
     chains = observe_arr.sizes["chain"]
     draws = observe_arr.sizes["draw"]
 
     observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
     observe_length = len(observe_list)
+    print(observe_length)
 
     #print(idata.sample_stats)
     likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
@@ -347,18 +350,24 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
     #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
+    print(best_fit)
+    print()
 
     hist2d_x = np.tile(np.arange(observe_length), chains * draws)
 
     ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
-    ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
-    ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=2)
-    ax.set_ylim(
-        [
-            np.min([observe_arr.min(), p_obs.min()]),
-            np.max([observe_arr.max(), p_obs.max()])
-        ]
-    )
+    #ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
+    origin_offset = observe_length - len(p_obs_extended) # compute origin offset to plot extended data
+    print(origin_offset)
+    ax.plot(np.arange(origin_offset, observe_length), p_obs_extended, "r-", label="Predicted observation (extended)", lw=1)
+    ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
+    ax_minima =  [
+        np.min([observe_arr.min(), p_obs_extended.min()]),
+        np.max([observe_arr.max(), p_obs_extended.max()])
+    ]
+    ax.set_ylim(ax_minima)
+
+    ax.set_xlim([origin_offset, observe_length])
     ax.set_xlabel("Time (integer steps)")
     ax.set_ylabel("Pressure")
     ax.legend()
