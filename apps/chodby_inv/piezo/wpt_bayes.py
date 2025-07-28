@@ -331,7 +331,7 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
             p_obs_extended = idata.sample_stats["observed_extended"].values
 
     observe = idata.posterior_predictive
-    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_") and v not in ["obs_0"]],
+    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_")],
                       key=lambda s: int(s.split("_", 1)[1]))
 
     observe_list = [observe[v] for v in observe_vars]
