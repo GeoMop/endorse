@@ -73,7 +73,12 @@ def _run_inversion(inv_cfg, epoch_df):
     df_reg = pd.DataFrame({
         "time_days": np.arange(time_days.min(), time_days.max(), dt_days)
     })
-    regular_pb_measured = df_reg.apply(smooth_fn, axis=1).values
+    regular_pb_measured_extended = df_reg.apply(smooth_fn, axis=1).values
+    #regular_pb_measured_cut = regular_pb_measured[regular_pb_measured["time_days"] >= 0]
+
+    regular_pb_measured = regular_pb_measured_extended[df_reg["time_days"] >= 0]
+    print(regular_pb_measured)
+    print(regular_pb_measured_extended)
 
     tests = load_pressure_tests()
     #selected_test = tests[inv_cfg["section"]]
