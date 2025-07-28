@@ -60,8 +60,8 @@ def borehole_section_inversion(inv_cfg, ):
 @common.memoize
 def _run_inversion(inv_cfg, epoch_df):
 
-    dt = 6*60 * 60  # dt = 6 hours
-    #time_delta = pd.Timedelta(dt, unit='s')
+    #dt = 6*60 * 60  # dt = 6 hours
+    dt = inv_cfg.get("dt", 6 * 60 * 60)  # Default to 6 hours if not specified
     dt_days = dt / (24 * 3600)  # Convert to days
     time_days = epoch_df.time_days.values
     p_b_measured = epoch_df.pressure.values
