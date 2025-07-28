@@ -251,7 +251,6 @@ def plot_idata(idata):
     plot_posterior_modified(idata, figsize=(16, 18))
 
     plt.savefig("posterior_plot.pdf", dpi=300)
-    plot_observe(idata)
 
     save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata, -1e4))
 
