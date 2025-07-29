@@ -249,8 +249,9 @@ def single_sample(args):
 
 
 def all_samples(workdir, cfg, parameters, map_fn):
-    data_scheme_key = setup_data_storage(workdir, cfg)
+
     n_samples, n_params = parameters.shape
+    data_scheme_key = setup_data_storage(workdir, cfg, n_samples)
     # Set directories to avoid NFS IO errors
 
     # create sample dir
@@ -278,7 +279,7 @@ def all_samples(workdir, cfg, parameters, map_fn):
     # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
 
 
-def setup_data_storage(workdir, cfg):
+def setup_data_storage(workdir, cfg, n_samples):
     # prepare data scheme for zarr storage
     # add current scheme for current sampling run
     path = Path(input_data.data_schema_yaml)
@@ -301,20 +302,20 @@ def setup_data_storage(workdir, cfg):
     block_size = 4 if cfg.sensitivity.second_order_sa else 3
     grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
     init_zarr_store(workdir / "transport_sampling",
+                    sample_size=n_samples,
                     qmc_size=qmc_size,
-                    time_size=18,
                     block_size=block_size,
-                    x_size=grid_size[0],
-                    y_size=grid_size[1])
+                    time_size=18,
+                    grid_size=[*grid_size, 2])
 
     return data_scheme_key
 
 def init_zarr_store(store_path: str,
+                    sample_size: int,
                     qmc_size: int,
                     block_size: int,
                     time_size: int,
-                    x_size: int,
-                    y_size: int,
+                    grid_size: list,
                     dtype=np.float32,
                     compressor=None) -> None:
     """
@@ -341,19 +342,20 @@ def init_zarr_store(store_path: str,
     """
     # Define dimensions: 'sample' is unlimited/appendable
     dims = ('sample', 'qmc', 'block', 'time', 'X', 'Y', 'Z')
-    shape = (0, qmc_size, block_size, time_size, x_size, y_size, 2)
+    shape = (sample_size, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
 
     # Create an empty DataArray with 0 length sample dimension
     data = xr.DataArray(
         np.zeros(shape, dtype=dtype),
         dims=dims,
         coords={
+            'sample': np.arange(sample_size),
             'qmc': np.arange(qmc_size),
             'block': np.arange(block_size),
             'time': np.arange(time_size),
-            'X': np.arange(x_size),
-            'Y': np.arange(y_size),
-            'Z': np.arange(2),
+            'X': np.arange(grid_size[0]),
+            'Y': np.arange(grid_size[1]),
+            'Z': np.arange(grid_size[2]),
         }
     )
 
@@ -361,7 +363,7 @@ def init_zarr_store(store_path: str,
 
     # Set encoding for chunking and compression
     ds.encoding['data'] = {
-        'chunks': (1, qmc_size, block_size, time_size, x_size, y_size, 2),
+        'chunks': (1, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2]),
         'compressor': compressor
     }
 

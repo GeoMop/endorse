@@ -1,0 +1,4098 @@
+ATTRS:
+  store_url: surface.zarr
+  store_type: local
+run_timestamp:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721134628:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721144226:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721144322:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721145136:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721145209:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250721145236:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722115112:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722120151:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722121453:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722122342:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722123348:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250722124157:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723124620:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723124753:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723131137:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723132447:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723132753:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723135346:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723141426:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723151205:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723152240:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723154140:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250723155619:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250724095733:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250724102917:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250724105752:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728103007:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728104854:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728105723:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728110900:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728111126:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728111543:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728113229:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728113318:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728124742:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728125116:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728130326:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728130521:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728130933:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728131647:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250728132453:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250729155504:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250729160737:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .
+run_20250729162108:
+  VARS:
+    sample_id:
+      unit: ''
+      description: Unique sample ID given by ordered Salib parameter sequence.
+      coords:
+      - iid
+      - qmc
+    A_sample:
+      unit: bool
+      description: Indicator function for parameter of that QMC sample be from the
+        set A (oposed to the set B) of the Saltelli schema.
+      coords:
+      - qmc
+      - param_name
+    parameter:
+      unit: ''
+      description: Free simulation parameter.
+      coords:
+      - iid
+      - qmc
+      - param_name
+    conc:
+      unit: g/m^3
+      description: Indicator concentration on a specified grid.
+      coords:
+      - iid
+      - qmc
+      - X
+      - Y
+      - Z
+      - sim_time
+    iid:
+      unit: int
+      description: Independent sample set
+      df_col: None
+    qmc:
+      unit: int
+      description: Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices.
+      df_col: None
+    X:
+      unit: m
+      description: Indicator grid coordinate (x axis).
+      df_col: None
+    Y:
+      unit: m
+      description: Indicator grid coordinate (y axis).
+      df_col: None
+    Z:
+      unit: m
+      description: Indicator grid coordinate (z axis).
+      df_col: None
+    sim_time:
+      unit: year
+      description: Simulation time.
+      df_col: None
+  COORDS:
+    iid:
+      sorted: false
+      chunk_size: 1024
+      merge: None
+    qmc:
+      sorted: false
+      chunk_size: 64
+      merge: None
+    param_name:
+      sorted: false
+      chunk_size: 64
+      merge:
+        step_limits: None
+    X:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Y:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    Z:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+    sim_time:
+      chunk_size: 1024
+      merge:
+        step_limits: None
+  ATTRS:
+    grid_step:
+    - 20
+    - 20
+    description: .

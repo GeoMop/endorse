@@ -181,18 +181,16 @@ def write_zarr_slice(store_path: str,
 
     # Write the slice by specifying the region to overwrite
     da.to_dataset(name='data').to_zarr(
-    # da.to_dataset(name='data').drop_vars(['time', 'X', 'Y', 'Z']).to_zarr(
         store_path,
         mode='a',
         region={
             'sample': slice(sample_idx, sample_idx + 1),
             'qmc': slice(qmc_idx, qmc_idx + 1),
-            'block': slice(block_idx, block_idx + 1)
-            # 'data': {
-            #     'sample': slice(sample_idx, sample_idx + 1),
-            #     'qmc': slice(qmc_idx, qmc_idx + 1),
-            #     'block': slice(block_idx, block_idx + 1)
-            # }
+            'block': slice(block_idx, block_idx + 1),
+            'time': 'auto',
+            'X': 'auto',
+            'Y': 'auto',
+            'Z': 'auto',
         }
     )
 
