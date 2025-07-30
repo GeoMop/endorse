@@ -301,7 +301,7 @@ def setup_data_storage(workdir, cfg, n_samples):
     qmc_size = cfg.sensitivity.n_samples
     block_size = 4 if cfg.sensitivity.second_order_sa else 3
     grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
-    init_zarr_store(workdir / "transport_sampling",
+    init_zarr_store(str(workdir / "transport_sampling"),
                     sample_size=n_samples,
                     qmc_size=qmc_size,
                     block_size=block_size,
