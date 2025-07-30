@@ -14,8 +14,10 @@ events_yaml = input_dir / "events.yaml"
 #blast_events_xlsx = input_dir / 'blast_events.xlsx'
 
 # smallest file
-piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"
+#piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"
 # last file
-#piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
+piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
 # configuration of the filtering sections
 # named sections of the data corresponding to interesting time intervals
+
+wpt_multipacker = input_dir / "wpt_2025_04_with_flux_on_multipacker.xlsx"
