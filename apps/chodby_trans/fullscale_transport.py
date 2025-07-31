@@ -119,14 +119,13 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
 
     # TODO: get grid, output times, values -> zarr_fuse
     # times
-    schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
-    root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
-    current_node = root_node[cfg.data_scheme_key]
-    grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    # schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
+    # root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
+    # current_node = root_node[cfg.data_scheme_key]
+    # grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    grid, values = get_indicator(cfg, fo, [20, 20])
 
-    workdir = Path('.').absolute()
-    workdir = workdir.parents[2]
-    write_zarr_slice(store_path=str(workdir / "transport_sampling"),
+    write_zarr_slice(store_path=str(input_data.zarr_store_path),
                      sample_idx=tags[0],
                      qmc_idx=tags[1],
                      block_idx=tags[2],
@@ -157,7 +156,7 @@ def write_zarr_slice(store_path: str,
         NumPy array of shape (time, X, Y, Z) matching the store dimensions.
     """
     # Open the existing Zarr store as an Xarray dataset
-    ds = xr.open_zarr(store_path, consolidated=True)
+    ds = xr.open_zarr(store_path, consolidated=False)
 
     # Validate slice_array shape
     expected_shape = (ds.sizes['time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])

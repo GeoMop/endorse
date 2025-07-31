@@ -209,7 +209,7 @@ machine_config:
             n_cores: 8
             n_nodes: 2
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
-            mem: 2Gb
+            mem: 16Gb
             queue: charon_2h
             pbs_name: endorse-flow123d
             walltime: "01:00:00"

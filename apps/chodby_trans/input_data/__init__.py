@@ -17,4 +17,5 @@ param_dirname = "parameters"
 empty_hdf_dirname = "empty_hdfs"
 pbs_job_dirname = "pbs_jobs"
 
+zarr_store_path = work_dir / "transport_sampling"
 
