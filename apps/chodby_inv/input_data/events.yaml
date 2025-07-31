@@ -69,3 +69,9 @@ excavation:
     origin: 24/03/12 16:0:0
     value_diff: 0.5
     avg_diff: 0.5
+
+# Time marks for simulation of hydro-mechanical model of excavation
+hm_model:
+    days_before_excavation: 100
+    days_simulation: 3650
+    excavation_start: 24/03/11 0:0:0

@@ -15,6 +15,7 @@ import chodby_inv.input_data as input_data
 work_dir = input_data.work_dir
 module_dir = pathlib.Path(__file__).parent
 from chodby_inv import piezo
+from chodby_inv.piezo.piezo_canonic import to_datetime
 
 class Boreholes:
     def __init__(self, yaml_config_file=input_data.bh_cfg_yaml):
@@ -230,6 +231,16 @@ class ObservePointData:
 
         return fig, ax
 
+def excavation_days_shift(events_cfg):
+    # Determine time shift between measurements and simulation
+    excavation_epoch = events_cfg['excavation']
+    simulation_epoch = events_cfg['hm_model']
+    start_sim_timestamp = to_datetime(simulation_epoch.excavation_start) - pd.Timedelta(
+        days=simulation_epoch.days_before_excavation)
+    start_exc_timestamp = to_datetime(excavation_epoch.origin)
+    days_shift = (start_exc_timestamp - start_sim_timestamp) / pd.Timedelta(days=1)
+    return days_shift
+
 
 def plot_chamber_pressures(pressure_fname,
                            output_fname,
@@ -242,13 +253,20 @@ def plot_chamber_pressures(pressure_fname,
     obs = ObservePointData(bhs, pressure_fname)
     fig, ax = obs.plot_chamber_pressure_averages(output_fname)
 
+    # Determine time shift between measurements and simulation
+    events_cfg = common.config.load_config(input_data.events_yaml)
+    days_shift = excavation_days_shift(events_cfg)
+
     # shift time scale and add labels
     for axis in ax:
         for line in axis.get_lines():
-            line.set_xdata(line.get_xdata() - 100)
+            line.set_xdata(line.get_xdata() - days_shift)
             line.set_label('model pressure [m]')
             axis.set_xlim(0,60)
             axis.legend()
+            axis.minorticks_on()  # Enable minor ticks
+            axis.grid(which='major', linestyle='-', linewidth=0.75)
+            axis.grid(which='minor', linestyle=':', linewidth=0.5)
     
     if pressure_init_fname is not None:
         obs_i = ObservePointData(bhs, pressure_init_fname)
@@ -257,7 +275,7 @@ def plot_chamber_pressures(pressure_fname,
         # plot both lines to one plot
         for axis, axis_i in zip(ax, ax_i):
             for line in axis_i.get_lines():
-                axis.plot(line.get_xdata() - 100, line.get_ydata(), label='model with enforced initial pressure [m]')
+                axis.plot(line.get_xdata() - days_shift, line.get_ydata(), label='model with enforced initial pressure [m]')
                 axis.legend()
 
     # read and plot reference pressures from measurements
@@ -285,8 +303,6 @@ if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
 
     output_fname = 'chamber_pressure_averages_refined.pdf'
-    pressure_init_fname = 'flow_observe_refined_init_p.yaml'
-    output_init_fname = 'chamber_pressure_averages_refined_init_p.pdf'
     output_compared_fname = 'chamber_pressures_refined_compared.pdf'
     plot_chamber_pressures(input_data.flow_obs_yaml,
                            work_dir / output_fname,
