@@ -28,7 +28,7 @@ import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
 
 input_dir = input_data.input_dir
-#work_dir = input_data.work_dir
+work_dir = input_data.work_dir
 script_path = Path(__file__).absolute()
 
 
@@ -246,12 +246,13 @@ def single_sample(args):
 
         # print("LEN:", len(obs_data))
         print("TIME:", time.time() - t)
+        return res
 
 
 def all_samples(workdir, cfg, parameters, map_fn):
 
     n_samples, n_params = parameters.shape
-    data_scheme_key = setup_data_storage(workdir, cfg, n_samples)
+    data_scheme_key = setup_data_storage(work_dir, cfg, n_samples)
     # Set directories to avoid NFS IO errors
 
     # create sample dir
