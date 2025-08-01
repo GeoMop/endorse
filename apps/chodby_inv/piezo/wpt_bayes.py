@@ -2,7 +2,7 @@ import numpy as np
 import yaml
 import logging
 import matplotlib.pyplot as plt
-from matplotlib.ticker import ScalarFormatter
+from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.stats import norm
 from scipy.stats import multivariate_normal
@@ -216,8 +216,6 @@ def _run_inversion(inv_cfg, epoch_df):
         [f"log_E_{n}" for n in range(param_dim)] + \
         ["p_far"]
 
-    print(parameter_names)
-
     # construct idata object from the chains
     idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
 
@@ -336,13 +334,11 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
 
     observe_list = [observe[v] for v in observe_vars]
     observe_arr = xr.concat(observe_list, dim="time")
-    print(observe_arr)
     chains = observe_arr.sizes["chain"]
     draws = observe_arr.sizes["draw"]
 
     observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
     observe_length = len(observe_list)
-    print(observe_length)
 
     #print(idata.sample_stats)
     likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
@@ -350,15 +346,12 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
     #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
-    print(best_fit)
-    print()
 
     hist2d_x = np.tile(np.arange(observe_length), chains * draws)
 
     ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
     #ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
     origin_offset = observe_length - len(p_obs_extended) # compute origin offset to plot extended data
-    print(origin_offset)
     ax.plot(np.arange(origin_offset, observe_length), p_obs_extended, "r-", label="Predicted observation (extended)", lw=1)
     ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
     ax_minima =  [
@@ -471,12 +464,14 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
         axes_progression[0].set_ylabel(f"{label}")
         for chain in np.arange(0, chains):
             axes_progression[0].plot(x_axis, dataset[chain, :], label=f"Chain {chain}")
+        axes_progression[0].legend(ncol=2, loc="lower right")
+        axes_progression[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+        axes_progression[0].set_yscale('symlog', linthresh=1)
+        axes_progression[0].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
 
         mean = np.mean(dataset, axis=0)
         median = np.median(dataset, axis=0)
         min = np.min(dataset, axis=0)
-        axes_progression[0].legend(ncol=2, loc="lower right")
-        axes_progression[0].grid(True)
 
         axes_progression[1].set_xlabel("Iterace v chainu")
         axes_progression[1].set_ylabel(f"")
@@ -484,7 +479,9 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
         axes_progression[1].plot(x_axis, median, label=f"Medián {label}")
         axes_progression[1].plot(x_axis, min, label=f"Minimum {label}")
         axes_progression[1].legend(ncol=2, loc="lower right")
-        axes_progression[1].grid(True)
+        axes_progression[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+        axes_progression[1].set_yscale('symlog', linthresh=1)
+        axes_progression[1].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
 
         figs += [fig_progression]
 
@@ -492,7 +489,10 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
         fig_hist.suptitle(f"Histogram {label} (hodnoty pod {cutoff} oříznuty)")
         axes_hist.set_xlabel(f"{label}")
         axes_hist.set_ylabel("Počet")
-        axes_hist.hist(dataset.values.flatten(), bins=100)
+        logbins = np.multiply(np.logspace(np.log10(-dataset.max()), np.log10(-dataset.min()), 100), -1)
+        axes_hist.hist(dataset.values.flatten(), bins=logbins[::-1])
+        axes_hist.set_xscale('symlog', linthresh=1)
+        axes_hist.xaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
 
         figs += [fig_hist]
 
