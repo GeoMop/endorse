@@ -53,6 +53,7 @@ def fracture_set(cfg, fr_population:Population, seed):
     #if n_large == 0:
     #    raise ValueError()
     # random small scale fractures
+    logging.info(f"Small fracture seed: {seed}")
     small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r),
                                              fr_limit, main_box_dimensions, seed, id_offset=n_large)
     fractures.extend(small_fr)

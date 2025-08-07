@@ -42,6 +42,7 @@ class Wrapper:
         cfg = self._config
         param_list = cfg.sensitivity.parameters
         assert(len(data_par) == len(param_list))
+        print(f"salib parameters: {data_par}")
 
         fr_families = cfg.fractures.population
         # set parameters according to a type
@@ -68,6 +69,7 @@ class Wrapper:
                                     fr_fam[par.name] = 10**norm_val
                 else:
                     # currently only `dfn_macro` seed for fractures
+                    print(f"seed parameter: {param.name} = {par_seed}")
                     cfg.transport_fullscale[param.name] = par_seed
             else:
                 pname = param.name

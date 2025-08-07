@@ -35,7 +35,7 @@ parameters:
         bounds: [ 0, 0.1 ]
   - name: dfn_macro # seed for large fractures
     type: seed
-    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+
 #  - name: storativity
 #    type: lognorm
 #    bounds: [-14.5662279378421, 2.0]

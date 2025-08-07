@@ -29,12 +29,18 @@ def box_with_sides(factory, dimensions):
     return box, sides
 
 
+def legacy_seed_from_hash(hash_value):
+    return abs(hash_value) % (2**32)
+
 def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_limit, box,  seed,
                        id_offset=0) -> List[fracture.Fracture]:
     """
     Generate set of stochastic fractures.
     """
-    np.random.seed(seed)
+    legacy_seed = legacy_seed_from_hash(seed)
+    print(f"seed: {seed}, legacy_seed: {legacy_seed}")
+    np.random.seed(legacy_seed)
+    # rng = np.random.default_rng(seed)
     max_fr_size = np.max(box)
     r_min, r_max = range
     if r_max is None:
