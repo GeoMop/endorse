@@ -531,7 +531,7 @@ def save_plots_pdf_pages(
 
 
 if __name__ == '__main__':
-    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
+    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][1]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
     idata = borehole_section_inversion(wpt_cfg)
     plot_idata(idata)

@@ -65,13 +65,13 @@ water_pressure_tests:
 
     -   start: "25/03/26 11:05:00"
         # start of extracted window
-        origin: "25/03/26 11:30:00"
+        origin: "25/03/26 11:40:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/26 11:46:00"
+        end: "25/03/26 15:00:00"
         # end of extracted window
         borehole: L5-37UR
         section: 1
-        dt: 60 # time step in seconds
+        dt: 120 # time step in seconds
 
 
