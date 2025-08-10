@@ -57,6 +57,31 @@ def borehole_section_inversion(inv_cfg, ):
     #epoch_df.set_index('time_days', inplace=True)
     return _run_inversion(inv_cfg, epoch_df)
 
+def interpolate_pressure_series(epoch_df, dt):
+    # create new time series
+    # minimum and maximum is set from epoch_df
+    time_series = epoch_df.time_days.values
+    target_points = pd.DataFrame({
+        "time_days": np.arange(time_series.min(), time_series.max(), dt)
+    })
+
+    print(target_points)
+
+    # extend the pressure series to include target points and remove duplicates
+    # new values have pressure NaN, which will be interpolated later
+    merged = pd.concat([epoch_df, target_points]) \
+        .drop_duplicates(subset="time_days", keep="first") \
+        .sort_values("time_days")
+
+    # interpolate missing pressure values
+    merged["pressure"] = merged["pressure"].interpolate(method="linear")
+    # df contains both old and new time values - extract only the target points
+    target_subset = merged[merged["time_days"].isin(target_points["time_days"])]
+
+    # return the pressure series and the time series
+    return target_subset["pressure"].values * 1000, target_subset["time_days"].values
+
+
 @common.memoize
 def _run_inversion(inv_cfg, epoch_df):
 
