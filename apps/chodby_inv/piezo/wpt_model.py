@@ -182,7 +182,7 @@ class PoroElasticSolver:
         self.p_far = p_far
 
         # Build the global system.
-        A_full, M_lumped, b_dirichlet = self.build_global_system(S, k_array, C_b, self.dt)
+        A_full, M_lumped, b_dirichlet = self.build_global_system(S, self.k_array, C_b, self.dt)
 
         n = self.n_dofs
         # Initialize the pressure field: node 0 = p_b0, interior nodes = p_far.
