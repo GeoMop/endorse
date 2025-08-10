@@ -88,23 +88,12 @@ def _run_inversion(inv_cfg, epoch_df):
     #dt = 6*60 * 60  # dt = 6 hours
     dt = inv_cfg.get("dt", 6 * 60 * 60)  # Default to 6 hours if not specified
     dt_days = dt / (24 * 3600)  # Convert to days
-    time_days = epoch_df.time_days.values
-    p_b_measured = epoch_df.pressure.values
-    def smooth_fn(x):
-        t_diff = time_days - x.time_days
-        mask = (t_diff >  - dt_days/2) & (t_diff <=  dt_days/2)
-        return p_b_measured[mask].mean() * 1000
+    regular_pb_measured_extended, time_series = interpolate_pressure_series(epoch_df, dt_days)
 
-    df_reg = pd.DataFrame({
-        "time_days": np.arange(time_days.min(), time_days.max(), dt_days)
-    })
-    regular_pb_measured_extended = df_reg.apply(smooth_fn, axis=1).values
-    #regular_pb_measured_cut = regular_pb_measured[regular_pb_measured["time_days"] >= 0]
-
-    regular_pb_measured = regular_pb_measured_extended[df_reg["time_days"] >= 0]
-    print(regular_pb_measured)
-    print(regular_pb_measured_extended)
-
+    #print(regular_pb_measured_extended)
+    #print(time_series)
+    regular_pb_measured = regular_pb_measured_extended[time_series >= 0]
+    #print(regular_pb_measured)
     tests = load_pressure_tests()
     #selected_test = tests[inv_cfg["section"]]
     selected_test = next((t for t in tests if t["vrt"] == inv_cfg["borehole"] and t["sekce"] == inv_cfg["section"]), None)
