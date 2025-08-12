@@ -60,7 +60,16 @@ class Extractor:
             # interpolated.save(f"slice_intp_{i:02d}.vtu", binary=False)
 
             # interpolated = grid.sample(surface, snap_to_closest_point=True)
-            interpolated = grid.sample(dataset[0], snap_to_closest_point=True)
+            interpolated = grid.sample(dataset[0],
+                                       # tolerance=1e-5,
+                                       # tolerance=1e-7,
+                                       # tolerance=1e-9,
+                                       tolerance=1e-11,
+                                       # tolerance=1e-16,
+                                       # locator='cell', # 'cell' 'obb_tree' 'static_cell'
+                                       # locator='cell_tree',
+                                       # locator='static_cell',
+                                       snap_to_closest_point=True)
             interpolated = interpolated.point_data_to_cell_data()
             interpolated.save(f"slice_intp_{i:02d}.vtu", binary=False)
             return self._extract_data(interpolated, self.attr_name)
