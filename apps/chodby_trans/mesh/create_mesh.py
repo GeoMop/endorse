@@ -440,23 +440,25 @@ def make_mesh(cfg, fr_pop, seed):
     else:
         fracture_set, n_large = None, 0
 
-    mesh_file = make_gmsh(cfg, fracture_set)
+    mesh_file = File(cfg.mesh_name + ".msh2")
+    if not Path(mesh_file.path).exists():
+        mesh_file = make_gmsh(cfg, fracture_set)
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = cfg.mesh_name + "_healed.msh2"
-    # if not os.path.exists(mesh_file_healed):
-    print("HEAL MESH")
-    hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
-    hm.heal_mesh(gamma_tol=0.02)
-    # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
-    hm.write(file_name=mesh_file_healed)
+    mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
+    if not Path(mesh_file_healed).exists():
+        print("HEAL MESH")
+        hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
+        hm.heal_mesh(gamma_tol=0.02)
+        # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
+        hm.write(file_name=mesh_file_healed.name)
 
     print("Final mesh file: ", mesh_file_healed)
-    return File(mesh_file_healed), fracture_set, n_large
+    return File(mesh_file_healed.name), fracture_set, n_large
 
 
 def main():
