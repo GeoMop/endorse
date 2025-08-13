@@ -170,16 +170,32 @@ def _run_inversion(inv_cfg, epoch_df):
     )
     prior = multivariate_normal(mean_prior, cov_prior)
 
+    flow_rate_observed = np.array([selected_test["spotreba"]])
+    #flow_rate_sigma = np.array([1e-6])
+    flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
+    if flow_rate_sigma == 0:
+        # cover cases when sigma is zero
+        flow_rate_sigma = np.array([1e-11])
 
-    # [ln k, p_far]
-    # mean_prior = np.array([np.log(k_prior), p_far])
-    # cov_prior = np.diag([0.5**2, 5000**2])
-    # prior = multivariate_normal(mean_prior, cov_prior)
+    pressure_output_sigma = 1000 # 1 kPa
+    pressure_output_sigma = np.full(len(regular_pb_measured), pressure_output_sigma)
 
-    sigma = 1000 # 2 kPa
-    cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
-    loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
+    observed = np.concatenate([
+        flow_rate_observed,
+        regular_pb_measured
+    ])
+
+    sigma = np.concatenate([
+        flow_rate_sigma, 
+        pressure_output_sigma
+    ])
+
+    cov_likelihood = sigma ** 2 * np.eye(len(observed))
+    print(cov_likelihood)
+
+    loglike = tda.GaussianLogLike(observed, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
+
 
     # ==============================================================================
     # 4. Configuring and Running the Bayesian Inversion using TinyDA
