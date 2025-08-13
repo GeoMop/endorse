@@ -123,8 +123,8 @@ def _run_inversion(inv_cfg, epoch_df):
         E_field = np.exp(param_vec[N:2*N])
         p_far = param_vec[-1]
         t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
-        flux = solver.C_b[0] * (p_b[1] - p_b[0]) / dt
         return p_b, flux
+        flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
 
 
     # L = 2     # [m] Length of the borehole section
