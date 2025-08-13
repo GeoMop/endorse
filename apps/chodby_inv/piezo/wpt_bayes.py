@@ -108,7 +108,7 @@ def _run_inversion(inv_cfg, epoch_df):
     #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
     p_b0 = selected_test["tlak"]
     #p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_prior = 10* 1000  # Far-field Dirichlet pressure (last node) [Pa]
+    p_far_prior = 70* 1000  # Far-field Dirichlet pressure (last node) [Pa]
     p_far_sd = 20* 1000 # 20kPa
     k_prior = 1e-9
 
