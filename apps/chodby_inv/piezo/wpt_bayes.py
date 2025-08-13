@@ -205,6 +205,10 @@ def _run_inversion(inv_cfg, epoch_df):
     # where you can pass the forward model, measured data, prior mean/covariance, 
     # and noise covariance. The exact API may differ; adjust according to your TinyDA version.
 
+    iterations = 20000
+    burnin = 8000
+    chains = 6
+
     # rwmh_cov = np.eye(len(mean_prior)) * 0.2
     # rmwh_scaling = 0.1
     # rwmh_adaptive = True
@@ -236,9 +240,6 @@ def _run_inversion(inv_cfg, epoch_df):
     # my_kernel = tda.AdaptiveMetropolis(C0=am_cov, t0=am_t0, sd=am_sd, epsilon=am_epsilon)
 
     #my_proposal = tda.MultipleTry(my_kernel, 3)
-    iterations = 20000
-    burnin = 0
-    chains = 8
     my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=chains)
       # define input variable names for inferencedata
     #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
