@@ -304,7 +304,7 @@ def plot_idata(idata):
 
     plt.savefig("posterior_plot.pdf", dpi=300)
 
-    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata, -1e4))
+    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata))
 
 def load_pressure_tests(path=input_data.wpt_multipacker):
     try:
