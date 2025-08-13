@@ -216,17 +216,36 @@ def _run_inversion(inv_cfg, epoch_df):
     #                                      period=50,
     #                                      adaptive=rwmh_adaptive)
 
-    m0 = 200 # initial archive size
+    # m0 = 200 # initial archive size
+    # delta = 5 # number of pairs to compute jump vector
+    # adaptive = True
+    # adaptivity_period = 50  # Period for adaptation
+    # nCR = 4 # up to how many parameters can change in a proposal
+    # my_proposal = tda.DREAMZ(
+    #     m0,
+    #     delta,
+    #     nCR=nCR,
+    #     adaptive=adaptive,
+    #     period=adaptivity_period
+    # )
+
+    m0 = 5000 # initial archive size
     delta = 5 # number of pairs to compute jump vector
     adaptive = True
     adaptivity_period = 50  # Period for adaptation
-    nCR = 4 # up to how many parameters can change in a proposal
-    my_proposal = tda.DREAMZ(
+    nCR = 15 # up to how many parameters can change in a proposal
+    sync_rate = 1000
+    stuck_checking_start = 3000
+    stuck_checking_period = 1000
+    my_proposal = tda.DREAM(
         m0,
         delta,
         nCR=nCR,
         adaptive=adaptive,
-        period=adaptivity_period
+        period=adaptivity_period,
+        sync_rate=sync_rate,
+        stuck_checking_start=stuck_checking_start,
+        stuck_checking_period=stuck_checking_period
     )
 
     # pcn_scaling = 0.1
