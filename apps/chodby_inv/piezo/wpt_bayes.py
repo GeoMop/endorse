@@ -271,10 +271,12 @@ def _run_inversion(inv_cfg, epoch_df):
     idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
 
     # add the observed data to the InferenceData object
-    idata["sample_stats"].attrs["observed_data"] = regular_pb_measured
-    idata["sample_stats"].attrs["observed_cov"] = cov_likelihood
+    idata["sample_stats"].attrs["observed_pressure"] = regular_pb_measured
+    idata["sample_stats"].attrs["observed_pressure_sigma"] = pressure_output_sigma
+    idata["sample_stats"].attrs["observed_flow"] = flow_rate_observed
+    idata["sample_stats"].attrs["observed_flow_sigma"] = flow_rate_sigma
 
-    idata["sample_stats"]["observed_extended"] = regular_pb_measured_extended
+    idata["sample_stats"].attrs["observed_extended"] = regular_pb_measured_extended
 
     # add prior information to the InferenceData object
     idata["posterior"].attrs["prior_mean"] = mean_prior
