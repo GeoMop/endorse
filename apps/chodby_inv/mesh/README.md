@@ -41,7 +41,11 @@ Triangular meshes provided in VTX and GMSH 2.2 mesh formats. Conversion to other
                  probably due to stitching the scans done from different positions
 
 
-
+### Meshing scripts
+- `create_mesh.py`: Create 3D mesh of box around the gallery L5 and the test chambers ZK5-1{J,S} in GMSH 2.2 format.
+                    Surface of the gallery and test chambers is read from a BREP mesh file.
+                    The volume mesh is refined in the vicinity of the gallery, test chambers and borehole measuring chambers.
+                    Configuration is in l5_mesh_config.yaml.
 
 
 ## Near-field transport model

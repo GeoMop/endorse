@@ -2,6 +2,7 @@
 set -x
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENDORSE_SRC_ROOT="$SCRIPT_DIR/../.."
 
 # Name of the virtual environment folder
 VENV_DIR="$SCRIPT_DIR/venv"
@@ -34,8 +35,13 @@ else
     echo "requirements.txt not found. Skipping dependency installation."
 fi
 
+# check git submodules
+git submodule update --init --recursive
+# install necessary submodules
+pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem
+
 # install endorse
-pip install -e ${SCRIPT_DIR}/../..
+pip install -e ${ENDORSE_SRC_ROOT}
 pip install -e ${SCRIPT_DIR}
 
 # REgister as a Jupyter kernel
