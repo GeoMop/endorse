@@ -46,3 +46,6 @@ pip install -e ${SCRIPT_DIR}
 
 # REgister as a Jupyter kernel
 #python3 -m ipykernel install --user --name=hlavo_env --display-name "Hlavo Environment"
+
+# Install custom tinyDA
+$SCRIPT_DIR/docker/install_custom_tinyda.sh $VENV_DIR/ tinyDA/
