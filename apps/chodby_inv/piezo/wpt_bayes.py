@@ -289,8 +289,8 @@ def plot_idata(idata):
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 
-    plot_observe(idata, bins=150)
-    plt.savefig("observe_plot.pdf", dpi=300)
+    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata, bins=150))
+    #plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
     az.summary(idata)
@@ -371,27 +371,36 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
 
     return zkousky
 
-def plot_observe(idata, p_obs=None, ax=None, bins=100):
+def plot_observe(idata, ax=None, bins=100):
     if ax is None:
-        _, ax = plt.subplots(figsize=(16, 9))
+        fig, ax = plt.subplots(figsize=(16, 9))
 
-    if p_obs is None:
-        # attempt to load data directly from idata
-        if idata.sample_stats.attrs["observed_data"] is not None:
-            p_obs = idata.sample_stats.attrs["observed_data"]
-            p_obs_extended = idata.sample_stats["observed_extended"].values
+
+    if idata.sample_stats.attrs["observed_pressure"] is None:
+        logging.warning("No observed data found in InferenceData object.")
+        return ax
+
+    pressure_output = idata.sample_stats.attrs["observed_pressure"]
+    pressure_output_extended = idata.sample_stats.attrs["observed_extended"]
+    pressure_output_sigma = idata.sample_stats.attrs["observed_pressure_sigma"]
+
+    flow_rate_observed = idata.sample_stats.attrs["observed_flow"]
+    flow_rate_sigma = idata.sample_stats.attrs["observed_flow_sigma"]
 
     observe = idata.posterior_predictive
-    observe_vars = sorted([v for v in observe.data_vars if v.startswith("obs_")],
+    pressure_vars = sorted([v for v in observe.data_vars if v.startswith("obs_") and v not in ["obs_0"]],
                       key=lambda s: int(s.split("_", 1)[1]))
 
-    observe_list = [observe[v] for v in observe_vars]
-    observe_arr = xr.concat(observe_list, dim="time")
+    pressure_list = [observe[v] for v in pressure_vars]
+    observe_arr = xr.concat(pressure_list, dim="time")
+
+    flow_values = observe["obs_0"].values
+
     chains = observe_arr.sizes["chain"]
     draws = observe_arr.sizes["draw"]
 
     observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
-    observe_length = len(observe_list)
+    observe_length = len(pressure_list)
 
     #print(idata.sample_stats)
     likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
@@ -404,12 +413,12 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
 
     ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
     #ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
-    origin_offset = observe_length - len(p_obs_extended) # compute origin offset to plot extended data
-    ax.plot(np.arange(origin_offset, observe_length), p_obs_extended, "r-", label="Predicted observation (extended)", lw=1)
+    origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
+    ax.plot(np.arange(origin_offset, observe_length), pressure_output_extended, "r-", label="Predicted observation (extended)", lw=1)
     ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
     ax_minima =  [
-        np.min([observe_arr.min(), p_obs_extended.min()]),
-        np.max([observe_arr.max(), p_obs_extended.max()])
+        np.min([observe_arr.min(), pressure_output_extended.min()]),
+        np.max([observe_arr.max(), pressure_output_extended.max()])
     ]
     ax.set_ylim(ax_minima)
 
@@ -417,9 +426,25 @@ def plot_observe(idata, p_obs=None, ax=None, bins=100):
     ax.set_xlabel("Time (integer steps)")
     ax.set_ylabel("Pressure")
     ax.legend()
+    fig.suptitle("Distibution of pressure series values")
     plt.colorbar(ax.collections[0], ax=ax, label="Counts")
 
-    return ax
+    fig_flow, ax_flow = plt.subplots(figsize=(16, 9))
+    fig_flow.suptitle("Flow rate distribution")
+    ax_flow.set_xlabel("Flow rate [m^3/s]")
+    ax_flow.set_ylabel("Counts")
+    # flow data contains both positive and negative values, across multiple orders of magnitude
+    # split the data into positive and negative parts for easier visualization
+    positive = flow_values[flow_values > 0]
+    if positive.size > 0:
+        ax_flow.hist(positive, alpha=0.7, label="Flow rate - positive values", bins=np.logspace(np.log10(positive.min()), np.log10(positive.max()), bins), color="blue")
+    negative = -flow_values[flow_values < 0] # convert to positive values for histogram
+    if negative.size > 0:
+        ax_flow.hist(negative, alpha=0.7, label="Flow rate - negative values", bins=np.logspace(np.log10(negative.min()), np.log10(negative.max()), bins), color="orange")
+    ax_flow.axvline(flow_rate_observed, color="red", linestyle="--", label="Observed flow rate")
+    ax_flow.set_xscale('log')
+
+    return [fig, fig_flow]
 
 def plot_trace_modified(idata, *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
