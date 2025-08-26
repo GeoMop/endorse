@@ -120,7 +120,7 @@ class Boreholes:
         factory.write_mesh('rects.msh')
         return rects
 
-    def make_observe_points(self, output_file: str, n_pts_per_chamber=3):
+    def make_observe_points(self, output_file: str = None, n_pts_per_chamber=3):
         point_list = []
         for i in range(self.n_boreholes):
             n_chambers = self.n_chambers(i)
@@ -132,8 +132,11 @@ class Boreholes:
                 list = [{"name": ch_name + f"_pt_{ipt}", "point": pt.tolist()} for ipt,pt in enumerate(pts)]
                 point_list.extend(list)
 
-        with open(output_file, "w") as file:
-            yaml.dump(point_list, file, default_flow_style=True)
+        if output_file is None:
+            return yaml.dump(point_list, default_flow_style=True)
+        else:
+            with open(output_file, "w") as file:
+                yaml.dump(point_list, file, default_flow_style=True)
 
 
 

@@ -119,5 +119,48 @@ def prepare_excavation_csv_files():
     writer_n.writerow([hm_model.days_simulation, last_stationing_n])
     writer_s.writerow([hm_model.days_simulation, last_stationing_s])
 
+
+def prepare_excavation_functions():
+    # Create strings defining the FieldTimeFunction data of excavation progress
+    # in the North and South test chambers to be used in Flow123d simulation.
+
+    events_cfg = common.config.load_config(input_data.events_yaml)
+    blasts = events_cfg['blasts']
+    excavation = events_cfg['excavation']
+    hm_model = events_cfg['hm_model']
+    days_shift = boreholes.excavation_days_shift(events_cfg)
+    delta = 0.001
+    final_stationing = 10
+    final_stationing_new = 10.1
+
+    values_n = [ {"t":0, "value":0} ]
+    values_s = [ {"t":0, "value":0} ]
+
+    last_stationing_n = 0
+    last_stationing_s = 0
+
+    for blast in blasts:
+        t = float( linear_time([blast['datetime']], excavation)[0] + days_shift )
+        if blast.side == "N":
+            values_n.append( { "t":t-delta, "value":last_stationing_n } )
+            if blast.face_stationing == final_stationing:
+                last_stationing_n = -final_stationing_new
+            else:
+                last_stationing_n = -blast.face_stationing
+            values_n.append( { "t":t, "value":last_stationing_n } )
+        elif blast.side == "S":
+            values_s.append( { "t":t-delta, "value":last_stationing_s } )
+            if blast.face_stationing == final_stationing:
+                last_stationing_s = final_stationing_new
+            else:
+                last_stationing_s = blast.face_stationing
+            values_s.append( { "t":t, "value":last_stationing_s } )
+
+    values_n.append( { "t":hm_model.days_simulation, "value":last_stationing_n } )
+    values_s.append( { "t":hm_model.days_simulation, "value":last_stationing_s } )
+
+    return values_n, values_s
+
+
 if __name__ == "__main__":
     prepare_excavation_csv_files()
