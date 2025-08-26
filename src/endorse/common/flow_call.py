@@ -91,7 +91,7 @@ class FlowOutput:
 def _prepare_inputs(file_in, params):
     in_dir, template = os.path.split(file_in)
     suffix = "_tmpl.yaml"
-    assert template[-len(suffix):] == suffix
+    assert template[-len(suffix):] == suffix, f"Template file name must end by '{suffix}'!"
     filebase = template[:-len(suffix)]
     main_input = filebase + ".yaml"
     main_input, used_params =  substitute_placeholders(file_in, main_input, params)
