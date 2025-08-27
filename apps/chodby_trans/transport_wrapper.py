@@ -1,4 +1,4 @@
-import os
+import os, sys
 import subprocess
 import time
 
@@ -83,11 +83,12 @@ class Wrapper:
             res = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
             return 0, res
         except Exception as e:
-            print("-"*60)
-            print(f"sample tags:{tags}")
-            print(f"transport_wrapper failed with exception: {e}")
+            sys.stdout.write("-"*60)
+            sys.stdout.write(f"Traceback sample tags:{tags}")
+            sys.stdout.write(f"transport_wrapper failed with exception: {e}")
             traceback.print_exc()
-            print("-"*60)
+            sys.stdout.write("-"*60)
+            sys.stdout.flush()
             # empty_block = np.zeros(18, 20, 20, 2)
             return -1000, []
 

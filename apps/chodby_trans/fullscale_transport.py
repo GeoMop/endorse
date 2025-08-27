@@ -1,3 +1,4 @@
+import sys
 import logging
 import shutil
 import time
@@ -117,12 +118,16 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
     else:
         fo = common.call_flow(cfg.machine_config, template, params)
 
+
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+
     # TODO: get grid, output times, values -> zarr_fuse
     # times
     # schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
     # root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
     # current_node = root_node[cfg.data_scheme_key]
     # grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    print(f"sample tags:{tags}")
     grid, values = get_indicator(cfg, fo, [20, 20])
 
     write_zarr_slice(store_path=str(input_data.zarr_store_path),
@@ -197,9 +202,19 @@ def write_zarr_slice(store_path: str,
 def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
     #extractor = Extractor.from_point_data(attr_name, z_loc)
     extractor = Extractor.from_cell_data(attr_name, z_loc)
-    pvd_content = pv.get_reader(pvd_in.path)
+    
+    try:
+        print(pvd_in.path)
+        pvd_content = pv.get_reader(pvd_in.path)
+    except Exception as e:
+        with open(pvd_in.path, "r", encoding="utf-8") as f:
+            sys.stdout.write(f.read())
+            sys.stdout.flush()
+        
+        raise Exception('pv.get_reader error') from e
+
     times = np.asarray(pvd_content.time_values)
-    print(times)
+    print("pvd times: ", times)
 
     result = np.empty((len(times), grid.n_cells), dtype=np.float64)
     for i, t in enumerate(times):

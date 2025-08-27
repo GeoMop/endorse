@@ -440,9 +440,11 @@ def make_mesh(cfg, fr_pop, seed):
     else:
         fracture_set, n_large = None, 0
 
-    mesh_file = File(cfg.mesh_name + ".msh2")
-    if not Path(mesh_file.path).exists():
+    mesh_file = None
+    if not Path(cfg.mesh_name + ".msh2").exists():
         mesh_file = make_gmsh(cfg, fracture_set)
+    else:
+        mesh_file = File(cfg.mesh_name + ".msh2")
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
