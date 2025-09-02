@@ -1,15 +1,17 @@
+from operator import inv
 import numpy as np
 import yaml
 import logging
 import matplotlib.pyplot as plt
-from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator
+from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator, LogFormatter, FuncFormatter
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.stats import norm
+from scipy.stats import norm, lognorm
 from scipy.stats import multivariate_normal
 from scipy.linalg import block_diag
 import pandas as pd
 import xarray as xr
 import arviz as az
+
 """
 
 """
@@ -106,25 +108,28 @@ def _run_inversion(inv_cfg, epoch_df):
     N = 10  # Number of finite elements (⇒ N+1 nodes)
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
     #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
-    p_b0 = selected_test["tlak"]
-    #p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_prior = 70* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_sd = 20* 1000 # 20kPa
+    #p_b0 = selected_test["tlak"]
+    p_b0 = regular_pb_measured[0]
+    # load p_far_prior from config, if available
+    # or default to the last measured pressure
+    # same for deviation, default to 10kPa if not specified
+    p_far_prior = inv_cfg.get("p_far_prior", regular_pb_measured[-1])
+    p_far_std = inv_cfg.get("p_far_std", 10 * 1000)
     k_prior = 1e-9
 
     # Rock and fluid parameters.
     biot = 0.2
     phi = 0.02  # Porosity (dimensionless)
-    E_prior = 30e9  # Young's modulus [Pa]
+    E_prior = 50e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
     solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
     def forward_model(param_vec):
-        k_field = np.exp(param_vec[:N])  # Convert log(k) to k
-        E_field = np.exp(param_vec[N:2*N])
+        k_field = np.power(10, param_vec[:N])  # Convert log(k) to k
+        E_field = np.power(10, param_vec[N:2*N])
         p_far = param_vec[-1]
         t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
         flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
-        return np.concatenate(([flux], p_b))
+        return np.concatenate((np.log10([flux]), p_b))
 
 
     # L = 2     # [m] Length of the borehole section
@@ -153,40 +158,50 @@ def _run_inversion(inv_cfg, epoch_df):
     k_correlation_length = 0.01  # [m] (adjust as needed)
     k_prior_std_log10 = 2   # Variance of the log(k) field (adjust based on your prior belief)
     E_correlation_length = 0.01  # [m] (adjust as needed)
-    E_prior_std_log10 = 20  # Variance of the log(k) field (adjust based on your prior belief)
+    E_prior_std_log10 = 0.3  # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
-        np.full(param_dim, np.log(k_prior)),
-        np.full(param_dim, np.log(E_prior)),
+        np.full(param_dim, np.log10(k_prior)),
+        np.full(param_dim, np.log10(E_prior)),
         np.array([p_far_prior])
     ])
-    k_prior_variance = (k_prior_std_log10 * np.log(10)) ** 2
-    E_prior_variance = (E_prior_std_log10 * np.log(10)) ** 2
+
+    #mean_prior[12]
+
+    k_prior_variance = (k_prior_std_log10) ** 2
+    E_prior_variance = (E_prior_std_log10) ** 2
     cov_prior = block_diag(
         exponential_covariance(param_dim, dx, k_correlation_length,
                                k_prior_variance),
         exponential_covariance(param_dim, dx, E_correlation_length,
                                E_prior_variance),
-        np.array([[p_far_sd**2]])
+        np.array([[p_far_std**2]])
     )
+
+
     prior = multivariate_normal(mean_prior, cov_prior)
 
     flow_rate_observed = np.array([selected_test["spotreba"]])
     #flow_rate_sigma = np.array([1e-6])
-    flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
+    #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
+    flow_rate_sigma = np.log(100 / 94) / 3 / 10
     if flow_rate_sigma == 0:
         # cover cases when sigma is zero
         flow_rate_sigma = np.array([1e-11])
 
-    pressure_output_sigma = 1000 # 1 kPa
+    #flow_rate_sigma = 10000
+    #flow_rate_observed = np.array([1e6])
+
+    pressure_output_sigma = 3 * 1000
     pressure_output_sigma = np.full(len(regular_pb_measured), pressure_output_sigma)
 
     observed = np.concatenate([
-        flow_rate_observed,
+        np.log10(flow_rate_observed),
         regular_pb_measured
     ])
 
     sigma = np.concatenate([
-        flow_rate_sigma, 
+        #np.log10(flow_rate_sigma),
+        np.array([flow_rate_sigma]),
         pressure_output_sigma
     ])
 
@@ -195,7 +210,6 @@ def _run_inversion(inv_cfg, epoch_df):
 
     loglike = tda.GaussianLogLike(observed, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
-
 
     # ==============================================================================
     # 4. Configuring and Running the Bayesian Inversion using TinyDA
@@ -210,17 +224,18 @@ def _run_inversion(inv_cfg, epoch_df):
     chains = 6
 
     # rwmh_cov = np.eye(len(mean_prior)) * 0.2
+    # rwmh_cov = np.diag(np.power(mean_prior * 0.1, 2), 0)
     # rmwh_scaling = 0.1
     # rwmh_adaptive = True
     # my_proposal = tda.AdaptiveMetropolis(C0=rwmh_cov,
     #                                      period=50,
     #                                      adaptive=rwmh_adaptive)
 
-    # m0 = 200 # initial archive size
+    # m0 = 10000 # initial archive size
     # delta = 5 # number of pairs to compute jump vector
     # adaptive = True
     # adaptivity_period = 50  # Period for adaptation
-    # nCR = 4 # up to how many parameters can change in a proposal
+    # nCR = 15 # up to how many parameters can change in a proposal
     # my_proposal = tda.DREAMZ(
     #     m0,
     #     delta,
@@ -229,7 +244,7 @@ def _run_inversion(inv_cfg, epoch_df):
     #     period=adaptivity_period
     # )
 
-    m0 = 5000 # initial archive size
+    m0 = 10000 # initial archive size
     delta = 5 # number of pairs to compute jump vector
     adaptive = True
     adaptivity_period = 50  # Period for adaptation
@@ -273,7 +288,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # add the observed data to the InferenceData object
     idata["sample_stats"].attrs["observed_pressure"] = regular_pb_measured
     idata["sample_stats"].attrs["observed_pressure_sigma"] = pressure_output_sigma
-    idata["sample_stats"].attrs["observed_flow"] = flow_rate_observed
+    idata["sample_stats"].attrs["observed_flow"] = np.log10(flow_rate_observed)
     idata["sample_stats"].attrs["observed_flow_sigma"] = flow_rate_sigma
 
     idata["sample_stats"].attrs["observed_extended"] = regular_pb_measured_extended
@@ -282,29 +297,42 @@ def _run_inversion(inv_cfg, epoch_df):
     idata["posterior"].attrs["prior_mean"] = mean_prior
     idata["posterior"].attrs["prior_cov"] = cov_prior
 
+    # add metadata to the InferenceData object
+    idata.attrs["borehole"] = inv_cfg["borehole"]
+    idata.attrs["section"] = inv_cfg["section"]
+    idata.attrs["year"] = piezo.to_datetime(inv_cfg["origin"]).year
+    idata.attrs["month"] = piezo.to_datetime(inv_cfg["origin"]).month
+
     return idata
+
+def safe_pow10(x):
+    x = np.clip(x, -300, 300)
+    return np.power(10, x)
+
 
 def plot_idata(idata):
 
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 
-    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata, bins=150))
+    generic_name = f"WPT_{idata.attrs['year']}_{idata.attrs['month']:02d}_{idata.attrs['borehole'][2:]}_{idata.attrs['section']}"
+
+    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata, bins=150, generic_name=generic_name))
     #plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
     az.summary(idata)
 
     # plot trace and force axis to use scientitic notation
-    plot_trace_modified(idata, figsize=(16, 36))
+    plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
     plt.savefig("trace_plot.pdf", dpi=300)
 
     # plot posterior distributions and corresponding prior distributions
-    plot_posterior_modified(idata, figsize=(16, 18))
+    plot_posterior_modified(idata, figsize=(16, 18), generic_name=generic_name)
 
     plt.savefig("posterior_plot.pdf", dpi=300)
 
-    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata))
+    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata, generic_name=generic_name))
 
 def load_pressure_tests(path=input_data.wpt_multipacker):
     try:
@@ -371,10 +399,13 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
 
     return zkousky
 
-def plot_observe(idata, ax=None, bins=100):
+def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     if ax is None:
         fig, ax = plt.subplots(figsize=(16, 9))
 
+
+    borehole = idata.attrs["borehole"]
+    section = idata.attrs["section"]
 
     if idata.sample_stats.attrs["observed_pressure"] is None:
         logging.warning("No observed data found in InferenceData object.")
@@ -385,6 +416,7 @@ def plot_observe(idata, ax=None, bins=100):
     pressure_output_sigma = idata.sample_stats.attrs["observed_pressure_sigma"]
 
     flow_rate_observed = idata.sample_stats.attrs["observed_flow"]
+    print(flow_rate_observed)
     flow_rate_sigma = idata.sample_stats.attrs["observed_flow_sigma"]
 
     observe = idata.posterior_predictive
@@ -394,7 +426,8 @@ def plot_observe(idata, ax=None, bins=100):
     pressure_list = [observe[v] for v in pressure_vars]
     observe_arr = xr.concat(pressure_list, dim="time")
 
-    flow_values = observe["obs_0"].values
+    flow_values = observe["obs_0"].values.flatten()
+    flow_values = np.clip(flow_values, -20, 20)
 
     chains = observe_arr.sizes["chain"]
     draws = observe_arr.sizes["draw"]
@@ -426,28 +459,34 @@ def plot_observe(idata, ax=None, bins=100):
     ax.set_xlabel("Time (integer steps)")
     ax.set_ylabel("Pressure")
     ax.legend()
-    fig.suptitle("Distibution of pressure series values")
+    fig.suptitle(f"{generic_name} - distibution of pressure series values")
     plt.colorbar(ax.collections[0], ax=ax, label="Counts")
 
     fig_flow, ax_flow = plt.subplots(figsize=(16, 9))
-    fig_flow.suptitle("Flow rate distribution")
+    fig_flow.suptitle(f"{generic_name} - flow rate distribution")
     ax_flow.set_xlabel("Flow rate [m^3/s]")
     ax_flow.set_ylabel("Counts")
     # flow data contains both positive and negative values, across multiple orders of magnitude
     # split the data into positive and negative parts for easier visualization
-    positive = flow_values[flow_values > 0]
-    if positive.size > 0:
-        ax_flow.hist(positive, alpha=0.7, label="Flow rate - positive values", bins=np.logspace(np.log10(positive.min()), np.log10(positive.max()), bins), color="blue")
-    negative = -flow_values[flow_values < 0] # convert to positive values for histogram
-    if negative.size > 0:
-        ax_flow.hist(negative, alpha=0.7, label="Flow rate - negative values", bins=np.logspace(np.log10(negative.min()), np.log10(negative.max()), bins), color="orange")
+    #positive = flow_values[flow_values > 0]
+    #if positive.size > 0:
+    #    ax_flow.hist(positive, alpha=0.7, label="Flow rate - positive values", bins=np.logspace(np.log10(positive.min()), np.log10(positive.max()), bins), color="blue")
+    #negative = -flow_values[flow_values < 0] # convert to positive values for histogram
+    #if negative.size > 0:
+    #    ax_flow.hist(negative, alpha=0.7, label="Flow rate - negative values", bins=np.logspace(np.log10(negative.min()), np.log10(negative.max()), bins), color="orange")
+    ax_flow.hist(flow_values, alpha=0.7, label="Flow rate - negative values", bins=bins, color="orange")
     ax_flow.axvline(flow_rate_observed, color="red", linestyle="--", label="Observed flow rate")
-    ax_flow.set_xscale('log')
+    ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
+    #ax_flow.xaxis.set_minor_formatter(FuncFormatter(exp_formatter))
+    #ax_flow.set_xscale('log')
 
     return [fig, fig_flow]
 
-def plot_trace_modified(idata, *args, **kwargs):
+def plot_trace_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
+    borehole = idata.attrs["borehole"]
+    section = idata.attrs["section"]
+    plt.suptitle(f"{generic_name} - trace plot")
 
     for ax_row in axes:
         for ax in ax_row:
@@ -460,9 +499,15 @@ def plot_trace_modified(idata, *args, **kwargs):
 
     return axes
 
-def plot_posterior_modified(idata, *args, **kwargs):
-    axes = az.plot_posterior(idata, *args, **kwargs)
+def exp_formatter(x, pos):
+     return f"{np.power(10, x):.1e}"
 
+def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
+    axes = az.plot_posterior(idata, *args, **kwargs)
+    borehole = idata.attrs["borehole"]
+    section = idata.attrs["section"]
+    plt.suptitle(f"{generic_name} - posterior distributions")
+    
     # add prior, if available
     if np.all([
         idata.posterior.attrs["prior_mean"] is not None,
@@ -490,6 +535,7 @@ def plot_posterior_modified(idata, *args, **kwargs):
                         continue
                     mean = prior_mean[idx]
                     sd = prior_sd[idx]
+                    print(sd)
                     xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                     yvals = norm.pdf(xvals, mean, sd)
                     ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
@@ -500,6 +546,7 @@ def plot_posterior_modified(idata, *args, **kwargs):
                     continue
                 mean = prior_mean[idx]
                 sd = prior_sd[idx]
+                print(sd)
                 xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                 yvals = norm.pdf(xvals, mean, sd)
                 ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
@@ -508,12 +555,23 @@ def plot_posterior_modified(idata, *args, **kwargs):
     for ax_row in axes:
         if isinstance(ax_row, np.ndarray):
             for ax in ax_row:
-                ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-                ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+                if ax.get_title() not in ["p_far"]:
+                    ax.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
+                else:
+                    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                    ax.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+                #ax.set_xscale('symlog', linthresh=1, base=10)
+                ax.tick_params(axis="x", labelsize=6)
         else:
             # single axis
-            ax_row.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-            ax_row.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+            if ax_row.get_title() not in ["p_far"]:
+                ax_row.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
+            else:
+                ax_row.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                ax_row.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+            #ax.set_xscale('symlog', linthresh=1, base=10)
+            #ax_row.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+            ax_row.tick_params(axis="x", labelsize=6)
 
     # constrained layout for better spacing
     fig = plt.gcf()
@@ -521,7 +579,7 @@ def plot_posterior_modified(idata, *args, **kwargs):
 
     return axes
 
-def plot_likelihood(idata: az.InferenceData, cutoff=None):
+def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
     if cutoff is None:
         cutoff = -1e8
     draws = idata.posterior.sizes["draw"]
@@ -535,10 +593,13 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
 
     figs = []
 
+    borehole = idata.attrs["borehole"]
+    section = idata.attrs["section"]
+
     for dataset, label in zip(datasets, labels):
         fig_progression, axes_progression = plt.subplots(2, 1, figsize=(16, 9))
-        fig_progression.suptitle(f"Vývoj {label} v čase (hodnoty pod {cutoff} oříznuty)")
-        axes_progression[0].set_xlabel("Iterace v chainu")
+        fig_progression.suptitle(f"{generic_name} - progression of {label} (values under {cutoff} cut off)")
+        axes_progression[0].set_xlabel("Iteration in chain")
         axes_progression[0].set_ylabel(f"{label}")
         for chain in np.arange(0, chains):
             axes_progression[0].plot(x_axis, dataset[chain, :], label=f"Chain {chain}")
@@ -551,10 +612,10 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
         median = np.median(dataset, axis=0)
         min = np.min(dataset, axis=0)
 
-        axes_progression[1].set_xlabel("Iterace v chainu")
+        axes_progression[1].set_xlabel("Iteration in chain")
         axes_progression[1].set_ylabel(f"")
-        axes_progression[1].plot(x_axis, mean, label=f"Průměrná {label}")
-        axes_progression[1].plot(x_axis, median, label=f"Medián {label}")
+        axes_progression[1].plot(x_axis, mean, label=f"Mean {label}")
+        axes_progression[1].plot(x_axis, median, label=f"Median {label}")
         axes_progression[1].plot(x_axis, min, label=f"Minimum {label}")
         axes_progression[1].legend(ncol=2, loc="lower right")
         axes_progression[1].grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -564,7 +625,7 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None):
         figs += [fig_progression]
 
         fig_hist, axes_hist = plt.subplots(figsize=(16, 9))
-        fig_hist.suptitle(f"Histogram {label} (hodnoty pod {cutoff} oříznuty)")
+        fig_hist.suptitle(f"{generic_name} - histogram {label} (values below {cutoff} cut off)")
         axes_hist.set_xlabel(f"{label}")
         axes_hist.set_ylabel("Počet")
         logbins = np.multiply(np.logspace(np.log10(-dataset.max()), np.log10(-dataset.min()), 100), -1)
@@ -594,7 +655,7 @@ def save_plots_pdf_pages(
 
 
 if __name__ == '__main__':
-    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][1]
+    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
     #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
     idata = borehole_section_inversion(wpt_cfg)
     plot_idata(idata)
