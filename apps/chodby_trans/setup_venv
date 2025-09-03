@@ -7,6 +7,8 @@ ENDORSE_SRC_ROOT="$SCRIPT_DIR/../.."
 # Name of the virtual environment folder
 VENV_DIR="$SCRIPT_DIR/venv"
 
+source load_modules
+
 if [ "$1" == "-d" ];
 then
     rm -rf "$VENV_DIR"
@@ -34,6 +36,15 @@ if [ -f "requirements.txt" ]; then
 else
     echo "requirements.txt not found. Skipping dependency installation."
 fi
+
+# Make sure mpicc is the MPICH one
+# type -a mpicc
+# # Force a source build with the correct compiler
+# export MPICC=$(which mpicc)
+# pip install --no-binary=mpi4py --no-cache-dir mpi4py
+
+# Dask
+pip install "dask[distributed]" toolz cloudpickle
 
 # check git submodules
 git submodule update --init --recursive

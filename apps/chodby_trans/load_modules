@@ -1,0 +1,21 @@
+#!/bin/bash
+
+module purge
+module load metabase
+module load python/3.11.11-gcc-10.2.1-555dlyc
+
+################## # mpi4py tryout
+# module load gcc/5.3.0 # due to missing libgfortran.so.3 for mpich
+# module load gcc/12.1.0-gcc-10.2.1-q5ykv26
+# module load mpich/3.0.2-gcc
+
+# sanity check
+# type -a mpicc
+# echo $PATH
+
+
+# export MPI_HOME=/software/mpich-3.0.2   # example path
+# export PATH="$MPI_HOME/bin:$PATH"
+# export LD_LIBRARY_PATH="$MPI_HOME/lib:$LD_LIBRARY_PATH"
+
+# type -a mpicc   # should now point to $MPI_HOME/bin/mpicc
