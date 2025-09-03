@@ -21,7 +21,7 @@ import scipy.integrate
 import scipy.interpolate
 
 from endorse import common
-import chodby_trans.input_data as input_data
+# import chodby_trans.input_data as input_data
 import chodby_trans.fullscale_transport as transport
 
 
@@ -80,8 +80,8 @@ class Wrapper:
         try:
             print("get observations from transport_wrapper")
             # res = self.calculate(self._config)
-            res = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
-            return 0, res
+            rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
+            return rc, data
         except Exception as e:
             sys.stdout.write("-"*60)
             sys.stdout.write(f"Traceback sample tags:{tags}")
