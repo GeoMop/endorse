@@ -84,11 +84,14 @@ start_workers() {
   echo "$HOST_COUNTS"
   while read -r COUNT HOST; do
     [[ -z "${HOST:-}" ]] && continue
-    echo "--- $HOST --- "
-    pbsdsh -vh "$HOST" -- python --version
-    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
+    # echo "--- $HOST --- "
+    # pbsdsh -vh "$HOST" -- python --version
+    # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
+    echo "--- $HOST ($COUNT slots) ---"
+    for ((i=0; i<COUNT; i++)); do
+      pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$i"
+    done
   done <<< "$HOST_COUNTS"
-  # wait
   echo "[worker] Workers started."
 }
 
