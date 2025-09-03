@@ -24,8 +24,8 @@ from endorse.fullscale_transport import compute_fields, fracture_map, apply_fiel
 
 from chodby_trans.mesh.create_mesh import make_mesh
 
-import chodby_trans.input_data as input_data
-input_dir = input_data.input_dir
+# import chodby_trans.input_data as input_data
+# input_dir = input_data.input_dir
 work_dir = input_data.work_dir
 
 # @attrs.define
@@ -107,7 +107,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
     )
     params.update(new_params)
     params.update(set_source_term(cfg))
-    template = input_dir / cfg_fine.input_template
+    template = cfg.input_dir / cfg_fine.input_template
 
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
@@ -136,7 +136,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
                      block_idx=tags[2],
                      slice_array=values)
 
-    return values
+    return fo.process.returncode, values
 
 
 def write_zarr_slice(store_path: str,
@@ -306,7 +306,7 @@ def set_source_term(cfg):
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
-        conc_flux_file= input_dir / cfg_fine.conc_flux_file
+        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file
     )
     return source_params
 
@@ -334,7 +334,7 @@ def main():
     cfg = common.config.load_config(str(conf_file))
 
     seed = 101
-    with common.workdir(str(work_dir), clean=False):
+    with common.workdir(str(input_data.work_dir), clean=False):
         transport_run(cfg, seed)
 
 
