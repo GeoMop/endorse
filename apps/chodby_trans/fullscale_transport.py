@@ -1,4 +1,6 @@
-import sys
+import os, sys
+import subprocess
+import pickle
 import logging
 import shutil
 import time
@@ -52,10 +54,42 @@ def fullscale_transport(cfg_path, seed):
     return transport_run(cfg, seed)
 
 
-@memoize
+def run_gmsh_helper_pickle(payload):
+    cwd = os.getcwd()
+    pyexec = sys.executable
+
+    # Serialize dict directly to bytes
+    payload_bytes = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
+
+    helper_path = Path(__file__).absolute().parents[0] / "mesh" / "create_mesh.py"
+    pickled_output_path = Path(cwd) / "create_mesh.pkl"
+    cmd = [pyexec, helper_path, "pickled"]
+    logging.info(cmd)
+    # Run helper, feed payload on stdin, read result from stdout
+    p = subprocess.run(
+        [pyexec, helper_path, "pickled"],
+        input=payload_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=cwd,
+    )
+
+    if p.returncode != 0:
+        raise RuntimeError(f"gmsh helper failed rc={p.returncode}\n{p.stderr.decode()}")
+
+    # Deserialize result
+    with open(pickled_output_path, "rb") as f:
+        result = pickle.load(f)
+        return result
+
+
+#@memoize
 def prepare_msh_input(cfg, seed):
-    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
-    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
+    # fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+    # mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
+    # return None
+
+    mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)
 
     # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
     full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed

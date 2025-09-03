@@ -1,3 +1,5 @@
+import os, sys
+import pickle
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -9,10 +11,6 @@ from endorse.mesh import mesh_tools, fracture_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 from bgem.stochastic.fracture import Population
-
-import chodby_trans.input_data as input_data
-input_dir = input_data.input_dir
-work_dir = input_data.work_dir
 
 
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
@@ -102,7 +100,7 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     """
     cfg_mt = cfg.geometry.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(input_dir / cfg_mt.csv_points)
+    df = pd.read_csv(cfg.input_dir / cfg_mt.csv_points)
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
 
     # rescale points to intended tunnel dimensions (x-width, z-height)
@@ -415,7 +413,11 @@ def make_gmsh(cfg:'dotdict', fracture_set):
     """
     final_mesh_filename = cfg.mesh_name + ".msh2"
 
-    factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
+    factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=False)
+    import gmsh as gmsh_orig
+    gmsh_orig.option.setNumber("General.Terminal", 1)     # headless
+    gmsh_orig.option.setNumber("General.NumThreads", 1)   # avoid hidden threading
+
     factory.get_logger().start()
     # gopt = options.Geometry()
     # gopt.Tolerance = 0.0001
@@ -463,18 +465,40 @@ def make_mesh(cfg, fr_pop, seed):
     return File(mesh_file_healed.name), fracture_set, n_large
 
 
-def main():
+def main(cfg_file=None, workdir=None):
 
+    import chodby_trans.input_data as input_data
     # common.EndorseCache.instance().expire_all()
 
-    conf_file = input_data.transport_config
-    cfg = common.config.load_config(str(conf_file))
+    if cfg_file is None:
+        cfg = common.config.load_config(str(input_data.transport_config))
+        workdir = str(input_data.work_dir)
+        seed = 101
+    else:
+        cfg = common.config.load_config(cfg_file)
+        seed = cfg.transport_fullscale.dfn_macro
 
-    seed = 101
-    with common.workdir(str(work_dir), clean=False):
+    with common.workdir(workdir, clean=False):
         fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
         make_mesh(cfg, fr_pop, seed)
 
 
 if __name__ == '__main__':
-    main()
+
+    if len(sys.argv) == 1:
+        main()
+    elif len(sys.argv) == 2 and sys.argv[1] == "pickled":
+        cfg = pickle.load(sys.stdin.buffer)
+        fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+        result = make_mesh(cfg, fr_pop, cfg.transport_fullscale.dfn_macro)
+
+        with open("create_mesh.pkl", "wb") as f:
+            pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+        # pickle.dump(result, sys.stdout.buffer, protocol=pickle.HIGHEST_PROTOCOL)
+
+    elif len(sys.argv) == 3:
+        cfg_file = sys.argv[1]
+        workdir = cfg_file = sys.argv[2]
+        main(cfg_file, workdir)
+    else:
+      raise RuntimeError("Unknown inputs.")
