@@ -8,12 +8,12 @@ set -euo pipefail
 # ======= EDIT THESE PATHS =======
 # Your project dir (on HOME/NFS) that contains "input/" and your driver app
 PROJECT_DIR="/auto/liberec3-tul/home/pavel_exner/workspace/endorse/apps/chodby_trans"
-APP_PY="$PROJECT_DIR/sensitivity_sampling.py"   # your TCP-based Dask driver (from earlier)
-VENV="$PROJECT_DIR/venv"
-
-OUTPUT_DIR="$PROJECT_DIR/workdir"
 INPUT_DIRNAME="input_data"
 WORK_DIRNAME="workdir"
+
+OUTPUT_DIR="$PROJECT_DIR/$WORK_DIRNAME"
+APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+VENV="$PROJECT_DIR/venv"
 # =================================
 
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
@@ -21,6 +21,9 @@ NCPUS=$(wc -l < "$PBS_NODEFILE")
 
 PYEXEC="$VENV/bin/python"
 DASK_BIN="$VENV/bin/dask"
+
+# not necessary at the end, `dask worker --no-nanny` solved it
+# export DASK_DISTRIBUTED__WORKER__DAEMON=False
 
 require_env() {
   for v in SCRATCHDIR PBS_NODEFILE; do
@@ -41,12 +44,12 @@ prepare_output_dir() {
 }
 
 stage_inputs() {
-
   echo "[stage] Staging inputs to each node's \$SCRATCHDIR..."
   for node in $UNIQ_HOSTS; do
     echo "--- $node ---"
-    pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME" "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"
-    pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
+    pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"
+    # pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME"
+    # pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
   done
   wait
@@ -88,18 +91,20 @@ start_workers() {
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
     echo "--- $HOST ($COUNT slots) ---"
-    for ((i=0; i<COUNT; i++)); do
-      pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$i"
-    done
+    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
   done <<< "$HOST_COUNTS"
   echo "[worker] Workers started."
 }
 
 stop_cluster() {
-  echo "[stop] Stopping workers..."
+  echo "[stop] Stopping workers, copying results from scratchdir..."
   for node in $(sort -u "$PBS_NODEFILE"); do
     pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true &
     pbsdsh -vh "$node" -- bash "$PROJECT_DIR/dask_process_stop.sh" worker &
+
+    pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
+    # pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/workdir_$node" &
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/" &
   done
   wait
   
@@ -137,7 +142,7 @@ case "$cmd" in
     require_env
     source $PROJECT_DIR/load_modules
     make_venv
-    prepare_output_dir
+    # prepare_output_dir
     stage_inputs
     compute_host_counts
     start_scheduler
