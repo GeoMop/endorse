@@ -26,9 +26,40 @@ from endorse.fullscale_transport import compute_fields, fracture_map, apply_fiel
 
 from chodby_trans.mesh.create_mesh import make_mesh
 
+from functools import wraps
+from multiprocessing import get_context
+
+# def run_in_subprocess(func):
+#     """
+#     Decorator: execute the wrapped function in a fresh spawned subprocess.
+
+#     Usage:
+#         @run_in_subprocess
+#         def my_cpp_func(x, y):
+#             ...
+#     """
+#     @wraps(func)
+#     def wrapper(*args, **kwargs):
+#         ctx = get_context("spawn")
+#         with ctx.Pool(1) as pool:
+#             return pool.apply(func, args, kwargs)
+#     return wrapper
+
+from functools import wraps
+from loky import ProcessPoolExecutor  # NOT the stdlib one
+
+def run_in_subprocess(func):
+    """Execute the function in a separate process (loky) with picklable args/return."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # fresh executor each call ⇒ fresh process & clean main thread
+        with ProcessPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(func, *args, **kwargs)
+            return fut.result()
+    return wrapper
+
 # import chodby_trans.input_data as input_data
 # input_dir = input_data.input_dir
-work_dir = input_data.work_dir
 
 # @attrs.define
 # class ResultSpec:
@@ -84,12 +115,13 @@ def run_gmsh_helper_pickle(payload):
 
 
 #@memoize
+@run_in_subprocess
 def prepare_msh_input(cfg, seed):
-    # fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
-    # mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
+    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
     # return None
 
-    mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)
+    # mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)
 
     # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
     full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
