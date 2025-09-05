@@ -1,17 +1,21 @@
-import logging
 import shutil
 from typing import *
 import csv
-import os, sys
+import os, sys, socket
 from pathlib import Path
 import pandas as pd
 import time
 from datetime import datetime
 import copy
 import subprocess
+import json
 
 import yaml
-from scoop import futures
+# from scoop import futures
+# from mpi4py.futures import MPIPoolExecutor
+
+# ---- Dask (over TCP) ----
+from dask.distributed import Client, wait
 
 import numpy as np
 
@@ -27,8 +31,18 @@ import zarr
 import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
 
+# from worker_logging import submit_logged, map_logged, setup_worker_logging
+
+import logging
+def setup_logging(name="driver"):
+    fmt = f"%(asctime)s [{name}] {socket.gethostname()}:%(process)d %(levelname)s: %(message)s"
+    logging.basicConfig(level=logging.INFO, format=fmt, handlers=[logging.StreamHandler(sys.stdout)], force=True)
+setup_logging(name="trans")
+
+
 input_dir = input_data.input_dir
 work_dir = input_data.work_dir
+output_dir = input_data.work_dir
 script_path = Path(__file__).absolute()
 
 
@@ -38,149 +52,10 @@ def solver_id(i):
 def sampled_data_hdf(i):
     return 'sampled_data_' + solver_id(i) + '.h5'
 
-
-def prepare_pbs_scripts(cfg, output_dir_in):
-    np = cfg.sensitivity.n_processes
-    # endorse_root = cfg["rep_dir"]
-    endorse_root = (input_dir / "../../../../").resolve()
-    pbs = cfg.machine_config.pbs
-
-    pbs_dir = output_dir_in / input_data.pbs_job_dirname
-    pbs_dir.mkdir()
-
-    def create_common_lines(id):
-        name = pbs.name + "_" + id
-        common_lines = [
-            '#!/bin/bash',
-            '#PBS -S /bin/bash',
-            # '#PBS -l select=' + str(met["chunks"]) + ':ncpus=' + str(met["ncpus_per_chunk"]) + ':mem=' + met["memory"],
-            # scratch: charon ssd: 346/20 = 17,3 GB
-            '#PBS -l select=1:ncpus=1:mem=' + pbs.mem + ":scratch_local=17gb",
-            # '#PBS -l place=scatter',
-            '#PBS -l walltime=' + str(pbs.walltime),
-            '#PBS -q ' + pbs.queue,
-            '#PBS -N ' + name,
-            '#PBS -j oe',
-            '#PBS -o ' + pbs_dir / (name + '.out'),
-            #'#PBS -e ' + os.path.join(pbs_dir, name + '.err'),
-            '\n',
-            'set -x',
-            'export TMPDIR=$SCRATCHDIR',
-            '\n# absolute path to output_dir',
-            'output_dir="' + work_dir + '"',
-            'workdir=$SCRATCHDIR',
-            #'\n',
-            #'SWRAP="' + met["swrap"] + '"',
-            #'IMG_MPIEXEC="/usr/local/mpich_4.0.3/bin/mpirun"',
-            #'SING_IMAGE="' + os.path.join(endorse_root, 'endorse.sif') + '"',
-            #'\n',
-            'cd $output_dir',
-            #'SCRATCH_COPY=$output_dir',
-            #'python3 $SWRAP/smpiexec_prepare.py -i $SING_IMAGE -s $SCRATCH_COPY -m $IMG_MPIEXEC'
-        ]
-        return common_lines
-
-    pbs_file_list = []
-    for n in range(np):
-        id = solver_id(n)
-        sensitivity_dir = Path("$workdir") / input_data.sensitivity_dirname
-        csv_file = "params_" + id + ".csv"
-
-        sample_subdir = sensitivity_dir /("samples_" + id)
-        sampled_data_out = Path("$workdir") / sampled_data_hdf(n)
-        # prepare PBS script
-        common_lines = create_common_lines(id)
-        rsync_cmd = " ".join(["rsync -av",
-                              #"--include " + os.path.join(sensitivity_dirname, empty_hdf_dirname, sampled_data_hdf(n)),
-                              #"--include " + os.path.join(sensitivity_dirname, param_dirname, "params_" + id + ".csv"),
-                              "--exclude *.h5",
-                              "--exclude *.pdf",
-                              "--exclude " + os.path.join(input_data.sensitivity_dirname, input_data.empty_hdf_dirname),
-                              "--exclude " + os.path.join(input_data.sensitivity_dirname, input_data.param_dirname),
-                              "--exclude " + os.path.join(input_data.sensitivity_dirname, input_data.pbs_job_dirname),
-                              "$output_dir" + "/",
-                              "$workdir"])
-        lines = [
-            *common_lines,
-            '\n',
-            rsync_cmd,
-            ' '.join(['cp',
-                      os.path.join(input_data.sensitivity_dirname, input_data.empty_hdf_dirname, sampled_data_hdf(n)),
-                      "$workdir"]),
-            ' '.join(['cp',
-                      os.path.join(input_data.sensitivity_dirname, input_data.param_dirname, csv_file),
-                      "$workdir"]),
-            'cd $workdir',
-            'pwd',
-            'ls -la',
-            '\n# finally gather the full command',
-            os.path.join(endorse_root, "bin", "endorse-bayes") + " "
-                + ' '.join(["-t", "set", "-o", "$workdir", "-p", csv_file, "-x", sample_subdir, "-s", id]),
-            # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
-            # 'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
-            # 'find . -name "solver_*" -print0 | xargs -0 rm -r',
-            # '\n' + ' '.join(['tar', '-zcvf', 'samples_' + id + '.tar.gz', sample_subdir]),
-            # ' '.join(['rm', '-r', sample_subdir]),
-            'ls -la',
-            'mkdir -p $output_dir/sampled_data',
-            'time cp ' + str(sampled_data_out) + ' $output_dir/sampled_data',
-            #'time cp -r sensitivity $output_dir',
-            'clean_scratch',
-            'echo "FINISHED"'
-        ]
-        pbs_file = os.path.join(pbs_dir, "pbs_job_" + id + ".sh")
-        with open(pbs_file, 'w') as f:
-            f.write('\n'.join(lines))
-        pbs_file_list.append(pbs_file)
-
-    return pbs_file_list
-
-
-def prepare_sets_of_params(cfg_sens: dotdict, parameters, output_dir_in, par_names):
-    n_processes = cfg_sens.n_processes
-    no_samples, no_parameters = np.shape(parameters)
-    rows_per_file = no_samples // n_processes
-    rem = no_samples % n_processes
-
-    param_dir = output_dir_in / input_data.param_dirname
-    param_dir.mkdir()
-    empty_hdf_dir = output_dir_in / input_data.empty_hdf_dirname
-    empty_hdf_dir.mkdir()
-
-    sample_idx = 0
-    off_start = 0
-    off_end = 0
-    for i in range(n_processes):
-        off_start = off_end
-        off_end = off_end + rows_per_file
-        # add sample while there is still remainder after rows_per_file division
-        if rem > 0:
-            off_end = off_end + 1
-            rem = rem - 1
-        subset_matrix = parameters[off_start:off_end, :]
-
-        param_file = param_dir / ("params_" + solver_id(i) + ".csv")
-        with open(param_file, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['idx', *par_names])
-            for row in subset_matrix:
-                writer.writerow([sample_idx, *row])
-                sample_idx = sample_idx+1
-
-        # Prepare HDF, write parameters
-        output_file = empty_hdf_dir / sampled_data_hdf(i)
-        n_params = parameters.shape[0]
-        n_times = cfg_sens.sample_shape[0]
-        n_elements = cfg_sens.sample_shape[1]
-        sample_storage.create_chunked_dataset(output_file,
-                                              shape=(n_params, n_times, n_elements),
-                                              chunks=(1, 1, n_elements))
-        sample_storage.append_new_dataset(output_file, "parameters", parameters)
-
-    # for i, mat in enumerate(sub_parameters):
-    #     output_file = f"parameters_{str(i+1).zfill(2)}.npy"
-    #     np.save(output_file, mat)
-    #     print(f"Saved {output_file}")
+def atomic_write_json(path: Path, payload: dict):
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 @memoize
@@ -224,17 +99,40 @@ def salib_samples(cfg: dotdict, seed):
 
 
 def single_sample(args):
-    sample_dir, data_scheme_key, tags, parameters = args
-    workdir = sample_dir.parents[2]
+    # sample_dir, data_scheme_key, tags, parameters = args
+    data_scheme_key, tags, parameters = args
+
+    # host = socket.gethostname()
+    pid  = os.getpid()
+    # logging.info(f"[worker {pid} on {host}] starting with tags={tags}", flush=True)
+
+    # create sample dir
+    # do we have to do this independently or is the "import" done in each process??
+    # scoop required total independency
+    workdir, inputdir, outputdir = input_data.resolve_dirs()
+
+    sensitivity_dir = workdir / input_data.sensitivity_dirname
+    sample_subdir = sensitivity_dir / "samples"
+
+    flag_file = sample_subdir / f"sample_{str(tags[0]).zfill(3)}.done.json"
+    if flag_file.exists():
+        # Already finished—return cached result
+        with open(flag_file) as f:
+            logging.info(f"SAMPLE already done: {flag_file}")
+            return json.load(f)["res"]
+
+    sample_dir = sample_subdir / (f"sample_{str(tags[0]).zfill(3)}_{pid}")
+    sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
     # read config file
-    conf_file = workdir / input_data.transport_config.parent.name / input_data.transport_config.name
+    conf_file = inputdir / input_data.transport_cfg_path.name
     cfg = common.config.load_config(str(conf_file))
     cfg["data_scheme_key"] = data_scheme_key
+    cfg["input_dir"] = inputdir
 
     logging.info("=========================== RUNNING CALCULATION " +
                  "sample {} ===========================".format(tags[0]).zfill(3))
-    logging.info(sample_dir)
+    logging.info(f"tags={tags}, parameters={parameters}, sample_dir={str(sample_dir)}")
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
@@ -242,22 +140,36 @@ def single_sample(args):
         t = time.time()
         res, sample_data = wrap.get_observations(tags)
 
-        print("Flow123d res: ", res, np.shape(sample_data))
+        logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
 
         # print("LEN:", len(obs_data))
-        print("TIME:", time.time() - t)
-        return res
+        logging.info(f"TIME: {time.time() - t}")
+    
+    result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
+    atomic_write_json(flag_file, result)
+    # tmp =  Path(f"{flag_file}.tmp")
+    # with open(tmp, "w") as f: json.dump(result, f)
+    # os.replace(tmp, flag_file)   # atomic rename
+
+    if res < 0:
+      logging.info(f"Moving failed sample {sample_dir.name}")
+      failed_subdir = sensitivity_dir / "failed_samples"
+      failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
+      sample_dir.rename(failed_subdir / sample_dir.name)
+
+    return res
 
 
-def all_samples(workdir, cfg, parameters, map_fn):
-
-    n_samples, n_params = parameters.shape
-    data_scheme_key = setup_data_storage(work_dir, cfg, n_samples)
+def all_samples(cfg, parameters, client=None):
     # Set directories to avoid NFS IO errors
 
-    # create sample dir
-    sensitivity_dir = workdir / input_data.sensitivity_dirname
-    sample_subdir = sensitivity_dir / "samples"
+    # # create sample dir
+    # sensitivity_dir = workdir / input_data.sensitivity_dirname
+    # sample_subdir = sensitivity_dir / "samples"
+
+    n_samples, n_params = parameters.shape
+    # data_scheme_key = setup_data_storage(cfg, n_samples)
+    data_scheme_key = "run_XXX"
 
     cfg_sens = cfg.sensitivity
     qmc_idx = sa.sample.saltelli_qmc_index(N=cfg_sens.n_samples,
@@ -268,27 +180,52 @@ def all_samples(workdir, cfg, parameters, map_fn):
                                                 calc_second_order=cfg_sens.second_order_sa)
     tags = np.column_stack((range(n_samples), qmc_idx, block_idx))
 
-    bh_args = []
-    for idx in range(n_samples):
-        sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
-        sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
+    # bh_args = []
+    # for idx in range(n_samples):
+    #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
+    #     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-        bh_args.append((sample_dir, data_scheme_key, tags[idx], parameters[idx]))
+    #     bh_args.append((sample_dir, data_scheme_key, tags[idx], parameters[idx]))
+    bh_args = [(data_scheme_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    logging.info(f"bh_args: {bh_args}")
 
-    results = list(map_fn(single_sample, bh_args))
-    print("Results collected: ", str(results)[:200])
-    # bcommon.pkl_write(workdir, results, "all_bh_configs.pkl")
+    # OPTION A: submit pattern
+    # futs = [submit_logged(futures, single_sample, a, label="fem") for a in args]
+    # results = [f.result() for f in futs]
+    # return results
+
+    # OPTION B: map pattern
+    # return list(map_logged(futures, single_sample, args, label="fem"))
+
+    # mapped = map_fn(single_sample, bh_args)  # iterator over results
+    # mapped = map_logged(futures, single_sample, bh_args, label="trans")
+    # results = [r for r in mapped]  # forces full consumption
+    # results = list(map_fn(single_sample, bh_args))
+    # results = [f.result() for f in scoop_list]  # consume all
+
+    # with MPIPoolExecutor() as ex:
+        # results = list(ex.map(single_sample, bh_args))
+
+    # Dask
+    t0 = time.time()    
+    futures = client.map(single_sample, bh_args, pure=False)
+    results = client.gather(futures)
+    logging.info("Completed %d tasks in %.2fs", len(results), time.time() - t0)
+
+    logging.info(f"Results collected: {results[:100]}")
+    # bcommon.pkl_write(workdir, results, "sample_results.pkl")
     zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
 
-def setup_data_storage(workdir, cfg, n_samples):
+def setup_data_storage(cfg, n_samples):
     # prepare data scheme for zarr storage
     # add current scheme for current sampling run
-    path = Path(input_data.data_schema_yaml)
-    if not path.exists():
-        shutil.copy2(input_data.data_schema_empty_yaml, input_data.data_schema_yaml)
 
-    with path.open("r", encoding="utf-8") as file:
+    data_scheme_path = input_data.data_schema_yaml
+    if not data_scheme_path.exists():
+        shutil.copy2(input_data.data_schema_empty_yaml, data_scheme_path)
+
+    with data_scheme_path.open("r", encoding="utf-8") as file:
         content = file.read()
         data_scheme = yaml.safe_load(content)
 
@@ -296,7 +233,7 @@ def setup_data_storage(workdir, cfg, n_samples):
     data_scheme_key = f"run_{now}"
     data_scheme[data_scheme_key] = copy.deepcopy(data_scheme["run_timestamp"])
 
-    with Path(input_data.data_schema_yaml).open("w", encoding="utf-8") as file:
+    with data_scheme_path.open("w", encoding="utf-8") as file:
         yaml.dump(data_scheme, file, sort_keys=False)
 
     # temporary shortcut for direct zarr
@@ -376,7 +313,7 @@ def init_zarr_store(store_path: str,
 pbs_script_template = """
 #!/bin/bash
 #PBS -S /bin/bash
-#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=17gb
+#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=10gb
 #PBS -l place=scatter
 #PBS -l walltime={walltime}
 #PBS -q {queue}
@@ -388,39 +325,50 @@ pbs_script_template = """
 set -x
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
-output_dir={workdir}
-work_dir=$SCRATCHDIR
+
+output_dir={outputdir}
+# work_dir={workdir}
+
+SCRIPT_PATH={script_path}
+PROJECT_DIR=$(dirname -- $SCRIPT_PATH)
+
+# # A node list with each host once
+UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
+NCPUS=$(wc -l < "$PBS_NODEFILE")
 
 # copy to scratch
 echo "Staging data to scratch ..."
 # copy to scratchdir on all nodes (unique line in pbs nodefile)
-for node in $(sort -u "$PBS_NODEFILE"); do
-    pbsdsh -vh "$node" -- rsync -av --info=progress2 --delete "$output_dir/" "$work_dir/" &
+for node in $UNIQ_HOSTS; do
+    pbsdsh -vh "$node" -- rsync -a --delete "$output_dir/" "$SCRATCHDIR/" &
 done
 wait
 
-cd "$work_dir"
+bash $PROJECT_DIR/dask_cluster.sh start
 
+cd "$SCRATCHDIR"
 echo "START SAMPLING"
-{python} -m scoop --hostfile $PBS_NODEFILE -vv -n {n_workers} {script_path} meta $work_dir
+bash $PROJECT_DIR/dask_cluster.sh run
 echo "FINISHED SAMPLING"
 
-ls -la
 echo "Copying results back ..."
-for node in $(sort -u "$PBS_NODEFILE"); do
-    pbsdsh -vh "$node" -- rsync -av --info=progress2 "$work_dir/" "$output_dir/" &
+uname -n
+for node in $UNIQ_HOSTS; do
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/workdir/" "$output_dir/workdir_$node" &
 done
 wait
+
+bash $PROJECT_DIR/dask_cluster.sh stop
 
 clean_scratch
 echo "FINISHED"
 """
 
-def submit_pbs(workdir, cfg):
+def submit_pbs(cfg):
     cfg_pbs = cfg.machine_config.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
-    pbs_filename = workdir / "sensitivity_sampling.pbs"
-    n_workers = cfg_pbs.n_nodes * (cfg_pbs.n_cores-1) # Not sure if we need reserve for the master scoop process
+    pbs_path = output_dir / "sensitivity_sampling.pbs"
+    n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores-1)-2)# Not sure if we need reserve for the master scoop process
     parameters = dict(
         n_chunks=cfg_pbs.n_nodes,
         n_cpus=cfg_pbs.n_cores,
@@ -432,49 +380,68 @@ def submit_pbs(workdir, cfg):
         python=sys.executable,
         n_workers=n_workers,
         script_path=script_path,
-        workdir=workdir,
-        out_log=(workdir / (cfg_pbs.pbs_name + '.out'))
+        workdir=work_dir,
+        outputdir=output_dir,
+        out_log=(output_dir / (cfg_pbs.pbs_name + '.out'))
     )
     print(parameters['python'])
     pbs_script = pbs_script_template.format(**parameters)
-    with open(pbs_filename, "w") as f:
+    with open(pbs_path, "w") as f:
         f.write(pbs_script)
 
-    cmd = ['qsub', pbs_filename]
+    cmd = ['qsub', pbs_path]
+    logging.info(f"submit pbs: '{cmd}'")
     subprocess.run(cmd, check=True)
 
 
 def main():
     # common.EndorseCache.instance().expire_all()
+    # setup_worker_logging(name="trans")
 
     if len(sys.argv) == 2:
         cmd = sys.argv[1]
-        workdir = input_data.work_dir
     elif len(sys.argv) == 3:
         cmd = sys.argv[1]
-        workdir = Path(sys.argv[2]).absolute()
+        scheduler = sys.argv[2]
+    # elif len(sys.argv) == 3:
+    #     cmd = sys.argv[1]
+    #     work_dir = Path(sys.argv[2]).absolute()
     else:
-      sys.exit("Provide command (local|meta|submit) and optionaly workdir path (overrides default).")
+      sys.exit("Provide command (local|meta|submit).")
+      # sys.exit("Provide command (local|meta|submit) and optionaly workdir path (overrides default).")
 
-
-    conf_file = input_data.transport_config
-    cfg = common.config.load_config(str(conf_file))
+    logging.info(f"main: work_dir = {work_dir}")
+    logging.info(f"main: input_dir = {input_dir}")
+    
+    cfg_path = input_data.transport_cfg_path
+    cfg = common.config.load_config(str(cfg_path))
 
     seed = 101
-    with common.workdir(str(workdir), clean=False):
 
-        shutil.copytree(input_dir, workdir / input_dir.name, dirs_exist_ok=True)
-
-        if cmd == 'submit':
-            submit_pbs(workdir, cfg)
-        elif cmd == 'local':
+    if cmd == 'submit':
+        # with common.workdir(str(work_dir), clean=False):
+        shutil.copytree(input_dir, output_dir / input_dir.name, dirs_exist_ok=True)
+        submit_pbs(cfg)
+    elif cmd == 'local':
+        with common.workdir(str(work_dir), clean=False):
+            shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
             parameters = salib_samples(cfg, seed)
-            all_samples(workdir=workdir, cfg=cfg, parameters=parameters, map_fn=map)
-        elif cmd == 'meta':
+            all_samples(cfg=cfg, parameters=parameters)
+    elif cmd == 'meta':
+        # optional: cap hidden threading for your FEM libs
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
+        os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+        os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+        
+        client = Client(scheduler)
+        logging.info(f"Connected to: {client}")
+        
+        with common.workdir(str(work_dir), clean=False):
             parameters = salib_samples(cfg, seed)
-            all_samples(workdir=workdir, cfg=cfg, parameters=parameters, map_fn=futures.map)
-        else:
-            sys.exit(f"Unkown command provided: '{cmd}'!")
+            all_samples(cfg=cfg, parameters=parameters, client=client)
+    else:
+        sys.exit(f"Unkown command provided: '{cmd}'!")
 
 if __name__ == '__main__':
     main()
