@@ -3,5 +3,6 @@
 
 salib
 # matplotlib
-scoop
+# scoop
+loky # advanced ProcessPoolExecutor, cloudpickle
 

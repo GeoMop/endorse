@@ -24,6 +24,7 @@ import zarr
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
+import chodby_trans.input_data as input_data
 from chodby_trans.mesh.create_mesh import make_mesh
 
 from functools import wraps
@@ -148,9 +149,22 @@ def transport_run(cfg, seed, tags):
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
-    input_msh = prepare_msh_input(cfg, seed)
-    # input_msh = File("input_fields.msh")
+    # with open("foo.txt", "a", encoding="utf-8") as f:
+    #         f.write("lalala\n")
+    # time.sleep(5)
 
+    input_msh = prepare_msh_input(cfg, seed)
+
+    # META SCOOP PROBLEM: cannot access home input_dir
+    # input_msh_filepath = input_dir / "input_fields.msh"
+    # accessing scratchdir only works
+    # workdir = Path(os.getcwd()).parents[2]
+    # # input_msh_filepath = workdir / input_dir.name / "input_fields.msh"
+    # input_msh_filepath = workdir / "input_data" / "input_fields.msh"
+    # shutil.copy2(str(input_msh_filepath), "input_fields.msh")
+    # input_msh = File(input_msh_filepath)
+
+    # return 0, []
     return parametrized_run(cfg, large_model, input_msh, tags)
 
 
@@ -202,6 +216,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
                      block_idx=tags[2],
                      slice_array=values)
 
+    # values = []
     return fo.process.returncode, values
 
 

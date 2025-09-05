@@ -78,7 +78,7 @@ class Wrapper:
 
     def get_observations(self, tags):
         try:
-            print("get observations from transport_wrapper")
+            print(f"transport_wrapper: get observations tags={tags}")
             # res = self.calculate(self._config)
             rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
             return rc, data
