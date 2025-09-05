@@ -207,14 +207,15 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
     # root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
     # current_node = root_node[cfg.data_scheme_key]
     # grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
-    print(f"sample tags:{tags}")
-    grid, values = get_indicator(cfg, fo, [20, 20])
 
-    write_zarr_slice(store_path=str(input_data.zarr_store_path),
-                     sample_idx=tags[0],
-                     qmc_idx=tags[1],
-                     block_idx=tags[2],
-                     slice_array=values)
+    # print(f"sample tags:{tags}")
+    # grid, values = get_indicator(cfg, fo, [20, 20])
+
+    # write_zarr_slice(store_path=str(input_data.zarr_store_path),
+    #                  sample_idx=tags[0],
+    #                  qmc_idx=tags[1],
+    #                  block_idx=tags[2],
+    #                  slice_array=values)
 
     # values = []
     return fo.process.returncode, values
