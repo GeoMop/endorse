@@ -16,6 +16,7 @@ import yaml
 
 # ---- Dask (over TCP) ----
 from dask.distributed import Client, wait
+# import dask.array as da
 
 import numpy as np
 
@@ -250,21 +251,24 @@ def setup_data_storage(cfg, n_samples):
     # DIRECT ZARR
     temporary shortcut for direct zarr
     qmc_size = cfg.sensitivity.n_samples
-    block_size = 4 if cfg.sensitivity.second_order_sa else 3
-    grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
+    # block_size = 4 if cfg.sensitivity.second_order_sa else 3
+    param_size=len(cfg.sensitivity.parameters)
+    grid_size = data_schema[data_schema_key]["ATTRS"]["grid_step"]
     init_zarr_store(str(input_data.zarr_store_path),
                     sample_size=n_samples,
                     qmc_size=qmc_size,
-                    block_size=block_size,
+                    param_size=param_size,
                     time_size=18,
                     grid_size=[*grid_size, 2])
 
     return data_schema_key
 
 def init_zarr_store(store_path: str,
+                    data_schema: dict,
                     sample_size: int,
+                    param_size: int,
                     qmc_size: int,
-                    block_size: int,
+                    par_size: int,
                     time_size: int,
                     grid_size: list,
                     dtype=np.float32,
@@ -276,8 +280,14 @@ def init_zarr_store(store_path: str,
     ----------
     store_path : str
         Path to the Zarr store (directory or Zarr URL).
+    data_schema : dict
+        Data schema (zarr fuse alike)
+    sample_size : int
+        Length of the 'iid' dimension.
     qmc_size : int
         Length of the 'qmc' dimension.
+    param_size : int
+        Length of the 'param_name' dimension.
     block_size : int
         Number of blocks: A, B, AB, (BA).
     x_size : int
@@ -292,34 +302,114 @@ def init_zarr_store(store_path: str,
         Compressor to use (default: None).
     """
     # Define dimensions: 'sample' is unlimited/appendable
-    dims = ('sample', 'qmc', 'block', 'time', 'X', 'Y', 'Z')
-    shape = (sample_size, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
+    coords = data_schema["COORDS"]
+    shapes = (sample_size, qmc_size, param_size, time_size, grid_size[0], grid_size[1], grid_size[2])
+    chunks = [ coords[c]["chunk_size"] for c in coords.keys]
 
-    # Create an empty DataArray with 0 length sample dimension
-    data = xr.DataArray(
-        np.zeros(shape, dtype=dtype),
-        dims=dims,
-        coords={
-            'sample': np.arange(sample_size),
-            'qmc': np.arange(qmc_size),
-            'block': np.arange(block_size),
-            'time': np.arange(time_size),
-            'X': np.arange(grid_size[0]),
-            'Y': np.arange(grid_size[1]),
-            'Z': np.arange(grid_size[2]),
+    # ds = xr.Dataset({'data': data})
+    ds = xr.Dataset(
+        data_vars={'conc': (tuple(coords.keys), None)},
+        coords={k: np.arange(v) for k, v in zip(coords.keys, shapes)}
+        # {
+        #     'iid': np.arange(sample_size),
+        #     'qmc': np.arange(qmc_size),
+        #     'block': np.arange(block_size),
+        #     'time': np.arange(time_size),
+        #     'X': np.arange(grid_size[0]),
+        #     'Y': np.arange(grid_size[1]),
+        #     'Z': np.arange(grid_size[2]),
+        # }
+    )
+
+    # Write to Zarr, overwrite if exists
+    ds.to_zarr(store_path, mode='w', encoding={
+        'chunks': chunks,
+        'compressor': compressor,
+        'fill_value': 0
         }
     )
 
-    ds = xr.Dataset({'data': data})
+# def init_zarr_store(store_path: str,
+#                     sample_size: int,
+#                     qmc_size: int,
+#                     par_size: int,
+#                     time_size: int,
+#                     grid_size: list,
+#                     dtype=np.float32,
+#                     compressor=None) -> None:
+#     """
+#     Initialize an empty Zarr store with the specified dimensions and chunking.
 
-    # Set encoding for chunking and compression
-    ds.encoding['data'] = {
-        'chunks': (1, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2]),
-        'compressor': compressor
-    }
+#     Parameters
+#     ----------
+#     store_path : str
+#         Path to the Zarr store (directory or Zarr URL).
+#     qmc_size : int
+#         Length of the 'qmc' dimension.
+#     block_size : int
+#         Number of blocks: A, B, AB, (BA).
+#     x_size : int
+#         Length of the 'X' dimension.
+#     y_size : int
+#         Length of the 'Y' dimension.
+#     time_size : int
+#         Length of the 'time' dimension.
+#     dtype : NumPy dtype, optional
+#         Data type of the array (default: np.float32).
+#     compressor : zarr compressor, optional
+#         Compressor to use (default: None).
+#     """
+#     # Define dimensions: 'sample' is unlimited/appendable
+#     dims = ('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z')
+#     shape = (sample_size, qmc_size, par_size, time_size, grid_size[0], grid_size[1], grid_size[2])
+#     # chunks = (1, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
+#     chunks = (64, 16, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
 
-    # Write to Zarr, overwrite if exists
-    ds.to_zarr(store_path, mode='w')
+#     # Create an empty DataArray with 0 length sample dimension
+#     # data = xr.DataArray(
+#     #     # np.zeros(shape, dtype=dtype),
+#     #     # da.zeros(shape, dtype=dtype, chunks=chunks)
+#     #     None,
+#     #     dims=dims,
+#     #     coords={
+#     #         'sample': np.arange(sample_size),
+#     #         'qmc': np.arange(qmc_size),
+#     #         'block': np.arange(block_size),
+#     #         'time': np.arange(time_size),
+#     #         'X': np.arange(grid_size[0]),
+#     #         'Y': np.arange(grid_size[1]),
+#     #         'Z': np.arange(grid_size[2]),
+#     #     }
+#     # )
+
+#     # ds = xr.Dataset({'data': data})
+#     ds = xr.Dataset(
+#         data_vars={'conc': (('iid','qmc', 'time', 'X', 'Y', 'Z'), None)},
+#         coords={
+#             'iid': np.arange(sample_size),
+#             'qmc': np.arange(qmc_size),
+#             'block': np.arange(block_size),
+#             'time': np.arange(time_size),
+#             'X': np.arange(grid_size[0]),
+#             'Y': np.arange(grid_size[1]),
+#             'Z': np.arange(grid_size[2]),
+#         }
+#     )
+
+#     # Set encoding for chunking and compression
+#     # ds.encoding['data'] = {
+#     #     'chunks': chunks,
+#     #     'compressor': compressor,
+#     #     'fill_value': 0
+#     # }
+
+#     # Write to Zarr, overwrite if exists
+#     ds.to_zarr(store_path, mode='w', encoding={
+#         'chunks': chunks,
+#         'compressor': compressor,
+#         'fill_value': 0
+#         }
+#     )
 
 
 pbs_script_template = """
