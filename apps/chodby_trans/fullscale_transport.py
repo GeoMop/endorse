@@ -18,7 +18,7 @@ from endorse.indicator import Extractor
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
 
-import zarr_fuse
+import zarr_fuse as zf
 import xarray as xr
 import zarr
 
@@ -145,7 +145,7 @@ def prepare_msh_input(cfg, seed):
 
 
 # @memoize
-def transport_run(cfg, seed, tags):
+def transport_run(cfg, seed, tags, parameters):
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
@@ -165,10 +165,10 @@ def transport_run(cfg, seed, tags):
     # input_msh = File(input_msh_filepath)
 
     # return 0, []
-    return parametrized_run(cfg, large_model, input_msh, tags)
+    return parametrized_run(cfg, large_model, input_msh, tags, parameters)
 
 
-def parametrized_run(cfg, large_model, input_fields_file, tags):
+def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
     times = output_times(cfg_fine)
@@ -203,10 +203,13 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
 
     # TODO: get grid, output times, values -> zarr_fuse
     # times
-    # schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
-    # root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
-    # current_node = root_node[cfg.data_scheme_key]
-    # grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
+    root_node = zf.open_storage(data_schema, **kwargs)
+    current_node = root_node[cfg.data_schema_key]
+
+    print(f"sample tags:{tags}")
+    grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
 
     # print(f"sample tags:{tags}")
     # grid, values = get_indicator(cfg, fo, [20, 20])
@@ -216,6 +219,23 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
     #                  qmc_idx=tags[1],
     #                  block_idx=tags[2],
     #                  slice_array=values)
+
+    param_names = [p.name for p in cfg.sensitivity.parameters]
+
+    current_node.update_dense(dict(
+        iid=[tags[0]],  # coords
+        qmc=[tags[1]],
+        param_name=param_names,
+        time=times,
+        X=grid.x,
+        Y=grid.y,
+        Z=grid.z,
+        block=[tags[2]],  #values
+        param= parameters[np.newaxis, np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
+        conc=slice_array[np.newaxis, np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "block", "time", "X", "Y", "Z"]
+    ))
+    
+    # current_node.update_dense()
 
     # values = []
     return fo.process.returncode, values

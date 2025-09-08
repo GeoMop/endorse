@@ -26,6 +26,7 @@ import endorse.sa as sa
 
 import xarray as xr
 import zarr
+import zarr_fuse as zf
 
 # import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
@@ -99,8 +100,8 @@ def salib_samples(cfg: dotdict, seed):
 
 
 def single_sample(args):
-    # sample_dir, data_scheme_key, tags, parameters = args
-    data_scheme_key, tags, parameters = args
+    # sample_dir, data_schema_key, tags, parameters = args
+    data_schema_key, tags, parameters = args
 
     # host = socket.gethostname()
     pid  = os.getpid()
@@ -127,7 +128,7 @@ def single_sample(args):
     # read config file
     conf_file = inputdir / input_data.transport_cfg_path.name
     cfg = common.config.load_config(str(conf_file))
-    cfg["data_scheme_key"] = data_scheme_key
+    cfg["data_schema_key"] = data_schema_key
     cfg["input_dir"] = inputdir
 
     logging.info("=========================== RUNNING CALCULATION " +
@@ -136,9 +137,9 @@ def single_sample(args):
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
-        wrap.set_parameters(data_par=parameters)
+        # wrap.set_parameters(data_par=parameters)
         t = time.time()
-        res, sample_data = wrap.get_observations(tags)
+        res, sample_data = wrap.get_observations(tags, parameters)
 
         logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
 
@@ -168,8 +169,8 @@ def all_samples(cfg, parameters, client=None):
     # sample_subdir = sensitivity_dir / "samples"
 
     n_samples, n_params = parameters.shape
-    # data_scheme_key = setup_data_storage(cfg, n_samples)
-    data_scheme_key = "run_XXX"
+    data_schema_key = setup_data_storage(cfg, n_samples)
+    # data_schema_key = "run_XXX"
 
     cfg_sens = cfg.sensitivity
     qmc_idx = sa.sample.saltelli_qmc_index(N=cfg_sens.n_samples,
@@ -185,8 +186,8 @@ def all_samples(cfg, parameters, client=None):
     #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
     #     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-    #     bh_args.append((sample_dir, data_scheme_key, tags[idx], parameters[idx]))
-    bh_args = [(data_scheme_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    #     bh_args.append((sample_dir, data_schema_key, tags[idx], parameters[idx]))
+    bh_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
     logging.info(f"bh_args: {bh_args}")
 
     # OPTION A: submit pattern
@@ -214,29 +215,40 @@ def all_samples(cfg, parameters, client=None):
 
     logging.info(f"Results collected: {results[:100]}")
     # bcommon.pkl_write(workdir, results, "sample_results.pkl")
-    zarr.consolidate_metadata(str(input_data.zarr_store_path))
+    # zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
 
 def setup_data_storage(cfg, n_samples):
     # prepare data scheme for zarr storage
     # add current scheme for current sampling run
 
-    data_scheme_path = input_data.data_schema_yaml
-    if not data_scheme_path.exists():
-        shutil.copy2(input_data.data_schema_empty_yaml, data_scheme_path)
+    data_schema_path = input_data.data_schema_yaml
+    if not data_schema_path.exists():
+        shutil.copy2(input_data.data_schema_empty_yaml, data_schema_path)
 
-    with data_scheme_path.open("r", encoding="utf-8") as file:
+    with data_schema_path.open("r", encoding="utf-8") as file:
         content = file.read()
-        data_scheme = yaml.safe_load(content)
+        data_schema = yaml.safe_load(content)
 
     now = datetime.now().strftime("%Y%m%d%H%M%S")
-    data_scheme_key = f"run_{now}"
-    data_scheme[data_scheme_key] = copy.deepcopy(data_scheme["run_timestamp"])
+    data_schema_key = f"run_{now}"
+    data_schema[data_schema_key] = copy.deepcopy(data_schema["run_timestamp"])
+    # data_schema.pop("run_timestamp", None)
 
-    with data_scheme_path.open("w", encoding="utf-8") as file:
-        yaml.dump(data_scheme, file, sort_keys=False)
+    with data_schema_path.open("w", encoding="utf-8") as file:
+        yaml.dump(data_schema, file, sort_keys=False)
 
-    # temporary shortcut for direct zarr
+    # kwargs =  {"WORKDIR": str(workdir), "S3_ENDPOINT_URL": "https://s3.cl4.du.cesnet.cz"}
+     # Local storage logic
+    # store_path = (workdir / fname).with_suffix(".zarr")
+    # ZARR FUSE
+    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    # data_schema = zf.schema.deserialize(data_schema_path) # read data scheme
+    # zf.remove_store(data_schema, **kwargs)      # start from scratch
+    # node = zf.open_store(data_schema, **kwargs) # initialize zarr_fuse storage
+
+    # DIRECT ZARR
+    temporary shortcut for direct zarr
     qmc_size = cfg.sensitivity.n_samples
     block_size = 4 if cfg.sensitivity.second_order_sa else 3
     grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
@@ -247,7 +259,7 @@ def setup_data_storage(cfg, n_samples):
                     time_size=18,
                     grid_size=[*grid_size, 2])
 
-    return data_scheme_key
+    return data_schema_key
 
 def init_zarr_store(store_path: str,
                     sample_size: int,

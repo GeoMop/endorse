@@ -1,7 +1,9 @@
 # Configuration of the ZARR-FUSE storage
 ATTRS:
-    store_url: "transport.zarr"
-    store_type: 'local'                 # 'guess' type is default
+    # store_url: "transport.zarr"
+    # store_type: 'local'                 # 'guess' type is default
+    # STORE_URL: "file://transport.zarr"
+    STORE_URL: "transport.zarr"
 
 run_timestamp:
     VARS:
@@ -9,8 +11,12 @@ run_timestamp:
             unit: ""
             description: "Unique sample ID given by ordered Salib parameter sequence."
             coords: [ "iid", "qmc" ]
-        A_sample:
-            unit: "bool"
+        # A_sample:
+        #     unit: "bool"
+        #     description: "Indicator function for parameter of that QMC sample be from the set A (oposed to the set B) of the Saltelli schema."
+        #     coords: [ "qmc", "param_name" ]
+        block:
+            unit: "int"
             description: "Indicator function for parameter of that QMC sample be from the set A (oposed to the set B) of the Saltelli schema."
             coords: [ "qmc", "param_name" ]
         parameter:
@@ -20,7 +26,7 @@ run_timestamp:
         conc:
             unit: "g/m^3"
             description: "Indicator concentration on a specified grid."
-            coords: [ "iid", "qmc", "X", "Y", "Z", "sim_time" ]
+            coords: [ "iid", "qmc", "sim_time", "X", "Y", "Z" ]
 
 
         iid:
@@ -51,31 +57,31 @@ run_timestamp:
     COORDS:
         iid:
             sorted: False
-            chunk_size: 1024
+            chunk_size: 64
             merge: None
         qmc:
             sorted: False
-            chunk_size: 64
+            chunk_size: 16
             merge: None
         param_name:
             sorted: False
             chunk_size: 64
             merge:
                 step_limits: None
+        sim_time:
+            chunk_size: 4
+            merge:
+                step_limits: None
         X:
-            chunk_size: 1024
+            chunk_size: 8
             merge:
                 step_limits: None
         Y:
-            chunk_size: 1024
+            chunk_size: 16
             merge:
                 step_limits: None
         Z:
-            chunk_size: 1024
-            merge:
-                step_limits: None
-        sim_time:
-            chunk_size: 1024
+            chunk_size: 2
             merge:
                 step_limits: None
 

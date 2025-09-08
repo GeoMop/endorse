@@ -76,11 +76,13 @@ class Wrapper:
                 assert pname in cfg.transport_fullscale, pname + " not in transport_fullscale"
                 cfg.transport_fullscale[pname] = data_par[idx]
 
-    def get_observations(self, tags):
+    def get_observations(self, tags, parameters):
         try:
             print(f"transport_wrapper: get observations tags={tags}")
             # res = self.calculate(self._config)
-            rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
+            # set_parameters(parameters)
+            # rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
+            
             return rc, data
         except Exception as e:
             sys.stdout.write("-"*60)
