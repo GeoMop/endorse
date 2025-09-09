@@ -52,7 +52,6 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     pressure_output_sigma = idata.sample_stats.attrs["observed_pressure_sigma"]
 
     flow_rate_observed = idata.sample_stats.attrs["observed_flow"]
-    print(flow_rate_observed)
     flow_rate_sigma = idata.sample_stats.attrs["observed_flow_sigma"]
 
     observe = idata.posterior_predictive
@@ -228,10 +227,6 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
             #ax_row.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
             ax_row.tick_params(axis="x", labelsize=6)
 
-    # constrained layout for better spacing
-    fig = plt.gcf()
-    fig.set_constrained_layout(True)
-
     return axes
 
 def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
@@ -248,9 +243,6 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
 
     figs = []
 
-    borehole = idata.attrs["borehole"]
-    section = idata.attrs["section"]
-
     for dataset, label in zip(datasets, labels):
         fig_progression, axes_progression = plt.subplots(2, 1, figsize=(16, 9))
         fig_progression.suptitle(f"{generic_name} - progression of {label} (values under {cutoff} cut off)")
@@ -261,7 +253,6 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
         axes_progression[0].legend(ncol=2, loc="lower right")
         axes_progression[0].grid(True, which='both', linestyle='--', linewidth=0.5)
         axes_progression[0].set_yscale('symlog', linthresh=1)
-        axes_progression[0].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
 
         mean = np.mean(dataset, axis=0)
         median = np.median(dataset, axis=0)
