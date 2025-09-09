@@ -16,7 +16,7 @@ def plot_idata(idata):
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 
-    generic_name = f"WPT_{idata.attrs['year']}_{idata.attrs['month']:02d}_{idata.attrs['borehole'][2:]}_{idata.attrs['section']}"
+    generic_name = get_generic_name(idata)
 
     save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata, bins=150, generic_name=generic_name))
     #plt.savefig("observe_plot.pdf", dpi=300)
