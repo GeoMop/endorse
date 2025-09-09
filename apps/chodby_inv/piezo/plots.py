@@ -81,7 +81,6 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     hist2d_x = np.tile(np.arange(observe_length), chains * draws)
 
     ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
-    #ax.plot(np.arange(observe_length), p_obs, "r-", label="Predicted observation", lw=2)
     origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
     ax.plot(np.arange(origin_offset, observe_length), pressure_output_extended, "r-", label="Predicted observation (extended)", lw=1)
     ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
@@ -102,19 +101,16 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     fig_flow.suptitle(f"{generic_name} - flow rate distribution")
     ax_flow.set_xlabel("Flow rate [m^3/s]")
     ax_flow.set_ylabel("Counts")
-    # flow data contains both positive and negative values, across multiple orders of magnitude
-    # split the data into positive and negative parts for easier visualization
-    #positive = flow_values[flow_values > 0]
-    #if positive.size > 0:
-    #    ax_flow.hist(positive, alpha=0.7, label="Flow rate - positive values", bins=np.logspace(np.log10(positive.min()), np.log10(positive.max()), bins), color="blue")
-    #negative = -flow_values[flow_values < 0] # convert to positive values for histogram
-    #if negative.size > 0:
-    #    ax_flow.hist(negative, alpha=0.7, label="Flow rate - negative values", bins=np.logspace(np.log10(negative.min()), np.log10(negative.max()), bins), color="orange")
-    ax_flow.hist(flow_values, alpha=0.7, label="Flow rate - negative values", bins=bins, color="orange")
-    ax_flow.axvline(flow_rate_observed, color="red", linestyle="--", label="Observed flow rate")
     ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
-    #ax_flow.xaxis.set_minor_formatter(FuncFormatter(exp_formatter))
-    #ax_flow.set_xscale('log')
+
+    # plot flow rate distribution
+    ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
+
+    # plot observed flow rate distribution
+    observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
+    observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
+    ax_flow.plot(observed_xvals, observed_yvals * flow_values.size / np.sum(observed_yvals), color="red", linestyle="dashed", label="Observed flow rate distribution")
+    ax_flow.legend()
 
     return [fig, fig_flow]
 
