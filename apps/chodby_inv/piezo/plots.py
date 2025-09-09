@@ -254,6 +254,24 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
         axes_progression[0].grid(True, which='both', linestyle='--', linewidth=0.5)
         axes_progression[0].set_yscale('symlog', linthresh=1)
 
+        dataspan = np.log10(-dataset.min()) - np.log10(-dataset.max()) # negative values
+        print(dataspan)
+        if dataspan >= 1.5:
+            subs_major = [1, 5]
+            subs_minor = np.arange(1, 10)
+        elif dataspan >= 0.6:
+            subs_major = [1, 3, 5, 7]
+            subs_minor = np.arange(1, 10)
+        elif dataspan >= 0.3:
+            subs_major = np.arange(1, 10, 0.5)
+            subs_minor = np.arange(1, 10, 0.1)
+        else:
+            subs_major = np.arange(1, 10, 0.2)
+            subs_minor = np.arange(1, 10, 0.05)
+
+        axes_progression[0].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
+        axes_progression[0].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
+        axes_progression[0].yaxis.set_major_formatter(get_symlog_formatter())
         mean = np.mean(dataset, axis=0)
         median = np.median(dataset, axis=0)
         min = np.min(dataset, axis=0)
@@ -266,7 +284,9 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
         axes_progression[1].legend(ncol=2, loc="lower right")
         axes_progression[1].grid(True, which='both', linestyle='--', linewidth=0.5)
         axes_progression[1].set_yscale('symlog', linthresh=1)
-        axes_progression[1].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
+        axes_progression[1].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
+        axes_progression[1].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
+        axes_progression[1].yaxis.set_major_formatter(get_symlog_formatter())
 
         figs += [fig_progression]
 
@@ -277,7 +297,9 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
         logbins = np.multiply(np.logspace(np.log10(-dataset.max()), np.log10(-dataset.min()), 100), -1)
         axes_hist.hist(dataset.values.flatten(), bins=logbins[::-1])
         axes_hist.set_xscale('symlog', linthresh=1)
-        axes_hist.xaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=np.arange(2, 10), linthresh=1))
+        axes_hist.xaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
+        axes_hist.xaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
+        axes_hist.xaxis.set_major_formatter(get_symlog_formatter())
 
         figs += [fig_hist]
 
