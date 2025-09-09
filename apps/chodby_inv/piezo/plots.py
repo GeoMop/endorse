@@ -35,6 +35,8 @@ def plot_idata(idata):
 
     save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata, generic_name=generic_name))
 
+    plot_merged(idata)
+
 def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     if ax is None:
         fig, ax = plt.subplots(figsize=(16, 9))
