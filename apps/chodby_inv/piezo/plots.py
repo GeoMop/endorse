@@ -321,3 +321,74 @@ def save_plots_pdf_pages(
     except:
         logging.error("Failed to save plot at %s", filename)
 
+def plot_merged(idata):
+
+    az.rcParams["plot.max_subplots"] = 400
+    generic_name = get_generic_name(idata)
+
+    # order: 
+    # observe (both)
+    # likelihood (just chains, just likelihood(?))
+    # posterior + trace (right side)
+    # new posterior plot (2d hist)
+    # pair (might not fit)
+    # all others
+
+    figs = []
+    figs += plot_observe(idata, bins=150, generic_name=generic_name)
+    likelihood_figs = plot_likelihood(idata, generic_name=generic_name) # order - likelihood, prior, posterior
+    figs += [likelihood_figs[0]]
+
+    trace_ax = plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
+    trace_fig = trace_ax[0, 0].figure
+
+    for i, var_name in enumerate(idata.posterior.data_vars):
+        trace_ax[i, 0].clear()
+        with plt.rc_context({'axes.labelsize': 12, "axes.titlesize": 12, 'xtick.labelsize': 12, 'ytick.labelsize': 12}):
+            plot_posterior_modified(idata, var_names=[var_name], generic_name=generic_name, ax=trace_ax[i, 0])
+        if var_name not in ["p_far"]:
+            trace_ax[i, 1].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
+    
+    figs += [trace_fig]
+
+    poserior_ax = plot_posterior_hist_2d(idata, generic_name=generic_name, figsize=(16, 18))
+    poserior_fig = poserior_ax[0].figure
+    figs += [poserior_fig]
+
+    pair_ax = az.plot_pair(idata, figsize=(16, 16), marginals=True, kind="kde")
+    pair_fig = pair_ax[0, 0].figure
+    figs += [pair_fig]
+
+    figs += likelihood_figs[1:] # add prior and posterior likelihood histograms
+
+    save_plots_pdf_pages(f"{generic_name}_summary.pdf", figs)
+
+def plot_posterior_hist_2d(idata, generic_name="WPT", *args, **kwargs):
+
+    if "figsize" in kwargs:
+        figsize = kwargs.pop("figsize")
+    
+    fig, axes = plt.subplots(2, 1, figsize=figsize)
+    fig.suptitle(f"{generic_name} - posterior distributions of log_k and log_E")
+
+    posterior = idata.posterior
+    k_params = [idx for idx in posterior.data_vars if idx.startswith("log_k_")]
+    k_values = posterior[k_params].to_array().values.reshape(len(k_params), -1)
+    E_params = [idx for idx in posterior.data_vars if idx.startswith("log_E_")]
+    E_values = posterior[E_params].to_array().values.reshape(len(E_params), -1)
+
+    n_samples, n_params = k_values.shape
+
+    x = np.repeat(np.arange(n_samples), n_params)
+
+    y = k_values.flatten()
+    axes[0].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
+    axes[0].set_xlabel("index of k parameter")
+    axes[0].set_ylabel("parameter value")
+    
+    y = E_values.flatten()
+    axes[1].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
+    axes[1].set_xlabel("index of E parameter")
+    axes[1].set_ylabel("parameter value")
+
+    return axes
