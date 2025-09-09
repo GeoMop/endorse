@@ -305,6 +305,12 @@ def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
 
     return figs
 
+def get_symlog_formatter():
+    formatter = ScalarFormatter(useMathText=True)
+    formatter.set_scientific(True)
+    formatter.set_powerlimits((-3, 3))
+    return formatter
+
 def save_plots_pdf_pages(
         filename: str,
         figs: list) -> None:
