@@ -171,7 +171,7 @@ def _run_inversion(inv_cfg, epoch_df):
     flow_rate_observed = np.array([selected_test["spotreba"]])
     #flow_rate_sigma = np.array([1e-6])
     #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
-    flow_rate_sigma = np.log(100 / 94) / 3 / 10
+    flow_rate_sigma = np.log10(100 / 94) / 3
     if flow_rate_sigma == 0:
         # cover cases when sigma is zero
         flow_rate_sigma = np.array([1e-11])
