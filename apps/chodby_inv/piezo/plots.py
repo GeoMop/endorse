@@ -8,6 +8,9 @@ from scipy.stats import norm, lognorm
 import logging
 
 
+def get_generic_name(idata):
+    return f"WPT_{idata.attrs['year']}_{idata.attrs['month']:02d}_{idata.attrs['borehole'][3:]}_{idata.attrs['section']}"
+
 def plot_idata(idata):
 
     #az.style.use("arviz-doc")
