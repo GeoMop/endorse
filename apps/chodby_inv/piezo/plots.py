@@ -136,6 +136,10 @@ def exp_formatter(x, pos):
 
 def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_posterior(idata, *args, **kwargs)
+    # constrained layout for better spacing
+    fig = plt.gcf()
+    fig.set_constrained_layout(True)
+
     borehole = idata.attrs["borehole"]
     section = idata.attrs["section"]
     plt.suptitle(f"{generic_name} - posterior distributions")
@@ -158,6 +162,25 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
         prior_sd = np.sqrt(np.diag(prior_cov))
 
         # iterate across axes and add corresponding prior plots
+        if not isinstance(axes, np.ndarray):
+            param_names = list(idata.posterior.data_vars)
+            idx = param_names.index(kwargs["var_names"][0])
+            mean = prior_mean[idx]
+            sd = prior_sd[idx]
+            print(sd)
+            xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
+            yvals = norm.pdf(xvals, mean, sd)
+            axes.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+
+            if axes.get_title() not in ["p_far"]:
+                axes.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
+            else:
+                axes.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+                axes.ticklabel_format(style='sci', axis='x', scilimits=(-3, 3))
+            #ax.set_xscale('symlog', linthresh=1, base=10)
+            axes.tick_params(axis="x", labelsize=6)
+            return axes
+
         for x, ax_row in enumerate(axes):
             if isinstance(ax_row, np.ndarray):
                 for y, ax in enumerate(ax_row):
