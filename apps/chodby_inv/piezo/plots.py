@@ -22,7 +22,7 @@ def plot_idata(idata):
     #plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
-    az.summary(idata)
+    print(az.summary(idata))
 
     # plot trace and force axis to use scientitic notation
     plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
