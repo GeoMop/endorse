@@ -14,6 +14,32 @@ boreholes:
     packer_width: 1
     packer_centers: [2, 4.5, 7]
     sensor_positions: [3.18, 5.67, 8.14]
+    fractures:
+      - position: 2.44
+        azimuth: 318.68
+        inclination: 74.56
+        width: 16.08e-3
+        flag: 1
+#      - position: 2.42
+#        azimuth: 314.31
+#        inclination: 79.52
+#        width: 6.03e-3
+#        flag: 1
+#      - position: 3.02
+#        azimuth: 310.23
+#        inclination: 85.08
+#        width: 10.98e-3
+#        flag: 1
+      - position: 3.07
+        azimuth: 127.47
+        inclination: 62.18
+        width: 8.83e-3
+        flag: 1
+      - position: 6.67
+        azimuth: 258.04
+        inclination: 68.83
+        width: 18.89e-3
+        flag: 1
 
   - name: L5-50UL
     id: L-9+40+14
@@ -25,6 +51,17 @@ boreholes:
     packer_width: 1
     packer_centers: [2.5, 6, 9]
     sensor_positions: [3.72, 7.22, 10.08]
+    fractures:
+      - position: 10.85
+        azimuth: 301.8
+        inclination: 89.56
+        width: 29.84e-3
+        flag: 1
+      - position: 11.29
+        azimuth: 250.35
+        inclination: 38.05
+        width: 21.5e-3
+        flag: 1
 
   - name: L5-37R
     id: P +5-09+00
@@ -36,6 +73,27 @@ boreholes:
     packer_width: 1
     packer_centers: [4.5, 8.5, 12]
     sensor_positions: [5.69, 9.67, 13.12]
+    fractures:
+      - position: 5.25
+        azimuth: 200.31
+        inclination: 49.51
+        width: 47.21e-3
+        flag: 3
+      - position: 7.71
+        azimuth: 203.91
+        inclination: 81.86
+        width: 302.93e-3
+        flag: 0
+      - position: 10.55
+        azimuth: 234.23
+        inclination: 62.77
+        width: 81.39e-3
+        flag: 2
+      - position: 11.44
+        azimuth: 338.31
+        inclination: 78.97
+        width: 53.09e-3
+        flag: 1
 
   - name: L5-26R
     id: P -6+13+00
@@ -47,6 +105,17 @@ boreholes:
     packer_width: 1
     packer_centers: [2.5, 6, 9]
     sensor_positions: [3.74, 7.19, 10.1]
+    fractures:
+      - position: 0.68
+        azimuth: 18.06
+        inclination: 78.6
+        width: 22.58e-3
+        flag: 1
+      - position: 2.73
+        azimuth: 218.01
+        inclination: 49.37
+        width: 14.57e-3
+        flag: 3
 
   - name: L5-23UR
     id: P-13+66+12
@@ -58,6 +127,7 @@ boreholes:
     packer_width: 1
     packer_centers: [2.5, 6, 9]
     sensor_positions: [3.68, 7.18, 10.12]
+    fractures: []
 
   - name: L5-37UR
     id: P +5-25+15
@@ -69,6 +139,33 @@ boreholes:
     packer_width: 1
     packer_centers: [1.5, 5, 7.5]
     sensor_positions: [2.67, 6.25, 8.74]
+    fractures:
+#      - position: 5.97
+#        azimuth: 235.45
+#        inclination: 57.71
+#        width: 4.63e-3
+#        flag: 2
+#      - position: 6.02
+#        azimuth: 239.26
+#        inclination: 66.26
+#        width: 2.74e-3
+#        flag: 2
+      - position: 6.17
+        azimuth: 234.68
+        inclination: 46.67
+        width: 32.64e-3
+        flag: 1
+#      - position: 6.24
+#        azimuth: 229.86
+#        inclination: 56.21
+#        width: 32.73e-3
+#        flag: 1
+#      - position: 6.36
+#        azimuth: 223.77
+#        inclination: 49.46
+#        width: 5.66e-3
+#        flag: 2
+
 
   - name: L5-24DR
     id: P-13+70-15
@@ -80,6 +177,17 @@ boreholes:
     packer_width: 1
     packer_centers: [1.5, 5, 8]
     sensor_positions: [2.79, 6.2, 9.15]
+    fractures:
+      - position: 0.6
+        azimuth: 343.38
+        inclination: 65.17
+        width: 17.37e-3
+        flag: 1
+      - position: 10.05
+        azimuth: 338.47
+        inclination: 48.82
+        width: 31.7e-3
+        flag: 2
 
   - name: L5-22DR
     id: P-13+59-12
@@ -91,5 +199,16 @@ boreholes:
     packer_width: 1
     packer_centers: [7.5, 10, 13.5]
     sensor_positions: [8.65, 11.19, 14.66]
+    fractures:
+      - position: 2.96
+        azimuth: 230.24
+        inclination: 47.43
+        width: 39.87e-3
+        flag: 1
+#      - position: 3.41
+#        azimuth: 233.47
+#        inclination: 58.09
+#        width: 35.42e-3
+#        flag: 1
 
 

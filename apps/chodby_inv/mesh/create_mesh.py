@@ -113,14 +113,22 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
     tunnel = tunnel_laser_scan.split_by_dimension()[3]
     tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
 
+    # create fractures
+    fractures_list = bhs.make_gmsh_fractures(factory)
+    fractures = factory.group( *fractures_list )
+    fractures_cut = fractures.copy().cut(tunnel)
+    # fractures_boundary = fractures.copy().fragment().get_boundary().split_by_dimension()[1]
+
     # fragment
     print("Fragmenting...")
-    box_fr, box_sides_fr, tunnel_fr, tunnel_boundary_fr = factory.fragment(box, box_sides_group, tunnel, tunnel_boundary)
+    box_fr, box_sides_fr, tunnel_fr, tunnel_boundary_fr, fractures_fr \
+        = factory.fragment(box, box_sides_group, tunnel, tunnel_boundary, fractures_cut)
     print("Fragmenting finished.")
 
     # get boundary of fragmented volumes
     b_box_fr = box_fr.get_boundary().split_by_dimension()[2]
     b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
+    b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
 
     # CHECK
     print("Checking fragments...")
@@ -158,6 +166,16 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
     tunnel_walls.dt_drop(tunnel_heads)
     tunnel_walls.set_region(".tunnel")
 
+    # GET fracture-tunnel boundaries and set regions
+    print("Get fracture boundaries.")
+    # fractures_boundary_orig = b_fractures_fr.select_by_intersect(fractures_boundary)
+    # b_fractures_fr.dt_drop(fractures_boundary_orig)
+    b_fractures_fr = b_fractures_fr.select_by_intersect(tunnel_walls)
+    print(f"b_fractures_fr:\n{b_fractures_fr}")
+    fractures_fr.set_region("fractures")
+    b_fractures_fr.set_region(".fractures_tunnel")
+
+
     # SET final geometry set
     print("Set regions to box sides.")
     geometry_set = []
@@ -167,6 +185,8 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
         geometry_set.append(b_side)
     geometry_set.append(tunnel_walls)
     geometry_set.append(box_fr)
+    geometry_set.append(fractures_fr)
+    geometry_set.append(b_fractures_fr)
 
     # create refinement fields around drifts
     line_fields = [line_distance_edz(factory, line, cfg.mesh.line_refinement)
@@ -272,7 +292,7 @@ def make_gmsh(cfg:'dotdict'):
     # factory.show()
     # exit(0)
 
-    meshing(factory, [geometry_set], final_mesh_filename)
+    meshing(factory, [geometry_set], str(final_mesh_filename))
     # factory.show()
     del factory
     return common.File(final_mesh_filename)

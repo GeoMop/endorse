@@ -94,6 +94,19 @@ class Boreholes:
     def sensor_position(self, bh_index, chamber_index):
         return self.config.boreholes[bh_index].sensor_positions[chamber_index]
 
+    def n_fractures(self, bh_index):
+        return len(self.config.boreholes[bh_index].fractures)
+
+    def fracture(self, bh_index, fr_index):
+        return self.config.boreholes[bh_index].fractures[fr_index]
+
+    def fr_normal(self, bh_index, fr_index):
+        fr = self.config.boreholes[bh_index].fractures[fr_index]
+        x = cos((self.l5_azimuth + 90 - fr.azimuth) * pi / 180)
+        y = sin((self.l5_azimuth + 90 - fr.azimuth) * pi / 180)
+        z = sin(fr.inclination * pi / 180)
+        return np.array([x, y, z])
+
     def make_gmsh_lines(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         lines = []
         for i in range(self.n_boreholes):
@@ -103,6 +116,20 @@ class Boreholes:
                 p2 = factory.point(self.chamber_end(i, ch))
                 lines.append( factory.line(p1, p2) )
         return lines
+
+    def make_gmsh_fractures(self, factory: bgem.gmsh.gmsh.GeometryOCC):
+        objs = []
+        radius = 5
+        for i in range(self.n_boreholes):
+            n_fracs = self.n_fractures(i)
+            bh_start = self.bh_start(i)
+            bh_dir = self.bh_direction(i)
+            for fri in range(n_fracs):
+                fr = self.fracture(i, fri)
+                center = bh_start + bh_dir*fr.position
+                normal = self.fr_normal(i, fri)
+                objs.append( factory.disc_discrete(radius, center, 8, normal) )
+        return objs
 
     def make_gmsh_rectangles(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         rects = []
