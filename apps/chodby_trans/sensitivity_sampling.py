@@ -16,7 +16,7 @@ import yaml
 
 # ---- Dask (over TCP) ----
 from dask.distributed import Client, wait
-# import dask.array as da
+import dask.array as da
 
 import numpy as np
 
@@ -249,16 +249,21 @@ def setup_data_storage(cfg, n_samples):
     # node = zf.open_store(data_schema, **kwargs) # initialize zarr_fuse storage
 
     # DIRECT ZARR
-    temporary shortcut for direct zarr
+    # temporary shortcut for direct zarr
     qmc_size = cfg.sensitivity.n_samples
     # block_size = 4 if cfg.sensitivity.second_order_sa else 3
     param_size=len(cfg.sensitivity.parameters)
     grid_size = data_schema[data_schema_key]["ATTRS"]["grid_step"]
+
+    from endorse.fullscale_transport import output_times
+    otimes = output_times(cfg.transport_fullscale)
+
     init_zarr_store(str(input_data.zarr_store_path),
+                    data_schema=data_schema[data_schema_key],
                     sample_size=n_samples,
                     qmc_size=qmc_size,
                     param_size=param_size,
-                    time_size=18,
+                    sim_time=otimes,
                     grid_size=[*grid_size, 2])
 
     return data_schema_key
@@ -268,8 +273,7 @@ def init_zarr_store(store_path: str,
                     sample_size: int,
                     param_size: int,
                     qmc_size: int,
-                    par_size: int,
-                    time_size: int,
+                    sim_time: int,
                     grid_size: list,
                     dtype=np.float32,
                     compressor=None) -> None:
@@ -290,12 +294,10 @@ def init_zarr_store(store_path: str,
         Length of the 'param_name' dimension.
     block_size : int
         Number of blocks: A, B, AB, (BA).
-    x_size : int
-        Length of the 'X' dimension.
-    y_size : int
-        Length of the 'Y' dimension.
-    time_size : int
+    sim_time : list
         Length of the 'time' dimension.
+    grid_size : int
+        Tuple: Length of the 'X' and 'Y' dimension.
     dtype : NumPy dtype, optional
         Data type of the array (default: np.float32).
     compressor : zarr compressor, optional
@@ -303,8 +305,12 @@ def init_zarr_store(store_path: str,
     """
     # Define dimensions: 'sample' is unlimited/appendable
     coords = data_schema["COORDS"]
-    shapes = (sample_size, qmc_size, param_size, time_size, grid_size[0], grid_size[1], grid_size[2])
-    chunks = [ coords[c]["chunk_size"] for c in coords.keys]
+    coords_names = list(coords.keys())
+    shapes = (sample_size, qmc_size, param_size, len(sim_time), grid_size[0], grid_size[1], grid_size[2])
+    chunks = [ coords[c]["chunk_size"] for c in coords_names]
+
+    ds_coords = {k: np.arange(v) for k, v in zip(coords_names, shapes)}
+    ds_coords['sim_time'] = sim_time
 
     # ds = xr.Dataset({'data': data})
     ds = xr.Dataset(
@@ -322,94 +328,7 @@ def init_zarr_store(store_path: str,
     )
 
     # Write to Zarr, overwrite if exists
-    ds.to_zarr(store_path, mode='w', encoding={
-        'chunks': chunks,
-        'compressor': compressor,
-        'fill_value': 0
-        }
-    )
-
-# def init_zarr_store(store_path: str,
-#                     sample_size: int,
-#                     qmc_size: int,
-#                     par_size: int,
-#                     time_size: int,
-#                     grid_size: list,
-#                     dtype=np.float32,
-#                     compressor=None) -> None:
-#     """
-#     Initialize an empty Zarr store with the specified dimensions and chunking.
-
-#     Parameters
-#     ----------
-#     store_path : str
-#         Path to the Zarr store (directory or Zarr URL).
-#     qmc_size : int
-#         Length of the 'qmc' dimension.
-#     block_size : int
-#         Number of blocks: A, B, AB, (BA).
-#     x_size : int
-#         Length of the 'X' dimension.
-#     y_size : int
-#         Length of the 'Y' dimension.
-#     time_size : int
-#         Length of the 'time' dimension.
-#     dtype : NumPy dtype, optional
-#         Data type of the array (default: np.float32).
-#     compressor : zarr compressor, optional
-#         Compressor to use (default: None).
-#     """
-#     # Define dimensions: 'sample' is unlimited/appendable
-#     dims = ('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z')
-#     shape = (sample_size, qmc_size, par_size, time_size, grid_size[0], grid_size[1], grid_size[2])
-#     # chunks = (1, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
-#     chunks = (64, 16, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
-
-#     # Create an empty DataArray with 0 length sample dimension
-#     # data = xr.DataArray(
-#     #     # np.zeros(shape, dtype=dtype),
-#     #     # da.zeros(shape, dtype=dtype, chunks=chunks)
-#     #     None,
-#     #     dims=dims,
-#     #     coords={
-#     #         'sample': np.arange(sample_size),
-#     #         'qmc': np.arange(qmc_size),
-#     #         'block': np.arange(block_size),
-#     #         'time': np.arange(time_size),
-#     #         'X': np.arange(grid_size[0]),
-#     #         'Y': np.arange(grid_size[1]),
-#     #         'Z': np.arange(grid_size[2]),
-#     #     }
-#     # )
-
-#     # ds = xr.Dataset({'data': data})
-#     ds = xr.Dataset(
-#         data_vars={'conc': (('iid','qmc', 'time', 'X', 'Y', 'Z'), None)},
-#         coords={
-#             'iid': np.arange(sample_size),
-#             'qmc': np.arange(qmc_size),
-#             'block': np.arange(block_size),
-#             'time': np.arange(time_size),
-#             'X': np.arange(grid_size[0]),
-#             'Y': np.arange(grid_size[1]),
-#             'Z': np.arange(grid_size[2]),
-#         }
-#     )
-
-#     # Set encoding for chunking and compression
-#     # ds.encoding['data'] = {
-#     #     'chunks': chunks,
-#     #     'compressor': compressor,
-#     #     'fill_value': 0
-#     # }
-
-#     # Write to Zarr, overwrite if exists
-#     ds.to_zarr(store_path, mode='w', encoding={
-#         'chunks': chunks,
-#         'compressor': compressor,
-#         'fill_value': 0
-#         }
-#     )
+    ds.to_zarr(store_path, mode='w')
 
 
 pbs_script_template = """
