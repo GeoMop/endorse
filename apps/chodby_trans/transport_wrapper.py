@@ -126,43 +126,95 @@ class Wrapper:
             if slice_array.shape != expected_shape:
                 raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
 
-            ds = xr.Dataset(
-                {
-                  # 'conc': (['iid', 'qmc'], slice_array), # add sample, qmc and block dims
-                  # 'parameter': (['iid', 'qmc'], parameters)
-                  'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'], slice_array[np.newaxis, np.newaxis, ...]), # add sample, qmc and block dims
-                  # 'parameter': (['sim_time', 'X', 'Y', 'Z'], parameters)
-                },
-                # dims=('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z'),
-                coords={
-                    'iid': [tags[0]],
-                    'qmc': [tags[1]],
-                    # 'param_name': param_names,
-                    'sim_time': times,
-                    'X': np.arange(20),
-                    'Y': np.arange(20),
-                    'Z': np.arange(2),
-                    # 'X': np.linspace(2.0, 3.0, num=ng),
-                    # 'Y': np.linspace(5.0, 8.0, num=ng),
-                    # 'Z': np.array([1.0,3.5])
-                }
-            )
+            ds_coords = xr.Dataset(
+                {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+                          slice_array[np.newaxis, np.newaxis, ...])})
+            ds_coords.to_zarr(store_path, mode='a', region={
+                'iid': slice(tags[0], tags[0] + 1),
+                'qmc': slice(tags[1], tags[1] + 1)})
 
-            # ds.to_zarr(store_path, mode='a')
-            # Write the slice by specifying the region to overwrite
-            ds.to_zarr(
-                store_path,
-                mode='a',
-                region={
-                    'iid': slice(tags[0], tags[0]+1),
-                    'qmc': slice(tags[1], tags[1]+1),
-                    # 'param_name': slice(block_idx, block_idx + 1),
-                    'sim_time': 'auto',
-                    'X': 'auto',
-                    'Y': 'auto',
-                    'Z': 'auto',
-                }
+            ds_pars = xr.Dataset(
+                {'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])}
             )
+            ds_pars.to_zarr(store_path, mode='a', region={
+                'iid': slice(tags[0], tags[0] + 1),
+                'qmc': slice(tags[1], tags[1] + 1)})
+
+            # ds_coords = xr.Dataset(
+            #     {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+            #               slice_array[np.newaxis, np.newaxis, ...])}
+            # )
+            # ds_coords.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0]+1),
+            #         'qmc': slice(tags[1], tags[1]+1),
+            #         'sim_time': 'auto',
+            #         'X': 'auto',
+            #         'Y': 'auto',
+            #         'Z': 'auto',
+            #     }
+            # )
+
+            # ds = xr.Dataset(
+            #     {
+            #       # 'conc': (['iid', 'qmc'], slice_array), # add sample, qmc and block dims
+            #       # 'parameter': (['iid', 'qmc'], parameters)
+            #       'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'], slice_array[np.newaxis, np.newaxis, ...]), # add sample, qmc and block dims
+            #       # 'parameter': (['sim_time', 'X', 'Y', 'Z'], parameters)
+            #     },
+            #     # dims=('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z'),
+            #     coords={
+            #         'iid': [tags[0]],
+            #         'qmc': [tags[1]],
+            #         # 'param_name': param_names,
+            #         'sim_time': times,
+            #         'X': np.arange(20),
+            #         'Y': np.arange(20),
+            #         'Z': np.arange(2),
+            #         # 'X': np.linspace(2.0, 3.0, num=ng),
+            #         # 'Y': np.linspace(5.0, 8.0, num=ng),
+            #         # 'Z': np.array([1.0,3.5])
+            #     }
+            # )
+            #
+            # # ds.to_zarr(store_path, mode='a')
+            # # Write the slice by specifying the region to overwrite
+            # ds.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0]+1),
+            #         'qmc': slice(tags[1], tags[1]+1),
+            #         # 'param_name': slice(block_idx, block_idx + 1),
+            #         'sim_time': 'auto',
+            #         'X': 'auto',
+            #         'Y': 'auto',
+            #         'Z': 'auto',
+            #     }
+            # )
+            #
+            # ds_pars = xr.Dataset(
+            #     {
+            #         'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])
+            #     },
+            #     coords={
+            #         'iid': [tags[0]],
+            #         'qmc': [tags[1]],
+            #         'param_name': param_names,
+            #     }
+            # )
+            # # Write the slice by specifying the region to overwrite
+            # ds_pars.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0] + 1),
+            #         'qmc': slice(tags[1], tags[1] + 1),
+            #         'param_name': 'auto',
+            #     }
+            # )
 
             # Wrap slice_array into a DataArray with new sample and qmc coords
             # da = xr.DataArray(

@@ -170,18 +170,33 @@ def all_samples(cfg, parameters, client=None):
     # sample_subdir = sensitivity_dir / "samples"
 
     n_samples, n_params = parameters.shape
-    data_schema_key = setup_data_storage(cfg, n_samples)
-    # data_schema_key = "run_XXX"
 
     cfg_sens = cfg.sensitivity
-    qmc_idx = sa.sample.saltelli_qmc_index(N=cfg_sens.n_samples,
-                                           D=n_params,
-                                           calc_second_order=cfg_sens.second_order_sa)
-    block_idx = sa.sample.saltelli_block_labels(N=cfg_sens.n_samples,
-                                                D=n_params,
-                                                calc_second_order=cfg_sens.second_order_sa)
-    tags = np.column_stack((range(n_samples), qmc_idx, block_idx))
+    print(f"N={cfg_sens.n_samples}, D={n_params}")
+    print(f"n_blocks={sa.sample._num_blocks(n_params)}")
+    print(f"n_samples (N*n_blocks)={n_samples}")
+    # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
+    #                                                 D=n_params,
+    #                                                 second_order=cfg_sens.second_order_sa)
+    # print("saltelli_base_idx:  ", saltelli_base_idx)
+    saltelli_qmc_idx = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
+                                                  D=n_params,
+                                                  second_order=cfg_sens.second_order_sa)
+    print("saltelli_qmc_idx:   ", saltelli_qmc_idx)
+    saltelli_block_idx = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
+                                                      D=n_params,
+                                                      second_order=cfg_sens.second_order_sa)
+    print("saltelli_block_idx: ", saltelli_block_idx)
+    A_sample_idx = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
+                                              D=n_params,
+                                              second_order=cfg_sens.second_order_sa)
+    print("A_sample_idx:\n", A_sample_idx)
 
+    data_schema_key = setup_data_storage(cfg, n_samples,
+                                         (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
+    # data_schema_key = "run_XXX"
+
+    tags = np.column_stack((range(n_samples), saltelli_qmc_idx, saltelli_block_idx))
     # bh_args = []
     # for idx in range(n_samples):
     #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
@@ -219,7 +234,7 @@ def all_samples(cfg, parameters, client=None):
     # zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
 
-def setup_data_storage(cfg, n_samples):
+def setup_data_storage(cfg, n_samples, salib_coords):
     # prepare data scheme for zarr storage
     # add current scheme for current sampling run
 
@@ -250,33 +265,19 @@ def setup_data_storage(cfg, n_samples):
 
     # DIRECT ZARR
     # temporary shortcut for direct zarr
-    qmc_size = cfg.sensitivity.n_samples
-    # block_size = 4 if cfg.sensitivity.second_order_sa else 3
-    param_size=len(cfg.sensitivity.parameters)
-    grid_size = data_schema[data_schema_key]["ATTRS"]["grid_step"]
-
-    from endorse.fullscale_transport import output_times
-    otimes = output_times(cfg.transport_fullscale)
-
-    init_zarr_store(str(input_data.zarr_store_path),
+    init_zarr_store(cfg,
+                    store_path=str(input_data.zarr_store_path),
                     data_schema=data_schema[data_schema_key],
-                    sample_size=n_samples,
-                    qmc_size=qmc_size,
-                    param_size=param_size,
-                    sim_time=otimes,
-                    grid_size=[*grid_size, 2])
+                    n_samples=n_samples,
+                    salib_coords=salib_coords)
 
     return data_schema_key
 
-def init_zarr_store(store_path: str,
+def init_zarr_store(cfg: dotdict,
+                    store_path: str,
                     data_schema: dict,
-                    sample_size: int,
-                    param_size: int,
-                    qmc_size: int,
-                    sim_time: int,
-                    grid_size: list,
-                    dtype=np.float32,
-                    compressor=None) -> None:
+                    n_samples: int,
+                    salib_coords: tuple) -> None:
     """
     Initialize an empty Zarr store with the specified dimensions and chunking.
 
@@ -286,36 +287,52 @@ def init_zarr_store(store_path: str,
         Path to the Zarr store (directory or Zarr URL).
     data_schema : dict
         Data schema (zarr fuse alike)
-    sample_size : int
+    n_samples : int
         Length of the 'iid' dimension.
-    qmc_size : int
-        Length of the 'qmc' dimension.
-    param_size : int
-        Length of the 'param_name' dimension.
-    block_size : int
-        Number of blocks: A, B, AB, (BA).
-    sim_time : list
-        Length of the 'time' dimension.
-    grid_size : int
-        Tuple: Length of the 'X' and 'Y' dimension.
-    dtype : NumPy dtype, optional
-        Data type of the array (default: np.float32).
-    compressor : zarr compressor, optional
-        Compressor to use (default: None).
     """
-    # Define dimensions: 'sample' is unlimited/appendable
+    qmc_size = cfg.sensitivity.n_samples
+    block_size = 4 if cfg.sensitivity.second_order_sa else 3
+    param_names = [p.name for p in cfg.sensitivity.parameters]
+    param_size = len(param_names)
+    grid_size = data_schema["ATTRS"]["grid_step"]
+
+    from endorse.fullscale_transport import output_times
+    otimes = output_times(cfg.transport_fullscale)
+
+    qmc, block, A_sample, parameters = salib_coords
+
+    # ALL coords
     coords = data_schema["COORDS"]
     coords_names = list(coords.keys())
-    shapes = (sample_size, qmc_size, param_size, len(sim_time), grid_size[0], grid_size[1], grid_size[2])
+    shapes = (n_samples, qmc_size, param_size, len(otimes), grid_size[0], grid_size[1], grid_size[2])
     chunks = [ coords[c]["chunk_size"] for c in coords_names]
-
+    # set coords once
     ds_coords = {k: np.arange(v) for k, v in zip(coords_names, shapes)}
-    ds_coords['sim_time'] = sim_time
+    ds_coords['sim_time'] = otimes
+    ds_coords['param_name'] = param_names
+    # 'X', 'Y', 'Z' -> indices in the regular grid axes
 
-    # ds = xr.Dataset({'data': data})
+    conc_coords = data_schema['VARS']['conc']['coords']
+    conc_shapes = (n_samples, qmc_size, len(otimes), grid_size[0], grid_size[1], grid_size[2])
+    conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c != "param_name"]
+
+    par_coords = data_schema['VARS']['parameter']['coords']
+    par_shapes = (n_samples, qmc_size, param_size)
+    par_chunks = [coords[c]["chunk_size"] for c in coords_names if c in par_coords]
+
+    A_coords = data_schema['VARS']['A_sample']['coords']
+    # A_shapes = (n_samples, param_size)
+    A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
+
     ds = xr.Dataset(
-        data_vars={'conc': (tuple(coords.keys), None)},
-        coords={k: np.arange(v) for k, v in zip(coords.keys, shapes)}
+        data_vars={
+            'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
+            'parameter': (tuple(par_coords), da.zeros(par_shapes, chunks=par_chunks)),
+            # 'parameter': (tuple(par_coords), da.from_array(parameters, chunks=par_chunks)),
+            'A_sample': (tuple(A_coords), da.from_array(A_sample, chunks=A_chunks))
+        },
+        coords=ds_coords
+        # coords={k: np.arange(v) for k, v in zip(coords_names, shapes)}
         # {
         #     'iid': np.arange(sample_size),
         #     'qmc': np.arange(qmc_size),
@@ -329,6 +346,7 @@ def init_zarr_store(store_path: str,
 
     # Write to Zarr, overwrite if exists
     ds.to_zarr(store_path, mode='w')
+
 
 
 pbs_script_template = """
