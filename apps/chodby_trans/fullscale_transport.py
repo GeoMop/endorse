@@ -410,13 +410,19 @@ def set_source_term(cfg):
     cfg_src = cfg_fine.sources_params
     cfg_bh = cfg.geometry.storage_borehole
 
+    dsb_idx = cfg.geometry.damaged_storage_borehole
+
     source_params = dict(
         # UOS surface: S = pi * du * hu [m2]
         sources_uos_surface=np.pi * cfg_src.diameter * cfg_src.length,
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
-        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file
+        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file,
+
+        storage_regions = [f"storage_{i}" for i in range(5) if i != dsb_idx],
+        plug_region = f"plug_{dsb_idx}",
+        container_region = f"container_{dsb_idx}",
     )
     return source_params
 
