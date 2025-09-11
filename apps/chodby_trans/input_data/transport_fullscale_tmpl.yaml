@@ -18,18 +18,20 @@ problem: !Coupling_Sequential
       #          - .tunnel_heads
       - !Union
         name: storages
-        regions:
-          - storage_0
-          - storage_1
-          - storage_3
-          - storage_4
+        regions: <storage_regions>
+#          - storage_0
+#          - storage_1
+#          - storage_3
+#          - storage_4
       - !From_Label
         name: plug
-        mesh_label: plug_2
+        mesh_label: <plug_region>
+#        mesh_label: plug_2
         allow_empty: False
       - !From_Label
         name: container
-        mesh_label: container_2
+        mesh_label: <container_region>
+#        mesh_label: container_2
         allow_empty: False
 
       # Resolve fracture regions.
