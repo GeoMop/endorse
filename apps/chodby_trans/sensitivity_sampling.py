@@ -367,6 +367,7 @@ output_dir={outputdir}
 
 SCRIPT_PATH={script_path}
 PROJECT_DIR=$(dirname -- $SCRIPT_PATH)
+WORK_DIRNAME="workdir"
 
 # # A node list with each host once
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
@@ -390,7 +391,7 @@ echo "FINISHED SAMPLING"
 echo "Copying results back ..."
 uname -n
 for node in $UNIQ_HOSTS; do
-    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/workdir/" "$output_dir/workdir_$node" &
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$output_dir/workdir_$node" &
 done
 wait
 
