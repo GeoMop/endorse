@@ -127,18 +127,17 @@ class Wrapper:
                 raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
 
             ds_coords = xr.Dataset(
-                {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
-                          slice_array[np.newaxis, np.newaxis, ...])})
+                {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
+                          slice_array[np.newaxis, ...])})
             ds_coords.to_zarr(store_path, mode='a', region={
-                'iid': slice(tags[0], tags[0] + 1),
-                'qmc': slice(tags[1], tags[1] + 1)})
+                'iid': slice(tags[0], tags[0] + 1)})
 
-            ds_pars = xr.Dataset(
-                {'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])}
-            )
-            ds_pars.to_zarr(store_path, mode='a', region={
-                'iid': slice(tags[0], tags[0] + 1),
-                'qmc': slice(tags[1], tags[1] + 1)})
+            # ds_pars = xr.Dataset(
+            #     {'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])}
+            # )
+            # ds_pars.to_zarr(store_path, mode='a', region={
+            #     'iid': slice(tags[0], tags[0] + 1),
+            #     'qmc': slice(tags[1], tags[1] + 1)})
 
             # ds_coords = xr.Dataset(
             #     {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],

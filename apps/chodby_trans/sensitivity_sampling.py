@@ -192,8 +192,9 @@ def all_samples(cfg, parameters, client=None):
                                               second_order=cfg_sens.second_order_sa)
     print("A_sample_idx:\n", A_sample_idx)
 
-    data_schema_key = setup_data_storage(cfg, n_samples,
-                                         (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
+    data_schema_key, data_schema = initialize_data_schema()
+    setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, n_samples,
+                        (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
     # data_schema_key = "run_XXX"
 
     tags = np.column_stack((range(n_samples), saltelli_qmc_idx, saltelli_block_idx))
@@ -234,10 +235,8 @@ def all_samples(cfg, parameters, client=None):
     # zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
 
-def setup_data_storage(cfg, n_samples, salib_coords):
-    # prepare data scheme for zarr storage
+def initialize_data_schema():
     # add current scheme for current sampling run
-
     data_schema_path = input_data.data_schema_yaml
     if not data_schema_path.exists():
         shutil.copy2(input_data.data_schema_empty_yaml, data_schema_path)
@@ -254,30 +253,14 @@ def setup_data_storage(cfg, n_samples, salib_coords):
     with data_schema_path.open("w", encoding="utf-8") as file:
         yaml.dump(data_schema, file, sort_keys=False)
 
-    # kwargs =  {"WORKDIR": str(workdir), "S3_ENDPOINT_URL": "https://s3.cl4.du.cesnet.cz"}
-     # Local storage logic
-    # store_path = (workdir / fname).with_suffix(".zarr")
-    # ZARR FUSE
-    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
-    # data_schema = zf.schema.deserialize(data_schema_path) # read data scheme
-    # zf.remove_store(data_schema, **kwargs)      # start from scratch
-    # node = zf.open_store(data_schema, **kwargs) # initialize zarr_fuse storage
+    return data_schema_key, data_schema[data_schema_key]
 
-    # DIRECT ZARR
-    # temporary shortcut for direct zarr
-    init_zarr_store(cfg,
-                    store_path=str(input_data.zarr_store_path),
-                    data_schema=data_schema[data_schema_key],
-                    n_samples=n_samples,
-                    salib_coords=salib_coords)
 
-    return data_schema_key
-
-def init_zarr_store(cfg: dotdict,
-                    store_path: str,
-                    data_schema: dict,
-                    n_samples: int,
-                    salib_coords: tuple) -> None:
+def setup_data_storage(cfg: dotdict,
+                       store_path: str,
+                       data_schema: dict,
+                       n_samples: int,
+                       salib_coords):
     """
     Initialize an empty Zarr store with the specified dimensions and chunking.
 
@@ -290,62 +273,76 @@ def init_zarr_store(cfg: dotdict,
     n_samples : int
         Length of the 'iid' dimension.
     """
-    qmc_size = cfg.sensitivity.n_samples
-    block_size = 4 if cfg.sensitivity.second_order_sa else 3
+    # prepare data scheme for zarr storage
+
+    # kwargs =  {"WORKDIR": str(workdir), "S3_ENDPOINT_URL": "https://s3.cl4.du.cesnet.cz"}
+     # Local storage logic
+    # store_path = (workdir / fname).with_suffix(".zarr")
+    # ZARR FUSE
+    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    # data_schema = zf.schema.deserialize(data_schema_path) # read data scheme
+    # zf.remove_store(data_schema, **kwargs)      # start from scratch
+    # node = zf.open_store(data_schema, **kwargs) # initialize zarr_fuse storage
+
+    # DIRECT ZARR
+    # temporary shortcut for direct zarr
+
     param_names = [p.name for p in cfg.sensitivity.parameters]
-    param_size = len(param_names)
     grid_size = data_schema["ATTRS"]["grid_step"]
 
     from endorse.fullscale_transport import output_times
     otimes = output_times(cfg.transport_fullscale)
 
     qmc, block, A_sample, parameters = salib_coords
+    n_samples, n_params = parameters.shape
 
     # ALL coords
     coords = data_schema["COORDS"]
     coords_names = list(coords.keys())
-    shapes = (n_samples, qmc_size, param_size, len(otimes), grid_size[0], grid_size[1], grid_size[2])
-    chunks = [ coords[c]["chunk_size"] for c in coords_names]
+    shapes = (n_samples, n_params, len(otimes), *grid_size)
+    # chunks = [ coords[c]["chunk_size"] for c in coords_names]
     # set coords once
+    # default coords are set to index their range: 0,1,2,...
     ds_coords = {k: np.arange(v) for k, v in zip(coords_names, shapes)}
-    ds_coords['sim_time'] = otimes
-    ds_coords['param_name'] = param_names
+    ds_coords['sim_time'] = otimes          # actual simulation times
+    ds_coords['param_name'] = param_names   # actual parameter names
     # 'X', 'Y', 'Z' -> indices in the regular grid axes
 
+    # concentration - prepare empty
     conc_coords = data_schema['VARS']['conc']['coords']
-    conc_shapes = (n_samples, qmc_size, len(otimes), grid_size[0], grid_size[1], grid_size[2])
+    conc_shapes = (n_samples, len(otimes), *grid_size)
     conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c != "param_name"]
 
+    # parameters
     par_coords = data_schema['VARS']['parameter']['coords']
-    par_shapes = (n_samples, qmc_size, param_size)
     par_chunks = [coords[c]["chunk_size"] for c in coords_names if c in par_coords]
+    print(f"parameter shape: {parameters.shape}, coords: {par_coords}")
 
+    # A_sample
     A_coords = data_schema['VARS']['A_sample']['coords']
-    # A_shapes = (n_samples, param_size)
     A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
+    print(f"A_sample shape: {A_sample.shape}, coords: {A_coords}")
 
     ds = xr.Dataset(
         data_vars={
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
-            'parameter': (tuple(par_coords), da.zeros(par_shapes, chunks=par_chunks)),
-            # 'parameter': (tuple(par_coords), da.from_array(parameters, chunks=par_chunks)),
-            'A_sample': (tuple(A_coords), da.from_array(A_sample, chunks=A_chunks))
+            'parameter': (tuple(par_coords), da.from_array(parameters, chunks=par_chunks)),
+            'A_sample': (tuple(A_coords), da.from_array(A_sample, chunks=A_chunks)),
+            'qmc':   ('iid', da.from_array(qmc,   chunks=coords['iid']["chunk_size"])),
+            'block': ('iid', da.from_array(block, chunks=coords['iid']["chunk_size"]))
         },
         coords=ds_coords
-        # coords={k: np.arange(v) for k, v in zip(coords_names, shapes)}
-        # {
-        #     'iid': np.arange(sample_size),
-        #     'qmc': np.arange(qmc_size),
-        #     'block': np.arange(block_size),
-        #     'time': np.arange(time_size),
-        #     'X': np.arange(grid_size[0]),
-        #     'Y': np.arange(grid_size[1]),
-        #     'Z': np.arange(grid_size[2]),
-        # }
     )
 
     # Write to Zarr, overwrite if exists
     ds.to_zarr(store_path, mode='w')
+
+    print("=========== READ ZARR ==============")
+    print("Control read of created Zarr storage")
+    read_ds = xr.open_zarr(store_path)
+    print(read_ds)
+    # print(read_ds['A_sample'].to_numpy())
+    print("=========== END READ ZARR ==============")
 
 
 

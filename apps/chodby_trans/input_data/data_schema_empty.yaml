@@ -7,35 +7,39 @@ ATTRS:
 
 run_timestamp:
     VARS:
-        sample_id:
-            unit: ""
-            description: "Unique sample ID given by ordered Salib parameter sequence."
-            coords: [ "iid", "qmc" ]
+#        sample_id:
+#            unit: ""
+#            description: "Unique sample ID given by ordered Salib parameter sequence."
+#            coords: [ "iid", "qmc" ]
+        qmc:
+            unit: "int"
+            description: "Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices."
+            coords: [ "iid"]
+        block:
+            unit: "int"
+            description: "Indicator function for parameter of that QMC sample be from the set A (oposed to the set B) of the Saltelli schema."
+            coords: [ "iid"]
         A_sample:
             unit: "int"
             description: "Indicator function for parameter of that QMC sample be from the set A (oposed to the set B) of the Saltelli schema."
             coords: [ "iid", "param_name" ]
-        block:
-            unit: "int"
-            description: "Indicator function for parameter of that QMC sample be from the set A (oposed to the set B) of the Saltelli schema."
-            coords: [ "qmc", "param_name" ]
         parameter:
             unit: ""
             description: "Free simulation parameter."
-            coords: [ "iid", "qmc", "param_name"]
+            coords: [ "iid", "param_name"]
         conc:
             unit: "g/m^3"
             description: "Indicator concentration on a specified grid."
-            coords: [ "iid", "qmc", "sim_time", "X", "Y", "Z" ]
+            coords: [ "iid", "sim_time", "X", "Y", "Z" ]
 
 
         iid:
             unit: "int"
             description: "Independent sample set"
             df_col: None
-        qmc:
-            unit: "int"
-            description: "Quasi Monte Carlo sub sample for Saltelli schema for Sobol indices."
+        sim_time:
+            unit: "year"
+            description: "Simulation time."
             df_col: None
         X:
             unit: "m"
@@ -49,20 +53,16 @@ run_timestamp:
             unit: "m"
             description: "Indicator grid coordinate (z axis)."
             df_col: None
-        sim_time:
-            unit: "year"
-            description: "Simulation time."
-            df_col: None
 
     COORDS:
         iid:
             sorted: False
             chunk_size: 64
             merge: None
-        qmc:
-            sorted: False
-            chunk_size: 16
-            merge: None
+#        qmc:
+#            sorted: False
+#            chunk_size: 16
+#            merge: None
         param_name:
             sorted: False
             chunk_size: 64
