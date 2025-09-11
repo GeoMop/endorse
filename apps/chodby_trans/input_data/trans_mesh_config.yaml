@@ -106,6 +106,7 @@ transport_fullscale:
 
     # The total simulation time as well as the output times are ese are quite dependent on the
     output_times:
+      - 0
       - 30
       - 60
       - 120

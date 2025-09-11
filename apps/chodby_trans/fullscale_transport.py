@@ -6,6 +6,7 @@ import shutil
 import time
 from typing import *
 from pathlib import Path
+import yaml
 
 import numpy as np
 import pyvista as pv
@@ -203,13 +204,20 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
 
     # TODO: get grid, output times, values -> zarr_fuse
     # times
-    kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
-    data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
-    root_node = zf.open_storage(data_schema, **kwargs)
-    current_node = root_node[cfg.data_schema_key]
+    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    # data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
+    # root_node = zf.open_storage(data_schema, **kwargs)
+    # current_node = root_node[cfg.data_schema_key]
+    # grid_size = current_node.schema.ATTRS["grid_step"]
+
+    data_schema_path = input_data.data_schema_yaml
+    with data_schema_path.open("r", encoding="utf-8") as file:
+        content = file.read()
+        data_schema = yaml.safe_load(content)
+        grid_size = data_schema[cfg.data_schema_key]["ATTRS"]["grid_step"]
 
     print(f"sample tags:{tags}")
-    grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    grid, values = get_indicator(cfg, fo, grid_size)
 
     # print(f"sample tags:{tags}")
     # grid, values = get_indicator(cfg, fo, [20, 20])
@@ -220,20 +228,20 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
     #                  block_idx=tags[2],
     #                  slice_array=values)
 
-    param_names = [p.name for p in cfg.sensitivity.parameters]
-
-    current_node.update_dense(dict(
-        iid=[tags[0]],  # coords
-        qmc=[tags[1]],
-        param_name=param_names,
-        time=times,
-        X=grid.x,
-        Y=grid.y,
-        Z=grid.z,
-        block=[tags[2]],  #values
-        param= parameters[np.newaxis, np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
-        conc=slice_array[np.newaxis, np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "block", "time", "X", "Y", "Z"]
-    ))
+    # param_names = [p.name for p in cfg.sensitivity.parameters]
+    #
+    # current_node.update_dense(dict(
+    #     iid=[tags[0]],  # coords
+    #     qmc=[tags[1]],
+    #     param_name=param_names,
+    #     time=times,
+    #     X=grid.x,
+    #     Y=grid.y,
+    #     Z=grid.z,
+    #     block=[tags[2]],  #values
+    #     param= parameters[np.newaxis, np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
+    #     conc=slice_array[np.newaxis, np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "block", "time", "X", "Y", "Z"]
+    # ))
     
     # current_node.update_dense()
 
@@ -329,7 +337,7 @@ def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
 
 def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     # Define grid resolution
-    nx, ny = grid_step  # number of elements in x and y
+    nx, ny, nz = grid_step  # number of elements in x and y
     bx, by, bz = cfg_geom.box_dimensions
     tol = 1e-6
     bx, by = bx-tol, by-tol
@@ -382,7 +390,7 @@ def get_indicator(cfg, fo, grid_step):
     values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
     print(np.shape(values))
     n_times = np.shape(values)[0]
-    block = values.reshape(n_times, *grid_step, 2)
+    block = values.reshape(n_times, *grid_step)
     print(np.shape(block))
     return grid, block
 #     plots.plot_indicators(inds)

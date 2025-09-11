@@ -85,15 +85,15 @@ class Wrapper:
         try:
             print(f"transport_wrapper: get observations tags={tags}")
             # res = self.calculate(self._config)
-            # set_parameters(parameters)
-            # rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
+            self.set_parameters(parameters)
+            rc, slice_array = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
             
             # test random results
-            cfg = self._config
-            param_names = [p.name for p in cfg.sensitivity.parameters]
-            times = output_times(cfg.transport_fullscale)
-            ng = 20
-            slice_array = np.random.rand(len(times), ng, ng, 2)
+            # cfg = self._config
+            # param_names = [p.name for p in cfg.sensitivity.parameters]
+            # times = output_times(cfg.transport_fullscale)
+            # ng = 20
+            # slice_array = np.random.rand(len(times), ng, ng, 2)
 
             # ZARR FUSE
             # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
