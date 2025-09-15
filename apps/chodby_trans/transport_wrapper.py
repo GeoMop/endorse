@@ -29,6 +29,8 @@ import chodby_trans.input_data as input_data
 import xarray as xr
 import zarr
 
+from dask.distributed import Lock
+
 
 class Wrapper:
 
@@ -116,9 +118,15 @@ class Wrapper:
             # logging.info(sample_dict)
             # current_node.update_dense(sample_dict)
 
+            def _chunk_idxs(coord_slice: slice, chunk_len: int):
+                start, stop = coord_slice.start, coord_slice.stop
+                first = start // chunk_len
+                last = (stop - 1) // chunk_len
+                return range(first, last + 1)
+
             # DIRECT ZARR
             # Open the existing Zarr store as an Xarray dataset
-            store_path=str(input_data.zarr_store_path)
+            store_path = str(input_data.zarr_store_path)
             ds = xr.open_zarr(store_path, consolidated=False)
 
             # Validate slice_array shape
@@ -126,11 +134,26 @@ class Wrapper:
             if slice_array.shape != expected_shape:
                 raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
 
-            ds_coords = xr.Dataset(
-                {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
-                          slice_array[np.newaxis, ...])})
-            ds_coords.to_zarr(store_path, mode='a', region={
-                'iid': slice(tags[0], tags[0] + 1)})
+            iid_idx = tags[0]
+            region = {'iid': slice(iid_idx, iid_idx + 1)}
+
+            # Lock for every chunk being accessed by the current write
+            iid_chunk = ds.chunksizes["iid"][0]
+            # qmc_chunks = ds.chunksizes["qmc"]
+            chunk_ids = list(_chunk_idxs(region['iid'], iid_chunk))
+            logging.info("lock chunk_ids: ", chunk_ids)
+            # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
+            locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
+            for L in locks: L.acquire()
+
+            try:
+                ds_coords = xr.Dataset(
+                    {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
+                              slice_array[np.newaxis, ...])})
+                ds_coords.to_zarr(store_path, mode='a', region={
+                    'iid': slice(iid_idx, iid_idx + 1)})
+            finally:
+                for L in reversed(locks): L.release()
 
             # ds_pars = xr.Dataset(
             #     {'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])}
@@ -250,7 +273,7 @@ class Wrapper:
 
             return 0, []
 
-            return rc, data
+            return rc, slice_array
         except Exception as e:
             sys.stdout.write("-"*60)
             sys.stdout.write(f"Traceback sample tags:{tags}")
