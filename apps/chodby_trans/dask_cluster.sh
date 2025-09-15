@@ -99,19 +99,21 @@ start_workers() {
 stop_cluster() {
   echo "[stop] Stopping workers, copying results from scratchdir..."
   for node in $(sort -u "$PBS_NODEFILE"); do
+    echo "--- $node ---"
     pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true &
     pbsdsh -vh "$node" -- bash "$PROJECT_DIR/dask_process_stop.sh" worker &
 
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
     # pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/workdir_$node" &
     pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/" &
+    pbsdsh -vh "$node" -- rm -r "$SCRATCHDIR/*"
   done
   wait
   
   echo "[stop] Stopping scheduler..."
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
   pbsdsh -vh "$HEAD_NODE" -- bash "$PROJECT_DIR/dask_process_stop.sh" scheduler
-  rm -r $SCRATCHDIR/*
+  rm -r "$SCRATCHDIR/*"
   
   echo "[stop] Done."
 }
