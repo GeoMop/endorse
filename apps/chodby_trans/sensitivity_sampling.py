@@ -16,6 +16,7 @@ import yaml
 
 # ---- Dask (over TCP) ----
 from dask.distributed import Client, wait
+import dask.array as da
 
 import numpy as np
 
@@ -26,6 +27,7 @@ import endorse.sa as sa
 
 import xarray as xr
 import zarr
+import zarr_fuse as zf
 
 # import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
@@ -99,8 +101,8 @@ def salib_samples(cfg: dotdict, seed):
 
 
 def single_sample(args):
-    # sample_dir, data_scheme_key, tags, parameters = args
-    data_scheme_key, tags, parameters = args
+    # sample_dir, data_schema_key, tags, parameters = args
+    data_schema_key, tags, parameters = args
 
     # host = socket.gethostname()
     pid  = os.getpid()
@@ -127,7 +129,7 @@ def single_sample(args):
     # read config file
     conf_file = inputdir / input_data.transport_cfg_path.name
     cfg = common.config.load_config(str(conf_file))
-    cfg["data_scheme_key"] = data_scheme_key
+    cfg["data_schema_key"] = data_schema_key
     cfg["input_dir"] = inputdir
 
     logging.info("=========================== RUNNING CALCULATION " +
@@ -136,9 +138,9 @@ def single_sample(args):
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
-        wrap.set_parameters(data_par=parameters)
+        # wrap.set_parameters(data_par=parameters)
         t = time.time()
-        res, sample_data = wrap.get_observations(tags)
+        res, sample_data = wrap.get_observations(tags, parameters)
 
         logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
 
@@ -168,25 +170,41 @@ def all_samples(cfg, parameters, client=None):
     # sample_subdir = sensitivity_dir / "samples"
 
     n_samples, n_params = parameters.shape
-    # data_scheme_key = setup_data_storage(cfg, n_samples)
-    data_scheme_key = "run_XXX"
 
     cfg_sens = cfg.sensitivity
-    qmc_idx = sa.sample.saltelli_qmc_index(N=cfg_sens.n_samples,
-                                           D=n_params,
-                                           calc_second_order=cfg_sens.second_order_sa)
-    block_idx = sa.sample.saltelli_block_labels(N=cfg_sens.n_samples,
-                                                D=n_params,
-                                                calc_second_order=cfg_sens.second_order_sa)
-    tags = np.column_stack((range(n_samples), qmc_idx, block_idx))
+    print(f"N={cfg_sens.n_samples}, D={n_params}")
+    print(f"n_blocks={sa.sample._num_blocks(n_params)}")
+    print(f"n_samples (N*n_blocks)={n_samples}")
+    # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
+    #                                                 D=n_params,
+    #                                                 second_order=cfg_sens.second_order_sa)
+    # print("saltelli_base_idx:  ", saltelli_base_idx)
+    saltelli_qmc_idx = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
+                                                  D=n_params,
+                                                  second_order=cfg_sens.second_order_sa)
+    print("saltelli_qmc_idx:   ", saltelli_qmc_idx)
+    saltelli_block_idx = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
+                                                      D=n_params,
+                                                      second_order=cfg_sens.second_order_sa)
+    print("saltelli_block_idx: ", saltelli_block_idx)
+    A_sample_idx = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
+                                              D=n_params,
+                                              second_order=cfg_sens.second_order_sa)
+    print("A_sample_idx:\n", A_sample_idx)
 
+    data_schema_key, data_schema = initialize_data_schema()
+    setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, n_samples,
+                        (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
+    # data_schema_key = "run_XXX"
+
+    tags = np.column_stack((range(n_samples), saltelli_qmc_idx, saltelli_block_idx))
     # bh_args = []
     # for idx in range(n_samples):
     #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
     #     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-    #     bh_args.append((sample_dir, data_scheme_key, tags[idx], parameters[idx]))
-    bh_args = [(data_scheme_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    #     bh_args.append((sample_dir, data_schema_key, tags[idx], parameters[idx]))
+    bh_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
     logging.info(f"bh_args: {bh_args}")
 
     # OPTION A: submit pattern
@@ -214,49 +232,35 @@ def all_samples(cfg, parameters, client=None):
 
     logging.info(f"Results collected: {results[:100]}")
     # bcommon.pkl_write(workdir, results, "sample_results.pkl")
-    zarr.consolidate_metadata(str(input_data.zarr_store_path))
+    # zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
 
-def setup_data_storage(cfg, n_samples):
-    # prepare data scheme for zarr storage
+def initialize_data_schema():
     # add current scheme for current sampling run
+    data_schema_path = input_data.data_schema_yaml
+    if not data_schema_path.exists():
+        shutil.copy2(input_data.data_schema_empty_yaml, data_schema_path)
 
-    data_scheme_path = input_data.data_schema_yaml
-    if not data_scheme_path.exists():
-        shutil.copy2(input_data.data_schema_empty_yaml, data_scheme_path)
-
-    with data_scheme_path.open("r", encoding="utf-8") as file:
+    with data_schema_path.open("r", encoding="utf-8") as file:
         content = file.read()
-        data_scheme = yaml.safe_load(content)
+        data_schema = yaml.safe_load(content)
 
     now = datetime.now().strftime("%Y%m%d%H%M%S")
-    data_scheme_key = f"run_{now}"
-    data_scheme[data_scheme_key] = copy.deepcopy(data_scheme["run_timestamp"])
+    data_schema_key = f"run_{now}"
+    data_schema[data_schema_key] = copy.deepcopy(data_schema["run_timestamp"])
+    # data_schema.pop("run_timestamp", None)
 
-    with data_scheme_path.open("w", encoding="utf-8") as file:
-        yaml.dump(data_scheme, file, sort_keys=False)
+    with data_schema_path.open("w", encoding="utf-8") as file:
+        yaml.dump(data_schema, file, sort_keys=False)
 
-    # temporary shortcut for direct zarr
-    qmc_size = cfg.sensitivity.n_samples
-    block_size = 4 if cfg.sensitivity.second_order_sa else 3
-    grid_size = data_scheme[data_scheme_key]["ATTRS"]["grid_step"]
-    init_zarr_store(str(input_data.zarr_store_path),
-                    sample_size=n_samples,
-                    qmc_size=qmc_size,
-                    block_size=block_size,
-                    time_size=18,
-                    grid_size=[*grid_size, 2])
+    return data_schema_key, data_schema[data_schema_key]
 
-    return data_scheme_key
 
-def init_zarr_store(store_path: str,
-                    sample_size: int,
-                    qmc_size: int,
-                    block_size: int,
-                    time_size: int,
-                    grid_size: list,
-                    dtype=np.float32,
-                    compressor=None) -> None:
+def setup_data_storage(cfg: dotdict,
+                       store_path: str,
+                       data_schema: dict,
+                       n_samples: int,
+                       salib_coords):
     """
     Initialize an empty Zarr store with the specified dimensions and chunking.
 
@@ -264,50 +268,82 @@ def init_zarr_store(store_path: str,
     ----------
     store_path : str
         Path to the Zarr store (directory or Zarr URL).
-    qmc_size : int
-        Length of the 'qmc' dimension.
-    block_size : int
-        Number of blocks: A, B, AB, (BA).
-    x_size : int
-        Length of the 'X' dimension.
-    y_size : int
-        Length of the 'Y' dimension.
-    time_size : int
-        Length of the 'time' dimension.
-    dtype : NumPy dtype, optional
-        Data type of the array (default: np.float32).
-    compressor : zarr compressor, optional
-        Compressor to use (default: None).
+    data_schema : dict
+        Data schema (zarr fuse alike)
+    n_samples : int
+        Length of the 'iid' dimension.
     """
-    # Define dimensions: 'sample' is unlimited/appendable
-    dims = ('sample', 'qmc', 'block', 'time', 'X', 'Y', 'Z')
-    shape = (sample_size, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2])
+    # prepare data scheme for zarr storage
 
-    # Create an empty DataArray with 0 length sample dimension
-    data = xr.DataArray(
-        np.zeros(shape, dtype=dtype),
-        dims=dims,
-        coords={
-            'sample': np.arange(sample_size),
-            'qmc': np.arange(qmc_size),
-            'block': np.arange(block_size),
-            'time': np.arange(time_size),
-            'X': np.arange(grid_size[0]),
-            'Y': np.arange(grid_size[1]),
-            'Z': np.arange(grid_size[2]),
-        }
+    # kwargs =  {"WORKDIR": str(workdir), "S3_ENDPOINT_URL": "https://s3.cl4.du.cesnet.cz"}
+     # Local storage logic
+    # store_path = (workdir / fname).with_suffix(".zarr")
+    # ZARR FUSE
+    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    # data_schema = zf.schema.deserialize(data_schema_path) # read data scheme
+    # zf.remove_store(data_schema, **kwargs)      # start from scratch
+    # node = zf.open_store(data_schema, **kwargs) # initialize zarr_fuse storage
+
+    # DIRECT ZARR
+    # temporary shortcut for direct zarr
+
+    param_names = [p.name for p in cfg.sensitivity.parameters]
+    grid_size = data_schema["ATTRS"]["grid_step"]
+
+    from endorse.fullscale_transport import output_times
+    otimes = output_times(cfg.transport_fullscale)
+
+    qmc, block, A_sample, parameters = salib_coords
+    n_samples, n_params = parameters.shape
+
+    # ALL coords
+    coords = data_schema["COORDS"]
+    coords_names = list(coords.keys())
+    shapes = (n_samples, n_params, len(otimes), *grid_size)
+    # chunks = [ coords[c]["chunk_size"] for c in coords_names]
+    # set coords once
+    # default coords are set to index their range: 0,1,2,...
+    ds_coords = {k: np.arange(v) for k, v in zip(coords_names, shapes)}
+    ds_coords['sim_time'] = otimes          # actual simulation times
+    ds_coords['param_name'] = param_names   # actual parameter names
+    # 'X', 'Y', 'Z' -> indices in the regular grid axes
+
+    # concentration - prepare empty
+    conc_coords = data_schema['VARS']['conc']['coords']
+    conc_shapes = (n_samples, len(otimes), *grid_size)
+    conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c != "param_name"]
+
+    # parameters
+    par_coords = data_schema['VARS']['parameter']['coords']
+    par_chunks = [coords[c]["chunk_size"] for c in coords_names if c in par_coords]
+    print(f"parameter shape: {parameters.shape}, coords: {par_coords}")
+
+    # A_sample
+    A_coords = data_schema['VARS']['A_sample']['coords']
+    A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
+    print(f"A_sample shape: {A_sample.shape}, coords: {A_coords}")
+
+    ds = xr.Dataset(
+        data_vars={
+            'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
+            'parameter': (tuple(par_coords), da.from_array(parameters, chunks=par_chunks)),
+            'A_sample': (tuple(A_coords), da.from_array(A_sample, chunks=A_chunks)),
+            'qmc':   ('iid', da.from_array(qmc,   chunks=coords['iid']["chunk_size"])),
+            'block': ('iid', da.from_array(block, chunks=coords['iid']["chunk_size"]))
+        },
+        coords=ds_coords
     )
-
-    ds = xr.Dataset({'data': data})
-
-    # Set encoding for chunking and compression
-    ds.encoding['data'] = {
-        'chunks': (1, qmc_size, block_size, time_size, grid_size[0], grid_size[1], grid_size[2]),
-        'compressor': compressor
-    }
 
     # Write to Zarr, overwrite if exists
     ds.to_zarr(store_path, mode='w')
+
+    print("=========== READ ZARR ==============")
+    print("Control read of created Zarr storage")
+    read_ds = xr.open_zarr(store_path)
+    print(read_ds)
+    # print(read_ds['A_sample'].to_numpy())
+    print("=========== END READ ZARR ==============")
+
 
 
 pbs_script_template = """
@@ -331,6 +367,7 @@ output_dir={outputdir}
 
 SCRIPT_PATH={script_path}
 PROJECT_DIR=$(dirname -- $SCRIPT_PATH)
+WORK_DIRNAME="workdir"
 
 # # A node list with each host once
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
@@ -354,7 +391,7 @@ echo "FINISHED SAMPLING"
 echo "Copying results back ..."
 uname -n
 for node in $UNIQ_HOSTS; do
-    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/workdir/" "$output_dir/workdir_$node" &
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$output_dir/workdir_$node" &
 done
 wait
 

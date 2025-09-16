@@ -21,8 +21,15 @@ import scipy.integrate
 import scipy.interpolate
 
 from endorse import common
-# import chodby_trans.input_data as input_data
 import chodby_trans.fullscale_transport as transport
+
+from endorse.fullscale_transport import output_times
+import zarr_fuse as zf
+import chodby_trans.input_data as input_data
+import xarray as xr
+import zarr
+
+from dask.distributed import Lock
 
 
 class Wrapper:
@@ -76,12 +83,197 @@ class Wrapper:
                 assert pname in cfg.transport_fullscale, pname + " not in transport_fullscale"
                 cfg.transport_fullscale[pname] = data_par[idx]
 
-    def get_observations(self, tags):
+    def get_observations(self, tags, parameters):
         try:
             print(f"transport_wrapper: get observations tags={tags}")
             # res = self.calculate(self._config)
-            rc, data = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags)
-            return rc, data
+            self.set_parameters(parameters)
+            rc, slice_array = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
+            
+            # test random results
+            # cfg = self._config
+            # param_names = [p.name for p in cfg.sensitivity.parameters]
+            # times = output_times(cfg.transport_fullscale)
+            # ng = 20
+            # slice_array = np.random.rand(len(times), ng, ng, 2)
+
+            # ZARR FUSE
+            # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+            # data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
+            # root_node = zf.open_store(data_schema, **kwargs)
+            # current_node = root_node[cfg.data_schema_key]
+
+            # sample_dict = dict(
+            #     iid=[tags[0]],  # coords
+            #     qmc=[tags[1]],
+            #     param_name=param_names,
+            #     sim_time=times,
+            #     X=np.linspace(2.0, 3.0, num=ng),
+            #     Y=np.linspace(5.0, 8.0, num=ng),
+            #     Z=np.array([1.0,3.5]),
+            #     block=np.full(len(param_names), tags[2])[np.newaxis, :],  #values
+            #     parameter= parameters[np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
+            #     conc=slice_array[np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "time", "X", "Y", "Z"]
+            # )
+            # logging.info(sample_dict)
+            # current_node.update_dense(sample_dict)
+
+            def _chunk_idxs(coord_slice: slice, chunk_len: int):
+                start, stop = coord_slice.start, coord_slice.stop
+                first = start // chunk_len
+                last = (stop - 1) // chunk_len
+                return range(first, last + 1)
+
+            # DIRECT ZARR
+            # Open the existing Zarr store as an Xarray dataset
+            store_path = str(input_data.zarr_store_path)
+            ds = xr.open_zarr(store_path, consolidated=False)
+
+            # Validate slice_array shape
+            expected_shape = (ds.sizes['sim_time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])
+            if slice_array.shape != expected_shape:
+                raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
+
+            iid_idx = tags[0]
+            region = {'iid': slice(iid_idx, iid_idx + 1)}
+
+            # Lock for every chunk being accessed by the current write
+            iid_chunk = ds.chunksizes["iid"][0]
+            # qmc_chunks = ds.chunksizes["qmc"]
+            chunk_ids = list(_chunk_idxs(region['iid'], iid_chunk))
+            logging.info("lock chunk_ids: ", chunk_ids)
+            # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
+            locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
+            for L in locks: L.acquire()
+
+            try:
+                ds_coords = xr.Dataset(
+                    {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
+                              slice_array[np.newaxis, ...])})
+                ds_coords.to_zarr(store_path, mode='a', region={
+                    'iid': slice(iid_idx, iid_idx + 1)})
+            finally:
+                for L in reversed(locks): L.release()
+
+            # ds_pars = xr.Dataset(
+            #     {'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])}
+            # )
+            # ds_pars.to_zarr(store_path, mode='a', region={
+            #     'iid': slice(tags[0], tags[0] + 1),
+            #     'qmc': slice(tags[1], tags[1] + 1)})
+
+            # ds_coords = xr.Dataset(
+            #     {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+            #               slice_array[np.newaxis, np.newaxis, ...])}
+            # )
+            # ds_coords.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0]+1),
+            #         'qmc': slice(tags[1], tags[1]+1),
+            #         'sim_time': 'auto',
+            #         'X': 'auto',
+            #         'Y': 'auto',
+            #         'Z': 'auto',
+            #     }
+            # )
+
+            # ds = xr.Dataset(
+            #     {
+            #       # 'conc': (['iid', 'qmc'], slice_array), # add sample, qmc and block dims
+            #       # 'parameter': (['iid', 'qmc'], parameters)
+            #       'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'], slice_array[np.newaxis, np.newaxis, ...]), # add sample, qmc and block dims
+            #       # 'parameter': (['sim_time', 'X', 'Y', 'Z'], parameters)
+            #     },
+            #     # dims=('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z'),
+            #     coords={
+            #         'iid': [tags[0]],
+            #         'qmc': [tags[1]],
+            #         # 'param_name': param_names,
+            #         'sim_time': times,
+            #         'X': np.arange(20),
+            #         'Y': np.arange(20),
+            #         'Z': np.arange(2),
+            #         # 'X': np.linspace(2.0, 3.0, num=ng),
+            #         # 'Y': np.linspace(5.0, 8.0, num=ng),
+            #         # 'Z': np.array([1.0,3.5])
+            #     }
+            # )
+            #
+            # # ds.to_zarr(store_path, mode='a')
+            # # Write the slice by specifying the region to overwrite
+            # ds.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0]+1),
+            #         'qmc': slice(tags[1], tags[1]+1),
+            #         # 'param_name': slice(block_idx, block_idx + 1),
+            #         'sim_time': 'auto',
+            #         'X': 'auto',
+            #         'Y': 'auto',
+            #         'Z': 'auto',
+            #     }
+            # )
+            #
+            # ds_pars = xr.Dataset(
+            #     {
+            #         'parameter': (['iid', 'qmc', 'param_name'], parameters[np.newaxis, np.newaxis, ...])
+            #     },
+            #     coords={
+            #         'iid': [tags[0]],
+            #         'qmc': [tags[1]],
+            #         'param_name': param_names,
+            #     }
+            # )
+            # # Write the slice by specifying the region to overwrite
+            # ds_pars.to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(tags[0], tags[0] + 1),
+            #         'qmc': slice(tags[1], tags[1] + 1),
+            #         'param_name': 'auto',
+            #     }
+            # )
+
+            # Wrap slice_array into a DataArray with new sample and qmc coords
+            # da = xr.DataArray(
+            #     {
+            #       'conc': (['iid', 'qmc'], slice_array), # add sample, qmc and block dims
+            #       'parameter': (['iid', 'qmc'], parameters)
+            #     },
+            #     # dims=('iid', 'qmc', 'param_name', 'sim_time', 'X', 'Y', 'Z'),
+            #     coords={
+            #         'iid': [tags[0]],
+            #         'qmc': [tags[1]],
+            #         'param_name': param_names,
+            #         'time': times,
+            #         'X': np.linspace(2.0, 3.0, num=ng),
+            #         'Y': np.linspace(5.0, 8.0, num=ng),
+            #         'Z': np.array([1.0,3.5])
+            #     }
+            # )
+
+            # Write the slice by specifying the region to overwrite
+            # da.to_dataset(name='conc').to_zarr(
+            #     store_path,
+            #     mode='a',
+            #     region={
+            #         'iid': slice(sample_idx, sample_idx + 1),
+            #         'qmc': slice(qmc_idx, qmc_idx + 1),
+            #         'param_name': slice(block_idx, block_idx + 1),
+            #         'sim_time': 'auto',
+            #         'X': 'auto',
+            #         'Y': 'auto',
+            #         'Z': 'auto',
+            #     }
+            # )
+
+            return 0, []
+
+            return rc, slice_array
         except Exception as e:
             sys.stdout.write("-"*60)
             sys.stdout.write(f"Traceback sample tags:{tags}")

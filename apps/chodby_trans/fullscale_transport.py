@@ -6,6 +6,7 @@ import shutil
 import time
 from typing import *
 from pathlib import Path
+import yaml
 
 import numpy as np
 import pyvista as pv
@@ -18,7 +19,7 @@ from endorse.indicator import Extractor
 from bgem.stochastic.fracture import Fracture, Population
 # from endorse import hm_simulation
 
-import zarr_fuse
+import zarr_fuse as zf
 import xarray as xr
 import zarr
 
@@ -145,7 +146,7 @@ def prepare_msh_input(cfg, seed):
 
 
 # @memoize
-def transport_run(cfg, seed, tags):
+def transport_run(cfg, seed, tags, parameters):
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
@@ -165,10 +166,10 @@ def transport_run(cfg, seed, tags):
     # input_msh = File(input_msh_filepath)
 
     # return 0, []
-    return parametrized_run(cfg, large_model, input_msh, tags)
+    return parametrized_run(cfg, large_model, input_msh, tags, parameters)
 
 
-def parametrized_run(cfg, large_model, input_fields_file, tags):
+def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
     times = output_times(cfg_fine)
@@ -203,10 +204,20 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
 
     # TODO: get grid, output times, values -> zarr_fuse
     # times
-    # schema = zarr_fuse.schema.deserialize(input_data.data_schema_yaml)
-    # root_node = zarr_fuse.open_storage(schema, workdir=work_dir)
-    # current_node = root_node[cfg.data_scheme_key]
-    # grid, values = get_indicator(cfg, fo, current_node.schema.ATTRS["grid_step"])
+    # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
+    # data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
+    # root_node = zf.open_storage(data_schema, **kwargs)
+    # current_node = root_node[cfg.data_schema_key]
+    # grid_size = current_node.schema.ATTRS["grid_step"]
+
+    data_schema_path = input_data.data_schema_yaml
+    with data_schema_path.open("r", encoding="utf-8") as file:
+        content = file.read()
+        data_schema = yaml.safe_load(content)
+        grid_size = data_schema[cfg.data_schema_key]["ATTRS"]["grid_step"]
+
+    print(f"sample tags:{tags}")
+    grid, values = get_indicator(cfg, fo, grid_size)
 
     # print(f"sample tags:{tags}")
     # grid, values = get_indicator(cfg, fo, [20, 20])
@@ -216,6 +227,23 @@ def parametrized_run(cfg, large_model, input_fields_file, tags):
     #                  qmc_idx=tags[1],
     #                  block_idx=tags[2],
     #                  slice_array=values)
+
+    # param_names = [p.name for p in cfg.sensitivity.parameters]
+    #
+    # current_node.update_dense(dict(
+    #     iid=[tags[0]],  # coords
+    #     qmc=[tags[1]],
+    #     param_name=param_names,
+    #     time=times,
+    #     X=grid.x,
+    #     Y=grid.y,
+    #     Z=grid.z,
+    #     block=[tags[2]],  #values
+    #     param= parameters[np.newaxis, np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
+    #     conc=slice_array[np.newaxis, np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "block", "time", "X", "Y", "Z"]
+    # ))
+    
+    # current_node.update_dense()
 
     # values = []
     return fo.process.returncode, values
@@ -309,7 +337,7 @@ def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
 
 def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     # Define grid resolution
-    nx, ny = grid_step  # number of elements in x and y
+    nx, ny, nz = grid_step  # number of elements in x and y
     bx, by, bz = cfg_geom.box_dimensions
     tol = 1e-6
     bx, by = bx-tol, by-tol
@@ -362,7 +390,7 @@ def get_indicator(cfg, fo, grid_step):
     values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
     print(np.shape(values))
     n_times = np.shape(values)[0]
-    block = values.reshape(n_times, *grid_step, 2)
+    block = values.reshape(n_times, *grid_step)
     print(np.shape(block))
     return grid, block
 #     plots.plot_indicators(inds)
@@ -382,13 +410,19 @@ def set_source_term(cfg):
     cfg_src = cfg_fine.sources_params
     cfg_bh = cfg.geometry.storage_borehole
 
+    dsb_idx = cfg.geometry.damaged_storage_borehole
+
     source_params = dict(
         # UOS surface: S = pi * du * hu [m2]
         sources_uos_surface=np.pi * cfg_src.diameter * cfg_src.length,
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
-        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file
+        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file,
+
+        storage_regions = [f"storage_{i}" for i in range(5) if i != dsb_idx],
+        plug_region = f"plug_{dsb_idx}",
+        container_region = f"container_{dsb_idx}",
     )
     return source_params
 
