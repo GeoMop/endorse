@@ -13,29 +13,32 @@ def get_generic_name(idata):
 
 def plot_idata(idata):
 
+    burnin = idata.attrs["burnin"] if "burnin" in idata.attrs else 0
+    idata_cut = idata.sel(draw=slice(burnin, None)) # cut first 2000 draws
+
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 
     generic_name = get_generic_name(idata)
 
-    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata, bins=150, generic_name=generic_name))
+    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata_cut, bins=150, generic_name=generic_name))
     #plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
-    print(az.summary(idata))
+    print(az.summary(idata_cut))
 
     # plot trace and force axis to use scientitic notation
-    plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
+    plot_trace_modified(idata_cut, figsize=(16, 36), generic_name=generic_name)
     plt.savefig("trace_plot.pdf", dpi=300)
 
     # plot posterior distributions and corresponding prior distributions
-    plot_posterior_modified(idata, figsize=(16, 18), generic_name=generic_name)
+    plot_posterior_modified(idata_cut, figsize=(16, 18), generic_name=generic_name)
 
     plt.savefig("posterior_plot.pdf", dpi=300)
 
-    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata, generic_name=generic_name))
+    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata_cut, generic_name=generic_name))
 
-    plot_merged(idata)
+    plot_merged(idata_cut, idata)
 
 def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     if ax is None:
@@ -329,7 +332,7 @@ def save_plots_pdf_pages(
     except:
         logging.error("Failed to save plot at %s", filename)
 
-def plot_merged(idata):
+def plot_merged(idata, idata_uncut):
 
     az.rcParams["plot.max_subplots"] = 400
     generic_name = get_generic_name(idata)
