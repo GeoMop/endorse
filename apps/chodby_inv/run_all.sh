@@ -6,6 +6,8 @@
 
 cd $PBS_O_WORKDIR
 
+export MPLBACKEND=TKAgg
+
 # Exit immediately on errors
 set -e
 
