@@ -20,7 +20,7 @@ n=$1
 module load python/3
 
 # 2) Activate virtual environment
-source /venv/scripts/activate
+source /venv/bin/activate
 
 # 3) Loop from 0 to n
 for i in $(seq 0 $n); do
