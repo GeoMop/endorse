@@ -261,13 +261,14 @@ def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cuto
 
     figs = []
 
-    for dataset, label in zip(datasets, labels):
+    for dataset, dataset_uncut, label in zip(datasets, datasets_uncut, labels):
         fig_progression, axes_progression = plt.subplots(2, 1, figsize=(16, 9))
         fig_progression.suptitle(f"{generic_name} - progression of {label} (values under {cutoff} cut off)")
         axes_progression[0].set_xlabel("Iteration in chain")
         axes_progression[0].set_ylabel(f"{label}")
         for chain in np.arange(0, chains):
             axes_progression[0].plot(x_axis, dataset[chain, :], label=f"Chain {chain}")
+        #axes_progression[0].axvline(x=0, color='red', linestyle='--', label='Cutoff point')
         axes_progression[0].legend(ncol=2, loc="lower right")
         axes_progression[0].grid(True, which='both', linestyle='--', linewidth=0.5)
         axes_progression[0].set_yscale('symlog', linthresh=1)
@@ -290,21 +291,36 @@ def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cuto
         axes_progression[0].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
         axes_progression[0].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
         axes_progression[0].yaxis.set_major_formatter(get_symlog_formatter())
-        mean = np.mean(dataset, axis=0)
-        median = np.median(dataset, axis=0)
-        min = np.min(dataset, axis=0)
 
-        axes_progression[1].set_xlabel("Iteration in chain")
-        axes_progression[1].set_ylabel(f"")
-        axes_progression[1].plot(x_axis, mean, label=f"Mean {label}")
-        axes_progression[1].plot(x_axis, median, label=f"Median {label}")
-        axes_progression[1].plot(x_axis, min, label=f"Minimum {label}")
-        axes_progression[1].legend(ncol=2, loc="lower right")
+        # mean = np.mean(dataset, axis=0)
+        # median = np.median(dataset, axis=0)
+        # min = np.min(dataset, axis=0)
+        # axes_progression[1].set_xlabel("Iteration in chain")
+        # axes_progression[1].set_ylabel(f"")
+        # axes_progression[1].plot(x_axis, mean, label=f"Mean {label}")
+        # axes_progression[1].plot(x_axis, median, label=f"Median {label}")
+        # axes_progression[1].plot(x_axis, min, label=f"Minimum {label}")
+        # axes_progression[1].legend(ncol=2, loc="lower right")
+        # axes_progression[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+        # axes_progression[1].set_yscale('symlog', linthresh=1)
+        # axes_progression[1].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
+        # axes_progression[1].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
+        # axes_progression[1].yaxis.set_major_formatter(get_symlog_formatter())
+
+        # uncut data plot
+        axes_progression[1].set_xlabel("Iteration in chain (uncut data)")
+        axes_progression[1].set_ylabel(f"{label}")
+        for chain in np.arange(0, chains_uncut):
+            axes_progression[1].plot(x_axis_uncut, dataset_uncut[chain, :], label=f"Chain {chain}")
         axes_progression[1].grid(True, which='both', linestyle='--', linewidth=0.5)
         axes_progression[1].set_yscale('symlog', linthresh=1)
+        axes_progression[1].axvline(x=cutoff, color='red', linestyle='--', label='Cutoff point')
+        axes_progression[1].legend(ncol=2, loc="lower right")
+
         axes_progression[1].yaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
         axes_progression[1].yaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
         axes_progression[1].yaxis.set_major_formatter(get_symlog_formatter())
+
 
         figs += [fig_progression]
 
@@ -315,6 +331,22 @@ def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cuto
         logbins = np.multiply(np.logspace(np.log10(-dataset.max()), np.log10(-dataset.min()), 100), -1)
         axes_hist.hist(dataset.values.flatten(), bins=logbins[::-1])
         axes_hist.set_xscale('symlog', linthresh=1)
+
+        dataspan_uncut = np.log10(-dataset_uncut.min()) - np.log10(-dataset_uncut.max()) # negative values
+        print(dataspan_uncut)
+        if dataspan >= 1.5:
+            subs_major = [1, 5]
+            subs_minor = np.arange(1, 10)
+        elif dataspan >= 0.6:
+            subs_major = [1, 3, 5, 7]
+            subs_minor = np.arange(1, 10)
+        elif dataspan >= 0.3:
+            subs_major = np.arange(1, 10, 0.5)
+            subs_minor = np.arange(1, 10, 0.1)
+        else:
+            subs_major = np.arange(1, 10, 0.2)
+            subs_minor = np.arange(1, 10, 0.05)
+
         axes_hist.xaxis.set_major_locator(SymmetricalLogLocator(base=10.0, subs=subs_major, linthresh=1))
         axes_hist.xaxis.set_minor_locator(SymmetricalLogLocator(base=10.0, subs=subs_minor, linthresh=1))
         axes_hist.xaxis.set_major_formatter(get_symlog_formatter())
