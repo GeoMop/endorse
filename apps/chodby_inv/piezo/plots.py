@@ -350,12 +350,23 @@ def plot_merged(idata):
     trace_ax = plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
     trace_fig = trace_ax[0, 0].figure
 
+    k_params = [v for v in idata.posterior.data_vars if v.startswith("log_k")]
+    E_params = [v for v in idata.posterior.data_vars if v.startswith("log_E")]
+
+    k_vals = np.concatenate([idata.posterior[v].values.flatten() for v in k_params])
+    E_vals = np.concatenate([idata.posterior[v].values.flatten() for v in E_params])
+
+    k_min, k_max = np.min(k_vals), np.max(k_vals)
+    E_min, E_max = np.min(E_vals), np.max(E_vals)
+
     for i, var_name in enumerate(idata.posterior.data_vars):
         trace_ax[i, 0].clear()
         with plt.rc_context({'axes.labelsize': 12, "axes.titlesize": 12, 'xtick.labelsize': 12, 'ytick.labelsize': 12}):
             plot_posterior_modified(idata, var_names=[var_name], generic_name=generic_name, ax=trace_ax[i, 0])
         if var_name not in ["p_far"]:
             trace_ax[i, 1].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
+        
+        trace_ax[i, 1].set_ylim([k_min, k_max] if var_name.startswith("log_k") else [E_min, E_max] if var_name.startswith("log_E") else None)
     
     figs += [trace_fig]
 
