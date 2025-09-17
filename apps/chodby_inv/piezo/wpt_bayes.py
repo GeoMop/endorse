@@ -95,7 +95,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # Geometry and time-stepping parameters.
     r_b = 0.076  # Borehole radius [m]
     R = 2  # Outer domain radius [m]
-    N = 10  # Number of finite elements (⇒ N+1 nodes)
+    N = 5  # Number of finite elements (⇒ N+1 nodes)
     geom_power = 8 # 1 = even spacing of elements, >1 = concentrated at borehole
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
     #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
