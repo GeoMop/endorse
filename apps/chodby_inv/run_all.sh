@@ -6,7 +6,6 @@
 
 cd $PBS_O_WORKDIR
 
-export MPLBACKEND=Agg
 
 # Exit immediately on errors
 set -e
@@ -19,6 +18,8 @@ module load python/3.11
 
 # 2) Activate virtual environment
 source venv/bin/activate
+
+export MPLBACKEND=Agg
 
 # 3) Loop from 0 to n
 for i in $(seq 0 $n); do
