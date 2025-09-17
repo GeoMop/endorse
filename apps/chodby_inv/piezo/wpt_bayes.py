@@ -118,9 +118,14 @@ def _run_inversion(inv_cfg, epoch_df):
         k_field = np.power(10, param_vec[:N])  # Convert log(k) to k
         E_field = np.power(10, param_vec[N:2*N])
         p_far = param_vec[-1]
-        t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
-        flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
-        return np.concatenate((np.log10([flux]), p_b))
+        try:
+            t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
+            flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
+            return np.concatenate((np.log10([flux]), p_b))
+        except Exception as e:
+            print(f"Simulation failed for parameters: {param_vec}, error: {e}")
+            # Return a large penalty value to indicate failure
+            return np.full(len(regular_pb_measured) + 1, 1e10)
 
 
     # L = 2     # [m] Length of the borehole section
