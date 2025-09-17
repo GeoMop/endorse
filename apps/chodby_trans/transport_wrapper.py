@@ -118,7 +118,7 @@ class Wrapper:
             # logging.info(sample_dict)
             # current_node.update_dense(sample_dict)
 
-            def _chunk_idxs(coord_slice: slice, chunk_len: int):
+            def _chunk_ranges(coord_slice: slice, chunk_len: int):
                 start, stop = coord_slice.start, coord_slice.stop
                 first = start // chunk_len
                 last = (stop - 1) // chunk_len
@@ -134,24 +134,37 @@ class Wrapper:
             if slice_array.shape != expected_shape:
                 raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
 
-            iid_idx = tags[0]
-            region = {'iid': slice(iid_idx, iid_idx + 1)}
+            sample_idx = tags[0]
+            qmc_idx = tags[1]
+            iid_idx = tags[2]
+            region = {'iid': slice(iid_idx, iid_idx + 1),
+                      'qmc': slice(qmc_idx, qmc_idx + 1)}
 
             # Lock for every chunk being accessed by the current write
-            iid_chunk = ds.chunksizes["iid"][0]
-            # qmc_chunks = ds.chunksizes["qmc"]
-            chunk_ids = list(_chunk_idxs(region['iid'], iid_chunk))
-            logging.info("lock chunk_ids: ", chunk_ids)
+            # iid_chunk = ds.chunksizes["iid"][0]
+            # qmc_chunk = ds.chunksizes["qmc"][0]
+            # chunk_ids = list(_chunk_ranges(region['iid'], iid_chunk))
+            # logging.info("lock chunk_ids: ", chunk_ids)
             # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
-            locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
-            for L in locks: L.acquire()
+            # locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
+
+            lock_names = []
+            for var, chunkshape in ds.chunksizes.items():  # 'iid', 'qmc'
+                for ciid in _chunk_ranges(region['iid'], chunkshape[0]):
+                    for cqmc in _chunk_ranges(region['qmc'], chunkshape[0]):
+                            lock_names.append(f"zarr-{var}-{ciid}-{cqmc}")
+            lock_names = sorted(set(lock_names))  # deterministic ordering avoids deadlocks
+            logging.info("lock_names: ", lock_names)
+            locks = [Lock(name) for name in lock_names]
+
+            for L in locks:
+                L.acquire()
 
             try:
                 ds_coords = xr.Dataset(
-                    {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
-                              slice_array[np.newaxis, ...])})
-                ds_coords.to_zarr(store_path, mode='a', region={
-                    'iid': slice(iid_idx, iid_idx + 1)})
+                    {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+                              slice_array[np.newaxis, np.newaxis, ...])})
+                ds_coords.to_zarr(store_path, mode='a', region=region)
             finally:
                 for L in reversed(locks): L.release()
 
@@ -271,7 +284,7 @@ class Wrapper:
             #     }
             # )
 
-            return 0, []
+            # return 0, []
 
             return rc, slice_array
         except Exception as e:
