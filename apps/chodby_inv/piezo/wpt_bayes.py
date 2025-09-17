@@ -273,8 +273,9 @@ def _run_inversion(inv_cfg, epoch_df):
         [f"log_E_{n}" for n in range(param_dim)] + \
         ["p_far"]
 
-    # construct idata object from the chains
-    idata = tda.to_inference_data(my_chains, burnin=burnin, parameter_names=parameter_names)
+    # construct idata object from the chains and include info about burn in
+    idata = tda.to_inference_data(my_chains, parameter_names=parameter_names)
+    idata.attrs["burnin"] = burnin
 
     # add the observed data to the InferenceData object
     idata["sample_stats"].attrs["observed_pressure"] = regular_pb_measured
