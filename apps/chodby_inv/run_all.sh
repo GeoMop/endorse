@@ -4,6 +4,8 @@
 #PBS -l walltime=06:00:00
 #PBS -q charon
 
+cd $PBS_O_WORKDIR
+
 # Exit immediately on errors
 set -e
 
