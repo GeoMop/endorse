@@ -9,12 +9,6 @@ cd $PBS_O_WORKDIR
 # Exit immediately on errors
 set -e
 
-# Check if n was provided
-if [ $# -ne 1 ]; then
-    echo "Usage: $0 <n>"
-    exit 1
-fi
-
 # Upper limit
 n=${N:-10}
 
