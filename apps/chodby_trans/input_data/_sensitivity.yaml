@@ -11,7 +11,7 @@ make_plots: False
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: False
 
-second_order_sa: True
+second_order_sa: False
 parameters:
   - name: dfn_geom  # seed for `p_32` and `power`
     type: seed

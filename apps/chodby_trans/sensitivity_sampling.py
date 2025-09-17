@@ -69,8 +69,8 @@ def salib_samples(cfg: dotdict, seed):
     print(problem)
 
     # Generate Saltelli samples
-    param_values = sa.sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
-    # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
+    # param_values = sa.sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
+    param_values = sa.sample.sobol(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
     print(param_values.shape)
 
     # # plot requires LaTeX installed
