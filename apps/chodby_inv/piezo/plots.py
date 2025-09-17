@@ -21,22 +21,22 @@ def plot_idata(idata):
 
     generic_name = get_generic_name(idata)
 
-    save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata_cut, bins=150, generic_name=generic_name))
+    #save_plots_pdf_pages("observe_plot.pdf", plot_observe(idata_cut, bins=150, generic_name=generic_name))
     #plt.savefig("observe_plot.pdf", dpi=300)
     #plt.show()
 
     print(az.summary(idata_cut))
 
     # plot trace and force axis to use scientitic notation
-    plot_trace_modified(idata_cut, figsize=(16, 36), generic_name=generic_name)
-    plt.savefig("trace_plot.pdf", dpi=300)
+    #plot_trace_modified(idata_cut, figsize=(16, 36), generic_name=generic_name)
+    #plt.savefig("trace_plot.pdf", dpi=300)
 
     # plot posterior distributions and corresponding prior distributions
-    plot_posterior_modified(idata_cut, figsize=(16, 18), generic_name=generic_name)
+    #plot_posterior_modified(idata_cut, figsize=(16, 18), generic_name=generic_name)
 
-    plt.savefig("posterior_plot.pdf", dpi=300)
+    #plt.savefig("posterior_plot.pdf", dpi=300)
 
-    save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata_cut, generic_name=generic_name))
+    #save_plots_pdf_pages("likelihood_plot.pdf", plot_likelihood(idata_cut, generic_name=generic_name))
 
     plot_merged(idata_cut, idata)
 
