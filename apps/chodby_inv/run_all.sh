@@ -1,7 +1,7 @@
 #!/bin/bash
-#PBS -N chodby_inv_run_all        # Job name
-#PBS -l select=1:ncpus=20:mem=10gb   # Resources (adjust to your needs)
-#PBS -l walltime=06:00:00    # Max runtime
+#PBS -N chodby_inv_run_all
+#PBS -l select=1:ncpus=20:mem=10gb
+#PBS -l walltime=06:00:00
 
 # Exit immediately on errors
 set -e
