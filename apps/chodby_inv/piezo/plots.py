@@ -235,7 +235,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
 
     return axes
 
-def plot_likelihood(idata: az.InferenceData, cutoff=None, generic_name="WPT"):
+def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cutoff=None, generic_name="WPT") -> list:
     if cutoff is None:
         cutoff = -1e8
     draws = idata.posterior.sizes["draw"]
@@ -348,7 +348,7 @@ def plot_merged(idata, idata_uncut):
 
     figs = []
     figs += plot_observe(idata, bins=150, generic_name=generic_name)
-    likelihood_figs = plot_likelihood(idata, generic_name=generic_name) # order - likelihood, prior, posterior
+    likelihood_figs = plot_likelihood(idata, idata_uncut, generic_name=generic_name) # order - likelihood, prior, posterior
     figs += [likelihood_figs[0]]
 
     trace_ax = plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
