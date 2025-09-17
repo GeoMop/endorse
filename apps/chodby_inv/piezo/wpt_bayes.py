@@ -218,7 +218,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # where you can pass the forward model, measured data, prior mean/covariance, 
     # and noise covariance. The exact API may differ; adjust according to your TinyDA version.
 
-    iterations = 20000
+    iterations = 30000
     burnin = 10000
     chains = 20
 
