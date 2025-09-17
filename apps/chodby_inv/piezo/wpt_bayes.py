@@ -216,8 +216,9 @@ def _run_inversion(inv_cfg, epoch_df):
     # and noise covariance. The exact API may differ; adjust according to your TinyDA version.
 
     iterations = 20000
-    burnin = 8000
-    chains = 6
+    burnin = 10000
+    chains = 20
+
 
     # rwmh_cov = np.eye(len(mean_prior)) * 0.2
     # rwmh_cov = np.diag(np.power(mean_prior * 0.1, 2), 0)
