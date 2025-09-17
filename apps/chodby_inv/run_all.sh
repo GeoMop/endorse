@@ -16,7 +16,7 @@ if [ $# -ne 1 ]; then
 fi
 
 # Upper limit
-n=$1
+n=${N:-10}
 
 # 1) Load Python 3.11
 module load python/3.11
