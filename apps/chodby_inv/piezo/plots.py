@@ -238,6 +238,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
 def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cutoff=None, generic_name="WPT") -> list:
     if cutoff is None:
         cutoff = -1e8
+    # cut data
     draws = idata.posterior.sizes["draw"]
     chains = idata.posterior.sizes["chain"]
     likelihoods = np.clip(idata["sample_stats"]["likelihood"], cutoff, None)
@@ -246,6 +247,17 @@ def plot_likelihood(idata: az.InferenceData, idata_uncut: az.InferenceData, cuto
     datasets = [likelihoods, prior, posterior]
     labels = ["log-likelihood", "log-prior", "log-posterior"]
     x_axis = np.arange(0, draws)
+
+    # uncut data
+    draws_uncut = idata_uncut.posterior.sizes["draw"]
+    chains_uncut = idata_uncut.posterior.sizes["chain"]
+    likelihoods_uncut = np.clip(idata_uncut["sample_stats"]["likelihood"], cutoff, None)
+    prior_uncut = np.clip(idata_uncut["sample_stats"]["prior"], cutoff, None)
+    posterior_uncut = np.clip(idata_uncut["sample_stats"]["posterior"], cutoff, None)
+    datasets_uncut = [likelihoods_uncut, prior_uncut, posterior_uncut]
+    x_axis_uncut = np.arange(0, draws_uncut)
+
+    cutoff = draws_uncut - draws # where to display cutoff line
 
     figs = []
 
