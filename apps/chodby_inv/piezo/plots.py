@@ -108,12 +108,13 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
 
     # plot flow rate distribution
-    ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
+    counts, bin_edges, _ = ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
+    total_area = (bin_edges[1] - bin_edges[0]) * np.sum(counts)
 
     # plot observed flow rate distribution
     observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
     observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
-    ax_flow.plot(observed_xvals, observed_yvals * flow_values.size / np.sum(observed_yvals), color="red", linestyle="dashed", label="Observed flow rate distribution")
+    ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
     ax_flow.legend()
 
     return [fig, fig_flow]
