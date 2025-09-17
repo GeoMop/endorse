@@ -18,8 +18,8 @@ fi
 # Upper limit
 n=$1
 
-# 1) Load Python 3
-module load python/3
+# 1) Load Python 3.11
+module load python/3.11
 
 # 2) Activate virtual environment
 source venv/bin/activate
