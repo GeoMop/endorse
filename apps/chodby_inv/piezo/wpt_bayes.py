@@ -1,8 +1,10 @@
+import logging
 from operator import inv
 import numpy as np
 from scipy.stats import multivariate_normal
 from scipy.linalg import block_diag
 import pandas as pd
+from sys import argv, exit
 
 # Import the borehole pressure model module.
 from . import PoroElasticSolver
@@ -360,7 +362,17 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
     return zkousky
 
 if __name__ == '__main__':
-    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][1]
-    #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
+    try:
+        selected_test = int(argv[1])
+    except:
+        print("No test index provided, exiting...")
+        exit(1)
+
+    events = common.load_config(input_data.events_yaml)['water_pressure_tests']
+    if selected_test >= len(events):
+        print(f"Test index {selected_test} out of range, exiting...")
+        exit(1)
+    
+    wpt_cfg = events[selected_test]
     idata = borehole_section_inversion(wpt_cfg)
     plot_idata(idata)
