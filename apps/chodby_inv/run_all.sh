@@ -2,6 +2,7 @@
 #PBS -N chodby_inv_run_all
 #PBS -l select=1:ncpus=20:mem=10gb
 #PBS -l walltime=06:00:00
+#PBS -q charon
 
 # Exit immediately on errors
 set -e
