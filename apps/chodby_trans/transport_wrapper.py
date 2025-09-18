@@ -85,6 +85,7 @@ class Wrapper:
 
     def get_observations(self, tags, parameters):
         try:
+            t = time.time()
             print(f"transport_wrapper: get observations tags={tags}")
             # res = self.calculate(self._config)
             self.set_parameters(parameters)
@@ -96,6 +97,9 @@ class Wrapper:
             # times = output_times(cfg.transport_fullscale)
             # ng = 20
             # slice_array = np.random.rand(len(times), ng, ng, 2)
+
+            sample_time = time.time() - t
+            logging.info(f"SIMULATION TIME: {sample_time}")
 
             # ZARR FUSE
             # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
@@ -161,9 +165,12 @@ class Wrapper:
                 L.acquire()
 
             try:
-                ds_coords = xr.Dataset(
-                    {'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
-                              slice_array[np.newaxis, np.newaxis, ...])})
+                ds_coords = xr.Dataset({
+                    'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+                              slice_array[np.newaxis, np.newaxis, ...]),
+                    'return_code': (['iid', 'qmc'], np.array(rc)[np.newaxis, np.newaxis, ...]),
+                    'sample_time': (['iid', 'qmc'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
+                })
                 ds_coords.to_zarr(store_path, mode='a', region=region)
             finally:
                 for L in reversed(locks): L.release()

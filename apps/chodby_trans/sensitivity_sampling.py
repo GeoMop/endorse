@@ -138,14 +138,9 @@ def single_sample(args):
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
-        # wrap.set_parameters(data_par=parameters)
-        t = time.time()
         res, sample_data = wrap.get_observations(tags, parameters)
-
         logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
-
         # print("LEN:", len(obs_data))
-        logging.info(f"TIME: {time.time() - t}")
     
     result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
     atomic_write_json(flag_file, result)
@@ -321,6 +316,7 @@ def setup_data_storage(cfg: dotdict,
     sid_chunks = [coords[c]["chunk_size"] for c in coords_names if c in sid_coords]
     sid_matrix = np.full((n_blocks, n_qmc), -1, dtype=int)  # or (U, V) if your ranges are [0, U) and [0, V)
     sid_matrix[block, qmc] = np.arange(n_samples)
+    res_shapes = (n_blocks, n_qmc)
     print(f"sid_matrix shape: {sid_matrix.shape}, coords: {sid_coords}")
     print("sid_matrix:\n", sid_matrix)
 
@@ -342,8 +338,10 @@ def setup_data_storage(cfg: dotdict,
 
     ds = xr.Dataset(
         data_vars={
-            'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'sample_id': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
+            'sample_time': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
+            'return_code': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
+            'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
             'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
         },

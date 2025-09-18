@@ -8,8 +8,16 @@ ATTRS:
 run_timestamp:
     VARS:
         sample_id:
-            unit: ""
+            unit: "int"
             description: "Unique sample ID given by ordered Salib parameter sequence."
+            coords: [ "iid", "qmc" ]
+        return_code:
+            unit: "int"
+            description: "Return code from transport wrapper or Flow123d."
+            coords: [ "iid", "qmc" ]
+        sample_time:
+            unit: "int"
+            description: "Length of sample computation in seconds."
             coords: [ "iid", "qmc" ]
 #        block:
 #            unit: "int"
