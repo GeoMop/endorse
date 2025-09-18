@@ -74,7 +74,7 @@ water_pressure_tests:
         # end of extracted window
         borehole: L5-37UR
         section: 1
-        dt: 240 # time step in seconds
+        dt: 480 # time step in seconds
         p_far_prior: 30000
         p_far_std: 5000
 
@@ -87,7 +87,7 @@ water_pressure_tests:
         # end of extracted window
         borehole: L5-37R
         section: 1
-        dt: 960 # time step in seconds
+        dt: 1920 # time step in seconds
         p_far_prior: 30000
         p_far_std: 5000
 
@@ -100,7 +100,7 @@ water_pressure_tests:
         # end of extracted window
         borehole: L5-26R
         section: 0
-        dt: 240 # time step in seconds
+        dt: 1920 # time step in seconds
         p_far_prior: 55000
         p_far_std: 8000
 
@@ -113,7 +113,7 @@ water_pressure_tests:
         # end of extracted window
         borehole: L5-37UR
         section: 1
-        dt: 240 # time step in seconds
+        dt: 480 # time step in seconds
         p_far_prior: 30000
         p_far_std: 5000
 
@@ -126,6 +126,6 @@ water_pressure_tests:
         # end of extracted window
         borehole: L5-37R
         section: 1
-        dt: 960 # time step in seconds
+        dt: 480 # time step in seconds
         p_far_prior: 30000
         p_far_std: 5000
