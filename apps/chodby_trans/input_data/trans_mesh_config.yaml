@@ -67,6 +67,7 @@ transport_fullscale:
     geometry: *geometry
     fractures: *fractures
     # The mesh to use in both simulations.
+    meshing_seed: 1
 
     # templates are part of the endorse sources
     input_template: transport_fullscale_tmpl.yaml
