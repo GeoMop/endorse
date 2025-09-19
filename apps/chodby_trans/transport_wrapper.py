@@ -86,8 +86,7 @@ class Wrapper:
     def get_observations(self, tags, parameters):
         try:
             t = time.time()
-            print(f"transport_wrapper: get observations tags={tags}")
-            # res = self.calculate(self._config)
+            logging.info(f"transport_wrapper: get observations tags={tags}")
             self.set_parameters(parameters)
             rc, slice_array = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
             

@@ -35,6 +35,8 @@ parameters:
         bounds: [ 0, 0.1 ]
   - name: dfn_macro # seed for large fractures
     type: seed
+  - name: meshing_seed # seed for large fractures
+    type: seed
 
 #  - name: storativity
 #    type: lognorm
