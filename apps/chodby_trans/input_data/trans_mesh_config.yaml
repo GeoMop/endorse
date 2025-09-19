@@ -207,13 +207,13 @@ machine_config:
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
         pbs:
-            n_cores: 8
+            n_cores: 18
             n_nodes: 2
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
-            mem: 16Gb
-            queue: charon_2h
-            pbs_name: endorse-flow123d
-            walltime: "01:00:00"
+            mem: 80Gb
+            queue: charon
+            pbs_name: chodby_trans
+            walltime: "08:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d

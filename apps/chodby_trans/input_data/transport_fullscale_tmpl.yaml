@@ -99,8 +99,8 @@ problem: !Coupling_Sequential
         - region_id
         - conductivity
         - cross_section
-    balance:
-      cumulative: true
+#    balance:
+#      cumulative: true
     output_stream:
       format: !vtk
         variant: ascii
@@ -230,5 +230,5 @@ problem: !Coupling_Sequential
           max_dt: [20000, 'y']        # 53
       common_time_unit: y
       write_used_timesteps: time_steps.yaml
-    balance:
-      cumulative: true
+#    balance:
+#      cumulative: true
