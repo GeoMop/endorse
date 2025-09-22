@@ -153,6 +153,9 @@ def single_sample(args):
       failed_subdir = sensitivity_dir / "failed_samples"
       failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
       sample_dir.rename(failed_subdir / sample_dir.name)
+    else:
+        if cfg["sensitivity"]["clean_sample_dir"]:
+            shutil.rmtree(sample_dir)
 
     return res
 

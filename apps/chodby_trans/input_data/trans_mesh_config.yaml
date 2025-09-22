@@ -43,8 +43,9 @@ fractures: &fractures
     #  crossing borehole: 3 fracture per 10 km
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
 
+    clip_box_ratio: 0.9 # *100 % of the box dimension
     large_min_r: 100
-    large_box:  [60, 60, 60]
+#    large_box:  [60, 60, 60]
     # Would be better to have separate domains for known large fractures close to tunnel and
     # uncertain large fractures, need support in Population
     # main box : [100, 80, 60]
