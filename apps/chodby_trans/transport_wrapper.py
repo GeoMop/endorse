@@ -171,6 +171,9 @@ class Wrapper:
                     'sample_time': (['iid', 'qmc'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
                 })
                 ds_coords.to_zarr(store_path, mode='a', region=region)
+            except Exception as e:
+                rc = -1001
+                raise Exception('zarr error') from e
             finally:
                 for L in reversed(locks): L.release()
 

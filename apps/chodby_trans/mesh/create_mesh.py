@@ -429,8 +429,8 @@ def make_gmsh(cfg:'dotdict', fracture_set):
     # factory.show()
     # exit(0)
 
-    logging.info(f"Setting GMSH Mesh.RandomSeed: {cfg.transport_fullscale["meshing_seed"]}")
-    factory.mesh_options.RandomSeed = cfg.transport_fullscale["meshing_seed"]
+    logging.info(f"Setting GMSH Mesh.RandomSeed: {cfg.transport_fullscale.meshing_seed}")
+    factory.mesh_options.RandomSeed = cfg.transport_fullscale.meshing_seed
     meshing(factory, [geometry_set], final_mesh_filename)
     # factory.show()
     del factory

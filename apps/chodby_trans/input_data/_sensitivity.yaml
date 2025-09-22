@@ -1,6 +1,6 @@
 #n_samples: 512 # must be power of 2 due to salib
 #n_processes: 440
-n_samples: 2 # must be power of 2 due to salib
+n_samples: 64 # must be power of 2 due to salib
 n_processes: 1
 # 42 x 31186
 sample_shape: [42, 31186]

@@ -5,7 +5,7 @@
 # ---- resources (edit) ----
 NODES=2
 PPN=8                    # cores per node
-MEM_PER_NODE=20gb
+MEM_PER_NODE=60gb
 SCRATCH_PER_NODE=20gb
 QUEUE=charon_2h
 WALLTIME=02:00:00

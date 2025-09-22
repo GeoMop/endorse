@@ -249,6 +249,12 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
     # current_node.update_dense()
 
     # values = []
+
+    if fo.process.returncode == 0:
+        res = fo.failed_convergence_reason
+    else:
+        res = fo.process.returncode
+
     return fo.process.returncode, values
 
 

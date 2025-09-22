@@ -144,7 +144,7 @@ case "$cmd" in
     require_env
     source $PROJECT_DIR/load_modules
     make_venv
-    # prepare_output_dir
+    prepare_output_dir
     stage_inputs
     compute_host_counts
     start_scheduler
