@@ -247,14 +247,42 @@ def _run_inversion(inv_cfg, epoch_df):
     #     period=adaptivity_period
     # )
 
-    m0 = 10000 # initial archive size
-    delta = 5 # number of pairs to compute jump vector
+    # old params
+    # m0 = 10000 # initial archive size
+    # delta = 5 # number of pairs to compute jump vector
+    # adaptive = True
+    # adaptivity_period = 50  # Period for adaptation
+    # nCR = 15 # up to how many parameters can change in a proposal
+    # Z_method = "random"
+    # b = 0.05
+    # b_star = 1e-6
+
+
+    # new params
+    m0 = 1000             # should be sufficient in combination with 'lhs'
+    delta = 1              
+    # number of jump pairs added to consturuct proposal jump
+    # at most 2 to have meaning proposal jumps.
+    Z_method = 'lhs'      # better prior coverage for initial archive
+    nCR = 3              
+    # Unintuitive parameter. Too large values leads to very sparse jump vectors
+    # nCR=1 means select all parameters, nCR=3 chood parameter probability from discrete set {1/3, 1/2, 1}
     adaptive = True
-    adaptivity_period = 50  # Period for adaptation
-    nCR = 15 # up to how many parameters can change in a proposal
+    # Less aggressive adaptivity, could avoid potential problems with ergodicity. 
+    # More diagnostics needed for reasonable choice.
+    adaptivity_period = 100   # keep same
+    gamma = 1.01             # more aggresive adaptivity
+    b = 0.1
+    # maximal relative prolongation / contraction of the jump
+    # 0.1 still needs about 10-40 steps to explore space between two isoolated parameter sets 
+    b_star = 1e-5         
+    # a bit more aggresive, but mainly have no impact
+
     sync_rate = 1000
     stuck_checking_start = 3000
     stuck_checking_period = 1000
+
+
     my_proposal = tda.DREAM(
         m0,
         delta,
@@ -263,7 +291,10 @@ def _run_inversion(inv_cfg, epoch_df):
         period=adaptivity_period,
         sync_rate=sync_rate,
         stuck_checking_start=stuck_checking_start,
-        stuck_checking_period=stuck_checking_period
+        stuck_checking_period=stuck_checking_period,
+        Z_method=Z_method,
+        b=b,
+        b_star=b_star
     )
 
     # pcn_scaling = 0.1
