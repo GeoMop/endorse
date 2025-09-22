@@ -176,19 +176,22 @@ def _run_inversion(inv_cfg, epoch_df):
         np.array([[p_far_std**2]])
     )
 
-
     prior = multivariate_normal(mean_prior, cov_prior)
 
-    flow_rate_observed = np.array([selected_test["spotreba"]])
-    #flow_rate_sigma = np.array([1e-6])
-    #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
-    flow_rate_sigma = np.log10(100 / 94) / 3
-    if flow_rate_sigma == 0:
-        # cover cases when sigma is zero
-        flow_rate_sigma = np.array([1e-11])
 
-    #flow_rate_sigma = 10000
-    #flow_rate_observed = np.array([1e6])
+    if piezo.to_datetime(inv_cfg["origin"]).year > 2024:
+        flow_rate_observed = np.array([selected_test["spotreba"]])
+        #flow_rate_sigma = np.array([1e-6])
+        #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
+        flow_rate_sigma = np.log10(100 / 94) / 3
+        if flow_rate_sigma == 0:
+            # cover cases when sigma is zero
+            flow_rate_sigma = np.array([1e-11])
+        plot_observed_flow = True
+    else:
+        flow_rate_sigma = 10000
+        flow_rate_observed = np.array([1e6])
+        plot_observed_flow = False
 
     pressure_output_sigma = 3 * 1000
     pressure_output_sigma = np.full(len(regular_pb_measured), pressure_output_sigma)
@@ -303,6 +306,7 @@ def _run_inversion(inv_cfg, epoch_df):
     idata.attrs["section"] = inv_cfg["section"]
     idata.attrs["year"] = piezo.to_datetime(inv_cfg["origin"]).year
     idata.attrs["month"] = piezo.to_datetime(inv_cfg["origin"]).month
+    idata.attrs["plot_observed_flow"] = plot_observed_flow
 
     return idata
 

@@ -112,9 +112,11 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     total_area = (bin_edges[1] - bin_edges[0]) * np.sum(counts)
 
     # plot observed flow rate distribution
-    observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
-    observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
-    ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
+    if idata.attrs["plot_observed_flow"]:
+        observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
+        observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
+        ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
+    
     ax_flow.legend()
 
     return [fig, fig_flow]
