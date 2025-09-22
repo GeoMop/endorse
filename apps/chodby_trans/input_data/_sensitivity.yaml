@@ -1,11 +1,13 @@
 #n_samples: 512 # must be power of 2 due to salib
 #n_processes: 440
 n_samples: 64 # must be power of 2 due to salib
-n_processes: 1
+#n_processes: 1
 # 42 x 31186
-sample_shape: [42, 31186]
+#sample_shape: [42, 31186]
 
-collect_only: False
+recompute_failed: True
+
+#collect_only: False
 mesh_only: False
 make_plots: False
 # if True, it removes sample dir right after the sample is collected

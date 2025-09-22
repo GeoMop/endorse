@@ -160,50 +160,27 @@ def single_sample(args):
     return res
 
 
-def all_samples(cfg, parameters, client=None):
+def prepare_sample_args(cfg, seed):
+    data_schema_key, data_schema = initialize_data_schema()
+    if input_data.zarr_store_path.exists() and cfg.sensitivity.recompute_failed:
+        tags, parameters = read_failed_parameters()
+    else:
+        parameters = salib_samples(cfg, seed)
+        tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
+    # data_schema_key = "run_XXX"
+
+    n_samples, n_params = parameters.shape
+    sample_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    logging.info(f"sample_args: {sample_args}")
+    return sample_args
+
+
+def all_samples(cfg, sample_args, client=None):
     # Set directories to avoid NFS IO errors
 
     # # create sample dir
     # sensitivity_dir = workdir / input_data.sensitivity_dirname
     # sample_subdir = sensitivity_dir / "samples"
-
-    n_samples, n_params = parameters.shape
-
-    cfg_sens = cfg.sensitivity
-    print(f"N={cfg_sens.n_samples}, D={n_params}")
-    print(f"n_blocks={sa.sample._num_blocks(n_params, second_order=cfg_sens.second_order_sa)}")
-    print(f"n_samples (N*n_blocks)={n_samples}")
-    # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
-    #                                                 D=n_params,
-    #                                                 second_order=cfg_sens.second_order_sa)
-    # print("saltelli_base_idx:  ", saltelli_base_idx)
-    saltelli_qmc_idx = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
-                                                  D=n_params,
-                                                  second_order=cfg_sens.second_order_sa)
-    print("saltelli_qmc_idx:   ", saltelli_qmc_idx)
-    saltelli_block_idx = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
-                                                      D=n_params,
-                                                      second_order=cfg_sens.second_order_sa)
-    print("saltelli_block_idx: ", saltelli_block_idx)
-    A_sample_idx = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
-                                              D=n_params,
-                                              second_order=cfg_sens.second_order_sa)
-    print("A_sample_idx:\n", A_sample_idx)
-
-    data_schema_key, data_schema = initialize_data_schema()
-    setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, n_samples,
-                        (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
-    # data_schema_key = "run_XXX"
-
-    tags = np.column_stack((range(n_samples), saltelli_qmc_idx, saltelli_block_idx))
-    # bh_args = []
-    # for idx in range(n_samples):
-    #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
-    #     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
-
-    #     bh_args.append((sample_dir, data_schema_key, tags[idx], parameters[idx]))
-    bh_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
-    logging.info(f"bh_args: {bh_args}")
 
     # OPTION A: submit pattern
     # futs = [submit_logged(futures, single_sample, a, label="fem") for a in args]
@@ -224,10 +201,9 @@ def all_samples(cfg, parameters, client=None):
 
     # Dask
     t0 = time.time()    
-    futures = client.map(single_sample, bh_args, pure=False)
+    futures = client.map(single_sample, sample_args, pure=False)
     results = client.gather(futures)
     logging.info("Completed %d tasks in %.2fs", len(results), time.time() - t0)
-
     logging.info(f"Results collected: {results[:100]}")
     # bcommon.pkl_write(workdir, results, "sample_results.pkl")
     # zarr.consolidate_metadata(str(input_data.zarr_store_path))
@@ -257,19 +233,20 @@ def initialize_data_schema():
 def setup_data_storage(cfg: dotdict,
                        store_path: str,
                        data_schema: dict,
-                       n_samples: int,
-                       salib_coords):
+                       parameters):
     """
     Initialize an empty Zarr store with the specified dimensions and chunking.
 
     Parameters
     ----------
+    cfg : dotdict
+        Configuration
     store_path : str
         Path to the Zarr store (directory or Zarr URL).
     data_schema : dict
         Data schema (zarr fuse alike)
-    n_samples : int
-        Length of the 'iid' dimension.
+    parameters : np.array
+        Parameter matrix NxP
     """
     # prepare data scheme for zarr storage
 
@@ -285,17 +262,38 @@ def setup_data_storage(cfg: dotdict,
     # DIRECT ZARR
     # temporary shortcut for direct zarr
 
-    param_names = [p.name for p in cfg.sensitivity.parameters]
+    cfg_sens = cfg.sensitivity
+    n_samples, n_params = parameters.shape
+    n_qmc = cfg_sens.n_samples
+    n_blocks = sa.sample._num_blocks(n_params, second_order=cfg.sensitivity.second_order_sa)
+
+    print(f"N={n_qmc}, D={n_params}")
+    print(f"n_blocks={n_blocks}")
+    print(f"n_samples (N*n_blocks)={n_samples}")
+    assert n_samples == n_qmc*n_blocks
+
+    # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
+    #                                                 D=n_params,
+    #                                                 second_order=cfg_sens.second_order_sa)
+    # print("saltelli_base_idx:  ", saltelli_base_idx)
+    qmc = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
+                                     D=n_params,
+                                     second_order=cfg_sens.second_order_sa)
+    print("saltelli_qmc_idx:   ", qmc)
+    block = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
+                                         D=n_params,
+                                         second_order=cfg_sens.second_order_sa)
+    print("saltelli_block_idx: ", block)
+    A_sample = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
+                                          D=n_params,
+                                          second_order=cfg_sens.second_order_sa)
+    print("A_sample_idx:\n", A_sample)
+
+    param_names = [p.name for p in cfg_sens.parameters]
     grid_size = data_schema["ATTRS"]["grid_step"]
 
     from endorse.fullscale_transport import output_times
     otimes = output_times(cfg.transport_fullscale)
-
-    qmc, block, A_sample, parameters = salib_coords
-    n_samples, n_params = parameters.shape
-
-    n_blocks = sa.sample._num_blocks(n_params, second_order=cfg.sensitivity.second_order_sa)
-    n_qmc = cfg.sensitivity.n_samples
 
     # ALL coords
     coords = data_schema["COORDS"]
@@ -361,6 +359,41 @@ def setup_data_storage(cfg: dotdict,
     # print(read_ds['A_sample'].to_numpy())
     print("=========== END READ ZARR ==============")
 
+    tags = np.column_stack((range(n_samples), block, qmc))
+    return tags
+
+
+def read_failed_parameters():
+
+    print("=========== READ ZARR ==============")
+    ds = xr.open_zarr(str(input_data.zarr_store_path))
+    print(ds)
+    # print(read_ds['A_sample'].to_numpy())
+    # print("sample_id:\n", ds['sample_id'].to_numpy())
+    # print(ds['parameter'].to_numpy())
+    # print("return_code:\n", ds['return_code'].to_numpy())
+    print("=========== END READ ZARR ==============")
+
+    # n_samples = ds['sample_time'].max()
+    # mask = np.isclose(ds['sample_time'].isel(iid=slice(7)).to_numpy(), 0, rtol=0, atol=1e-12)
+    # params = ds['parameter'].to_numpy()[mask]  # 1D np.ndarray of matches
+
+    # subset to the first 7 along iid ("rows")
+    param_sub = ds['parameter'].isel(iid=slice(6))
+    time_sub = ds['sample_time'].isel(iid=slice(6))
+    sample_id_sub = ds['sample_id'].isel(iid=slice(6))
+
+    mask = np.isclose(time_sub.to_numpy(), 0, rtol=0, atol=1e-12)
+
+    param_vec = param_sub.to_numpy()[mask]
+    sample_id_vec = sample_id_sub.to_numpy()[mask]
+
+    i_idx, q_idx = np.where(mask)  # integer indices
+    iid_vec = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
+    qmc_vec = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
+
+    tags = np.column_stack((sample_id_vec, iid_vec, qmc_vec))
+    return tags, param_vec
 
 
 pbs_script_template = """
@@ -461,8 +494,7 @@ def main():
     #     cmd = sys.argv[1]
     #     work_dir = Path(sys.argv[2]).absolute()
     else:
-      sys.exit("Provide command (local|meta|submit).")
-      # sys.exit("Provide command (local|meta|submit) and optionaly workdir path (overrides default).")
+      sys.exit("Provide command (submit|meta|).")
 
     logging.info(f"main: work_dir = {work_dir}")
     logging.info(f"main: input_dir = {input_dir}")
@@ -476,11 +508,11 @@ def main():
         # with common.workdir(str(work_dir), clean=False):
         shutil.copytree(input_dir, output_dir / input_dir.name, dirs_exist_ok=True)
         submit_pbs(cfg)
-    elif cmd == 'local':
-        with common.workdir(str(work_dir), clean=False):
-            shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
-            parameters = salib_samples(cfg, seed)
-            all_samples(cfg=cfg, parameters=parameters)
+    # elif cmd == 'local':
+    #     with common.workdir(str(work_dir), clean=False):
+    #         shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
+    #         parameters = salib_samples(cfg, seed)
+    #         all_samples(cfg=cfg, parameters=parameters)
     elif cmd == 'meta':
         # optional: cap hidden threading for your FEM libs
         os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -492,8 +524,8 @@ def main():
         logging.info(f"Connected to: {client}")
         
         with common.workdir(str(work_dir), clean=False):
-            parameters = salib_samples(cfg, seed)
-            all_samples(cfg=cfg, parameters=parameters, client=client)
+            sample_args = prepare_sample_args(cfg, seed)
+            all_samples(cfg=cfg, sample_args=sample_args, client=client)
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")
 
