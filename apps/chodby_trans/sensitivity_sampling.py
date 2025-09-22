@@ -294,7 +294,7 @@ def setup_data_storage(cfg: dotdict,
     qmc, block, A_sample, parameters = salib_coords
     n_samples, n_params = parameters.shape
 
-    n_blocks = sa.sample._num_blocks(n_params)  # iid
+    n_blocks = sa.sample._num_blocks(n_params, second_order=cfg.sensitivity.second_order_sa)
     n_qmc = cfg.sensitivity.n_samples
 
     # ALL coords
