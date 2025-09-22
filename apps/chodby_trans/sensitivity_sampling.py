@@ -69,8 +69,8 @@ def salib_samples(cfg: dotdict, seed):
     print(problem)
 
     # Generate Saltelli samples
-    param_values = sa.sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
-    # param_values = sample.sobol(problem, n_samples, calc_second_order=True)
+    # param_values = sa.sample.saltelli(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
+    param_values = sa.sample.sobol(problem, cfg_sens.n_samples, calc_second_order=cfg_sens.second_order_sa)
     print(param_values.shape)
 
     # # plot requires LaTeX installed
@@ -138,14 +138,9 @@ def single_sample(args):
 
     wrap = transport_wrapper.Wrapper(cfg=cfg)
     with common.workdir(str(sample_dir), clean=False):
-        # wrap.set_parameters(data_par=parameters)
-        t = time.time()
         res, sample_data = wrap.get_observations(tags, parameters)
-
         logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
-
         # print("LEN:", len(obs_data))
-        logging.info(f"TIME: {time.time() - t}")
     
     result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
     atomic_write_json(flag_file, result)
@@ -158,6 +153,9 @@ def single_sample(args):
       failed_subdir = sensitivity_dir / "failed_samples"
       failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
       sample_dir.rename(failed_subdir / sample_dir.name)
+    else:
+        if cfg["sensitivity"]["clean_sample_dir"]:
+            shutil.rmtree(sample_dir)
 
     return res
 
@@ -173,7 +171,7 @@ def all_samples(cfg, parameters, client=None):
 
     cfg_sens = cfg.sensitivity
     print(f"N={cfg_sens.n_samples}, D={n_params}")
-    print(f"n_blocks={sa.sample._num_blocks(n_params)}")
+    print(f"n_blocks={sa.sample._num_blocks(n_params, second_order=cfg_sens.second_order_sa)}")
     print(f"n_samples (N*n_blocks)={n_samples}")
     # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
     #                                                 D=n_params,
@@ -296,11 +294,14 @@ def setup_data_storage(cfg: dotdict,
     qmc, block, A_sample, parameters = salib_coords
     n_samples, n_params = parameters.shape
 
+    n_blocks = sa.sample._num_blocks(n_params)  # iid
+    n_qmc = cfg.sensitivity.n_samples
+
     # ALL coords
     coords = data_schema["COORDS"]
     coords_names = list(coords.keys())
-    shapes = (n_samples, n_params, len(otimes), *grid_size)
-    # chunks = [ coords[c]["chunk_size"] for c in coords_names]
+    shapes = (n_blocks, n_qmc, n_params, len(otimes), *grid_size)
+
     # set coords once
     # default coords are set to index their range: 0,1,2,...
     ds_coords = {k: np.arange(v) for k, v in zip(coords_names, shapes)}
@@ -310,26 +311,42 @@ def setup_data_storage(cfg: dotdict,
 
     # concentration - prepare empty
     conc_coords = data_schema['VARS']['conc']['coords']
-    conc_shapes = (n_samples, len(otimes), *grid_size)
-    conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c != "param_name"]
+    conc_shapes = (n_blocks, n_qmc, len(otimes), *grid_size)
+    conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c in conc_coords]
+
+    # sample_id
+    sid_coords = data_schema['VARS']['sample_id']['coords']
+    sid_chunks = [coords[c]["chunk_size"] for c in coords_names if c in sid_coords]
+    sid_matrix = np.full((n_blocks, n_qmc), -1, dtype=int)  # or (U, V) if your ranges are [0, U) and [0, V)
+    sid_matrix[block, qmc] = np.arange(n_samples)
+    res_shapes = (n_blocks, n_qmc)
+    print(f"sid_matrix shape: {sid_matrix.shape}, coords: {sid_coords}")
+    print("sid_matrix:\n", sid_matrix)
 
     # parameters
     par_coords = data_schema['VARS']['parameter']['coords']
     par_chunks = [coords[c]["chunk_size"] for c in coords_names if c in par_coords]
-    print(f"parameter shape: {parameters.shape}, coords: {par_coords}")
+    par_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
+    par_matrix[block, qmc, :] = parameters
+    print(f"par_matrix shape: {par_matrix.shape}, coords: {par_coords}")
+    print("par_matrix:\n", par_matrix)
 
     # A_sample
     A_coords = data_schema['VARS']['A_sample']['coords']
     A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
-    print(f"A_sample shape: {A_sample.shape}, coords: {A_coords}")
+    A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
+    A_matrix[block, qmc, :] = A_sample
+    print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
+    print("A_matrix:\n", A_matrix)
 
     ds = xr.Dataset(
         data_vars={
+            'sample_id': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
+            'sample_time': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
+            'return_code': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
-            'parameter': (tuple(par_coords), da.from_array(parameters, chunks=par_chunks)),
-            'A_sample': (tuple(A_coords), da.from_array(A_sample, chunks=A_chunks)),
-            'qmc':   ('iid', da.from_array(qmc,   chunks=coords['iid']["chunk_size"])),
-            'block': ('iid', da.from_array(block, chunks=coords['iid']["chunk_size"]))
+            'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
+            'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
         },
         coords=ds_coords
     )

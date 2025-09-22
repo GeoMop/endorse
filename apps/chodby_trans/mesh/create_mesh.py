@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import logging
 
 from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
@@ -428,6 +429,8 @@ def make_gmsh(cfg:'dotdict', fracture_set):
     # factory.show()
     # exit(0)
 
+    logging.info(f"Setting GMSH Mesh.RandomSeed: {cfg.transport_fullscale.meshing_seed}")
+    factory.mesh_options.RandomSeed = cfg.transport_fullscale.meshing_seed
     meshing(factory, [geometry_set], final_mesh_filename)
     # factory.show()
     del factory

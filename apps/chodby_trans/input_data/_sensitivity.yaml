@@ -1,6 +1,6 @@
 #n_samples: 512 # must be power of 2 due to salib
 #n_processes: 440
-n_samples: 2 # must be power of 2 due to salib
+n_samples: 64 # must be power of 2 due to salib
 n_processes: 1
 # 42 x 31186
 sample_shape: [42, 31186]
@@ -9,9 +9,9 @@ collect_only: False
 mesh_only: False
 make_plots: False
 # if True, it removes sample dir right after the sample is collected
-clean_sample_dir: False
+clean_sample_dir: True
 
-second_order_sa: True
+second_order_sa: False
 parameters:
   - name: dfn_geom  # seed for `p_32` and `power`
     type: seed
@@ -34,6 +34,8 @@ parameters:
         type: norm
         bounds: [ 0, 0.1 ]
   - name: dfn_macro # seed for large fractures
+    type: seed
+  - name: meshing_seed # seed for large fractures
     type: seed
 
 #  - name: storativity

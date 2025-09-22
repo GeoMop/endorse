@@ -85,8 +85,8 @@ class Wrapper:
 
     def get_observations(self, tags, parameters):
         try:
-            print(f"transport_wrapper: get observations tags={tags}")
-            # res = self.calculate(self._config)
+            t = time.time()
+            logging.info(f"transport_wrapper: get observations tags={tags}")
             self.set_parameters(parameters)
             rc, slice_array = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
             
@@ -96,6 +96,9 @@ class Wrapper:
             # times = output_times(cfg.transport_fullscale)
             # ng = 20
             # slice_array = np.random.rand(len(times), ng, ng, 2)
+
+            sample_time = time.time() - t
+            logging.info(f"SIMULATION TIME: {sample_time}")
 
             # ZARR FUSE
             # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
@@ -118,7 +121,7 @@ class Wrapper:
             # logging.info(sample_dict)
             # current_node.update_dense(sample_dict)
 
-            def _chunk_idxs(coord_slice: slice, chunk_len: int):
+            def _chunk_ranges(coord_slice: slice, chunk_len: int):
                 start, stop = coord_slice.start, coord_slice.stop
                 first = start // chunk_len
                 last = (stop - 1) // chunk_len
@@ -134,24 +137,43 @@ class Wrapper:
             if slice_array.shape != expected_shape:
                 raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
 
-            iid_idx = tags[0]
-            region = {'iid': slice(iid_idx, iid_idx + 1)}
+            sample_idx = tags[0]
+            qmc_idx = tags[1]
+            iid_idx = tags[2]
+            region = {'iid': slice(iid_idx, iid_idx + 1),
+                      'qmc': slice(qmc_idx, qmc_idx + 1)}
 
             # Lock for every chunk being accessed by the current write
-            iid_chunk = ds.chunksizes["iid"][0]
-            # qmc_chunks = ds.chunksizes["qmc"]
-            chunk_ids = list(_chunk_idxs(region['iid'], iid_chunk))
-            logging.info("lock chunk_ids: ", chunk_ids)
+            # iid_chunk = ds.chunksizes["iid"][0]
+            # qmc_chunk = ds.chunksizes["qmc"][0]
+            # chunk_ids = list(_chunk_ranges(region['iid'], iid_chunk))
+            # logging.info("lock chunk_ids: ", chunk_ids)
             # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
-            locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
-            for L in locks: L.acquire()
+            # locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
+
+            lock_names = []
+            for var, chunkshape in ds.chunksizes.items():  # 'iid', 'qmc'
+                for ciid in _chunk_ranges(region['iid'], chunkshape[0]):
+                    for cqmc in _chunk_ranges(region['qmc'], chunkshape[0]):
+                            lock_names.append(f"zarr-{var}-{ciid}-{cqmc}")
+            lock_names = sorted(set(lock_names))  # deterministic ordering avoids deadlocks
+            logging.info("lock_names: ", lock_names)
+            locks = [Lock(name) for name in lock_names]
+
+            for L in locks:
+                L.acquire()
 
             try:
-                ds_coords = xr.Dataset(
-                    {'conc': (['iid', 'sim_time', 'X', 'Y', 'Z'],
-                              slice_array[np.newaxis, ...])})
-                ds_coords.to_zarr(store_path, mode='a', region={
-                    'iid': slice(iid_idx, iid_idx + 1)})
+                ds_coords = xr.Dataset({
+                    'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+                              slice_array[np.newaxis, np.newaxis, ...]),
+                    'return_code': (['iid', 'qmc'], np.array(rc)[np.newaxis, np.newaxis, ...]),
+                    'sample_time': (['iid', 'qmc'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
+                })
+                ds_coords.to_zarr(store_path, mode='a', region=region)
+            except Exception as e:
+                rc = -1001
+                raise Exception('zarr error') from e
             finally:
                 for L in reversed(locks): L.release()
 
@@ -271,7 +293,7 @@ class Wrapper:
             #     }
             # )
 
-            return 0, []
+            # return 0, []
 
             return rc, slice_array
         except Exception as e:

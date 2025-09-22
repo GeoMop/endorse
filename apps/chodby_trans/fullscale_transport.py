@@ -119,7 +119,10 @@ def run_gmsh_helper_pickle(payload):
 #@memoize
 @run_in_subprocess
 def prepare_msh_input(cfg, seed):
-    fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
+    fracture_box = cfg.fractures.clip_box_ratio * np.array(cfg.geometry.box_dimensions)
+    logging.info(f"box: {cfg.geometry.box_dimensions}")
+    logging.info(f"fracture_box: {fracture_box}")
+    fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
     mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
     # return None
 
@@ -246,6 +249,12 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
     # current_node.update_dense()
 
     # values = []
+
+    if fo.process.returncode == 0:
+        res = fo.failed_convergence_reason
+    else:
+        res = fo.process.returncode
+
     return fo.process.returncode, values
 
 
