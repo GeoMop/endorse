@@ -13,7 +13,7 @@ from sys import argv, exit
 from . import PoroElasticSolver
 from chodby_inv import input_data, piezo
 from endorse import common
-from . import plot_idata, get_generic_name
+from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_file
 
 # Import TinyDA (assumes TinyDA is installed; adjust the import if needed)
 import xarray as xr
@@ -405,27 +405,6 @@ def load_pressure_tests(path=input_data.wpt_multipacker):
         minule_datum = datum
 
     return zkousky
-
-def save_idata_to_file(idata, filename):
-    # if path doesn't exist, create it
-    print(f"Saving idata {filename}...")
-
-    if os.path.exists(filename):
-        with open(filename, "wb") as file:
-            pickle.dump(obj=idata, file=file)
-    else:
-        with open(filename, "ab") as file:
-            pickle.dump(obj=idata, file=file)
-
-def read_idata_from_file(filename):
-    print(f"Reading idata from {filename}")
-    try:
-        with open(filename, "rb") as file:
-            idata = pickle.load(file=file)
-            return idata
-    except:
-        print("Error reading idata file")
-
 
 if __name__ == '__main__':
     try:
