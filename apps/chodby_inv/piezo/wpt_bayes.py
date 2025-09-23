@@ -325,7 +325,6 @@ def _run_inversion(inv_cfg, epoch_df):
     idata["sample_stats"].attrs["observed_pressure_sigma"] = pressure_output_sigma
     idata["sample_stats"].attrs["observed_flow"] = np.log10(flow_rate_observed)
     idata["sample_stats"].attrs["observed_flow_sigma"] = flow_rate_sigma
-
     idata["sample_stats"].attrs["observed_extended"] = regular_pb_measured_extended
 
     # add prior information to the InferenceData object
@@ -338,6 +337,7 @@ def _run_inversion(inv_cfg, epoch_df):
     idata.attrs["year"] = piezo.to_datetime(inv_cfg["origin"]).year
     idata.attrs["month"] = piezo.to_datetime(inv_cfg["origin"]).month
     idata.attrs["plot_observed_flow"] = plot_observed_flow
+    idata.attrs["solver_radii"] = solver.r
 
     return idata
 
