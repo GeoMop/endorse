@@ -495,3 +495,51 @@ def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, *args, **kwargs
 
     return axes
 
+def compare_plot(idata_a, idata_b):
+    name = "WPT_compare"
+    figs = []
+
+    idata_a_name = f"{idata_a.attrs['year']}_{idata_a.attrs['month']:02d} posterior"
+    idata_b_name = f"{idata_b.attrs['year']}_{idata_b.attrs['month']:02d} posterior"
+    ax_posterior = plot_posterior_modified(idata_a, generic_name=name, grid=(11, 1), figsize=(16, 32), hdi_prob="hide")
+    idata_a_patch = Patch(color="blue", label=idata_a_name)
+    plot_posterior_modified(idata_b, ax=ax_posterior, color="red", grid=(11, 1), hdi_prob="hide")
+    idata_b_patch = Patch(color="red", label=idata_b_name)
+
+    handles, labels = ax_posterior[0].get_legend_handles_labels()
+    handles.append(idata_a_patch)
+    handles.append(idata_b_patch)
+    labels.append(idata_a_name)
+    labels.append(idata_b_name)
+
+    fig_posterior = ax_posterior[0].figure
+    fig_posterior.legend(handles[1:], labels[1:], loc='upper right', title='Legend')
+    figs.append(fig_posterior)
+
+
+    fig_observe, ax_observe = plt.subplots(2, 2, figsize=(32, 18))
+    plot_observe(idata_a, ax_observe[0, 0], kind="pressure")
+    plot_observe(idata_b, ax=ax_observe[0, 1], kind="pressure")
+    plot_observe(idata_a, ax_observe[1, 0], kind="flow")
+    plot_observe(idata_b, ax=ax_observe[1, 1], kind="flow")
+
+    figs.append(fig_observe)
+
+    fig_hist2d, ax_hist2d = plt.subplots(2, 2, figsize=(16, 9))
+    plot_posterior_hist_2d(idata_a, axes=[ax_hist2d[0, 0], ax_hist2d[1, 0]])
+    plot_posterior_hist_2d(idata_b, axes=[ax_hist2d[0, 1], ax_hist2d[1, 1]])
+
+    ymin = min(ax_hist2d[0, 0].get_ylim()[0], ax_hist2d[0, 1].get_ylim()[0])
+    ymax = max(ax_hist2d[0, 0].get_ylim()[1], ax_hist2d[0, 1].get_ylim()[1])
+    ax_hist2d[0, 0].set_ylim(ymin, ymax)
+    ax_hist2d[0, 1].set_ylim(ymin, ymax)
+
+    ymin = min(ax_hist2d[1, 0].get_ylim()[0], ax_hist2d[1, 1].get_ylim()[0])
+    ymax = max(ax_hist2d[1, 0].get_ylim()[1], ax_hist2d[1, 1].get_ylim()[1])
+    ax_hist2d[1, 0].set_ylim(ymin, ymax)
+    ax_hist2d[1, 1].set_ylim(ymin, ymax)
+
+    figs.append(fig_hist2d)
+
+    return figs
+
