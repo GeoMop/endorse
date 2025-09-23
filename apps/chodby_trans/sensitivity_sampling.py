@@ -513,6 +513,9 @@ def main():
     #         shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
     #         parameters = salib_samples(cfg, seed)
     #         all_samples(cfg=cfg, parameters=parameters)
+    elif cmd == 'read':
+        # zarr_path = sys.argv[2]
+        read_failed_parameters()
     elif cmd == 'meta':
         # optional: cap hidden threading for your FEM libs
         os.environ.setdefault("OMP_NUM_THREADS", "1")

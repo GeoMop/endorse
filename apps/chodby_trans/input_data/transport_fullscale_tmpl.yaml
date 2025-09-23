@@ -15,23 +15,17 @@ problem: !Coupling_Sequential
           - .side_y1
           - .side_z0
           - .side_z1
-      #          - .tunnel_heads
+      #          - .tunnel_heads # are considered sealed
       - !Union
         name: storages
         regions: <storage_regions>
-#          - storage_0
-#          - storage_1
-#          - storage_3
-#          - storage_4
       - !From_Label
         name: plug
         mesh_label: <plug_region>
-#        mesh_label: plug_2
         allow_empty: False
       - !From_Label
         name: container
         mesh_label: <container_region>
-#        mesh_label: container_2
         allow_empty: False
 
       # Resolve fracture regions.
@@ -99,8 +93,8 @@ problem: !Coupling_Sequential
         - region_id
         - conductivity
         - cross_section
-#    balance:
-#      cumulative: true
+    balance:
+      cumulative: true
     output_stream:
       format: !vtk
         variant: ascii
@@ -181,11 +175,9 @@ problem: !Coupling_Sequential
         fields:
           - field: conc
             interpolation: [P0_value, D1_value] #[P0_value, P1_average, D1_value]
-#            interpolation: [P0_value, P1_average, D1_value] #[P0_value, P1_average, D1_value]
           - field: region_id
             interpolation: [P0_value]
           - porosity
-#        - peclet_number
     output_stream:
       format: !vtk
         variant: ascii
@@ -230,5 +222,5 @@ problem: !Coupling_Sequential
           max_dt: [20000, 'y']        # 53
       common_time_unit: y
       write_used_timesteps: time_steps.yaml
-#    balance:
-#      cumulative: true
+    balance:
+      cumulative: true
