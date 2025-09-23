@@ -450,13 +450,17 @@ def plot_merged(idata, idata_uncut):
 
     save_plots_pdf_pages(f"{generic_name}_summary.pdf", figs)
 
-def plot_posterior_hist_2d(idata, generic_name="WPT", *args, **kwargs):
+def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, *args, **kwargs):
+
 
     if "figsize" in kwargs:
         figsize = kwargs.pop("figsize")
     
-    fig, axes = plt.subplots(2, 1, figsize=figsize)
-    fig.suptitle(f"{generic_name} - posterior distributions of log_k and log_E")
+    if axes is None:
+        _, axes = plt.subplots(2, 1, figsize=figsize)
+    
+    fig = axes[0].get_figure()
+    fig.suptitle(f"{generic_name} - posterior distributions of k and E")
 
     posterior = idata.posterior
     k_params = [idx for idx in posterior.data_vars if idx.startswith("log_k_")]
@@ -467,15 +471,27 @@ def plot_posterior_hist_2d(idata, generic_name="WPT", *args, **kwargs):
     n_samples, n_params = k_values.shape
 
     x = np.repeat(np.arange(n_samples), n_params)
-
     y = k_values.flatten()
-    axes[0].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
-    axes[0].set_xlabel("index of k parameter")
-    axes[0].set_ylabel("parameter value")
-    
+
+    if "solver_radii" in idata.attrs:
+        radii = idata.attrs["solver_radii"][:-1]
+    else: 
+        radii = [0, 1, 2, 3, 4]
+    labels = [f"{r:.2f}" for r in radii]
+
+    counts, xedges, yedges, im = axes[0].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
+    axes[0].set_xlabel("distance from borehole [m]")
+    axes[0].set_ylabel("k parameter value")
+    x_centers = (xedges[:-1] + xedges[1:]) / 2
+    axes[0].set_xticks(ticks=x_centers, labels=labels)
+    axes[0].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
+
     y = E_values.flatten()
     axes[1].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
-    axes[1].set_xlabel("index of E parameter")
-    axes[1].set_ylabel("parameter value")
+    axes[1].set_xlabel("distance from borehole [m]")
+    axes[1].set_ylabel("E parameter value")
+    axes[1].set_xticks(ticks=x_centers, labels=labels)
+    axes[1].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
 
     return axes
+
