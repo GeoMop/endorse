@@ -7,6 +7,8 @@ from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator, LogFormatt
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy.stats import norm, lognorm
 import logging
+from sys import argv, exit
+from pathlib import Path
 
 
 def get_generic_name(idata):
@@ -544,3 +546,23 @@ def compare_plot(idata_a, idata_b):
 
     return figs
 
+if __name__ == "__main__":
+    from . import read_idata_from_file
+
+    borehole = argv[1]
+    section = argv[2]
+    string = f"{borehole}_{section}"
+    string2 = ".idata"
+
+    directory = Path.cwd()
+    matching = [
+        file for file in directory.iterdir()
+        if file.is_file() and string in file.name and string2 in file.name
+    ]
+    assert len(matching) == 2, f"Invalid number of files - {len(matching)}"
+    
+    idata_a = read_idata_from_file(str(matching[0]))
+    idata_b = read_idata_from_file(str(matching[1]))
+
+    figs = compare_plot(idata_a, idata_b)
+    save_plots_pdf_pages(f"{string}_compareplot.pdf", figs)
