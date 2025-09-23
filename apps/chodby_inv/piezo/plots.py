@@ -40,9 +40,9 @@ def plot_idata(idata):
 
     plot_merged(idata_cut, idata)
 
-def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
+def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
     if ax is None:
-        fig, ax = plt.subplots(figsize=(16, 9))
+        _, ax = plt.subplots(figsize=(16, 18), nrows=2)
 
 
     borehole = idata.attrs["borehole"]
@@ -50,6 +50,10 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
 
     if idata.sample_stats.attrs["observed_pressure"] is None:
         logging.warning("No observed data found in InferenceData object.")
+        return ax
+
+    if kind not in ["both", "pressure", "flow"]:
+        logging.warning("Unknown type of observe plot")
         return ax
 
     pressure_output = idata.sample_stats.attrs["observed_pressure"]
@@ -82,44 +86,58 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT"):
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
 
-    hist2d_x = np.tile(np.arange(observe_length), chains * draws)
+    figs = []
 
-    ax.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
-    origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
-    ax.plot(np.arange(origin_offset, observe_length), pressure_output_extended, "r-", label="Predicted observation (extended)", lw=1)
-    ax.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
-    ax_minima =  [
-        np.min([observe_arr.min(), pressure_output_extended.min()]),
-        np.max([observe_arr.max(), pressure_output_extended.max()])
-    ]
-    ax.set_ylim(ax_minima)
+    if kind in ["both", "pressure"]:
+        if kind in ["both"]:
+            ax_pressure = ax[0]
+        else:
+            ax_pressure = ax
 
-    ax.set_xlim([origin_offset, observe_length])
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
-    fig.suptitle(f"{generic_name} - distibution of pressure series values")
-    plt.colorbar(ax.collections[0], ax=ax, label="Counts")
+        hist2d_x = np.tile(np.arange(observe_length), chains * draws)
 
-    fig_flow, ax_flow = plt.subplots(figsize=(16, 9))
-    fig_flow.suptitle(f"{generic_name} - flow rate distribution")
-    ax_flow.set_xlabel("Flow rate [m^3/s]")
-    ax_flow.set_ylabel("Counts")
-    ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
+        ax_pressure.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
+        origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
+        ax_pressure.plot(np.arange(origin_offset, observe_length), pressure_output_extended, "r-", label="Predicted observation (extended)", lw=1)
+        ax_pressure.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
+        ax_minima =  [
+            np.min([observe_arr.min(), pressure_output_extended.min()]),
+            np.max([observe_arr.max(), pressure_output_extended.max()])
+        ]
+        ax_pressure.set_ylim(ax_minima)
 
-    # plot flow rate distribution
-    counts, bin_edges, _ = ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
-    total_area = (bin_edges[1] - bin_edges[0]) * np.sum(counts)
+        ax_pressure.set_xlim([origin_offset, observe_length])
+        ax_pressure.set_xlabel("Time (integer steps)")
+        ax_pressure.set_ylabel("Pressure")
+        ax_pressure.legend()
+        plt.suptitle(f"{generic_name} - distibution of pressure series values")
+        plt.colorbar(ax.collections[0], ax=ax, label="Counts")
+        figs.append(ax.get_figure())
 
-    # plot observed flow rate distribution
-    if idata.attrs["plot_observed_flow"]:
-        observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
-        observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
-        ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
-    
-    ax_flow.legend()
+    if kind in ["both", "flow"]:
+        if kind in ["both"]:
+            ax_flow = ax[1]
+        else:
+            ax_flow = ax
+        plt.suptitle(f"{generic_name} - flow rate distribution")
+        ax_flow.set_xlabel("Flow rate [m^3/s]")
+        ax_flow.set_ylabel("Counts")
+        ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
 
-    return [fig, fig_flow]
+        # plot flow rate distribution
+        counts, bin_edges, _ = ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
+        total_area = (bin_edges[1] - bin_edges[0]) * np.sum(counts)
+
+        # plot observed flow rate distribution
+        if idata.attrs["plot_observed_flow"]:
+            observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
+            observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
+            ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
+        
+        ax_flow.legend()
+        figs.append(ax_flow.get_figure())
+
+    return figs
 
 def plot_trace_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
