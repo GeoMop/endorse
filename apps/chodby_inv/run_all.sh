@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -N chodby_inv_run_all
-#PBS -l select=1:ncpus=20:mem=25gb
+#PBS -l select=1:ncpus=20:mem=40gb
 #PBS -l walltime=24:00:00
 #PBS -q charon
 
