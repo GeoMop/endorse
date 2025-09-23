@@ -1,3 +1,4 @@
+from matplotlib.patches import Patch
 import numpy as np
 import arviz as az
 import xarray as xr
