@@ -195,7 +195,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
             print(sd)
             xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
             yvals = norm.pdf(xvals, mean, sd)
-            axes.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+            axes.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
 
             if axes.get_title() not in ["p_far"]:
                 axes.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
@@ -218,7 +218,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
                     print(sd)
                     xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                     yvals = norm.pdf(xvals, mean, sd)
-                    ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+                    ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
             else:
                 idx = x
                 # if empty axis, skip
@@ -229,7 +229,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
                 print(sd)
                 xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                 yvals = norm.pdf(xvals, mean, sd)
-                ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Původní odhad")
+                ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
 
     # set scientific notation for axes
     for ax_row in axes:
