@@ -9,7 +9,7 @@ import logging
 
 
 def get_generic_name(idata):
-    return f"WPT_{idata.attrs['year']}_{idata.attrs['month']:02d}_{idata.attrs['borehole'][3:]}_{idata.attrs['section']}"
+    return f"WPT_{idata.attrs['borehole'][3:]}_{idata.attrs['section']}_{idata.attrs['year']}_{idata.attrs['month']:02d}"
 
 def plot_idata(idata):
 
