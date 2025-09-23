@@ -57,9 +57,9 @@ def test_sa_from_cfg_and_sampling():
     assert isinstance(sa_obj.parameters["S"].distribution, ot.Normal)
 
     # sampling
-    Xg, Xp = sa_obj.sample(seed=123, n_samples=sa_obj.n_samples)
-    Xg = np.asarray(Xg)
-    Xp = np.asarray(Xp)
+    in_design= sa_obj.sample(seed=123, n_samples=sa_obj.n_samples)
+    Xg = in_design.group_mat
+    Xp = in_design.param_mat
 
     # unique groups should be {"g1", "S"}
     uniq_groups = sorted(set(sa_obj.groups))
@@ -104,9 +104,9 @@ def test_sa_end_to_end_3params_2outputs():
     sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
 
     # design + mapping
-    Xg, Xp = sa_obj.sample(seed=2024, n_samples=sa_obj.n_samples)
-    Xg = np.asarray(Xg)
-    Xp = np.asarray(Xp)
+    in_design= sa_obj.sample(seed=2024, n_samples=sa_obj.n_samples)
+    Xg = in_design.group_mat
+    Xp = in_design.param_mat
 
     # build outputs: y1 = k1 + k2, y2 = S
     name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
@@ -275,3 +275,109 @@ def test_infer_saltelli_layout_2blocks_3groups_4params():
                     f"Inconsistent mix for block {b}, pos {i}: "
                     f"got {X[r]}, expected {mixed}"
                 )
+
+Seed = sa.Seed  # alias for brevity in tests
+def test_seed_helpers_and_reproducibility():
+    # +0.0 and -0.0 must map to the same uint64
+    s_pos0 = Seed.get_int64(0.0)
+    s_neg0 = Seed.get_int64(-0.0)
+    assert isinstance(s_pos0, np.uint64)
+    assert s_pos0 == s_neg0
+
+    # Determinism
+    s_a = Seed.get_int64(0.123456789)
+    assert s_a == Seed.get_int64(0.123456789)
+
+    # Different inputs (very likely) produce different 64-bit values
+    s_b = Seed.get_int64(0.987654321)
+    assert s_a != s_b
+
+    # SeedSequence reproducibility
+    ss1 = Seed.get_seedsequence(0.42)
+    ss2 = Seed.get_seedsequence(0.42)
+    rng1 = np.random.default_rng(ss1)
+    rng2 = np.random.default_rng(ss2)
+    x1 = rng1.integers(0, 2**31, size=8)
+    x2 = rng2.integers(0, 2**31, size=8)
+    assert np.array_equal(x1, x2)
+
+    # Spawned children should yield distinct streams (with overwhelming probability)
+    kids = ss1.spawn(2)
+    r0 = np.random.default_rng(kids[0]).integers(0, 2**31, size=8)
+    r1 = np.random.default_rng(kids[1]).integers(0, 2**31, size=8)
+    assert not np.array_equal(r0, r1)
+    assert not np.array_equal(r0, x1)
+
+
+def test_seed_distribution_behaves_like_uniform():
+    """
+    The Seed class delegates to ot.Uniform(0,1). Check basic behavior:
+    - samples are in [0,1)
+    - sample mean is close to 0.5
+    """
+    ot.RandomGenerator.SetSeed(12345)
+    dist = Seed()
+
+    N = 10000
+    samp = np.asarray(dist.getSample(N)).ravel()
+    assert (samp >= 0.0).all() and (samp < 1.0).all()
+
+    # Mean ~ 0.5 for Uniform(0,1); tolerance relaxed to avoid flakiness
+    mean = float(samp.mean())
+    assert abs(mean - 0.5) < 0.02, f"mean={mean} too far from 0.5"
+
+
+def test_seed_mapping_uniformity_on_close_pairs():
+    """
+    Generate many very-close float pairs u and nextafter(u, 1.0) from Seed(),
+    map each to uint64 via Seed.get_int64, and check the mapping is
+    roughly uniform:
+      - histogram across high bits is near-uniform (chi-by-eye bound)
+      - a few individual bit positions are ~50% ones
+    """
+    ot.RandomGenerator.SetSeed(24680)
+    dist = Seed()
+
+    # Draw base uniforms
+    N_pairs = 20000  # 20k pairs -> 40k uint64s (keeps the test fast & stable)
+    u = np.asarray(dist.getSample(N_pairs)).ravel().astype(np.float64)
+
+    # Make very close neighbors on the right
+    u_next = np.nextafter(u, np.float64(1.0))
+
+    # Map both to uint64 using the hashing helper
+    seeds_a = np.array([Seed.get_int64(x) for x in u], dtype=np.uint64)
+    seeds_b = np.array([Seed.get_int64(x) for x in u_next], dtype=np.uint64)
+    seeds_all = np.concatenate([seeds_a, seeds_b]).astype(np.uint64)
+
+    # Sanity: neighbors should (overwhelmingly likely) hash to different values
+    # (A cryptographic hash should avalanche on tiny input changes.)
+    diff_ratio = np.mean(seeds_a != seeds_b)
+    assert diff_ratio > 0.999, f"Too many collisions for close pairs: ratio={diff_ratio}"
+
+    # --- Uniformity check via histogram over high bits ---
+    # Use the top k bits to form bins; with k=11 -> 2048 bins
+    k = 11
+    bins = 1 << k
+    high = (seeds_all >> np.uint64(64 - k)).astype(np.uint64)
+    counts = np.bincount(high.astype(np.int64), minlength=bins)
+    total = seeds_all.size
+    expected = total / bins
+    std = np.sqrt(expected)
+
+    # Max deviation shouldn't exceed ~6σ (very generous, keeps flakiness low)
+    max_dev = np.max(np.abs(counts - expected))
+    assert max_dev <= 6 * std, f"Histogram deviates too much: max_dev={max_dev:.2f}, 6σ={6*std:.2f}"
+
+    # --- Bit balance sanity: a few specific bit positions near 50% ones ---
+    def bit_ratio(arr: np.ndarray, bit: int) -> float:
+        return float(((arr >> np.uint64(bit)) & np.uint64(1)).mean())
+
+    # Check LSB, a middle bit, and the MSB
+    ratios = {
+        "bit0": bit_ratio(seeds_all, 0),
+        "bit31": bit_ratio(seeds_all, 31),
+        "bit63": bit_ratio(seeds_all, 63),
+    }
+    for name, r in ratios.items():
+        assert 0.45 <= r <= 0.55, f"{name} ones ratio out of range: {r:.3f}"

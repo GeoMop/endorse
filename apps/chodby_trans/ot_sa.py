@@ -66,20 +66,8 @@ class Seed(ot.PythonDistribution):
     def __init__(self):
         self._distr = ot.Uniform(0.0, 1.0)
 
-    def computeCDF(self, x):        
-        return self._distr.computeCDF(x)
-
-    def computePDF(self, x):
-        return self._distr.computePDF(x)
-    
-    def computeQuantile(self, x):
-        return self._distr.computeQuantile(x)
-
-    def getRange(self):
-        return ot.Interval(0.0, 1.0)
-
-    def isContinuous(self):
-        return True
+    def __getattr__(self, item):
+        return getattr(self._distr, item)
     
     @staticmethod
     def get_seedsequence(x: float) -> np.random.SeedSequence:
@@ -313,7 +301,7 @@ class SensitivityAnalysis:
 
 
     # ----- sampling -----
-    def sample(self, seed: int, n_samples: int=None) -> Tuple[np.ndarray, np.ndarray]:        
+    def sample(self, seed: int, n_samples: int=None) -> InputDesign:        
         if n_samples is None:
             n_samples = self.n_samples
         assert n_samples > 0
