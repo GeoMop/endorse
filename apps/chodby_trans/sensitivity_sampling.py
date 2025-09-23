@@ -24,6 +24,7 @@ from endorse import common
 from endorse.common import dotdict, File, report, memoize
 # from endorse.sa import sample, analyze
 import endorse.sa as sa
+from endorse.fullscale_transport import output_times
 
 import xarray as xr
 import zarr
@@ -32,6 +33,7 @@ import zarr_fuse as zf
 # import chodby_trans.sample_storage as sample_storage
 import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
+from chodby_trans import ot_sa
 
 # from worker_logging import submit_logged, map_logged, setup_worker_logging
 
@@ -77,10 +79,7 @@ def salib_samples(cfg: dotdict, seed):
     # plot_conductivity(cfg, param_values)
     # # exit(0)
 
-    sensitivity_dir = Path(input_data.sensitivity_dirname)
-    if sensitivity_dir.exists():
-        shutil.rmtree(sensitivity_dir)
-    sensitivity_dir.mkdir()
+
 
     return param_values
     # TODO: write parameters
@@ -99,6 +98,23 @@ def salib_samples(cfg: dotdict, seed):
     # else:
     #     pass
 
+@memoize
+def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
+    cfg_sens = cfg.ot_sensitivity
+    problem = ot_sa.SensitivityAnalysis.from_cfg(cfg_sens)
+    return problem.sample(seed)
+   
+def prepare_sampling(cfg: dotdict, seed):
+    """
+    Clean samplig directory + return samples array.
+    """
+    
+    sensitivity_dir = Path(input_data.sensitivity_dirname)
+    if sensitivity_dir.exists():
+        shutil.rmtree(sensitivity_dir)
+    sensitivity_dir.mkdir()
+
+    return ot_samples(cfg, seed)
 
 def single_sample(args):
     # sample_dir, data_schema_key, tags, parameters = args
@@ -160,49 +176,59 @@ def single_sample(args):
     return res
 
 
-def all_samples(cfg, parameters, client=None):
+def all_samples(cfg, client=None, seed = 123):
+    
+    input_design = prepare_sampling(cfg, seed)
+    
     # Set directories to avoid NFS IO errors
 
     # # create sample dir
     # sensitivity_dir = workdir / input_data.sensitivity_dirname
     # sample_subdir = sensitivity_dir / "samples"
 
-    n_samples, n_params = parameters.shape
+    #n_samples, n_params = parameters.shape
+    #n_groups = group_mat.shape[1]
 
-    cfg_sens = cfg.sensitivity
-    print(f"N={cfg_sens.n_samples}, D={n_params}")
-    print(f"n_blocks={sa.sample._num_blocks(n_params, second_order=cfg_sens.second_order_sa)}")
-    print(f"n_samples (N*n_blocks)={n_samples}")
-    # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
-    #                                                 D=n_params,
-    #                                                 second_order=cfg_sens.second_order_sa)
-    # print("saltelli_base_idx:  ", saltelli_base_idx)
-    saltelli_qmc_idx = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
-                                                  D=n_params,
-                                                  second_order=cfg_sens.second_order_sa)
-    print("saltelli_qmc_idx:   ", saltelli_qmc_idx)
-    saltelli_block_idx = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
-                                                      D=n_params,
-                                                      second_order=cfg_sens.second_order_sa)
-    print("saltelli_block_idx: ", saltelli_block_idx)
-    A_sample_idx = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
-                                              D=n_params,
-                                              second_order=cfg_sens.second_order_sa)
-    print("A_sample_idx:\n", A_sample_idx)
+    #saltelli_block_idx, saltelli_qmc_idx, A_sample_idx = ot_sa.infer_saltelli_layout(parameters, n_groups)
+    
+    
+    # cfg_sens = cfg.sensitivity
+    # print(f"N={cfg_sens.n_samples}, D={n_params}")
+    # print(f"n_blocks={sa.sample._num_blocks(n_params, second_order=cfg_sens.second_order_sa)}")
+    # print(f"n_samples (N*n_blocks)={n_samples}")
+    # # saltelli_base_idx = sa.sample.saltelli_base_idx(N=cfg_sens.n_samples,
+    # #                                                 D=n_params,
+    # #                                                 second_order=cfg_sens.second_order_sa)
+    # # print("saltelli_base_idx:  ", saltelli_base_idx)
+    # saltelli_qmc_idx = sa.sample.saltelli_qmc_idx(N=cfg_sens.n_samples,
+    #                                               D=n_params,
+    #                                               second_order=cfg_sens.second_order_sa)
+    # saltelli_block_idx = sa.sample.saltelli_block_idx(N=cfg_sens.n_samples,
+    #                                                   D=n_params,
+    #                                                   second_order=cfg_sens.second_order_sa)
+    # A_sample_idx = sa.sample.saltelli_ab_mask(N=cfg_sens.n_samples,
+    #                                           D=n_params,
+    #                                           second_order=cfg_sens.second_order_sa)
 
+    print("saltelli_qmc_idx:   ", input_design.i_saltelli)
+    print("saltelli_block_idx: ", input_design.i_block)
+    print("A_sample_idx:\n", input_design.A_mask)
+
+    
     data_schema_key, data_schema = initialize_data_schema()
-    setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, n_samples,
-                        (saltelli_qmc_idx, saltelli_block_idx, A_sample_idx, parameters))
+    setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, input_design)
     # data_schema_key = "run_XXX"
 
-    tags = np.column_stack((range(n_samples), saltelli_qmc_idx, saltelli_block_idx))
+    n_samples = input_design.n_samples
+    tags = np.column_stack((range(n_samples), input_design.i_saltelli, input_design.i_block))
     # bh_args = []
     # for idx in range(n_samples):
     #     sample_dir = sample_subdir / ("sample_" + str(idx).zfill(3))
     #     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
     #     bh_args.append((sample_dir, data_schema_key, tags[idx], parameters[idx]))
-    bh_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    bh_args = [(data_schema_key, tags[idx], input_design.param_mat[idx]) 
+               for idx in range(n_samples)]
     logging.info(f"bh_args: {bh_args}")
 
     # OPTION A: submit pattern
@@ -256,9 +282,8 @@ def initialize_data_schema():
 
 def setup_data_storage(cfg: dotdict,
                        store_path: str,
-                       data_schema: dict,
-                       n_samples: int,
-                       salib_coords):
+                       data_schema: dict,                       
+                       input_design):
     """
     Initialize an empty Zarr store with the specified dimensions and chunking.
 
@@ -285,18 +310,18 @@ def setup_data_storage(cfg: dotdict,
     # DIRECT ZARR
     # temporary shortcut for direct zarr
 
-    param_names = [p.name for p in cfg.sensitivity.parameters]
-    grid_size = data_schema["ATTRS"]["grid_step"]
+    param_names = input_design.param_names
+    n_params = len(param_names)
+    n_samples = input_design.n_samples
+    n_blocks = input_design.n_blocks
+    n_qmc = input_design.block_size
+    parameters = input_design.param_mat
+    block, qmc,  A_sample = input_design.saltelli_layout
 
-    from endorse.fullscale_transport import output_times
+    grid_size = data_schema["ATTRS"]["grid_step"]
     otimes = output_times(cfg.transport_fullscale)
 
-    qmc, block, A_sample, parameters = salib_coords
-    n_samples, n_params = parameters.shape
-
-    n_blocks = sa.sample._num_blocks(n_params)  # iid
-    n_qmc = cfg.sensitivity.n_samples
-
+    
     # ALL coords
     coords = data_schema["COORDS"]
     coords_names = list(coords.keys())
@@ -335,7 +360,7 @@ def setup_data_storage(cfg: dotdict,
     A_coords = data_schema['VARS']['A_sample']['coords']
     A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
     A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
-    A_matrix[block, qmc, :] = A_sample
+    A_matrix[:, :, :] = A_sample[None, :, :]
     print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
     print("A_matrix:\n", A_matrix)
 
@@ -448,6 +473,7 @@ def submit_pbs(cfg):
     subprocess.run(cmd, check=True)
 
 
+
 def main():
     # common.EndorseCache.instance().expire_all()
     # setup_worker_logging(name="trans")
@@ -479,8 +505,8 @@ def main():
     elif cmd == 'local':
         with common.workdir(str(work_dir), clean=False):
             shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
-            parameters = salib_samples(cfg, seed)
-            all_samples(cfg=cfg, parameters=parameters)
+            #group_mat, parameters = ot_samples(cfg, seed)
+            all_samples(cfg=cfg, seed=seed)
     elif cmd == 'meta':
         # optional: cap hidden threading for your FEM libs
         os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -492,8 +518,8 @@ def main():
         logging.info(f"Connected to: {client}")
         
         with common.workdir(str(work_dir), clean=False):
-            parameters = salib_samples(cfg, seed)
-            all_samples(cfg=cfg, parameters=parameters, client=client)
+            #parameters = salib_samples(cfg, seed)
+            all_samples(cfg=cfg,  seed=seed, client=client)
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")
 

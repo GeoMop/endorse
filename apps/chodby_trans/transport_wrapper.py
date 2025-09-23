@@ -22,6 +22,7 @@ import scipy.interpolate
 
 from endorse import common
 import chodby_trans.fullscale_transport as transport
+from chodby_trans import ot_sa
 
 from endorse.fullscale_transport import output_times
 import zarr_fuse as zf
@@ -87,8 +88,12 @@ class Wrapper:
         try:
             t = time.time()
             logging.info(f"transport_wrapper: get observations tags={tags}")
-            self.set_parameters(parameters)
-            rc, slice_array = transport.transport_run(self._config, self._config.transport_fullscale.dfn_macro, tags, parameters)
+            #self.set_parameters(parameters)
+            sa = ot_sa.SensitivityAnalysis.from_cfg(self._config.ot_sensitivity)
+            param_dict = sa.param_vec_to_dict(parameters)
+            rc, slice_array = transport.transport_run(
+                self._config, 
+                tags, param_dict)
             
             # test random results
             # cfg = self._config

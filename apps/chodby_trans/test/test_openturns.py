@@ -39,7 +39,7 @@ def run_case(exp, method, model, second_order=False):
 # -----------------------------
 def test_open_turns():
     ot.RandomGenerator.SetSeed(42)
-    size = 2**12
+    size = 2**10
     n_params = 8
     distr = ot.JointDistribution([ot.Uniform(0.0, 1.0)] * n_params)
     second_order = False
@@ -85,3 +85,37 @@ def test_open_turns():
     #     fname=None,        # e.g., "compare_methods.pdf"
     #     show_plot=True
     # )
+
+
+def test_vectorized_quantile():
+    dist = ot.Normal(0.0, 1.0)
+    # Scalar p -> Point
+    out = dist.computeQuantile([0.25, 0.5, 0.75])  # median
+    assert isinstance(out, ot.typ.Sample)
+    assert len(out) == 3
+    
+
+
+def test_mutlivariate_fn():
+    inputDistribution = ot.Normal(5)
+    function = ot.SymbolicFunction(
+        ["x0", "x1", "x2", "x3", "x4"],
+        ["x0 + 4.0 * x1 ^ 2 + 3.0 * x2", "-7.0 * x2 - 4.0 * x3 + x4"],
+    )
+    size = 1000
+    sie = ot.SobolIndicesExperiment(inputDistribution, size)
+    inputDesign = sie.generate()
+    input_names = inputDistribution.getDescription()
+    inputDesign.setDescription(input_names)
+    print("Sample size: ", inputDesign.getSize())# Scalar p -> Point
+    
+    outputDesign = function(inputDesign)
+    sensitivityAnalysis = ot.SaltelliSensitivityAlgorithm(inputDesign, outputDesign, size)
+
+    output_dimension = function.getOutputDimension()
+    all = [sensitivityAnalysis.getFirstOrderIndices(i) for i in range(output_dimension)]
+    for o in all:
+        print("Output:", o)
+    
+    nopar = sensitivityAnalysis.getFirstOrderIndices()
+    print("all: \n",nopar)    

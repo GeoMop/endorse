@@ -1,0 +1,55 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+
+        {
+        "name": "Pytest OpenTurns",
+        "type": "debugpy",
+        "request": "launch",
+        "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
+        "module": "pytest",
+        "args": ["-q", "-ra", "test_openturns.py"],
+        "justMyCode": true,
+        "console": "internalConsole",
+        "cwd": "${workspaceFolder}/apps/chodby_trans/test"
+        },
+        {
+        "name": "Pytest ot_sa",
+        "type": "debugpy",
+        "request": "launch",
+        "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
+        "module": "pytest",
+        "args": ["-q", "-ra", "test_ot_sa.py"],
+        "justMyCode": true,
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}/apps/chodby_trans/test"
+        },
+        {
+        "name": "transport_sampling_local",
+        "type": "debugpy",
+        "request": "launch",
+        "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
+        "module": "chodby_trans.sensitivity_sampling",
+        "args": ["local"],
+        "justMyCode": true,
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}/apps/chodby_trans"
+        },
+        {
+            "name": "WPT_bayes",
+            "type": "python",
+            "request": "launch",
+            "module": "chodby_inv.piezo.wpt_bayes"
+        },
+        {
+            "name": "ot_distr",
+            "type": "python",
+            "request": "launch",
+            "module": "chodby_inv.piezo.wpt_bayes"
+        },
+    ]
+}

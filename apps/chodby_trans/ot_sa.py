@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from typing import *
+from functools import cached_property
 import sys
 import numpy as np
+import struct
 import hashlib
 import attrs
 import openturns as ot
@@ -60,7 +62,50 @@ def LogNormal(*args, **kwargs):
     shift = float(kwargs.get('shift', '0.0'))
     return ot.LogNormal(mean, std, shift)
 
+class Seed(ot.PythonDistribution):
+    def __init__(self):
+        self._distr = ot.Uniform(0.0, 1.0)
 
+    def computeCDF(self, x):        
+        return self._distr.computeCDF(x)
+
+    def computePDF(self, x):
+        return self._distr.computePDF(x)
+    
+    def computeQuantile(self, x):
+        return self._distr.computeQuantile(x)
+
+    def getRange(self):
+        return ot.Interval(0.0, 1.0)
+
+    def isContinuous(self):
+        return True
+    
+    @staticmethod
+    def get_seedsequence(x: float) -> np.random.SeedSequence:
+        """
+        Prefered way to initialize numpy generator:
+
+        ss = Seed.seedsequence(float_uniform_seed)
+        rng = np.random.default_rng(ss)
+        
+        Use ss.spawn to create (most probably) independent rng chains:
+        
+        chain_seeds = ss.spawn(4)   # spwn 4 chains
+        """
+        s64 = Seed.get_int64(x)
+        lo = np.uint32(s64 & np.uint64(0xFFFFFFFF))
+        hi = np.uint32(s64 >> np.uint64(32))
+        return np.random.SeedSequence([int(lo), int(hi)])
+
+    def get_int64(x: float) -> int:
+        salt: bytes = b""
+        if x == 0.0:
+            x = 0.0 # always +0.0        
+        data = struct.pack(">d", x)
+        digest_size: int = 8    # in64 == 8 bytes
+        h = hashlib.blake2b(data + salt, digest_size=digest_size).digest()
+        return np.frombuffer(h, dtype=">u8")[0].astype(np.uint64)
 
 @attrs.define
 class Parameter:
@@ -124,6 +169,47 @@ class Parameter:
         qs = self.distribution.computeQuantile(uniform_list)
         return np.asarray(qs)[:, 0]
 
+@attrs.define(frozen=False)
+class InputDesign:
+    param_names: List[str]
+    group_mat: np.ndarray
+    param_mat: np.ndarray
+
+    @cached_property
+    def saltelli_layout(self):
+        return infer_saltelli_layout(self.param_mat, self.n_groups)
+
+    @property
+    def n_groups(self):
+        return self.group_mat.shape[1]
+
+    @property
+    def n_samples(self):
+        return self.group_mat.shape[0]
+
+    @property
+    def n_blocks(self):
+        return len(np.unique(self.i_block))
+
+    @property
+    def block_size(self): 
+        return len(np.unique(self.i_saltelli))
+
+    @property
+    def i_block(self):
+        i_block, i_saltelli, A_mask = self.saltelli_layout
+        return i_block
+
+    @property
+    def i_saltelli(self):
+        i_block, i_saltelli, A_mask = self.saltelli_layout
+        return i_saltelli
+
+    @property
+    def A_mask(self):
+        i_block, i_saltelli, A_mask = self.saltelli_layout
+        return A_mask
+
 
 @attrs.define
 class SobolResultGroup:
@@ -141,12 +227,16 @@ class SobolResultGroup:
  
 SobolResult = Dict[str, SobolResultGroup]
 
+
+
+
 @attrs.define(frozen=False)
 class SensitivityAnalysis:
-    n_samples: int
+   
     parameters: Dict[str, Parameter]
     sampler: Literal["sobol", "mc"] = "sobol"
     compute_s2: bool = False
+    n_samples: int = 0
     confidence_level: float = 0.95
     _experiment_design: Optional[Callable] = attrs.field(
         init=False,
@@ -159,11 +249,11 @@ class SensitivityAnalysis:
         param_cfg = sa_cfg['parameters']
         parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
         return SensitivityAnalysis(
-            sa_cfg['n_samples'],
             parameters,
             sa_cfg.get('sampler', "sobol"),
             sa_cfg.get('second_order', False),
-            sa_cfg.get('confidence_level', 0.95))
+            sa_cfg['n_samples'],
+            sa_cfg.get('err_est_confidence_level', 0.95))
 
     @property
     def groups(self) -> List[str]:
@@ -175,8 +265,8 @@ class SensitivityAnalysis:
 
     
     def __attrs_post_init__(self):
-        if not isinstance(self.n_samples, int) or self.n_samples <= 0:
-            raise ValueError("n_samples must be a positive integer")
+        if not isinstance(self.n_samples, int) or self.n_samples < 0:
+            raise ValueError("n_samples must be a non-negative integer")
         if not self.parameters:
             raise ValueError("parameters must be a non-empty dict")
         for k, p in self.parameters.items():
@@ -223,7 +313,10 @@ class SensitivityAnalysis:
 
 
     # ----- sampling -----
-    def sample(self, seed: int, n_samples: int) -> Tuple[np.ndarray, np.ndarray]:        
+    def sample(self, seed: int, n_samples: int=None) -> Tuple[np.ndarray, np.ndarray]:        
+        if n_samples is None:
+            n_samples = self.n_samples
+        assert n_samples > 0
         ot.RandomGenerator.SetSeed(seed)
         group_distrs = ot.JointDistribution([ot.Uniform(0.0, 1.0)] * len(self.groups))
         group_samples = self.saltelli_design(group_distrs)
@@ -235,8 +328,19 @@ class SensitivityAnalysis:
             for p in self.parameters.values()
         ]
         param_samples = np.column_stack(cols)
-        return raw_input_design_mat, param_samples
-        
+
+        param_names = list(self.parameters.keys())
+        return InputDesign(param_names, raw_input_design_mat, param_samples)
+    
+    
+
+    def param_vec_to_dict(self, params: Union[np.ndarray, List[float]]):
+        param_array = np.array(params)
+        assert param_array.ndim == 1
+        assert len(param_array) == len(self.parameters)
+        return dict(zip(self.parameters.keys(), param_array))
+
+
     def second_order_indices(self, algo, i):
         try:
             return algo.getSecondOrderIndices(i)
@@ -288,3 +392,86 @@ class SensitivityAnalysis:
             )
             for ig, group in enumerate(self.groups)
         }    
+
+
+
+
+def infer_saltelli_layout(input_design: np.ndarray, n_groups: int):
+    """
+    Infer Saltelli block structure for a design whose columns are parameters (M_p),
+    but blocks were generated for n_groups = M_g.
+
+    Supports two layouts:
+      1) Contiguous blocks: rows [b*L : (b+1)*L) form a block.
+      2) Transposed (SALib-style): rows grouped by within-block index first.
+
+    Returns:
+      block_index    : (N,) int block id per row
+      saltelli_index : (N,) int position in block per row
+      block_mask     : (L, M_p) bool; for each within-block row i, mask[i, j] is True
+                       iff column j takes its value from A (False ⇒ from B).
+    """
+    X = np.asarray(input_design)
+    if X.ndim != 2:
+        raise ValueError("input_design must be a 2D array")
+    N, Mp = X.shape
+    if N == 0 or Mp == 0:
+        raise ValueError("input_design must have positive shape in both dims")
+    if not isinstance(n_groups, int) or n_groups <= 0:
+        raise ValueError("n_groups must be a positive integer")
+
+    # Candidate block lengths (first-order vs second-order)
+    L1 = 2 + n_groups
+    L2 = 2 + 2 * n_groups
+    candidates = [L for L in (L1, L2) if N % L == 0]
+    if not candidates:
+        raise ValueError(
+            f"N={N} not divisible by 2+M_g={L1} or 2+2*M_g={L2}; cannot infer Saltelli block size."
+        )
+
+    def looks_like_contiguous(Ltest: int) -> bool:
+        # In a Saltelli block, each parameter column only takes A or B (≤2 unique values)
+        if Ltest > N:
+            return False
+        block0 = X[:Ltest, :]
+        uniq_per_col = [np.unique(block0[:, j]).size for j in range(block0.shape[1])]
+        return (max(uniq_per_col) <= 2)
+
+    # Choose block length and layout
+    if len(candidates) == 1:
+        L = candidates[0]
+        contiguous = looks_like_contiguous(L)
+    else:
+        c0 = looks_like_contiguous(candidates[0])
+        c1 = looks_like_contiguous(candidates[1])
+        if c0 and not c1:
+            L, contiguous = candidates[0], True
+        elif c1 and not c0:
+            L, contiguous = candidates[1], True
+        else:
+            # ambiguous; prefer first-order length, still infer layout
+            L = min(candidates)
+            contiguous = looks_like_contiguous(L)
+
+    B = N // L  # number of blocks
+
+    if contiguous:
+        block_index    = np.arange(N, dtype=int) // L
+        saltelli_index = np.arange(N, dtype=int) %  L
+        rows_block0 = np.arange(L)
+    else:
+        block_index    = np.arange(N, dtype=int) %  B
+        saltelli_index = np.arange(N, dtype=int) // B
+        rows_block0 = np.arange(L) * B  # pick the first block’s representative rows
+
+    block0 = X[rows_block0, :]  # (L, Mp)
+
+    # Identify the A-row within the block: row most similar (by equal columns) to all rows
+    equal_cols = (block0[:, None, :] == block0[None, :, :])   # (L, L, Mp)
+    equality_counts = equal_cols.sum(axis=2).sum(axis=1)      # (L,)
+    a_idx = int(np.argmax(equality_counts))
+
+    # For each within-block row, a column equals A-row ⇒ that column comes from A
+    block_mask = (block0 == block0[a_idx, :])                 # (L, Mp) boolean
+
+    return block_index, saltelli_index, block_mask

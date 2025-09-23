@@ -53,7 +53,7 @@ def fixed_fractures(cfg):
     return [fr]
 
 
-def fracture_set(cfg, fr_population:frac.Population, seed):
+def fracture_set(cfg, fr_population:frac.Population, seed:int):
     main_box_dimensions = cfg.geometry.box_dimensions
 
     # Fixed large fractures

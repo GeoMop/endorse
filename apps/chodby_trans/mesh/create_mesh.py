@@ -438,16 +438,19 @@ def make_gmsh(cfg:'dotdict', fracture_set):
 
 
 @memoize
-def make_mesh(cfg, fr_pop, seed):
+def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
+
+    # need to review endorse and bgem code to update from legacy to seed to SeedSeq
+    dfn_seed = dfn_seed_seq.generate_state(1)[0]
 
     if "fractures" in cfg.geometry.include:
-        fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, seed)
+        fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
     else:
         fracture_set, n_large = None, 0
 
     mesh_file = None
     if not Path(cfg.mesh_name + ".msh2").exists():
-        mesh_file = make_gmsh(cfg, fracture_set)
+        mesh_file = make_gmsh(cfg, fracture_set)    # use mesh_seed for gmsh randomization
     else:
         mesh_file = File(cfg.mesh_name + ".msh2")
 
@@ -459,6 +462,8 @@ def make_mesh(cfg, fr_pop, seed):
     mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
     if not Path(mesh_file_healed).exists():
         print("HEAL MESH")
+
+        # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
         hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
         hm.heal_mesh(gamma_tol=0.02)
         # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")

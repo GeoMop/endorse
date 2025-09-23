@@ -149,3 +149,129 @@ def test_sa_end_to_end_3params_2outputs():
     loT, hiT = g1.agg_ST_ci
     assert lo1 <= hi1 and -0.1 <= lo1 <= 0.2 and 0.1 <= hi1 <= 0.5
     assert loT <= hiT and -0.1 <= loT <= 0.2 and 0.1 <= hiT <= 0.5
+
+
+
+def _first_order_block_params(Ap, Bp, group_of_param, n_groups):
+    """
+    Build a single first-order Saltelli block at PARAMETER level (Mp columns),
+    for a design generated at GROUP level (n_groups).
+      row 0: A (all params from A)
+      row 1: B (all params from B)
+      row 2+: for each group g, swap that group: params in group g from B, others from A
+    """
+    Ap = np.asarray(Ap, float)  # (Mp,)
+    Bp = np.asarray(Bp, float)  # (Mp,)
+    rows = [Ap, Bp]
+    for g in range(n_groups):
+        r = Ap.copy()
+        mask_g = (group_of_param == g)
+        r[mask_g] = Bp[mask_g]
+        rows.append(r)
+    return np.vstack(rows)  # shape (2 + n_groups, Mp)
+
+
+def test_infer_saltelli_layout_2blocks_3groups_4params():
+    """
+    2 blocks (B=2), n_groups=3, Mp=4 parameters with grouping:
+      group 0 -> params [0,1]
+      group 1 -> param  [2]
+      group 2 -> param  [3]
+    We verify both contiguous and transposed row layouts.
+    """
+    Mp = 4
+    n_groups = 3
+    L = 2 + n_groups  # 5 rows per block for first-order Saltelli
+
+    # parameter -> group mapping
+    group_of_param = np.array([0, 0, 1, 2], dtype=int)
+    # sanity: group sizes
+    size_g0 = int(np.sum(group_of_param == 0))  # 2
+    size_g1 = int(np.sum(group_of_param == 1))  # 1
+    size_g2 = int(np.sum(group_of_param == 2))  # 1
+    assert (size_g0, size_g1, size_g2) == (2, 1, 1)
+
+    # Block 0 A/B parameter-level values
+    A0p = np.array([0.10, 0.20, 0.30, 0.40])
+    B0p = np.array([0.90, 0.80, 0.70, 0.60])
+    block0 = _first_order_block_params(A0p, B0p, group_of_param, n_groups)  # (5,4)
+
+    # Block 1 A/B parameter-level values (different from block 0)
+    A1p = np.array([0.11, 0.22, 0.33, 0.44])
+    B1p = np.array([0.91, 0.82, 0.73, 0.64])
+    block1 = _first_order_block_params(A1p, B1p, group_of_param, n_groups)  # (5,4)
+
+    # Layout 1: contiguous blocks (OpenTURNS-like)
+    X_contig = np.vstack([block0, block1])  # (10,4)
+
+    # Layout 2: transposed (SALib-style): rows grouped by within-block index
+    # rows: [block0[i], block1[i]] for i in 0..L-1
+    X_trans = np.vstack([np.vstack([block0[i], block1[i]]) for i in range(L)])  # (10,4)
+
+    for X in (X_contig, X_trans):
+        N = X.shape[0]
+        block_idx, saltelli_idx, mask = sa.infer_saltelli_layout(X, n_groups=n_groups)
+
+        # shapes
+        assert block_idx.shape == (N,)
+        assert saltelli_idx.shape == (N,)
+        assert mask.shape == (L, Mp)
+
+        # inferred L and number of blocks
+        L_inferred = int(saltelli_idx.max()) + 1
+        assert L_inferred == L
+        B = N // L_inferred
+        assert N == B * L_inferred
+
+        # counts per block / per within-block position
+        for b in range(B):
+            assert np.sum(block_idx == b) == L_inferred
+        for i in range(L_inferred):
+            assert np.sum(saltelli_idx == i) == B
+
+        # ---- mask semantics in a first-order block ----
+        # Expect one row all-True (A), one row all-False (B),
+        # and one swap-row per group with True count = Mp - |group|
+        true_counts = mask.sum(axis=1)
+        a_rows = np.where(true_counts == Mp)[0]
+        b_rows = np.where(true_counts == 0)[0]
+        rows_swap_g0 = np.where(true_counts == Mp - size_g0)[0]  # -> Mp-2 = 2
+        rows_swap_g1 = np.where(true_counts == Mp - size_g1)[0]  # -> Mp-1 = 3
+        # both g1 and g2 swaps have Mp-1 True; there should be 2 such rows total
+        assert a_rows.size == 1 and b_rows.size == 1
+        assert rows_swap_g0.size == 1
+        assert (true_counts == Mp - 1).sum() == 2
+
+        a_idx = int(a_rows[0])
+        b_idx0 = int(b_rows[0])
+
+        # Which columns are swapped (False) in those rows?
+        # For the 2-True row: should be exactly the two params in group 0
+        false_cols_g0 = set(np.where(~mask[rows_swap_g0[0]])[0].tolist())
+        expected_g0_false = set(np.where(group_of_param == 0)[0].tolist())
+        assert false_cols_g0 == expected_g0_false
+
+        # Among the two 3-True rows: each should have exactly one False column,
+        # and together they should cover the two singletons (groups 1 and 2).
+        rows_3true = np.where(true_counts == Mp - 1)[0]
+        assert len(rows_3true) == 2
+        false_sets = [set(np.where(~mask[r])[0].tolist()) for r in rows_3true]
+        assert all(len(s) == 1 for s in false_sets)
+        union_false = set().union(*false_sets)
+        expected_singletons = set(np.where(group_of_param != 0)[0].tolist())
+        assert union_false == expected_singletons  # should be {2, 3}
+
+        # ---- Consistency: each in-block row is a mix of that block's A/B rows per mask ----
+        for b in range(B):
+            # locate A and B rows for block b
+            rA = np.where((block_idx == b) & (saltelli_idx == a_idx))[0][0]
+            rB = np.where((block_idx == b) & (saltelli_idx == b_idx0))[0][0]
+            Arow = X[rA]
+            Brow = X[rB]
+            for i in range(L_inferred):
+                r = np.where((block_idx == b) & (saltelli_idx == i))[0][0]
+                mixed = np.where(mask[i], Arow, Brow)
+                assert np.allclose(X[r], mixed), (
+                    f"Inconsistent mix for block {b}, pos {i}: "
+                    f"got {X[r]}, expected {mixed}"
+                )

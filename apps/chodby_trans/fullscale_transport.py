@@ -27,6 +27,7 @@ from endorse.fullscale_transport import compute_fields, fracture_map, apply_fiel
 
 import chodby_trans.input_data as input_data
 from chodby_trans.mesh.create_mesh import make_mesh
+from chodby_trans import ot_sa
 
 from functools import wraps
 from multiprocessing import get_context
@@ -116,14 +117,28 @@ def run_gmsh_helper_pickle(payload):
         return result
 
 
+def population_parametrized(fr_families, parameters):
+    new_fr_families = fr_families.copy()
+    for fr_fam in new_fr_families:
+        fr_fam['p_32'] = fr_fam['p_32'] * parameters['p_32_scale'] 
+        fr_fam['power'] = fr_fam['power'] * parameters['p_32_scale'] 
+        fr_fam['tr_a'] = fr_fam['tr_a'] * parameters['p_32_scale'] 
+        fr_fam['tr_b'] = fr_fam['tr_b'] * parameters['p_32_scale'] 
+    return new_fr_families
+
+
 #@memoize
 @run_in_subprocess
-def prepare_msh_input(cfg, seed):
+def prepare_msh_input(cfg, param_dict):
     fracture_box = cfg.fractures.clip_box_ratio * np.array(cfg.geometry.box_dimensions)
     logging.info(f"box: {cfg.geometry.box_dimensions}")
     logging.info(f"fracture_box: {fracture_box}")
-    fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
-    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, seed)
+    
+    dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
+    fr_pop = Population.initialize_3d(dfn_cfg, fracture_box)
+    dfn_seed = ot_sa.Seed.get_seedsequence(param_dict['dfn_macro_seed'])
+    meshing_seed = ot_sa.Seed.get_seedsequence(param_dict['meshing_seed'])
+    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, meshing_seed)
     # return None
 
     # mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)
@@ -149,7 +164,7 @@ def prepare_msh_input(cfg, seed):
 
 
 # @memoize
-def transport_run(cfg, seed, tags, parameters):
+def transport_run(cfg, tags, param_dict):
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
@@ -157,7 +172,7 @@ def transport_run(cfg, seed, tags, parameters):
     #         f.write("lalala\n")
     # time.sleep(5)
 
-    input_msh = prepare_msh_input(cfg, seed)
+    input_msh = prepare_msh_input(cfg, param_dict)
 
     # META SCOOP PROBLEM: cannot access home input_dir
     # input_msh_filepath = input_dir / "input_fields.msh"
@@ -169,10 +184,10 @@ def transport_run(cfg, seed, tags, parameters):
     # input_msh = File(input_msh_filepath)
 
     # return 0, []
-    return parametrized_run(cfg, large_model, input_msh, tags, parameters)
+    return parametrized_run(cfg, large_model, input_msh, tags, param_dict)
 
 
-def parametrized_run(cfg, large_model, input_fields_file, tags, parameters):
+def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
     times = output_times(cfg_fine)

@@ -37,9 +37,9 @@ def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_l
     """
     Generate set of stochastic fractures.
     """
-    legacy_seed = legacy_seed_from_hash(seed)
-    print(f"seed: {seed}, legacy_seed: {legacy_seed}")
-    np.random.seed(legacy_seed)
+    # legacy_seed = legacy_seed_from_hash(seed)
+    # print(f"seed: {seed}, legacy_seed: {legacy_seed}")
+    np.random.seed(seed)
     # rng = np.random.default_rng(seed)
     max_fr_size = np.max(box)
     r_min, r_max = range
