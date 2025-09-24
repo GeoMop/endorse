@@ -170,7 +170,7 @@ def single_sample(args):
       failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
       sample_dir.rename(failed_subdir / sample_dir.name)
     else:
-        if cfg["sensitivity"]["clean_sample_dir"]:
+        if cfg["ot_sensitivity"]["clean_sample_dir"]:
             shutil.rmtree(sample_dir)
 
     return res
@@ -438,6 +438,9 @@ done
 wait
 
 bash $PROJECT_DIR/dask_cluster.sh stop
+
+# just dry-run while compressing logs and failed samples
+bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 
 clean_scratch
 echo "FINISHED"
