@@ -85,16 +85,17 @@ class Wrapper:
                 cfg.transport_fullscale[pname] = data_par[idx]
 
     def get_observations(self, tags, parameters):
+        t = time.time()
+        logging.info(f"transport_wrapper: get observations tags={tags}")
+
         try:
-            t = time.time()
-            logging.info(f"transport_wrapper: get observations tags={tags}")
             #self.set_parameters(parameters)
             sa = ot_sa.SensitivityAnalysis.from_cfg(self._config.ot_sensitivity)
             param_dict = sa.param_vec_to_dict(parameters)
             rc, slice_array = transport.transport_run(
                 self._config, 
                 tags, param_dict)
-            
+
             # test random results
             # cfg = self._config
             # param_names = [p.name for p in cfg.sensitivity.parameters]
@@ -102,9 +103,21 @@ class Wrapper:
             # ng = 20
             # slice_array = np.random.rand(len(times), ng, ng, 2)
 
-            sample_time = time.time() - t
-            logging.info(f"SIMULATION TIME: {sample_time}")
+        except Exception as e:
+            sys.stdout.write("-"*60)
+            sys.stdout.write(f"Traceback sample tags:{tags}")
+            sys.stdout.write(f"transport_wrapper failed with exception: {e}")
+            traceback.print_exc()
+            sys.stdout.write("-"*60)
+            sys.stdout.flush()
 
+            rc = -1000
+            slice_array = np.array([])
+
+        sample_time = time.time() - t
+        logging.info(f"SIMULATION TIME: {sample_time}")
+
+        try:
             # ZARR FUSE
             # kwargs =  {"WORKDIR": str(input_data.zarr_store_path), "STORE_URL": str(input_data.zarr_store_path)}
             # data_schema = zf.schema.deserialize(input_data.data_schema_yaml) # read data scheme
@@ -137,16 +150,18 @@ class Wrapper:
             store_path = str(input_data.zarr_store_path)
             ds = xr.open_zarr(store_path, consolidated=False)
 
+            sample_idx = tags[0]
+            iid_idx = tags[1]
+            qmc_idx = tags[2]
+            region = {'iid': slice(iid_idx, iid_idx + 1),
+                      'qmc': slice(qmc_idx, qmc_idx + 1)}
+
             # Validate slice_array shape
             expected_shape = (ds.sizes['sim_time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])
             if slice_array.shape != expected_shape:
-                raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
-
-            sample_idx = tags[0]
-            qmc_idx = tags[1]
-            iid_idx = tags[2]
-            region = {'iid': slice(iid_idx, iid_idx + 1),
-                      'qmc': slice(qmc_idx, qmc_idx + 1)}
+                # raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
+                slice_array = np.zeros(expected_shape)
+                logging.info(f"sample {sample_idx} return code {rc} => create empty slice for zarr")
 
             # Lock for every chunk being accessed by the current write
             # iid_chunk = ds.chunksizes["iid"][0]
