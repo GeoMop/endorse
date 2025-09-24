@@ -51,12 +51,12 @@ def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_l
     else:
         # prescribed fracture range
         n_frac_lim = None
-    pop.domain = [b if d > 0 else 0.0 for d, b in zip(pop.domain, box)]
+    # pop.domain = [b if d > 0 else 0.0 for d, b in zip(pop.domain, box)] # that is really weird
     pop.set_sample_range([r_min, r_max], sample_size=n_frac_lim)
     logging.info(f"fr set range: {[r_min, r_max]}, fr_lim: {n_frac_lim}, mean population size: {pop.mean_size()}")
 
 
-    pos_gen = fracture.UniformBoxPosition(pop.domain)
+    pos_gen = fracture.UniformBoxPosition(list(pop.domain))
     fractures = pop.sample(pos_distr=pos_gen, keep_nonempty=True)
     for i, fr in enumerate(fractures):
         reg = gmsh.Region.get(f"fr_{id_offset+i}")

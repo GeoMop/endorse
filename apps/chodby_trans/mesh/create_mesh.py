@@ -405,7 +405,7 @@ def meshing(factory, objects, mesh_filename):
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
-def make_gmsh(cfg:'dotdict', fracture_set):
+def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
@@ -429,8 +429,8 @@ def make_gmsh(cfg:'dotdict', fracture_set):
     # factory.show()
     # exit(0)
 
-    logging.info(f"Setting GMSH Mesh.RandomSeed: {cfg.transport_fullscale.meshing_seed}")
-    factory.mesh_options.RandomSeed = cfg.transport_fullscale.meshing_seed
+    logging.info(f"Setting GMSH Mesh.RandomSeed: {mesh_seed}")
+    factory.mesh_options.RandomSeed = mesh_seed
     meshing(factory, [geometry_set], final_mesh_filename)
     # factory.show()
     del factory
@@ -442,6 +442,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
 
     # need to review endorse and bgem code to update from legacy to seed to SeedSeq
     dfn_seed = dfn_seed_seq.generate_state(1)[0]
+    mesh_seed = mesh_seed_seq.generate_state(1)[0]
 
     if "fractures" in cfg.geometry.include:
         fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
@@ -450,7 +451,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
 
     mesh_file = None
     if not Path(cfg.mesh_name + ".msh2").exists():
-        mesh_file = make_gmsh(cfg, fracture_set)    # use mesh_seed for gmsh randomization
+        mesh_file = make_gmsh(cfg, fracture_set, mesh_seed)    # use mesh_seed for gmsh randomization
     else:
         mesh_file = File(cfg.mesh_name + ".msh2")
 
@@ -465,7 +466,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
 
         # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
         hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
-        hm.heal_mesh(gamma_tol=0.02)
+        hm.heal_mesh(gamma_tol=0.002)
         # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
         hm.write(file_name=mesh_file_healed.name)
 
