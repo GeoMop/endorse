@@ -88,8 +88,11 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
     #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
-
-    figs = []
+    
+    if kind == "both":
+        fig = ax[0].get_figure()
+    else:
+        fig = ax.get_figure()
 
     if kind in ["both", "pressure"]:
         if kind in ["both"]:
@@ -114,8 +117,7 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
         ax_pressure.set_ylabel("Pressure")
         ax_pressure.legend()
         plt.suptitle(f"{generic_name} - distibution of pressure series values")
-        plt.colorbar(ax.collections[0], ax=ax, label="Counts")
-        figs.append(ax.get_figure())
+        plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
 
     if kind in ["both", "flow"]:
         if kind in ["both"]:
@@ -138,9 +140,8 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
             ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
         
         ax_flow.legend()
-        figs.append(ax_flow.get_figure())
 
-    return figs
+    return fig
 
 def plot_trace_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
@@ -414,9 +415,9 @@ def plot_merged(idata, idata_uncut):
     # all others
 
     figs = []
-    figs += plot_observe(idata, bins=150, generic_name=generic_name)
+    figs.append(plot_observe(idata, bins=150, generic_name=generic_name))
     likelihood_figs = plot_likelihood(idata, idata_uncut, generic_name=generic_name) # order - likelihood, prior, posterior
-    figs += [likelihood_figs[0]]
+    figs.append(likelihood_figs[0])
 
     trace_ax = plot_trace_modified(idata, figsize=(16, 36), generic_name=generic_name)
     trace_fig = trace_ax[0, 0].figure
@@ -439,16 +440,15 @@ def plot_merged(idata, idata_uncut):
         
         trace_ax[i, 1].set_ylim([k_min, k_max] if var_name.startswith("log_k") else [E_min, E_max] if var_name.startswith("log_E") else None)
     
-    figs += [trace_fig]
+    figs.append(trace_fig)
 
     poserior_ax = plot_posterior_hist_2d(idata, generic_name=generic_name, figsize=(16, 18))
     poserior_fig = poserior_ax[0].figure
-    figs += [poserior_fig]
+    figs.append(poserior_fig)
 
     pair_ax = az.plot_pair(idata, figsize=(16, 16), marginals=True, kind="kde")
     pair_fig = pair_ax[0, 0].figure
-    figs += [pair_fig]
-
+    figs.append(pair_fig)
     figs += likelihood_figs[1:] # add prior and posterior likelihood histograms
 
     save_plots_pdf_pages(f"{generic_name}_summary.pdf", figs)
