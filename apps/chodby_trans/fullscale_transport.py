@@ -143,7 +143,7 @@ def prepare_msh_input(cfg, seed):
 
     # input_fields_file = File("input_fields.msh2")
     input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
-    shutil.copy2(input_fields_file.path, input_msh_filepath)
+    shutil.move(input_fields_file.path, input_msh_filepath)
     input_msh = File(input_msh_filepath)
     return input_msh
 

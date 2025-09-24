@@ -447,6 +447,9 @@ wait
 
 bash $PROJECT_DIR/dask_cluster.sh stop
 
+# just dry-run while compressing logs and failed samples
+bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
+
 clean_scratch
 echo "FINISHED"
 """
