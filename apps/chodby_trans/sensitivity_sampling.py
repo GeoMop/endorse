@@ -285,14 +285,20 @@ def setup_data_storage(cfg: dotdict,
     param_names = input_design.param_names
     n_params = len(param_names)
     n_samples = input_design.n_samples
-    n_blocks = input_design.n_blocks
-    n_qmc = input_design.block_size
-    parameters = input_design.param_mat
-    block, qmc,  A_sample = input_design.saltelli_layout
 
-    print("saltelli_qmc_idx:   ", input_design.i_saltelli)
-    print("saltelli_block_idx: ", input_design.i_block)
-    print("A_sample_idx:\n", input_design.A_mask)
+    # n_blocks = input_design.n_blocks
+    # n_qmc = input_design.block_size
+    n_blocks = input_design.block_size
+    n_qmc = input_design.n_blocks
+
+    parameters = input_design.param_mat
+    # block, qmc,  A_sample = input_design.saltelli_layout
+    qmc, block, A_sample = input_design.saltelli_layout
+
+    print("saltelli_qmc_idx:   ", input_design.i_block)
+    print("saltelli_block_idx: ", input_design.i_saltelli)
+    print("A_mask:\n", input_design.A_mask)
+    print("A_sample:\n", A_sample)
 
     grid_size = data_schema["ATTRS"]["grid_step"]
     otimes = output_times(cfg.transport_fullscale)
@@ -335,7 +341,7 @@ def setup_data_storage(cfg: dotdict,
     A_coords = data_schema['VARS']['A_sample']['coords']
     A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
     A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
-    A_matrix[:, :, :] = A_sample[None, :, :]
+    # A_matrix[:, :, :] = A_sample[None, :, :]
     print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
     print("A_matrix:\n", A_matrix)
 
