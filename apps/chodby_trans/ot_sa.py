@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import *
 from functools import cached_property
+import xarray as xr
 import sys
 import numpy as np
 import struct
@@ -159,13 +160,20 @@ class Parameter:
 
 @attrs.define(frozen=False)
 class InputDesign:
+    groups: List[str]
     param_names: List[str]
     group_mat: np.ndarray
     param_mat: np.ndarray
+    confidence_level: float = 0.95    
+
 
     @cached_property
     def saltelli_layout(self):
         return infer_saltelli_layout(self.param_mat, self.n_groups)
+
+    @property
+    def name_to_col(self):
+        return {k:i for i, k in enumerate(self.param_names)}
 
     @property
     def n_groups(self):
@@ -197,6 +205,79 @@ class InputDesign:
     def A_mask(self):
         i_block, i_saltelli, A_mask = self.saltelli_layout
         return A_mask
+
+    def second_order_indices(self, algo, i):
+        try:
+            return algo.getSecondOrderIndices(i)
+        except TypeError:
+            return np.eye(self.n_groups)
+
+
+    def compute_sobol(
+        self,
+        output_array: np.ndarray,        # (S, n_outputs) model evals on mapped parameter rows   
+    ) -> SobolResult:
+        input_group_matrix = self.group_mat
+        
+        if isinstance(output_array, xr.DataArray):
+            output_matrix = output_array.data  # dask-backed OK
+            output_index = output_array.indexes["output"]
+        else:
+            output_matrix = np.asarray(output_array)
+            output_index = np.arange(output_matrix.shape[1], dtype=int)
+
+        # Ensure 2D outputs
+        Y = np.atleast_2d(output_matrix)
+        X = np.asarray(input_group_matrix)
+        if X.shape[0] != Y.shape[0]:
+            raise ValueError(f"Num rows mismatch: len(input_group_matrix) = {len(X)} and " \
+            "len((output_matrix) = {len(Y)}")
+
+        # OT expects Samples and the *base size* N used to build the Sobol design.
+        # (The constructor is SaltelliSensitivityAlgorithm(inputDesign, outputDesign, N).)
+        # See OT docs example. :contentReference[oaicite:0]{index=0}
+        Xs = ot.Sample(X)
+        Ys = ot.Sample(Y)
+        base_size = int(self.n_blocks)
+
+        algo = ot.SaltelliSensitivityAlgorithm(Xs, Ys, base_size)
+        algo.setConfidenceLevel(self.confidence_level)  # your class already exposes 95% CI as outputs
+
+        n_outputs = Y.shape[1]
+        S1, ST, S2 = [], [], []
+        for i in range(n_outputs):
+            S1.append(algo.getFirstOrderIndices(i))
+            ST.append(algo.getTotalOrderIndices(i))
+            S2.append(self.second_order_indices(algo, i))
+        
+        S1 = np.stack(S1, axis=1)
+        ST = np.stack(ST, axis=1)
+        S2 = np.stack(S2, axis=2)
+        agg_S1 = algo.getAggregatedFirstOrderIndices()
+        agg_ST = algo.getAggregatedTotalOrderIndices()
+        stack_ci = lambda CI: np.stack([CI.getLowerBound(), CI.getUpperBound()], axis=1)
+        agg_S1_ci = stack_ci(algo.getFirstOrderIndicesInterval())
+        agg_ST_ci = stack_ci(algo.getTotalOrderIndicesInterval())
+        
+
+        coords = dict(
+            group=np.array(self.groups, dtype=object),
+            group2=np.array(self.groups, dtype=object),
+            output=output_index,
+            bound=np.array(["low", "high"], dtype=object),
+        )
+        data_vars = dict(
+            S1=(("group", "output"), S1),
+            ST=(("group", "output"), ST),
+            S2=(("group", "group2", "output"), S2),
+            S1_agg=(("group",), agg_S1),
+            ST_agg=(("group",), agg_ST),
+            S1_agg_ci=(("group", "bound"), agg_S1_ci),
+            ST_agg_ci=(("group", "bound"), agg_ST_ci),
+        )
+        ds = xr.Dataset(data_vars=data_vars, coords=coords)
+        return ds
+
 
 
 @attrs.define
@@ -318,68 +399,17 @@ class SensitivityAnalysis:
         param_samples = np.column_stack(cols)
 
         param_names = list(self.parameters.keys())
-        return InputDesign(param_names, raw_input_design_mat, param_samples)
+        return InputDesign(self.groups, param_names, raw_input_design_mat, param_samples, self.confidence_level)
     
-    
+    @property
+    def name_to_col(self):
+        return {k:i for i, k in enumerate(self.parameters.keys())}
 
     def param_vec_to_dict(self, params: Union[np.ndarray, List[float]]):
         param_array = np.array(params)
         assert param_array.ndim == 1
         assert len(param_array) == len(self.parameters)
         return dict(zip(self.parameters.keys(), param_array))
-
-
-    def second_order_indices(self, algo, i):
-        try:
-            return algo.getSecondOrderIndices(i)
-        except TypeError:
-            return np.eye(len(self.groups))
-
-    def compute_sobol(
-        self,
-        input_group_matrix: np.ndarray,   # (S, n_groups) from saltelli_design(...)
-        output_matrix: np.ndarray,        # (S, n_outputs) model evals on mapped parameter rows
-    ) -> SobolResult:
-        # Ensure 2D outputs
-        Y = np.atleast_2d(output_matrix)
-        X = np.asarray(input_group_matrix)
-        if X.shape[0] != Y.shape[0]:
-            raise ValueError(f"Num rows mismatch: len(input_group_matrix) = {len(X)} and " \
-            "len((output_matrix) = {len(Y)}")
-
-        # OT expects Samples and the *base size* N used to build the Sobol design.
-        # (The constructor is SaltelliSensitivityAlgorithm(inputDesign, outputDesign, N).)
-        # See OT docs example. :contentReference[oaicite:0]{index=0}
-        Xs = ot.Sample(X)
-        Ys = ot.Sample(Y)
-        base_size = int(self.n_samples)
-
-        algo = ot.SaltelliSensitivityAlgorithm(Xs, Ys, base_size)
-        algo.setConfidenceLevel(self.confidence_level)  # your class already exposes 95% CI as outputs
-
-        n_outputs = Y.shape[1]
-        S1, ST, S2 = [], [], []
-        for i in range(n_outputs):
-            S1.append(algo.getFirstOrderIndices(i))
-            ST.append(algo.getTotalOrderIndices(i))
-            S2.append(self.second_order_indices(algo, i))
-        
-        S1 = np.stack(S1, axis=1)
-        ST = np.stack(ST, axis=1)
-        S2 = np.stack(S2, axis=2)
-        agg_S1 = algo.getAggregatedFirstOrderIndices()
-        agg_ST = algo.getAggregatedTotalOrderIndices()
-        stack_ci = lambda CI: np.stack([CI.getLowerBound(), CI.getUpperBound()], axis=1)
-        agg_S1_ci = stack_ci(algo.getFirstOrderIndicesInterval())
-        agg_ST_ci = stack_ci(algo.getTotalOrderIndicesInterval())
-        return {
-            group: SobolResultGroup(
-                S1[ig], ST[ig], dict(zip(self.groups, S2[ig])), 
-                agg_S1[ig], agg_ST[ig], 
-                agg_S1_ci[ig], agg_ST_ci[ig] 
-            )
-            for ig, group in enumerate(self.groups)
-        }    
 
 
 

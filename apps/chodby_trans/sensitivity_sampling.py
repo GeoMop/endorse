@@ -34,7 +34,7 @@ import zarr_fuse as zf
 import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
-
+from chodby_trans.sa import vector_sa_plot as vsp
 # from worker_logging import submit_logged, map_logged, setup_worker_logging
 
 import logging
@@ -98,7 +98,7 @@ def salib_samples(cfg: dotdict, seed):
     # else:
     #     pass
 
-@memoize
+
 def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
     cfg_sens = cfg.ot_sensitivity
     problem = ot_sa.SensitivityAnalysis.from_cfg(cfg_sens)
@@ -485,6 +485,43 @@ def submit_pbs(cfg):
     logging.info(f"submit pbs: '{cmd}'")
     subprocess.run(cmd, check=True)
 
+#@memoize
+def compute_raw_sobol(cfg, seed):
+    input_design = prepare_sampling(cfg, seed)
+    store_path = str(input_data.zarr_store_path)
+    ds = xr.open_zarr(store_path, consolidated=True)
+    rc = ds['return_code'].to_numpy()
+    print('Return code:\n', rc)
+    print(f"Number of failed runs: {(rc < 0).sum()} / {rc.size}")
+    valid_iid = (ds['return_code'] >= 0).all(dim='qmc').to_numpy()  # mask failed runs
+    n_valid = int(valid_iid.sum()) 
+    print(f"Valid iid: {n_valid} ")
+    conc = ds['conc'].isel(sim_time=slice(1, None), iid=valid_iid)  # skip t=0
+    conc_max_space = conc.quantile(0.99, dim=('X', 'Y', 'Z')).compute()
+    print("Max concentration (99% quantile) over space and time:\n", conc_max_space.to_numpy())
+    conc_mean = conc.mean(dim=('iid', 'qmc'))
+    conc_vars = conc.var(dim=('iid', 'qmc')).compute()
+    assert np.all(conc_vars > 0.0), f"Some concentration variance is zero: {np.sum(conc_vars == 0.0)}"
+    center_conc = conc - conc_mean
+    conc_2D = center_conc.stack(sample=('iid', 'qmc'), output=('sim_time', 'X', 'Y', 'Z'))
+    
+    si_ds = input_design.compute_sobol(conc_2D.transpose('sample', 'output').compute())
+    si_ds = si_ds.unstack('output')  
+    assert 'sim_time' in si_ds.dims, "Expected spatial dimensions in the output"
+    return si_ds, conc_vars
+
+def make_plots(cfg, seed):
+    si_ds, conc_vars = compute_raw_sobol(cfg, seed)
+
+    si_space_agg = si_ds.copy()
+    space_dims = ('X', 'Y', 'Z')
+    for var in ['S1', 'ST', 'S2']:
+        si_space_agg[var] = si_space_agg[var].weighted(conc_vars).mean(dim=space_dims)
+    for d in space_dims:
+        si_space_agg = si_space_agg.drop_vars(d)
+
+    filtered_ds = vsp.select_sobol_terms_with_others(si_space_agg, 0.9, output_dim='sim_time', si_threshold=0.05)
+    vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=output_dir / "sobol_stacked.pdf")
 
 
 def main():
@@ -535,6 +572,9 @@ def main():
         with common.workdir(str(work_dir), clean=False):
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
+    elif cmd == 'plots':
+        make_plots(cfg, seed)
+
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")
 

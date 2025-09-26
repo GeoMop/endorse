@@ -29,12 +29,34 @@
         "cwd": "${workspaceFolder}/apps/chodby_trans/test"
         },
         {
+        "name": "Pytest vec_plot",
+        "type": "debugpy",
+        "request": "launch",
+        "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
+        "module": "pytest",
+        "args": ["-q", "-ra", "test_vec_plot.py"],
+        "justMyCode": true,
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}/apps/chodby_trans/test"
+        },
+        {
         "name": "transport_sampling_local",
         "type": "debugpy",
         "request": "launch",
         "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
         "module": "chodby_trans.sensitivity_sampling",
         "args": ["local"],
+        "justMyCode": true,
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}/apps/chodby_trans"
+        },
+        {
+        "name": "transport_plots",
+        "type": "debugpy",
+        "request": "launch",
+        "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
+        "module": "chodby_trans.sensitivity_sampling",
+        "args": ["plots"],
         "justMyCode": true,
         "console": "integratedTerminal",
         "cwd": "${workspaceFolder}/apps/chodby_trans"
