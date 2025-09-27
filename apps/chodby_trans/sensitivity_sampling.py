@@ -117,6 +117,7 @@ def prepare_sampling(cfg: dotdict, seed):
     return ot_samples(cfg, seed)
 
 def single_sample(args):
+    setup_logging(name="trans")
     # sample_dir, data_schema_key, tags, parameters = args
     data_schema_key, tags, parameters = args
 

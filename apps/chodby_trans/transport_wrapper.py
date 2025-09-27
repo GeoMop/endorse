@@ -178,7 +178,8 @@ class Wrapper:
                     for cqmc in _chunk_ranges(region['qmc'], chunkshape[0]):
                             lock_names.append(f"zarr-{var}-{ciid}-{cqmc}")
             lock_names = sorted(set(lock_names))  # deterministic ordering avoids deadlocks
-            logging.info("lock_names: ", lock_names)
+            # logging.info("lock_names: {}".format(' '.join(map(str, lock_names))))
+            logging.info(f"lock_names: {lock_names}")
             locks = [Lock(name) for name in lock_names]
 
             for L in locks:
