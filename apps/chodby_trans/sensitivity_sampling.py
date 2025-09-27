@@ -165,10 +165,17 @@ def single_sample(args):
     # os.replace(tmp, flag_file)   # atomic rename
 
     if res < 0:
-      logging.info(f"Moving failed sample {sample_dir.name}")
       failed_subdir = sensitivity_dir / "failed_samples"
       failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
-      sample_dir.rename(failed_subdir / sample_dir.name)
+
+      num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
+
+      if num_dirs <= 10:
+          logging.info(f"Moving failed sample {sample_dir.name}")
+          sample_dir.rename(failed_subdir / sample_dir.name)
+      else:
+        if cfg["ot_sensitivity"]["clean_sample_dir"]:
+            shutil.rmtree(sample_dir)
     else:
         if cfg["ot_sensitivity"]["clean_sample_dir"]:
             shutil.rmtree(sample_dir)
