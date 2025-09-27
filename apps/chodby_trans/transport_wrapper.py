@@ -115,7 +115,7 @@ class Wrapper:
             rc = -1000
             slice_array = np.array([])
 
-        sample_time = int(time.time() - t)
+        sample_time = time.time() - t
         logging.info(f"SIMULATION TIME: {sample_time}")
 
         try:

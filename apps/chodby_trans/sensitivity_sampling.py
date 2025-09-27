@@ -356,8 +356,8 @@ def setup_data_storage(cfg: dotdict,
     ds = xr.Dataset(
         data_vars={
             'sample_id': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
-            'sample_time': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
-            'return_code': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
+            'sample_time': (tuple(sid_coords), da.full(res_shapes, fill_value=-1, chunks=sid_chunks, dtype=float)),
+            'return_code': (tuple(sid_coords), da.full(res_shapes, fill_value=-2000, chunks=sid_chunks, dtype=int)),
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
             'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
