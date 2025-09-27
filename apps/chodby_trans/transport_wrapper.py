@@ -87,21 +87,22 @@ class Wrapper:
     def get_observations(self, tags, parameters):
         t = time.time()
         logging.info(f"transport_wrapper: get observations tags={tags}")
+        cfg = self._config
 
         try:
-            #self.set_parameters(parameters)
-            sa = ot_sa.SensitivityAnalysis.from_cfg(self._config.ot_sensitivity)
-            param_dict = sa.param_vec_to_dict(parameters)
-            rc, slice_array = transport.transport_run(
-                self._config, 
-                tags, param_dict)
-
-            # test random results
-            # cfg = self._config
-            # param_names = [p.name for p in cfg.sensitivity.parameters]
-            # times = output_times(cfg.transport_fullscale)
-            # ng = 20
-            # slice_array = np.random.rand(len(times), ng, ng, 2)
+            if cfg.test_random_data:
+                # test random results
+                times = output_times(cfg.transport_fullscale)
+                ng = 20
+                slice_array = np.random.rand(len(times), ng, ng, 2)
+                rc = 42
+            else:
+                #self.set_parameters(parameters)
+                sa = ot_sa.SensitivityAnalysis.from_cfg(self._config.ot_sensitivity)
+                param_dict = sa.param_vec_to_dict(parameters)
+                rc, slice_array = transport.transport_run(
+                    self._config, 
+                    tags, param_dict)
 
         except Exception as e:
             sys.stdout.write("-"*60)
@@ -114,7 +115,7 @@ class Wrapper:
             rc = -1000
             slice_array = np.array([])
 
-        sample_time = time.time() - t
+        sample_time = int(time.time() - t)
         logging.info(f"SIMULATION TIME: {sample_time}")
 
         try:
@@ -324,7 +325,7 @@ class Wrapper:
             sys.stdout.write("-"*60)
             sys.stdout.flush()
             # empty_block = np.zeros(18, 20, 20, 2)
-            return -1000, []
+            return -1000, slice_array
 
     def calculate(self, cfg):
         """

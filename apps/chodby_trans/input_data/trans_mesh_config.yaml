@@ -1,3 +1,6 @@
+
+test_random_data: True
+
 # base of the mesh file name
 mesh_name: trans_mesh
 
