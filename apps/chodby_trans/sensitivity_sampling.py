@@ -189,7 +189,7 @@ def single_sample(args):
 
 def prepare_sample_args(cfg, seed):
     data_schema_key, data_schema = initialize_data_schema()
-    if input_data.zarr_store_path.exists() and cfg.sensitivity.recompute_failed:
+    if input_data.zarr_store_path.exists() and cfg.ot_sensitivity.recompute_failed:
         tags, parameters = read_failed_parameters()
     else:
         # parameters = salib_samples(cfg, seed)
