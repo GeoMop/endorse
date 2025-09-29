@@ -43,10 +43,12 @@ nproc=4
 # zip -r $ROOT/logs.zip $ROOT/logs_charon*
 # zip -r $ROOT/workers.zip $ROOT/workdir_charon*
 echo "Compressing zarr storage..."
-tar cf - $ROOT/transport_sampling | pigz -9 -p $(nproc) > $ROOT/transport_sampling.tar.gz
+# ZARR_PATH=$ROOT
+ZARR_PATH="/storage/projects/flow123d.old/chodby/transport/"
+tar cf - $ZARR_PATH/transport_sampling | pigz -9 -p $(nproc) > $ZARR_PATH/transport_sampling.tar.gz
 if (( DELETE )); then
   echo "Deleting zarr storage..."
-  rm -r $ROOT/transport_sampling
+  rm -r $ZARR_PATH/transport_sampling
 fi
 
 echo "Compressing logs..."
