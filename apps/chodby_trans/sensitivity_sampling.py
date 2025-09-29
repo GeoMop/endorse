@@ -239,6 +239,12 @@ def all_samples(cfg, sample_args, client=None):
     # bcommon.pkl_write(workdir, results, "sample_results.pkl")
     # zarr.consolidate_metadata(str(input_data.zarr_store_path))
 
+    time.sleep(5)
+    client.retire_workers(close_workers=True)
+    time.sleep(5)
+    client.close()
+    time.sleep(5)
+
 
 def initialize_data_schema():
     # add current scheme for current sampling run

@@ -12,6 +12,7 @@ WORKER_COUNT=$3
 CMD=( "$DASK_BIN" worker "$SCHED_ADDR"
       --nworkers 1 --nthreads 1
       --no-nanny
+      --death-timeout 120s
       --local-directory "$SCRATCHDIR/dask"
       --memory-limit auto )
 

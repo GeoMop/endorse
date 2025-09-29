@@ -172,6 +172,10 @@ class Wrapper:
             # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
             # locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
 
+            # SINGLE LOCK
+            # lock_names = ["zarr"]
+
+            # LOCKS PER CHUNKS
             lock_names = []
             for var, chunkshape in ds.chunksizes.items():  # 'iid', 'qmc'
                 for ciid in _chunk_ranges(region['iid'], chunkshape[0]):
@@ -180,6 +184,7 @@ class Wrapper:
             lock_names = sorted(set(lock_names))  # deterministic ordering avoids deadlocks
             # logging.info("lock_names: {}".format(' '.join(map(str, lock_names))))
             logging.info(f"lock_names: {lock_names}")
+
             locks = [Lock(name) for name in lock_names]
 
             for L in locks:
@@ -192,7 +197,7 @@ class Wrapper:
                     'return_code': (['iid', 'qmc'], np.array(rc)[np.newaxis, np.newaxis, ...]),
                     'sample_time': (['iid', 'qmc'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
                 })
-                ds_coords.to_zarr(store_path, mode='a', region=region)
+                ds_coords.to_zarr(store_path, mode='r+', region=region)
             except Exception as e:
                 rc = -1001
                 raise Exception('zarr error') from e
