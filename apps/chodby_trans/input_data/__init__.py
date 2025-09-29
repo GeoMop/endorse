@@ -34,7 +34,8 @@ transport_cfg_path = input_dir / "trans_mesh_config.yaml"
 data_schema_yaml = output_dir / input_data_dirname / "data_schema.yaml"
 data_schema_empty_yaml = output_dir / input_data_dirname / "data_schema_empty.yaml"
 
-zarr_store_path = output_dir / "transport_sampling"
+# zarr_store_path = output_dir / "transport_sampling"
+zarr_store_path = Path("/storage/projects/flow123d.old/chodby/transport/transport_sampling")
 
 # transport_config = "trans_mesh_config.yaml"
 # data_schema_yaml = "data_schema.yaml"
