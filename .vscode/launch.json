@@ -29,12 +29,12 @@
         "cwd": "${workspaceFolder}/apps/chodby_trans/test"
         },
         {
-        "name": "Pytest vec_plot",
+        "name": "Pytest postprocess",
         "type": "debugpy",
         "request": "launch",
         "python": "${workspaceFolder}/apps/chodby_trans/venv/bin/python",   // <- interpreter path
         "module": "pytest",
-        "args": ["-q", "-ra", "test_vec_plot.py"],
+        "args": ["-q", "-ra", "test_postprocess.py"],
         "justMyCode": true,
         "console": "integratedTerminal",
         "cwd": "${workspaceFolder}/apps/chodby_trans/test"
@@ -58,6 +58,7 @@
         "module": "chodby_trans.sensitivity_sampling",
         "args": ["plots"],
         "justMyCode": true,
+        "showReturnValue": false,
         "console": "integratedTerminal",
         "cwd": "${workspaceFolder}/apps/chodby_trans"
         },

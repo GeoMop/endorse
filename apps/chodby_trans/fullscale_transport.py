@@ -401,15 +401,19 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
 #         step = max((b - a) / 5.0 ,  1000)
 #         times.extend(np.arange(a, b, step))
 #     return times
-#
-# @report
-def get_indicator(cfg, fo, grid_step):
-    cfg_fine = cfg.transport_fullscale
-    z_dim = 0.9 * 0.5 * cfg.geometry.box_dimensions[2]
+
+
+def z_cuts_fn(cfg_geom: dotdict):
+    z_dim = 0.9 * 0.5 * cfg_geom.box_dimensions[2]
     # z_shift = cfg.geometry.borehole.z_pos
     # z_shift = cfg.geometry.main_tunnel.center[2] - cfg.geometry.main_tunnel.height/2 - cfg.geometry.storage_borehole.length/2
     z_shift = 0
-    z_cuts = (z_shift - z_dim, z_shift + z_dim)
+    return (z_shift - z_dim, z_shift + z_dim)
+
+# @report
+def get_indicator(cfg, fo, grid_step):
+    cfg_fine = cfg.transport_fullscale
+    z_cuts = z_cuts_fn(cfg.geometry)
     grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
     values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
     print(np.shape(values))

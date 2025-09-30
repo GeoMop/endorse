@@ -253,8 +253,8 @@ class InputDesign:
         S1 = np.stack(S1, axis=1)
         ST = np.stack(ST, axis=1)
         S2 = np.stack(S2, axis=2)
-        agg_S1 = algo.getAggregatedFirstOrderIndices()
-        agg_ST = algo.getAggregatedTotalOrderIndices()
+        #agg_S1 = algo.getAggregatedFirstOrderIndices()
+        #agg_ST = algo.getAggregatedTotalOrderIndices()
         stack_ci = lambda CI: np.stack([CI.getLowerBound(), CI.getUpperBound()], axis=1)
         agg_S1_ci = stack_ci(algo.getFirstOrderIndicesInterval())
         agg_ST_ci = stack_ci(algo.getTotalOrderIndicesInterval())
@@ -270,8 +270,8 @@ class InputDesign:
             S1=(("group", "output"), S1),
             ST=(("group", "output"), ST),
             S2=(("group", "group2", "output"), S2),
-            S1_agg=(("group",), agg_S1),
-            ST_agg=(("group",), agg_ST),
+            #S1_agg=(("group",), agg_S1),
+            #ST_agg=(("group",), agg_ST),
             S1_agg_ci=(("group", "bound"), agg_S1_ci),
             ST_agg_ci=(("group", "bound"), agg_ST_ci),
         )

@@ -128,10 +128,6 @@ matplotlib.use("Agg", force=True)
 import matplotlib.pyplot as plt
 import pytest
 
-# >>>>>> change these to your actual module paths <<<<<<
-#import ot_sa as sa
-#import sobol_select_plot as sp  # the module you showed (select_sobol_terms_with_others, plot_sobol_stacked)
-
 import chodby_trans.ot_sa as sa
 import chodby_trans.sa.vector_sa_plot as sp
 

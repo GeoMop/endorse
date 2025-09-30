@@ -31,6 +31,12 @@ def select_sobol_terms_with_others(
     and vars:
       SI(param, output), SI_agg(param), SI_agg_ci(param, bound)
       (S2 and 'others' get CI=[0,0])
+
+    TODO:
+    0. Assume ds with: S1, S2, ST, S1_agg, S2_agg, ST_agg, S1_agg_ci, ST_agg_ci
+    1. merge S1, S2; S1_agg, S2_agg; extend CI and ST and ST_agg -> new DS
+    2. ranking by SI_agg -> select mask
+    3. assemble selected + 'others' -> new DS
     """
     groups = ds["group"].values
     outputs = ds[output_dim].values
@@ -38,35 +44,37 @@ def select_sobol_terms_with_others(
 
     # Merge S1 and S2 (upper triangle i<j)
     S1 = ds["S1"].values                # (G, M)
-    S2 = ds["S2"].values                # (G, G, M)
     G, M = S1.shape
     I, J = np.triu_indices(G, k=1)
-    S2_pairs = S2[I, J, :]              # (P, M) with P = G*(G-1)/2
-
+    S2_pairs = ds["S2"].values[I, J, :]              # (P, M) with P = G*(G-1)/2
     SI_all = np.vstack([S1, S2_pairs])  # (T, M) T=G+P
-
-    # Labels
-    gstr = groups.astype(str)
-    s2_labels = np.char.add(np.char.add(gstr[I], "×"), gstr[J])
-    labels_all = np.concatenate([gstr, s2_labels])  # (T,)
-
+    g_labels = groups.astype(str)
+    labels_all = [("S1", g, (i,)) for i, g in enumerate(g_labels)]
+    labels_all.extend(
+         [("S2", f"{g_labels[i]}×{g_labels[j]}", (i, j)) for i, j in zip(I, J)]
+    )
+    
     # Aggregates
-    S1_agg = ds["S1_agg"].values                    # (G,)
+    #S1_agg =                     # (G,)
     S1_agg_ci = ds["S1_agg_ci"].values              # (G,2)
     S2_agg_pairs = S2.mean(axis=2)[I, J]            # (P,)
     zeros_ci_pairs = np.zeros((len(I), 2), dtype=float)
 
-    SI_agg_all = np.concatenate([S1_agg, S2_agg_pairs])          # (T,)
+    SI_agg_all = np.concatenate([
+        ds["S1_agg"].values, S2_agg_pairs])          # (T,)
     SI_agg_ci_all = np.vstack([S1_agg_ci, zeros_ci_pairs])       # (T,2)
+    ST_agg_all = np.concatenate([
+         ds["ST_agg"].values,  zeros_ci_pairs[:, 0]])
 
     # Per-output ranking → cum-sum → cut
     order = np.argsort(-SI_all, axis=0)                           # (T,M) descending
     sorted_vals = np.take_along_axis(SI_all, order, axis=0)       # (T,M)
     valid_mask = (sorted_vals >= si_threshold)                    # (T,M)
+    
     cs = (sorted_vals * valid_mask).cumsum(axis=0)                # (T,M)
 
-    reached = (cs >= var_threshold)                               # (T,M)
-    any_reached = reached.any(axis=0)                             # (M,)
+    #reached =                                # (T,M)
+    any_reached = (cs >= var_threshold).any(axis=0)                             # (M,)
     first_pos = np.argmax(reached, axis=0)                        # (M,)
     valid_counts = valid_mask.sum(axis=0)                         # (M,)
     cut = np.where(any_reached, first_pos + 1, valid_counts)      # (M,)
@@ -76,6 +84,8 @@ def select_sobol_terms_with_others(
     rows, cols = np.where(take_sorted)
     selected_terms = np.unique(order[rows, cols])                 # (K,)
 
+
+ 
     # Assemble selected
     SI_sel = SI_all[selected_terms, :]            # (K,M)
     SI_agg_sel = SI_agg_all[selected_terms]       # (K,)
@@ -93,6 +103,7 @@ def select_sobol_terms_with_others(
     SI = np.vstack([SI_sel, others[None, :]])                     # (K+1, M)
     SI_agg = np.concatenate([SI_agg_sel, [others_agg]])           # (K+1,)
     SI_agg_ci = np.vstack([SI_agg_ci_sel, others_ci[None, :]])    # (K+1, 2)
+    ST_agg = ST_agg_all[selected_terms]
     params = np.concatenate([params_sel, np.array(["others"], dtype=object)])
 
     return xr.Dataset(
@@ -100,6 +111,7 @@ def select_sobol_terms_with_others(
             SI=(("param", output_dim), SI),
             SI_agg=(("param",), SI_agg),
             SI_agg_ci=(("param", "bound"), SI_agg_ci),
+            ST_agg=(("param"), ST_agg)
         ),
         coords=dict(
             param=np.array(params, dtype=object),
@@ -131,21 +143,35 @@ def _distinct_colors(n: int, labels) -> list:
     return cols
 
 
-def plot_sobol_stacked(ds_sel: xr.Dataset, *, figsize=(12, 5), 
-                       x_label, out_path=None):
+def plot_sobol_stacked(
+    ds_sel: xr.Dataset,
+    *,
+    x_label: str,
+    figsize=(12, 5),
+    ci_level: float = 0.95,
+    out_path: str | None = None,
+):
     """
-    Stacked SIs by output (left) and stacked aggregated SIs (right).
+    Stacked-area SIs by output (left) and stacked aggregated SIs (right).
     - params sorted by SI_agg desc (largest at bottom)
-    - legend to the right, single column, shared for both panels
-    - 'others' colored gray
-    - CI on the right: mark lower bound with a horizontal tick per stacked segment
+    - legend to the right (single column); legend_x and legend_space_frac control placement
+    - right plot shows half error bars (lower only) with legend entry 'CI(<level>)'
+    - right plot: for S1 terms (labels without '×' and not 'others'), draw ▲ for S1_agg and ★ for
+      ST_agg at the bottom of the segment; x scaled so 1.0 hits the right edge of the bar.
+
+    st_agg_by_group: mapping {group_name -> ST_agg value in [0,1]} or DataArray with coord 'group'
     """
+    right_plot_frac: float = 0.12,     # ~ 1/10 figure width for right plot
+    legend_space_frac: float = 0.12,   # ~ 1/10 figure width reserved for legend
+    legend_x: float = 0.92,            # legend anchor x in figure coords
+
+
     params = ds_sel["param"].values.astype(object)
     outputs = ds_sel["output"].values
-    bound = ds_sel["bound"].values
-    SI = ds_sel["SI"].values           # (P, M)
-    SI_agg = ds_sel["SI_agg"].values   # (P,)
-    SI_agg_ci = ds_sel["SI_agg_ci"].values  # (P, 2) [low, high]
+    SI = ds_sel["SI"].values                  # (P, M)
+    SI_agg = ds_sel["SI_agg"].values          # (P,)
+    SI_agg_ci = ds_sel["SI_agg_ci"].values    # (P, 2) [low, high]
+    ST_agg = ds_sel["ST_agg"].values
 
     P, M = SI.shape
 
@@ -156,77 +182,101 @@ def plot_sobol_stacked(ds_sel: xr.Dataset, *, figsize=(12, 5),
     SI_agg_s = SI_agg[order]
     SI_agg_ci_s = SI_agg_ci[order, :]
 
-    # colors
+    # colors (others -> gray)
     colors = _distinct_colors(P, params_s)
 
-    # figure with shared y; leave room on right for legend
-    fig, (axL, axR) = plt.subplots(
-        1, 2, figsize=figsize, sharey=True, #gridspec_kw={"wspace": 0.25}
+    # ---- layout: left plot, right thin plot; leave space on right for legend
+    left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(
+        1, 2,
+        width_ratios=[left_frac, right_plot_frac],
+        wspace=0.25
     )
+    axL = fig.add_subplot(gs[0, 0])
+    axR = fig.add_subplot(gs[0, 1], sharey=axL)
 
-    # ---------- LEFT: stacked per-output ----------
-    bottoms = np.zeros(M, dtype=float)
-    handles = []
-    for i in range(P):
-        h = axL.bar(
-            outputs,
-            SI_s[i, :],
-            bottom=bottoms,
-            color=colors[i],
-            label=str(params_s[i]),
-        )
-        handles.append(h)
-        bottoms += SI_s[i, :]
-
+    # ---------- LEFT: stacked area (supports non-uniform outputs)
+    # stackplot expects list/rows per layer, bottom-most first
+    polys = axL.stackplot(outputs, SI_s, colors=colors, labels=[str(p) for p in params_s], linewidth=0.5)
     axL.set_ylim(0.0, 1.0)
-    axL.set_ylabel("Most important S1 and S2 indices")
+    axL.set_ylabel("Sobol index")
     axL.set_xlabel(x_label)
-    
-    # ---------- RIGHT: stacked aggregated (one bar at x=0) ----------
-    xrng = np.array([0.0])
-    width = 0.1
+    axL.grid(axis="y", alpha=0.2)
+
+    # ---------- RIGHT: stacked aggregated bar at x=0
+    x0 = 0.0
+    width = 0.6  # visual width only
     bottom = 0.0
+
+    # proxy for CI legend entry
+    ci_proxy = Line2D([], [], color="k", linestyle="-", label=f"CI ({int(round(ci_level*100))}%)")
+
     for i in range(P):
+        # stacked segment
         axR.bar(
-            xrng,
-            [SI_agg_s[i]],
+            [x0], [SI_agg_s[i]],
             bottom=[bottom],
             width=width,
             color=colors[i],
-            #edgecolor="white",
-            #linewidth=0.5,
         )
-        # lower-only CI tick at cumulative lower bound
-        low_i = float(SI_agg_ci_s[i, 0])  # lower bound for this term
-        y_tick = bottom + low_i
-        axR.hlines(
-            y_tick,
-            xrng[0] - width * 0.45,
-            xrng[0] + width * 0.45,
-            colors="k",
-            #linewidth=1.2,
-        )
+
+        # half error bar (lower only), drawn as a vertical errorbar ending at the top
+        low_i = float(SI_agg_ci_s[i, 0])
+        top_i = bottom + SI_agg_s[i]
+        # if low_i is valid (< segment height), draw from top down to top - (top_seg - low_abs)
+        if low_i > 0.0 and low_i < SI_agg_s[i]:
+            lo = top_i - low_i     # amount below the top
+            axR.errorbar(
+                [x0], [top_i],
+                yerr=[[lo], [0.0]],  # lower error only
+                fmt="none",
+                ecolor="k",
+                elinewidth=1.2,
+                capsize=3,
+                capthick=1.2,
+            )
+
+        # S1/ST markers for S1 terms only (labels without '×' and not 'others')
+        if ST_agg[i] > 0.0:
+            # Have ST information (i.e. S1 index)
+            #label_i = str(params_s[i])
+            # Triangle (▲) for S1_agg of this term
+            x_tri = x0 - width/2.0 + SI_agg_s[i] * width
+            x_star = x0 - width/2.0 + ST_agg[i] * width            
+            axR.plot([x_tri], [bottom], marker="^", markersize=6, color="k", linestyle="none")
+            axR.plot([x_star], [bottom], marker="*", markersize=7, color="k", linestyle="none")
+
         bottom += SI_agg_s[i]
 
-    axR.set_xlabel("var weighted mean SI")
+    axR.set_ylim(0.0, 1.0)
+    axR.set_xlim(x0 - 1.0, x0 + 1.0)
+    axR.set_xticks([x0])
+    axR.set_xticklabels(["aggregated"])
+    axR.set_xlabel("")
 
-    # ---------- Legend to the right, single column ----------
-    # Build legend entries (one per param, top-to-bottom matches stack order)
-    #legend_labels = [str(p) for p in params_s]
-    # Use one handle per layer (from any bar call); create proxy artists of correct colors
-    #proxies = [mpl.patches.Patch(facecolor=colors[i], edgecolor="white", label=legend_labels[i]) for i in range(P)]
+    axR.grid(axis="y", alpha=0.2)
+
+    # ---------- Legend: to the right, single column ----------
+    legend_labels = [str(p) for p in params_s]
+    proxies = [mpl.patches.Patch(facecolor=colors[i], edgecolor="none", label=legend_labels[i]) for i in range(P)]
+    # add CI proxy as well
+    proxies.append(ci_proxy)
+    labels = legend_labels + [ci_proxy.get_label()]
+
     fig.legend(
-        #handles=proxies,
-        #labels=legend_labels,
+        handles=proxies,
+        labels=labels,
         loc="center left",
-        bbox_to_anchor=(0.85, 0.5),
+        bbox_to_anchor=(legend_x, 0.5),
         ncol=1,
         frameon=False,
-        title="Parameter,\nInteraction",
+        title="Parameter / Interaction",
     )
 
-    # tighten layout but keep right margin for legend
-    fig.tight_layout(rect=(0, 0, 0.85, 1))  # leave 15% for legend
+    # leave horizontal space on right for legend
+    fig.tight_layout(rect=(0, 0, 1.0 - legend_space_frac, 1))
+
     if out_path:
-        fig.savefig(out_path)
+        fig.savefig(out_path, bbox_inches="tight")
     return fig, (axL, axR)

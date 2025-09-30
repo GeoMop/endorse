@@ -34,7 +34,9 @@ import zarr_fuse as zf
 import chodby_trans.input_data as input_data
 import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
-from chodby_trans.sa import vector_sa_plot as vsp
+#from chodby_trans.sa import vector_sa_plot as vsp
+from chodby_trans import postprocess as pp
+
 # from worker_logging import submit_logged, map_logged, setup_worker_logging
 
 import logging
@@ -99,10 +101,7 @@ def salib_samples(cfg: dotdict, seed):
     #     pass
 
 
-def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
-    cfg_sens = cfg.ot_sensitivity
-    problem = ot_sa.SensitivityAnalysis.from_cfg(cfg_sens)
-    return problem.sample(seed)
+
    
 def prepare_sampling(cfg: dotdict, seed):
     """
@@ -114,7 +113,7 @@ def prepare_sampling(cfg: dotdict, seed):
         shutil.rmtree(sensitivity_dir)
     sensitivity_dir.mkdir()
 
-    return ot_samples(cfg, seed)
+    return pp.ot_samples(cfg, seed)
 
 def single_sample(args):
     # sample_dir, data_schema_key, tags, parameters = args
@@ -573,7 +572,7 @@ def main():
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'plots':
-        make_plots(cfg, seed)
+        pp.make_transport_plots(cfg, seed)
 
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")
