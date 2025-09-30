@@ -10,6 +10,9 @@ import copy
 import subprocess
 import json
 
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
 import yaml
 # from scoop import futures
 # from mpi4py.futures import MPIPoolExecutor
@@ -116,6 +119,7 @@ def prepare_sampling(cfg: dotdict, seed):
     return pp.ot_samples(cfg, seed)
 
 def single_sample(args):
+    setup_logging(name="trans")
     # sample_dir, data_schema_key, tags, parameters = args
     data_schema_key, tags, parameters = args
 
@@ -164,10 +168,17 @@ def single_sample(args):
     # os.replace(tmp, flag_file)   # atomic rename
 
     if res < 0:
-      logging.info(f"Moving failed sample {sample_dir.name}")
       failed_subdir = sensitivity_dir / "failed_samples"
       failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
-      sample_dir.rename(failed_subdir / sample_dir.name)
+
+      num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
+
+      if num_dirs <= 10:
+          logging.info(f"Moving failed sample {sample_dir.name}")
+          sample_dir.rename(failed_subdir / sample_dir.name)
+      else:
+        if cfg["ot_sensitivity"]["clean_sample_dir"]:
+            shutil.rmtree(sample_dir)
     else:
         if cfg["ot_sensitivity"]["clean_sample_dir"]:
             shutil.rmtree(sample_dir)
@@ -284,14 +295,20 @@ def setup_data_storage(cfg: dotdict,
     param_names = input_design.param_names
     n_params = len(param_names)
     n_samples = input_design.n_samples
-    n_blocks = input_design.n_blocks
-    n_qmc = input_design.block_size
-    parameters = input_design.param_mat
-    block, qmc,  A_sample = input_design.saltelli_layout
 
-    print("saltelli_qmc_idx:   ", input_design.i_saltelli)
-    print("saltelli_block_idx: ", input_design.i_block)
-    print("A_sample_idx:\n", input_design.A_mask)
+    # n_blocks = input_design.n_blocks
+    # n_qmc = input_design.block_size
+    n_blocks = input_design.block_size
+    n_qmc = input_design.n_blocks
+
+    parameters = input_design.param_mat
+    # block, qmc,  A_sample = input_design.saltelli_layout
+    qmc, block, A_sample = input_design.saltelli_layout
+
+    print("saltelli_qmc_idx:   ", input_design.i_block)
+    print("saltelli_block_idx: ", input_design.i_saltelli)
+    print("A_mask:\n", input_design.A_mask)
+    print("A_sample:\n", A_sample)
 
     grid_size = data_schema["ATTRS"]["grid_step"]
     otimes = output_times(cfg.transport_fullscale)
@@ -334,15 +351,15 @@ def setup_data_storage(cfg: dotdict,
     A_coords = data_schema['VARS']['A_sample']['coords']
     A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
     A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
-    A_matrix[:, :, :] = A_sample[None, :, :]
+    # A_matrix[:, :, :] = A_sample[None, :, :]
     print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
     print("A_matrix:\n", A_matrix)
 
     ds = xr.Dataset(
         data_vars={
             'sample_id': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
-            'sample_time': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
-            'return_code': (tuple(sid_coords), da.zeros(res_shapes, chunks=sid_chunks, dtype=int)),
+            'sample_time': (tuple(sid_coords), da.full(res_shapes, fill_value=-1, chunks=sid_chunks, dtype=float)),
+            'return_code': (tuple(sid_coords), da.full(res_shapes, fill_value=-2000, chunks=sid_chunks, dtype=int)),
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
             'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
@@ -374,27 +391,56 @@ def read_failed_parameters():
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
+    logging.info("plotting sample time histogram...")
+    plot_sample_time_hist(ds['sample_time'].to_numpy().ravel())
 
-    # n_samples = ds['sample_time'].max()
-    # mask = np.isclose(ds['sample_time'].isel(iid=slice(7)).to_numpy(), 0, rtol=0, atol=1e-12)
-    # params = ds['parameter'].to_numpy()[mask]  # 1D np.ndarray of matches
+    logging.info("getting failed samples...")
+    v_param = ds['parameter'].to_numpy()
+    v_time = ds['sample_time'].to_numpy()
+    v_sample_id = ds['sample_id'].to_numpy()
+    v_rc = ds['return_code'].to_numpy()
 
-    # subset to the first 7 along iid ("rows")
-    param_sub = ds['parameter'].isel(iid=slice(6))
-    time_sub = ds['sample_time'].isel(iid=slice(6))
-    sample_id_sub = ds['sample_id'].isel(iid=slice(6))
-
-    mask = np.isclose(time_sub.to_numpy(), 0, rtol=0, atol=1e-12)
-
-    param_vec = param_sub.to_numpy()[mask]
-    sample_id_vec = sample_id_sub.to_numpy()[mask]
+    mask = v_rc < 0
+    f_param = v_param[mask]
+    f_sample_id = v_sample_id[mask]
 
     i_idx, q_idx = np.where(mask)  # integer indices
-    iid_vec = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
-    qmc_vec = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
+    f_iid = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
+    f_qmc = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
 
-    tags = np.column_stack((sample_id_vec, iid_vec, qmc_vec))
-    return tags, param_vec
+    tags = np.column_stack((f_sample_id, f_iid, f_qmc))
+    return tags, f_param
+
+def plot_sample_time_hist(st):
+    upper_limit = 2000
+    n_removed = np.sum(st > upper_limit)
+    print(f"count st > {upper_limit}: {n_removed}")
+    cst = st[st <= upper_limit]
+
+    cst_std = cst.std()
+    cst_mean = cst.mean()
+    cst_median = np.median(cst)
+    cst_q95 = np.quantile(cst, 0.95)
+    n_bins = 50
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax.hist(cst, bins=n_bins)
+    for v, label, style in [(cst_mean, f"Mean [{int(cst_mean)}]", "-"),
+                            (cst_median, f"Median [{int(cst_median)}]", "--"),
+                            (cst_q95, f"95th pct [{int(cst_q95)}]", ":")]:
+        if np.isfinite(v):
+            ax.axvline(v, linestyle=style, linewidth=1, label=label, color="k")
+    # ax.plot(x_axis, norm.pdf(x_axis, cst_mean, cst_std))
+    ax.text(0.7, 0.65,
+            f"st > {upper_limit}: {n_removed}",
+            transform=plt.gca().transAxes,
+            ha="left", va="top",
+            fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
+    ax.set_title('Sample time histogram')
+    ax.set_ylabel('count')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_dir / 'sample_time_hist.pdf', format='pdf')
 
 
 pbs_script_template = """

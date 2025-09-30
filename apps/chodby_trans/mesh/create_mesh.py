@@ -442,7 +442,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
 
     # need to review endorse and bgem code to update from legacy to seed to SeedSeq
     dfn_seed = dfn_seed_seq.generate_state(1)[0]
-    mesh_seed = mesh_seed_seq.generate_state(1)[0]
+    mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
 
     if "fractures" in cfg.geometry.include:
         fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
