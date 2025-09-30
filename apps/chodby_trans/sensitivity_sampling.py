@@ -392,29 +392,25 @@ def read_failed_parameters():
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
-
-    # n_samples = ds['sample_time'].max()
-    # mask = np.isclose(ds['sample_time'].isel(iid=slice(7)).to_numpy(), 0, rtol=0, atol=1e-12)
-    # params = ds['parameter'].to_numpy()[mask]  # 1D np.ndarray of matches
-
-    # subset to the first 7 along iid ("rows")
-    param_sub = ds['parameter'].isel(iid=slice(6))
-    time_sub = ds['sample_time'].isel(iid=slice(6))
-    sample_id_sub = ds['sample_id'].isel(iid=slice(6))
-
-    mask = np.isclose(time_sub.to_numpy(), 0, rtol=0, atol=1e-12)
-
-    param_vec = param_sub.to_numpy()[mask]
-    sample_id_vec = sample_id_sub.to_numpy()[mask]
-
-    i_idx, q_idx = np.where(mask)  # integer indices
-    iid_vec = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
-    qmc_vec = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
-
+    logging.info("plotting sample time histogram...")
     plot_sample_time_hist(ds['sample_time'].to_numpy().ravel())
 
-    tags = np.column_stack((sample_id_vec, iid_vec, qmc_vec))
-    return tags, param_vec
+    logging.info("getting failed samples...")
+    v_param = ds['parameter'].to_numpy()
+    v_time = ds['sample_time'].to_numpy()
+    v_sample_id = ds['sample_id'].to_numpy()
+    v_rc = ds['return_code'].to_numpy()
+
+    mask = v_rc < 0
+    f_param = v_param[mask]
+    f_sample_id = v_sample_id[mask]
+
+    i_idx, q_idx = np.where(mask)  # integer indices
+    f_iid = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
+    f_qmc = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
+
+    tags = np.column_stack((f_sample_id, f_iid, f_qmc))
+    return tags, f_param
 
 def plot_sample_time_hist(st):
     upper_limit = 2000
