@@ -10,6 +10,9 @@ import copy
 import subprocess
 import json
 
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
 import yaml
 # from scoop import futures
 # from mpi4py.futures import MPIPoolExecutor
@@ -408,8 +411,41 @@ def read_failed_parameters():
     iid_vec = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
     qmc_vec = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
 
+    plot_sample_time_hist(ds['sample_time'].to_numpy().ravel())
+
     tags = np.column_stack((sample_id_vec, iid_vec, qmc_vec))
     return tags, param_vec
+
+def plot_sample_time_hist(st):
+    upper_limit = 2000
+    n_removed = np.sum(st > upper_limit)
+    print(f"count st > {upper_limit}: {n_removed}")
+    cst = st[st <= upper_limit]
+
+    cst_std = cst.std()
+    cst_mean = cst.mean()
+    cst_median = np.median(cst)
+    cst_q95 = np.quantile(cst, 0.95)
+    n_bins = 50
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    ax.hist(cst, bins=n_bins)
+    for v, label, style in [(cst_mean, f"Mean [{int(cst_mean)}]", "-"),
+                            (cst_median, f"Median [{int(cst_median)}]", "--"),
+                            (cst_q95, f"95th pct [{int(cst_q95)}]", ":")]:
+        if np.isfinite(v):
+            ax.axvline(v, linestyle=style, linewidth=1, label=label, color="k")
+    # ax.plot(x_axis, norm.pdf(x_axis, cst_mean, cst_std))
+    ax.text(0.7, 0.65,
+            f"st > {upper_limit}: {n_removed}",
+            transform=plt.gca().transAxes,
+            ha="left", va="top",
+            fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
+    ax.set_title('Sample time histogram')
+    ax.set_ylabel('count')
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_dir / 'sample_time_hist.pdf', format='pdf')
 
 
 pbs_script_template = """
