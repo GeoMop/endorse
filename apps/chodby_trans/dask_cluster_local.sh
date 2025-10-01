@@ -6,12 +6,9 @@
 set -euo pipefail
 
 # ======= EDIT THESE PATHS =======
-# Your project dir (on HOME/NFS) that contains "input/" and your driver app
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INPUT_DIRNAME="input_data"
-WORK_DIRNAME="workdir"
+OUTPUT_DIR=${1}
 
-OUTPUT_DIR="$PROJECT_DIR/$WORK_DIRNAME"
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
 # =================================
@@ -38,11 +35,6 @@ require_env() {
   fi
 }
 
-prepare_output_dir() {
-  echo "[output dir] Prepare local output dir"
-  mkdir -p "$OUTPUT_DIR"
-  cp -r "$PROJECT_DIR/$INPUT_DIRNAME" "$OUTPUT_DIR/$INPUT_DIRNAME"
-}
 
 start_scheduler() {
   local host_ip="127.0.0.1"
@@ -140,20 +132,20 @@ run_example() {
   local sched
   sched="$(cat "$SCHED_ADDR_FILE")"
   echo "[run] $APP_PY -> $sched"
-  "$PYEXEC" -u "$APP_PY" meta "$sched" 2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
+  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR local "$sched" 2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
 }
 
-cmd=${1:-help}
+cmd=${2:-help}
 case "$cmd" in
   start)
     require_env
-    prepare_output_dir
     start_scheduler
-    start_workers "${2:-1}"
+    start_workers "${3:-1}"
     status_cluster
     echo
-    echo "Run your app any time with:  bash $0 run"
-    echo "Stop cluster with:           bash $0 stop"
+    echo "Run your app any time with:  bash $0 $OUTPUT_DIR run"
+    echo "Print dask status with:      bash $0 $OUTPUT_DIR status"
+    echo "Stop cluster with:           bash $0 $OUTPUT_DIR stop"
     ;;
   run)
     require_env
@@ -169,8 +161,11 @@ case "$cmd" in
     ;;
   help|*)
     cat <<EOF
-Usage: bash dask_cluster.sh <start|run|status|stop>
+Usage: bash dask_cluster.sh <workdir> <command>
 
+ workdir - path to working directory
+
+ command:
  start [N] - start local scheduler + N worker processes (default N=1)
  run       - run your driver once against the live scheduler (repeat as you wish)
  status    - print scheduler address and log hints

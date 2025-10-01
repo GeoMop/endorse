@@ -6,12 +6,10 @@
 set -euo pipefail
 
 # ======= EDIT THESE PATHS =======
-# Your project dir (on HOME/NFS) that contains "input/" and your driver app
-PROJECT_DIR="/auto/liberec3-tul/home/pavel_exner/workspace/endorse/apps/chodby_trans"
-INPUT_DIRNAME="input_data"
-WORK_DIRNAME="workdir"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUTPUT_DIR=${1}
+#WORK_DIRNAME="workdir"
 
-OUTPUT_DIR="$PROJECT_DIR/$WORK_DIRNAME"
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
 # =================================
@@ -35,12 +33,6 @@ make_venv() {
   if [[ ! -x "$PYEXEC" ]]; then
     bash setup_venv
   fi
-}
-
-prepare_output_dir() {
-  echo "[output dir] Prepare local output dir"
-  mkdir -p "$OUTPUT_DIR"
-  cp -r "$PROJECT_DIR/$INPUT_DIRNAME" "$OUTPUT_DIR/$INPUT_DIRNAME"
 }
 
 stage_inputs() {
@@ -133,28 +125,25 @@ run_example() {
   # Run your driver against the live scheduler (can call this many times).
   SCHED=$(cat "$SCRATCHDIR/SCHED_ADDR.txt")
   echo "[run] Running driver against $SCHED ..."
-  "$PYEXEC" -u "$APP_PY" meta "$SCHED" \
+  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR meta "$SCHED" \
       2>&1 | tee "$SCRATCHDIR/logs/driver_$(date +%H%M%S).log"
-  # stage_inputs
 }
 
-cmd=${1:-help}
+cmd=${2:-help}
 case "$cmd" in
   start)
     require_env
     source $PROJECT_DIR/load_modules
     make_venv
-    prepare_output_dir
     stage_inputs
     compute_host_counts
     start_scheduler
     start_workers
     status_cluster
     echo
-    echo "Run your app any time with:"
-    echo "  bash $0 run"
-    echo "Stop cluster with:"
-    echo "  bash $0 stop"
+    echo "Run your app any time with:  bash $0 $OUTPUT_DIR run"
+    echo "Print dask status with:      bash $0 $OUTPUT_DIR status"
+    echo "Stop cluster with:           bash $0 $OUTPUT_DIR stop"
     ;;
   run)
     require_env
@@ -170,14 +159,13 @@ case "$cmd" in
     ;;
   help|*)
     cat <<EOF
-Usage: bash dask_cluster.sh <start|run|status|stop>
+Usage: bash dask_cluster.sh <workdir> <start|run|status|stop>
 
  start  - stage inputs to \$SCRATCHDIR on all nodes and start Dask scheduler/workers
  run    - run your driver once against the live scheduler (repeat as you wish)
  status - print scheduler address and log hints
  stop   - stop workers and scheduler
 
-Edit VENV / PROJECT_DIR / APP_PY at the top of this script to match your layout.
 EOF
     ;;
 esac

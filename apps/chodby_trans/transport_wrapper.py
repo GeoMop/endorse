@@ -26,7 +26,8 @@ from chodby_trans import ot_sa
 
 from endorse.fullscale_transport import output_times
 import zarr_fuse as zf
-import chodby_trans.input_data as input_data
+import chodby_trans.job as job
+
 import xarray as xr
 import zarr
 
@@ -148,7 +149,7 @@ class Wrapper:
 
             # DIRECT ZARR
             # Open the existing Zarr store as an Xarray dataset
-            store_path = str(input_data.zarr_store_path)
+            store_path = str(job.output.zarr_store_path)
             ds = xr.open_zarr(store_path, consolidated=False)
 
             sample_idx = tags[0]

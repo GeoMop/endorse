@@ -33,14 +33,12 @@ import xarray as xr
 import zarr
 import zarr_fuse as zf
 
-# import chodby_trans.sample_storage as sample_storage
-import chodby_trans.input_data as input_data
+import chodby_trans.job as job
 import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 
-# from worker_logging import submit_logged, map_logged, setup_worker_logging
 
 import logging
 def setup_logging(name="driver"):
@@ -48,10 +46,6 @@ def setup_logging(name="driver"):
     logging.basicConfig(level=logging.INFO, format=fmt, handlers=[logging.StreamHandler(sys.stdout)], force=True)
 setup_logging(name="trans")
 
-
-input_dir = input_data.input_dir
-work_dir = input_data.work_dir
-output_dir = input_data.work_dir
 script_path = Path(__file__).absolute()
 
 
@@ -111,7 +105,7 @@ def prepare_sampling(cfg: dotdict, seed):
     Clean samplig directory + return samples array.
     """
     
-    sensitivity_dir = Path(input_data.sensitivity_dirname)
+    sensitivity_dir = Path(job.scratch.sensitivity_dir)
     if sensitivity_dir.exists():
         shutil.rmtree(sensitivity_dir)
     sensitivity_dir.mkdir()
@@ -119,20 +113,15 @@ def prepare_sampling(cfg: dotdict, seed):
     return pp.ot_samples(cfg, seed)
 
 def single_sample(args):
-    setup_logging(name="trans")
     # sample_dir, data_schema_key, tags, parameters = args
-    data_schema_key, tags, parameters = args
+    workdir, data_schema_key, tags, parameters = args
+    job.set_workdir(workdir)
+    setup_logging(name=f"T{tags[0]}")
 
     # host = socket.gethostname()
     pid  = os.getpid()
-    # logging.info(f"[worker {pid} on {host}] starting with tags={tags}", flush=True)
 
-    # create sample dir
-    # do we have to do this independently or is the "import" done in each process??
-    # scoop required total independency
-    workdir, inputdir, outputdir = input_data.resolve_dirs()
-
-    sensitivity_dir = workdir / input_data.sensitivity_dirname
+    sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
     flag_file = sample_subdir / f"sample_{str(tags[0]).zfill(3)}.done.json"
@@ -146,10 +135,9 @@ def single_sample(args):
     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
     # read config file
-    conf_file = inputdir / input_data.transport_cfg_path.name
+    conf_file = job.input.transport_cfg_path
     cfg = common.config.load_config(str(conf_file))
     cfg["data_schema_key"] = data_schema_key
-    cfg["input_dir"] = inputdir
 
     logging.info("=========================== RUNNING CALCULATION " +
                  "sample {} ===========================".format(tags[0]).zfill(3))
@@ -188,19 +176,19 @@ def single_sample(args):
 
 def prepare_sample_args(cfg, seed):
     data_schema_key, data_schema = initialize_data_schema()
-    if input_data.zarr_store_path.exists() and cfg.sensitivity.recompute_failed:
+    if job.output.zarr_store_path.exists() and cfg.ot_sensitivity.recompute_failed:
         tags, parameters = read_failed_parameters()
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
         input_design = prepare_sampling(cfg, seed)
         parameters = input_design.param_mat
-        tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, input_design)
+        tags = setup_data_storage(cfg, str(job.output.zarr_store_path), data_schema, input_design)
     # data_schema_key = "run_XXX"
 
     n_samples, n_params = parameters.shape
-    sample_args = [(data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
-    logging.info(f"sample_args: {sample_args}")
+    sample_args = [(job.output.dir_path, data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
+    logging.info(f"sample_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
     return sample_args
 
 
@@ -241,9 +229,9 @@ def all_samples(cfg, sample_args, client=None):
 
 def initialize_data_schema():
     # add current scheme for current sampling run
-    data_schema_path = input_data.data_schema_yaml
+    data_schema_path = job.input.data_schema_yaml
     if not data_schema_path.exists():
-        shutil.copy2(input_data.data_schema_empty_yaml, data_schema_path)
+        shutil.copy2(job.input.data_schema_empty_yaml, data_schema_path)
 
     with data_schema_path.open("r", encoding="utf-8") as file:
         content = file.read()
@@ -372,7 +360,7 @@ def setup_data_storage(cfg: dotdict,
 
     print("=========== READ ZARR ==============")
     print("Control read of created Zarr storage")
-    read_ds = xr.open_zarr(store_path)
+    read_ds = xr.open_zarr(store_path, consolidated=False)
     print(read_ds)
     # print(read_ds['A_sample'].to_numpy())
     print("=========== END READ ZARR ==============")
@@ -384,7 +372,7 @@ def setup_data_storage(cfg: dotdict,
 def read_failed_parameters():
 
     print("=========== READ ZARR ==============")
-    ds = xr.open_zarr(str(input_data.zarr_store_path))
+    ds = xr.open_zarr(str(job.output.zarr_store_path))
     print(ds)
     # print(read_ds['A_sample'].to_numpy())
     # print("sample_id:\n", ds['sample_id'].to_numpy())
@@ -440,7 +428,7 @@ def plot_sample_time_hist(st):
     ax.set_ylabel('count')
     ax.legend()
     fig.tight_layout()
-    fig.savefig(output_dir / 'sample_time_hist.pdf', format='pdf')
+    fig.savefig(job.output.plots / 'sample_time_hist.pdf', format='pdf')
 
 
 pbs_script_template = """
@@ -504,7 +492,7 @@ echo "FINISHED"
 def submit_pbs(cfg):
     cfg_pbs = cfg.machine_config.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
-    pbs_path = output_dir / "sensitivity_sampling.pbs"
+    pbs_path = job.output.pbs_script
     n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores-1)-2)# Not sure if we need reserve for the master scoop process
     parameters = dict(
         n_chunks=cfg_pbs.n_nodes,
@@ -517,9 +505,9 @@ def submit_pbs(cfg):
         python=sys.executable,
         n_workers=n_workers,
         script_path=script_path,
-        workdir=work_dir,
-        outputdir=output_dir,
-        out_log=(output_dir / (cfg_pbs.pbs_name + '.out'))
+        workdir=job.scratch.dir_path,
+        outputdir=job.output.dir_path,
+        out_log=(job.output.dir_path / (cfg_pbs.pbs_name + '.out'))
     )
     print(parameters['python'])
     pbs_script = pbs_script_template.format(**parameters)
@@ -533,7 +521,7 @@ def submit_pbs(cfg):
 #@memoize
 def compute_raw_sobol(cfg, seed):
     input_design = prepare_sampling(cfg, seed)
-    store_path = str(input_data.zarr_store_path)
+    store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
     rc = ds['return_code'].to_numpy()
     print('Return code:\n', rc)
@@ -566,45 +554,58 @@ def make_plots(cfg, seed):
         si_space_agg = si_space_agg.drop_vars(d)
 
     filtered_ds = vsp.select_sobol_terms_with_others(si_space_agg, 0.9, output_dim='sim_time', si_threshold=0.05)
-    vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=output_dir / "sobol_stacked.pdf")
+    vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=job.output.plots / "sobol_stacked.pdf")
 
 
 def main():
     # common.EndorseCache.instance().expire_all()
-    # setup_worker_logging(name="trans")
 
-    if len(sys.argv) == 2:
-        cmd = sys.argv[1]
-    elif len(sys.argv) == 3:
-        cmd = sys.argv[1]
-        scheduler = sys.argv[2]
-    # elif len(sys.argv) == 3:
-    #     cmd = sys.argv[1]
-    #     work_dir = Path(sys.argv[2]).absolute()
+    if len(sys.argv) == 3:
+        work_dir = Path(sys.argv[1]).absolute()
+        cmd = sys.argv[2]
+    elif len(sys.argv) == 4:
+        work_dir = Path(sys.argv[1]).absolute()
+        cmd = sys.argv[2]
+        scheduler = sys.argv[3]
     else:
-      sys.exit("Provide command (submit|meta|).")
+      sys.exit("Provide <workdir> <command: (submit|local|meta|plots|read)> <command_args>.")
 
-    logging.info(f"main: work_dir = {work_dir}")
-    logging.info(f"main: input_dir = {input_dir}")
-    
-    cfg_path = input_data.transport_cfg_path
+
+    # resolve job dirs
+    job.set_workdir(work_dir)
+    if cmd == 'submit' or cmd == 'local':
+        if job.input.dir_path.exists():
+            while True:
+                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
+                if user_input.lower() in ["yes", "y"]:
+                    print("Continuing...")
+                    break
+                elif user_input.lower() in ["no", "n"]:
+                    print("Exiting...")
+                    break
+                else:
+                    print("Invalid input. Please enter yes/no.")
+        else:
+            shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
+
+    logging.info(job.to_str())
+    if not job.input.dir_path.exists():
+        raise Exception(f"Input data '{job.input.dir_path}' not found in workdir '{work_dir}'")
+
+    cfg_path = job.input.transport_cfg_path
     cfg = common.config.load_config(str(cfg_path))
 
     seed = 101
 
+    if not job.output.plots.exists():
+        job.output.plots.mkdir()
+
     if cmd == 'submit':
-        # with common.workdir(str(work_dir), clean=False):
-        shutil.copytree(input_dir, output_dir / input_dir.name, dirs_exist_ok=True)
         submit_pbs(cfg)
-    # elif cmd == 'local':
-    #     with common.workdir(str(work_dir), clean=False):
-    #         shutil.copytree(input_dir, work_dir / input_dir.name, dirs_exist_ok=True)
-    #         parameters = salib_samples(cfg, seed)
-    #         all_samples(cfg=cfg, parameters=parameters)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         read_failed_parameters()
-    elif cmd == 'meta':
+    elif cmd == 'meta' or cmd == 'local':
         # optional: cap hidden threading for your FEM libs
         os.environ.setdefault("OMP_NUM_THREADS", "1")
         os.environ.setdefault("MKL_NUM_THREADS", "1")
