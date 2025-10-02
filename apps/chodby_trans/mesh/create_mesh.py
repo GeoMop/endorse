@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 import logging
 
+import chodby_trans.job as job
 from bgem.gmsh.gmsh import ObjectSet
 from endorse import common
 from endorse.common import dotdict, File, memoize
@@ -101,7 +102,7 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     """
     cfg_mt = cfg.geometry.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
-    df = pd.read_csv(cfg.input_dir / cfg_mt.csv_points)
+    df = pd.read_csv(job.input.dir_path / cfg_mt.csv_points)
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
 
     # rescale points to intended tunnel dimensions (x-width, z-height)

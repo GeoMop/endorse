@@ -25,6 +25,7 @@ import zarr
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
+import chodby_trans.job as job
 import chodby_trans.input_data as input_data
 from chodby_trans.mesh.create_mesh import make_mesh
 from chodby_trans import ot_sa
@@ -61,8 +62,6 @@ def run_in_subprocess(func):
             return fut.result()
     return wrapper
 
-# import chodby_trans.input_data as input_data
-# input_dir = input_data.input_dir
 
 # @attrs.define
 # class ResultSpec:
@@ -129,7 +128,10 @@ def population_parametrized(fr_families, parameters):
 
 #@memoize
 @run_in_subprocess
-def prepare_msh_input(cfg, param_dict):
+def prepare_msh_input(workdir, cfg, param_dict):
+    # when running in subprocess, global variables are lost
+    # therefore we set the workdir again
+    job.set_workdir(workdir)
     fracture_box = cfg.fractures.clip_box_ratio * np.array(cfg.geometry.box_dimensions)
     logging.info(f"box: {cfg.geometry.box_dimensions}")
     logging.info(f"fracture_box: {fracture_box}")
@@ -172,7 +174,7 @@ def transport_run(cfg, tags, param_dict):
     #         f.write("lalala\n")
     # time.sleep(5)
 
-    input_msh = prepare_msh_input(cfg, param_dict)
+    input_msh = prepare_msh_input(job.output.dir_path, cfg, param_dict)
 
     # META SCOOP PROBLEM: cannot access home input_dir
     # input_msh_filepath = input_dir / "input_fields.msh"
@@ -206,7 +208,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     )
     params.update(new_params)
     params.update(set_source_term(cfg))
-    template = cfg.input_dir / cfg_fine.input_template
+    template = job.input.dir_path / cfg_fine.input_template
 
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
@@ -228,7 +230,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     # current_node = root_node[cfg.data_schema_key]
     # grid_size = current_node.schema.ATTRS["grid_step"]
 
-    data_schema_path = input_data.data_schema_yaml
+    data_schema_path = job.input.data_schema_yaml
     with data_schema_path.open("r", encoding="utf-8") as file:
         content = file.read()
         data_schema = yaml.safe_load(content)
@@ -446,7 +448,7 @@ def set_source_term(cfg):
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
-        conc_flux_file= cfg.input_dir / cfg_fine.conc_flux_file,
+        conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
         storage_regions = [f"storage_{i}" for i in range(5) if i != dsb_idx],
         plug_region = f"plug_{dsb_idx}",
