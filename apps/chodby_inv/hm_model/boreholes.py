@@ -4,6 +4,8 @@ from endorse import common
 import numpy as np
 import pandas as pd
 from math import sin, cos, pi
+import pyvista as pv
+import vtk
 #from bgem import gmsh, geometry
 import yaml
 import matplotlib.animation as animation
@@ -59,6 +61,9 @@ class Boreholes:
         y = sin((self.l5_azimuth + 90 - bh.azimuth) * pi / 180)
         z = sin(bh.inclination * pi / 180)
         return np.array([x, y, z])
+
+    def bh_length(self, bh_index):
+        return self.config.boreholes[bh_index].length
 
     @property
     def n_boreholes(self):
@@ -119,7 +124,7 @@ class Boreholes:
 
     def make_gmsh_fractures(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         objs = []
-        radius = 5
+        radius = 10
         for i in range(self.n_boreholes):
             n_fracs = self.n_fractures(i)
             bh_start = self.bh_start(i)
@@ -164,6 +169,66 @@ class Boreholes:
         else:
             with open(output_file, "w") as file:
                 yaml.dump(point_list, file, default_flow_style=True)
+
+    def make_vtk_visualization(self, filename):
+        lines = []
+        texts = []
+        cyls = []
+        labels = []
+        label_coords = []
+        for i in range(self.n_boreholes):
+            dir = self.bh_direction(i)
+            p1 = self.bh_start(i)
+            p2 = p1 + dir*self.bh_length(i)
+            lines.append(pv.Line(p1, p2))
+
+            for ch in range(self.n_chambers(i)):
+                chp1 = self.chamber_start(i, ch)
+                chp2 = self.chamber_end(i, ch)
+                cyls.append( pv.Cylinder(center=(chp1+chp2)/2, direction=dir, radius=0.1, height=np.linalg.norm(chp2-chp1)) )
+
+            labels.append( self.bh_name(i) )
+            label_coords.append( p2 )
+            text = pv.Text3D(self.bh_name(i), depth=0.5, center=p2, normal=dir)
+            texts.append( text )
+        mesh = pv.merge(lines + cyls)
+        mesh.add_field_data( np.array(labels), 'Labels' )
+        mesh.add_field_data( np.array(label_coords), 'LabelCoords' )
+
+        mesh.save(filename)
+
+    def visualize_fractures(self, output_file):
+
+        # Number of points to discretize each circle boundary
+        n_circle_points = 40
+        # Radius of all fractures
+        radius = 2
+
+        all_meshes = []
+        for bi in range(self.n_boreholes):
+            bh_start = self.bh_start(bi)
+            bh_normal = self.bh_direction(bi)
+            for fi in range(self.n_fractures(bi)):
+                f = self.fracture(bi, fi)
+                f_center = bh_start + bh_normal * f.position
+                f_normal = self.fr_normal(bi, fi)
+                disc = pv.Disc(center=f_center, inner=0.0, outer=radius, normal=f_normal, c_res=n_circle_points)
+
+                # Assign scalars as per-disc (cell data)
+                n_cells = disc.n_cells
+                disc.cell_data["width"] = np.full(n_cells, f.width)
+                disc.cell_data["flag"] = np.full(n_cells, f.flag)
+
+                all_meshes.append(disc)
+
+        # Combine all discs into a single mesh
+        combined = all_meshes[0]
+        for m in all_meshes[1:]:
+            combined = combined.merge(m)
+
+        # Save to VTU file
+        combined.save(output_file)
+
 
 
 
@@ -333,9 +398,10 @@ def plot_chamber_pressures(pressure_fname,
 
 if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
+    # output_fname = 'chamber_pressure_averages_refined.pdf'
+    # output_compared_fname = 'chamber_pressures_refined_compared.pdf'
+    # plot_chamber_pressures(input_data.flow_obs_yaml,
+    #                        work_dir / output_fname,
+    #                        output_compared_fname= work_dir / output_compared_fname)
 
-    output_fname = 'chamber_pressure_averages_refined.pdf'
-    output_compared_fname = 'chamber_pressures_refined_compared.pdf'
-    plot_chamber_pressures(input_data.flow_obs_yaml,
-                           work_dir / output_fname,
-                           output_compared_fname= work_dir / output_compared_fname)
+    Boreholes().make_vtk_visualization("boreholes.vtp")
