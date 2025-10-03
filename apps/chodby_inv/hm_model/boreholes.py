@@ -18,8 +18,8 @@ from chodby_inv import piezo
 from chodby_inv.piezo.piezo_canonic import to_datetime
 
 class Boreholes:
-    def __init__(self, yaml_config_file=input_data.bh_cfg_yaml):
-        self.config = common.config.load_config(yaml_config_file)
+    def __init__(self, config=common.config.load_config(input_data.bh_cfg_yaml)):
+        self.config = config
 
 
     @property
