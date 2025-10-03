@@ -250,6 +250,8 @@ class ObservePointData:
             #ax[ci].yaxis.set_minor_locator(ticker.MultipleLocator(10))
             #ax[ci].minorticks_on()
             ax[ci].plot(xx, pressures)
+            ax[ci].set_xlabel("time [d]")
+            ax[ci].set_ylabel("pressure head [m]")
             if print_pressures:
                 print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
 
