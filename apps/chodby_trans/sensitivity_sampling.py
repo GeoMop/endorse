@@ -188,7 +188,7 @@ def prepare_sample_args(cfg, seed):
 
     n_samples, n_params = parameters.shape
     sample_args = [(job.output.dir_path, data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
-    logging.info(f"sample_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
+    logging.info(f"eval_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
     return sample_args
 
 
@@ -293,10 +293,11 @@ def setup_data_storage(cfg: dotdict,
     # block, qmc,  A_sample = input_design.saltelli_layout
     qmc, block, A_sample = input_design.saltelli_layout
 
-    print("saltelli_qmc_idx:   ", input_design.i_block)
-    print("saltelli_block_idx: ", input_design.i_saltelli)
-    print("A_mask:\n", input_design.A_mask)
-    print("A_sample:\n", A_sample)
+    print("i_sample:   ", input_design.i_block)
+    print("i_saltelli: ", input_design.i_saltelli)
+    # print("A_mask:\n", input_design.A_mask)
+    # print("A_sample:\n", A_sample)
+
 
     grid_size = data_schema["ATTRS"]["grid_step"]
     otimes = output_times(cfg.transport_fullscale)
@@ -318,14 +319,14 @@ def setup_data_storage(cfg: dotdict,
     conc_shapes = (n_blocks, n_qmc, len(otimes), *grid_size)
     conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c in conc_coords]
 
-    # sample_id
-    sid_coords = data_schema['VARS']['sample_id']['coords']
+    # i_eval
+    sid_coords = data_schema['VARS']['i_eval']['coords']
     sid_chunks = [coords[c]["chunk_size"] for c in coords_names if c in sid_coords]
     sid_matrix = np.full((n_blocks, n_qmc), -1, dtype=int)  # or (U, V) if your ranges are [0, U) and [0, V)
     sid_matrix[block, qmc] = np.arange(n_samples)
     res_shapes = (n_blocks, n_qmc)
-    print(f"sid_matrix shape: {sid_matrix.shape}, coords: {sid_coords}")
-    print("sid_matrix:\n", sid_matrix)
+    print(f"i_eval_matrix shape: {sid_matrix.shape}, coords: {sid_coords}")
+    print("i_eval_matrix:\n", sid_matrix)
 
     # parameters
     par_coords = data_schema['VARS']['parameter']['coords']
@@ -336,21 +337,21 @@ def setup_data_storage(cfg: dotdict,
     print("par_matrix:\n", par_matrix)
 
     # A_sample
-    A_coords = data_schema['VARS']['A_sample']['coords']
-    A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
-    A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
-    # A_matrix[:, :, :] = A_sample[None, :, :]
-    print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
-    print("A_matrix:\n", A_matrix)
+    # A_coords = data_schema['VARS']['A_sample']['coords']
+    # A_chunks = [coords[c]["chunk_size"] for c in coords_names if c in A_coords]
+    # A_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
+    # # A_matrix[:, :, :] = A_sample[None, :, :]
+    # print(f"A_matrix shape: {A_matrix.shape}, coords: {A_coords}")
+    # print("A_matrix:\n", A_matrix)
 
     ds = xr.Dataset(
         data_vars={
-            'sample_id': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
-            'sample_time': (tuple(sid_coords), da.full(res_shapes, fill_value=-1, chunks=sid_chunks, dtype=float)),
+            'i_eval': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
+            'eval_time': (tuple(sid_coords), da.full(res_shapes, fill_value=-1, chunks=sid_chunks, dtype=float)),
             'return_code': (tuple(sid_coords), da.full(res_shapes, fill_value=-2000, chunks=sid_chunks, dtype=int)),
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
-            'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
+            # 'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
         },
         coords=ds_coords
     )
@@ -379,24 +380,24 @@ def read_failed_parameters():
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
-    logging.info("plotting sample time histogram...")
-    plot_sample_time_hist(ds['sample_time'].to_numpy().ravel())
+    logging.info("plotting eval time histogram...")
+    plot_sample_time_hist(ds['eval_time'].to_numpy().ravel())
 
     logging.info("getting failed samples...")
     v_param = ds['parameter'].to_numpy()
-    v_time = ds['sample_time'].to_numpy()
-    v_sample_id = ds['sample_id'].to_numpy()
+    v_time = ds['eval_time'].to_numpy()
+    v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
 
     mask = v_rc < 0
     f_param = v_param[mask]
-    f_sample_id = v_sample_id[mask]
+    f_ieval = v_ieval[mask]
 
     i_idx, q_idx = np.where(mask)  # integer indices
-    f_iid = ds['iid'].isel(iid=i_idx).to_numpy()  # coordinate values of iid
-    f_qmc = ds['qmc'].isel(qmc=q_idx).to_numpy()  # coordinate values of qmc
+    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
+    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
 
-    tags = np.column_stack((f_sample_id, f_iid, f_qmc))
+    tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     return tags, f_param
 
 def plot_sample_time_hist(st):
@@ -526,17 +527,17 @@ def compute_raw_sobol(cfg, seed):
     rc = ds['return_code'].to_numpy()
     print('Return code:\n', rc)
     print(f"Number of failed runs: {(rc < 0).sum()} / {rc.size}")
-    valid_iid = (ds['return_code'] >= 0).all(dim='qmc').to_numpy()  # mask failed runs
-    n_valid = int(valid_iid.sum()) 
-    print(f"Valid iid: {n_valid} ")
-    conc = ds['conc'].isel(sim_time=slice(1, None), iid=valid_iid)  # skip t=0
+    valid_isample = (ds['return_code'] >= 0).all(dim='i_saltelli').to_numpy()  # mask failed runs
+    n_valid = int(valid_isample.sum())
+    print(f"Valid i_sample: {n_valid} ")
+    conc = ds['conc'].isel(sim_time=slice(1, None), i_sample=valid_isample)  # skip t=0
     conc_max_space = conc.quantile(0.99, dim=('X', 'Y', 'Z')).compute()
     print("Max concentration (99% quantile) over space and time:\n", conc_max_space.to_numpy())
-    conc_mean = conc.mean(dim=('iid', 'qmc'))
-    conc_vars = conc.var(dim=('iid', 'qmc')).compute()
+    conc_mean = conc.mean(dim=('i_sample', 'i_saltelli'))
+    conc_vars = conc.var(dim=('i_sample', 'i_saltelli')).compute()
     assert np.all(conc_vars > 0.0), f"Some concentration variance is zero: {np.sum(conc_vars == 0.0)}"
     center_conc = conc - conc_mean
-    conc_2D = center_conc.stack(sample=('iid', 'qmc'), output=('sim_time', 'X', 'Y', 'Z'))
+    conc_2D = center_conc.stack(sample=('i_sample', 'i_saltelli'), output=('sim_time', 'X', 'Y', 'Z'))
     
     si_ds = input_design.compute_sobol(conc_2D.transpose('sample', 'output').compute())
     si_ds = si_ds.unstack('output')  

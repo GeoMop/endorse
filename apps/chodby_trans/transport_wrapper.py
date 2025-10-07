@@ -152,32 +152,25 @@ class Wrapper:
             store_path = str(job.output.zarr_store_path)
             ds = xr.open_zarr(store_path, consolidated=False)
 
-            sample_idx = tags[0]
-            iid_idx = tags[1]
-            qmc_idx = tags[2]
-            region = {'iid': slice(iid_idx, iid_idx + 1),
-                      'qmc': slice(qmc_idx, qmc_idx + 1)}
+            i_eval_idx = tags[0]
+            isample_idx = tags[1]
+            isaltelli_idx = tags[2]
+            region = {'i_sample': slice(isample_idx, isample_idx + 1),
+                      'i_saltelli': slice(isaltelli_idx, isaltelli_idx + 1)}
 
             # Validate slice_array shape
             expected_shape = (ds.sizes['sim_time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])
             if slice_array.shape != expected_shape:
                 # raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
                 slice_array = np.zeros(expected_shape)
-                logging.info(f"sample {sample_idx} return code {rc} => create empty slice for zarr")
+                logging.info(f"sample {i_eval_idx} return code {rc} => create empty slice for zarr")
 
             # Lock for every chunk being accessed by the current write
-            # iid_chunk = ds.chunksizes["iid"][0]
-            # qmc_chunk = ds.chunksizes["qmc"][0]
-            # chunk_ids = list(_chunk_ranges(region['iid'], iid_chunk))
-            # logging.info("lock chunk_ids: ", chunk_ids)
-            # lock = Lock(f"zarr-write-iid-{iid_idx}")  # or per-chunk naming if you prefer
-            # locks = [Lock(f"zarr-chunk-iid-{cid}") for cid in sorted(chunk_ids)]
-
             lock_names = []
-            for var, chunkshape in ds.chunksizes.items():  # 'iid', 'qmc'
-                for ciid in _chunk_ranges(region['iid'], chunkshape[0]):
-                    for cqmc in _chunk_ranges(region['qmc'], chunkshape[0]):
-                            lock_names.append(f"zarr-{var}-{ciid}-{cqmc}")
+            for var, chunkshape in ds.chunksizes.items():  # 'i_sample', 'i_saltelli'
+                for cisample in _chunk_ranges(region['i_sample'], chunkshape[0]):
+                    for cisaltelli in _chunk_ranges(region['i_saltelli'], chunkshape[0]):
+                            lock_names.append(f"zarr-{var}-{cisample}-{cisaltelli}")
             lock_names = sorted(set(lock_names))  # deterministic ordering avoids deadlocks
             # logging.info("lock_names: {}".format(' '.join(map(str, lock_names))))
             logging.info(f"lock_names: {lock_names}")
@@ -188,10 +181,10 @@ class Wrapper:
 
             try:
                 ds_coords = xr.Dataset({
-                    'conc': (['iid', 'qmc', 'sim_time', 'X', 'Y', 'Z'],
+                    'conc': (['i_sample', 'i_saltelli', 'sim_time', 'X', 'Y', 'Z'],
                               slice_array[np.newaxis, np.newaxis, ...]),
-                    'return_code': (['iid', 'qmc'], np.array(rc)[np.newaxis, np.newaxis, ...]),
-                    'sample_time': (['iid', 'qmc'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
+                    'return_code': (['i_sample', 'i_saltelli'], np.array(rc)[np.newaxis, np.newaxis, ...]),
+                    'eval_time': (['i_sample', 'i_saltelli'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
                 })
                 ds_coords.to_zarr(store_path, mode='a', region=region)
             except Exception as e:
