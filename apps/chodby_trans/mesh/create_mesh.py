@@ -378,7 +378,7 @@ def meshing(factory, objects, mesh_filename):
     Common EDZ and transport domain meshing setup.
     """
     print("Meshing...")
-    # factory.write_brep()
+    factory.write_brep()
     #factory.mesh_options.CharacteristicLengthMin = cfg.get("min_mesh_step", cfg.boreholes_mesh_step)
     #factory.mesh_options.CharacteristicLengthMax = cfg.boundary_mesh_step
     factory.mesh_options.MinimumCirclePoints = 6
