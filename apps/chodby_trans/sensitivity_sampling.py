@@ -575,11 +575,13 @@ def main():
     # resolve job dirs
     job.set_workdir(work_dir)
     if cmd == 'submit' or cmd == 'local':
+        copy_flag = False
         if job.input.dir_path.exists():
             while True:
                 user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
                 if user_input.lower() in ["yes", "y"]:
                     print("Continuing...")
+                    copy_flag = True
                     break
                 elif user_input.lower() in ["no", "n"]:
                     print("Exiting...")
@@ -587,6 +589,9 @@ def main():
                 else:
                     print("Invalid input. Please enter yes/no.")
         else:
+            copy_flag = True
+        
+        if copy_flag:
             shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
