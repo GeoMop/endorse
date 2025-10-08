@@ -467,11 +467,11 @@ for node in $UNIQ_HOSTS; do
 done
 wait
 
-bash $PROJECT_DIR/dask_cluster.sh start
+bash $PROJECT_DIR/dask_cluster.sh $output_dir start
 
 cd "$SCRATCHDIR"
 echo "START SAMPLING"
-bash $PROJECT_DIR/dask_cluster.sh run
+bash $PROJECT_DIR/dask_cluster.sh $output_dir run
 echo "FINISHED SAMPLING"
 
 echo "Copying results back ..."
@@ -481,7 +481,7 @@ for node in $UNIQ_HOSTS; do
 done
 wait
 
-bash $PROJECT_DIR/dask_cluster.sh stop
+bash $PROJECT_DIR/dask_cluster.sh $output_dir stop
 
 # just dry-run while compressing logs and failed samples
 bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
