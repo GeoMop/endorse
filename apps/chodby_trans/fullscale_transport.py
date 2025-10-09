@@ -30,6 +30,8 @@ import chodby_trans.input_data as input_data
 from chodby_trans.mesh.create_mesh import make_mesh
 from chodby_trans import ot_sa
 
+import chodby_trans.exception_wrapper as exp
+
 from functools import wraps
 from multiprocessing import get_context
 
@@ -272,7 +274,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     else:
         res = fo.process.returncode
 
-    return fo.process.returncode, values
+    return res, values
 
 
 def write_zarr_slice(store_path: str,

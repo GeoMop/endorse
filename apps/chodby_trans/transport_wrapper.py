@@ -33,6 +33,7 @@ import zarr
 
 from dask.distributed import Lock
 
+import chodby_trans.exception_wrapper as exp
 
 class Wrapper:
 
@@ -90,6 +91,14 @@ class Wrapper:
         logging.info(f"transport_wrapper: get observations tags={tags}")
         cfg = self._config
 
+        def print_exp(_e: Exception, _tags: list):
+            sys.stdout.write("-" * 60)
+            sys.stdout.write(f"Traceback sample tags:{_tags}")
+            sys.stdout.write(f"transport_wrapper failed with exception: {_e}")
+            traceback.print_exc()
+            sys.stdout.write("-" * 60)
+            sys.stdout.flush()
+
         try:
             if cfg.test_random_data:
                 # test random results
@@ -106,15 +115,13 @@ class Wrapper:
                     tags, param_dict)
 
         except Exception as e:
-            sys.stdout.write("-"*60)
-            sys.stdout.write(f"Traceback sample tags:{tags}")
-            sys.stdout.write(f"transport_wrapper failed with exception: {e}")
-            traceback.print_exc()
-            sys.stdout.write("-"*60)
-            sys.stdout.flush()
-
-            rc = -1000
+            print_exp(e, tags)
             slice_array = np.array([])
+
+            if isinstance(e, exp.WrapperException):
+                rc = e.code
+            else:
+                rc = exp.ReturnCode.UNKNOWN_ERROR
 
         sample_time = time.time() - t
         logging.info(f"SIMULATION TIME: {sample_time}")
@@ -188,8 +195,8 @@ class Wrapper:
                 })
                 ds_coords.to_zarr(store_path, mode='a', region=region)
             except Exception as e:
-                rc = -1001
-                raise Exception('zarr error') from e
+                print_exp(e, tags)
+                rc = exp.ReturnCode.ZARR_ERROR
             finally:
                 for L in reversed(locks): L.release()
 

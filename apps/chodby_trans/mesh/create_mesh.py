@@ -14,6 +14,7 @@ from endorse.mesh import mesh_tools, fracture_tools
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 from bgem.stochastic.fracture import Population
 
+import chodby_trans.exception_wrapper as exp
 
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
     """
@@ -214,6 +215,7 @@ def safe_list(source_dict: dict[str, ObjectSet], keys: list[str]) -> list[Object
     return new_list
 
 
+@exp.rethrow_as(exp.GeomException, "Geometry exception")
 def make_geometry(factory, cfg:'dotdict', fracture_set):
     cfg_geom = cfg.geometry
     cfg_mesh = cfg.mesh
@@ -373,6 +375,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
     return geometry_final
 
 
+@exp.rethrow_as(exp.MeshException, "Meshing exception")
 def meshing(factory, objects, mesh_filename):
     """
     Common EDZ and transport domain meshing setup.
@@ -438,6 +441,20 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
     return File(final_mesh_filename)
 
 
+@exp.rethrow_as(exp.HealException, "Meshing exception")
+def heal_mesh(mesh_file: File):
+    mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
+    if not Path(mesh_file_healed).exists():
+        print("HEAL MESH")
+
+        # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
+        hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
+        hm.heal_mesh(gamma_tol=0.002)
+        # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
+        hm.write(file_name=mesh_file_healed.name)
+    return mesh_file_healed
+
+
 @memoize
 def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
 
@@ -461,15 +478,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
-    if not Path(mesh_file_healed).exists():
-        print("HEAL MESH")
-
-        # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
-        hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
-        hm.heal_mesh(gamma_tol=0.002)
-        # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
-        hm.write(file_name=mesh_file_healed.name)
+    mesh_file_healed = heal_mesh(mesh_file)
 
     print("Final mesh file: ", mesh_file_healed)
     return File(mesh_file_healed.name), fracture_set, n_large
