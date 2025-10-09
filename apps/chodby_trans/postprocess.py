@@ -24,7 +24,7 @@ def sampling_data(cfg, seed):
     input_design = ot_samples(cfg, seed)
     store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
-    ds1 = ds.rename_dims({"iid": "iid1", "qmc": "qmc1"})
+    ds1 = ds.rename_dims({"i_sample": "iid1", "i_saltelli": "qmc1"})
     print(ds1.dims)
     ds2 = ds1.rename_dims({"iid1": "QMC", "qmc1": "IID"})
     print(ds2.dims)

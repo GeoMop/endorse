@@ -180,30 +180,30 @@ class InputDesign:
         return self.group_mat.shape[1]
 
     @property
-    def n_samples(self):
+    def n_evals(self):
         return self.group_mat.shape[0]
 
     @property
-    def n_blocks(self):
-        return len(np.unique(self.i_block))
+    def n_samples(self):
+        return len(np.unique(self.i_sample))
 
     @property
-    def block_size(self): 
+    def n_saltelli(self):
         return len(np.unique(self.i_saltelli))
 
     @property
-    def i_block(self):
-        i_block, i_saltelli, A_mask = self.saltelli_layout
-        return i_block
+    def i_sample(self):
+        i_sample, i_saltelli, A_mask = self.saltelli_layout
+        return i_sample
 
     @property
     def i_saltelli(self):
-        i_block, i_saltelli, A_mask = self.saltelli_layout
+        i_sample, i_saltelli, A_mask = self.saltelli_layout
         return i_saltelli
 
     @property
     def A_mask(self):
-        i_block, i_saltelli, A_mask = self.saltelli_layout
+        i_sample, i_saltelli, A_mask = self.saltelli_layout
         return A_mask
 
     def second_order_indices(self, algo, i):
@@ -238,7 +238,7 @@ class InputDesign:
         # See OT docs example. :contentReference[oaicite:0]{index=0}
         Xs = ot.Sample(X)
         Ys = ot.Sample(Y)
-        base_size = int(self.n_blocks)
+        base_size = int(self.n_samples)
 
         algo = ot.SaltelliSensitivityAlgorithm(Xs, Ys, base_size)
         algo.setConfidenceLevel(self.confidence_level)  # your class already exposes 95% CI as outputs

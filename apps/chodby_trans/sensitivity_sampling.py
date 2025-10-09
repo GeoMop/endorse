@@ -283,21 +283,15 @@ def setup_data_storage(cfg: dotdict,
     param_names = input_design.param_names
     n_params = len(param_names)
     n_samples = input_design.n_samples
-
-    # n_blocks = input_design.n_blocks
-    # n_qmc = input_design.block_size
-    n_blocks = input_design.block_size
-    n_qmc = input_design.n_blocks
+    n_saltelli = input_design.n_saltelli
 
     parameters = input_design.param_mat
-    # block, qmc,  A_sample = input_design.saltelli_layout
-    qmc, block, A_sample = input_design.saltelli_layout
+    i_sample, i_saltelli, A_sample = input_design.saltelli_layout
 
-    print("i_sample:   ", input_design.i_block)
-    print("i_saltelli: ", input_design.i_saltelli)
+    print("i_sample:   ", i_sample)
+    print("i_saltelli: ", i_saltelli)
     # print("A_mask:\n", input_design.A_mask)
     # print("A_sample:\n", A_sample)
-
 
     grid_size = data_schema["ATTRS"]["grid_step"]
     otimes = output_times(cfg.transport_fullscale)
@@ -305,7 +299,7 @@ def setup_data_storage(cfg: dotdict,
     # ALL coords
     coords = data_schema["COORDS"]
     coords_names = list(coords.keys())
-    shapes = (n_blocks, n_qmc, n_params, len(otimes), *grid_size)
+    shapes = (n_samples, n_saltelli, n_params, len(otimes), *grid_size)
 
     # set coords once
     # default coords are set to index their range: 0,1,2,...
@@ -316,23 +310,23 @@ def setup_data_storage(cfg: dotdict,
 
     # concentration - prepare empty
     conc_coords = data_schema['VARS']['conc']['coords']
-    conc_shapes = (n_blocks, n_qmc, len(otimes), *grid_size)
+    conc_shapes = (n_samples, n_saltelli, len(otimes), *grid_size)
     conc_chunks = [coords[c]["chunk_size"] for c in coords_names if c in conc_coords]
 
     # i_eval
     sid_coords = data_schema['VARS']['i_eval']['coords']
     sid_chunks = [coords[c]["chunk_size"] for c in coords_names if c in sid_coords]
-    sid_matrix = np.full((n_blocks, n_qmc), -1, dtype=int)  # or (U, V) if your ranges are [0, U) and [0, V)
-    sid_matrix[block, qmc] = np.arange(n_samples)
-    res_shapes = (n_blocks, n_qmc)
+    sid_matrix = np.full((n_samples, n_saltelli), -1, dtype=int)  # or (U, V) if your ranges are [0, U) and [0, V)
+    sid_matrix[i_sample, i_saltelli] = np.arange(input_design.n_evals)
+    res_shapes = (n_samples, n_saltelli)
     print(f"i_eval_matrix shape: {sid_matrix.shape}, coords: {sid_coords}")
     print("i_eval_matrix:\n", sid_matrix)
 
     # parameters
     par_coords = data_schema['VARS']['parameter']['coords']
     par_chunks = [coords[c]["chunk_size"] for c in coords_names if c in par_coords]
-    par_matrix = np.zeros((n_blocks, n_qmc, n_params), dtype=parameters.dtype)
-    par_matrix[block, qmc, :] = parameters
+    par_matrix = np.zeros((n_samples, n_saltelli, n_params), dtype=parameters.dtype)
+    par_matrix[i_sample, i_saltelli, :] = parameters
     print(f"par_matrix shape: {par_matrix.shape}, coords: {par_coords}")
     print("par_matrix:\n", par_matrix)
 
@@ -366,7 +360,7 @@ def setup_data_storage(cfg: dotdict,
     # print(read_ds['A_sample'].to_numpy())
     print("=========== END READ ZARR ==============")
 
-    tags = np.column_stack((range(n_samples), input_design.i_saltelli, input_design.i_block))
+    tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
 
