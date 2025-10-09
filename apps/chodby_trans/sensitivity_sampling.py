@@ -461,11 +461,11 @@ for node in $UNIQ_HOSTS; do
 done
 wait
 
-bash $PROJECT_DIR/dask_cluster.sh start
+bash $PROJECT_DIR/dask_cluster.sh $output_dir start
 
 cd "$SCRATCHDIR"
 echo "START SAMPLING"
-bash $PROJECT_DIR/dask_cluster.sh run
+bash $PROJECT_DIR/dask_cluster.sh $output_dir run
 echo "FINISHED SAMPLING"
 
 echo "Copying results back ..."
@@ -475,7 +475,7 @@ for node in $UNIQ_HOSTS; do
 done
 wait
 
-bash $PROJECT_DIR/dask_cluster.sh stop
+bash $PROJECT_DIR/dask_cluster.sh $output_dir stop
 
 # just dry-run while compressing logs and failed samples
 bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
@@ -569,11 +569,13 @@ def main():
     # resolve job dirs
     job.set_workdir(work_dir)
     if cmd == 'submit' or cmd == 'local':
+        copy_flag = False
         if job.input.dir_path.exists():
             while True:
                 user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
                 if user_input.lower() in ["yes", "y"]:
                     print("Continuing...")
+                    copy_flag = True
                     break
                 elif user_input.lower() in ["no", "n"]:
                     print("Exiting...")
@@ -581,6 +583,9 @@ def main():
                 else:
                     print("Invalid input. Please enter yes/no.")
         else:
+            copy_flag = True
+        
+        if copy_flag:
             shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
