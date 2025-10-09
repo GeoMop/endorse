@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import endorse
 
 from pathlib import Path
-from chodby_trans import input_data, ot_sa
+import chodby_trans.job as job
+from chodby_trans import ot_sa
 from chodby_trans.plots import save_conc_and_si_pdf
 
 def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
@@ -21,7 +22,7 @@ def sampling_data(cfg, seed):
     # saltelli ... index of evaluation within sample according to Saltelli schema
     
     input_design = ot_samples(cfg, seed)
-    store_path = str(input_data.zarr_store_path)
+    store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
     ds1 = ds.rename_dims({"iid": "iid1", "qmc": "qmc1"})
     print(ds1.dims)

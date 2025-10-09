@@ -620,7 +620,8 @@ def main():
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'plots':
-        pp.make_transport_plots(cfg, seed)
+        with common.workdir(str(job.output.plots), clean=False):
+            pp.make_transport_plots(cfg, seed)
 
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")
