@@ -61,6 +61,18 @@ def atomic_write_json(path: Path, payload: dict):
     tmp.write_text(json.dumps(payload), encoding="utf-8")
     os.replace(tmp, path)
 
+def make_tarfile(source_dir: Path, output_file: Path = None):
+    """
+    Tar and compress the given directory
+    :param source_dir:
+    :param output_file: if not specified, create <source_dir_name>.tar.gz in the same path
+    :return:
+    """
+    if output_file is None:
+        output_file = source_dir.parent / (source_dir.stem + ".tar.gz")
+    with tarfile.open(output_file, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
 
 @memoize
 def salib_samples(cfg: dotdict, seed):
@@ -99,19 +111,6 @@ def salib_samples(cfg: dotdict, seed):
     #     pass
 
 
-def make_tarfile(source_dir: Path, output_file: Path = None):
-    """
-    Tar and compress the given directory
-    :param source_dir:
-    :param output_file: if not specified, create <source_dir_name>.tar.gz in the same path
-    :return:
-    """
-    if output_file is None:
-        output_file = source_dir.parent / (source_dir.stem + ".tar.gz")
-    with tarfile.open(output_file, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
-
-
 def prepare_sampling(cfg: dotdict, seed):
     """
     Clean samplig directory + return samples array.
@@ -132,18 +131,18 @@ def single_sample(args):
 
     # host = socket.gethostname()
     pid  = os.getpid()
+    sample_dirname = f"sample_{str(tags[0]).zfill(3)}_{pid}"
 
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
-    flag_file = sample_subdir / f"sample_{str(tags[0]).zfill(3)}.done.json"
-    if flag_file.exists():
-        # Already finished—return cached result
-        with open(flag_file) as f:
-            logging.info(f"SAMPLE already done: {flag_file}")
-            return json.load(f)["res"]
+    # flag_file = sample_subdir / f"sample_{str(tags[0]).zfill(3)}.done.json"
+    # if flag_file.exists():
+    #     # Already finished—return cached result
+    #     with open(flag_file) as f:
+    #         logging.info(f"SAMPLE already done: {flag_file}")
+    #         return json.load(f)["res"]
 
-    sample_dirname = f"sample_{str(tags[0]).zfill(3)}_{pid}"
     sample_dir = sample_subdir / sample_dirname
     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
@@ -162,11 +161,8 @@ def single_sample(args):
         logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
         # print("LEN:", len(obs_data))
     
-    result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
-    atomic_write_json(flag_file, result)
-    # tmp =  Path(f"{flag_file}.tmp")
-    # with open(tmp, "w") as f: json.dump(result, f)
-    # os.replace(tmp, flag_file)   # atomic rename
+    # result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
+    # atomic_write_json(flag_file, result)
 
     # soft clean
     if cfg["ot_sensitivity"]["clean_soft_sample_dir"]:
