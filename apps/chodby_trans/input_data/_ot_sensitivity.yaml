@@ -2,6 +2,8 @@ n_samples: 512 # must be power of 2 due to salib
 recompute_failed: True
 # if True, it removes sample dir right after the sample is collected
 clean_sample_dir: False
+# if True, it removes some intermediate files and tar the sample dir
+clean_soft_sample_dir: True
 
 
 # collect_only: False

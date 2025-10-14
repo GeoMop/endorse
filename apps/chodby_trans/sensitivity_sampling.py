@@ -9,6 +9,7 @@ from datetime import datetime
 import copy
 import subprocess
 import json
+import tarfile
 
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -98,8 +99,19 @@ def salib_samples(cfg: dotdict, seed):
     #     pass
 
 
+def make_tarfile(source_dir: Path, output_file: Path = None):
+    """
+    Tar and compress the given directory
+    :param source_dir:
+    :param output_file: if not specified, create <source_dir_name>.tar.gz in the same path
+    :return:
+    """
+    if output_file is None:
+        output_file = source_dir.parent / (source_dir.stem + ".tar.gz")
+    with tarfile.open(output_file, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
 
-   
+
 def prepare_sampling(cfg: dotdict, seed):
     """
     Clean samplig directory + return samples array.
@@ -131,7 +143,8 @@ def single_sample(args):
             logging.info(f"SAMPLE already done: {flag_file}")
             return json.load(f)["res"]
 
-    sample_dir = sample_subdir / (f"sample_{str(tags[0]).zfill(3)}_{pid}")
+    sample_dirname = f"sample_{str(tags[0]).zfill(3)}_{pid}"
+    sample_dir = sample_subdir / sample_dirname
     sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
     # read config file
@@ -155,21 +168,28 @@ def single_sample(args):
     # with open(tmp, "w") as f: json.dump(result, f)
     # os.replace(tmp, flag_file)   # atomic rename
 
+    # soft clean
+    if cfg["ot_sensitivity"]["clean_soft_sample_dir"]:
+        shutil.rmtree(sample_dir / "joblib_cache", ignore_errors=True)
+        for file in sample_dir.glob("*healed_modified.msh2"):
+            if file.is_file(): file.unlink()
+
     if res < 0:
-      failed_subdir = sensitivity_dir / "failed_samples"
-      failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
+        failed_subdir = sensitivity_dir / "failed_samples"
+        failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
-      num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
+        num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
 
-      if num_dirs <= 10:
-          logging.info(f"Moving failed sample {sample_dir.name}")
-          sample_dir.rename(failed_subdir / sample_dir.name)
-      else:
-        if cfg["ot_sensitivity"]["clean_sample_dir"]:
-            shutil.rmtree(sample_dir)
+        if num_dirs <= 10:
+            logging.info(f"Moving failed sample {sample_dir.name}")
+            sample_dir.rename(failed_subdir / sample_dir.name)
+        else:
+            if cfg["ot_sensitivity"]["clean_sample_dir"]:
+                shutil.rmtree(sample_dir)
     else:
-        if cfg["ot_sensitivity"]["clean_sample_dir"]:
-            shutil.rmtree(sample_dir)
+        if not cfg["ot_sensitivity"]["clean_sample_dir"]:
+            make_tarfile(sample_dir)
+        shutil.rmtree(sample_dir)   # always remove sample dir
 
     return res
 
