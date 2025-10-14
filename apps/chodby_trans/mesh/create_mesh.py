@@ -442,7 +442,7 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
 
 
 @exp.rethrow_as(exp.HealException, "Meshing exception")
-def heal_mesh(mesh_file: File):
+def make_heal_mesh(cfg, mesh_file: File):
     mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
     if not Path(mesh_file_healed).exists():
         print("HEAL MESH")
@@ -478,7 +478,7 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = heal_mesh(mesh_file)
+    mesh_file_healed = make_heal_mesh(cfg, mesh_file)
 
     print("Final mesh file: ", mesh_file_healed)
     return File(mesh_file_healed.name), fracture_set, n_large

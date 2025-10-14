@@ -1,8 +1,7 @@
 
 from contextlib import ContextDecorator
-from enum import Enum
 
-class ReturnCode(Enum):
+class ReturnCode():
     UNKNOWN_ERROR = -1000
     BGEM_GEOM_ERROR = -1001
     BGEM_GMSH_ERROR = -1002
