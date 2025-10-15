@@ -15,6 +15,8 @@ def get_generic_name(idata):
     return f"WPT_{idata.attrs['borehole'][3:]}_{idata.attrs['section']}_{idata.attrs['year']}_{idata.attrs['month']:02d}"
 
 def plot_idata(idata):
+    from . import remove_burnin
+    idata_cut = remove_burnin(idata)
 
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
