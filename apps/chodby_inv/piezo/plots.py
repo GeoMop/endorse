@@ -475,13 +475,13 @@ def plot_merged(idata, idata_uncut):
 def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, *args, **kwargs):
 
 
-    if "figsize" in kwargs:
-        figsize = kwargs.pop("figsize")
     
     if axes is None:
-        _, axes = plt.subplots(2, 1, figsize=figsize)
+        _, axes = plt.subplots(2, 1)
     
     fig = axes[0].get_figure()
+    if "figsize" in kwargs:
+        fig.figsize = kwargs.pop("figsize")
     fig.suptitle(f"{generic_name} - posterior distributions of k and E")
 
     posterior = idata.posterior
