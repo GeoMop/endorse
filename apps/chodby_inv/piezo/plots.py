@@ -46,10 +46,6 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
     if ax is None:
         _, ax = plt.subplots(figsize=(16, 18), nrows=2)
 
-
-    borehole = idata.attrs["borehole"]
-    section = idata.attrs["section"]
-
     if idata.sample_stats.attrs["observed_pressure"] is None:
         logging.warning("No observed data found in InferenceData object.")
         return ax
