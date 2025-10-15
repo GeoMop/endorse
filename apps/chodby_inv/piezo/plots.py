@@ -16,9 +16,6 @@ def get_generic_name(idata):
 
 def plot_idata(idata):
 
-    burnin = idata.attrs["burnin"] if "burnin" in idata.attrs else 0
-    idata_cut = idata.sel(draw=slice(burnin, None)) # cut first 2000 draws
-
     #az.style.use("arviz-doc")
     az.rcParams["plot.max_subplots"] = 50
 

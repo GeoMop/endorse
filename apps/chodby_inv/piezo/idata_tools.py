@@ -21,3 +21,12 @@ def read_idata_from_file(filename):
     except:
         print("Error reading idata file")
 
+
+def remove_burnin(idata, burnin=0):
+    if burnin > 0:
+        return idata.isel(draw=slice(burnin, None))
+    
+    if "burnin" in idata.attrs:
+        return idata.isel(draw=slice(idata.attrs["burnin"], None))
+    
+    return idata
