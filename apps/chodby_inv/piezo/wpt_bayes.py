@@ -321,6 +321,7 @@ def _run_inversion(inv_cfg, epoch_df):
     idata.attrs["burnin"] = burnin
 
     # add the observed data to the InferenceData object
+    idata["sample_stats"].attrs["observed_timeseries"] = time_series
     idata["sample_stats"].attrs["observed_pressure"] = regular_pb_measured
     idata["sample_stats"].attrs["observed_pressure_sigma"] = pressure_output_sigma
     idata["sample_stats"].attrs["observed_flow"] = np.log10(flow_rate_observed)
