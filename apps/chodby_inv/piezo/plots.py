@@ -434,7 +434,7 @@ def plot_merged(idata, idata_uncut):
     # all others
 
     figs = []
-    figs.append(plot_observe(idata, bins=150, generic_name=generic_name))
+    figs.append(plot_observe(idata, bincount=150, generic_name=generic_name))
     likelihood_figs = plot_likelihood(idata, idata_uncut, generic_name=generic_name) # order - likelihood, prior, posterior
     figs.append(likelihood_figs[0])
 
