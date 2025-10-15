@@ -542,7 +542,7 @@ def compare_plot(idata_a, idata_b):
     return figs
 
 if __name__ == "__main__":
-    from . import read_idata_from_file
+    from . import read_idata_from_file, remove_burnin
 
     borehole = argv[1]
     section = argv[2]
@@ -557,7 +557,9 @@ if __name__ == "__main__":
     assert len(matching) == 2, f"Invalid number of files - {len(matching)}"
     
     idata_a = read_idata_from_file(str(matching[0]))
+    idata_a = remove_burnin(idata_a)
     idata_b = read_idata_from_file(str(matching[1]))
+    idata_b = remove_burnin(idata_b)
 
     figs = compare_plot(idata_a, idata_b)
     save_plots_pdf_pages(f"{string}_compareplot.pdf", figs)
