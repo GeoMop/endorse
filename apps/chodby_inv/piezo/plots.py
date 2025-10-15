@@ -539,11 +539,35 @@ def compare_plot(idata_a, idata_b):
     figs.append(fig_posterior)
 
 
-    fig_observe, ax_observe = plt.subplots(2, 2, figsize=(32, 18))
-    plot_observe(idata_a, ax_observe[0, 0], kind="pressure")
-    plot_observe(idata_b, ax=ax_observe[0, 1], kind="pressure")
-    plot_observe(idata_a, ax_observe[1, 0], kind="flow")
-    plot_observe(idata_b, ax=ax_observe[1, 1], kind="flow")
+    fig_observe, ax_observe = plt.subplots(2, 1, figsize=(32, 18))
+    new_time_step = 1 / (24 * 30)
+    plot_observe(idata_a, ax_observe[0], kind="pressure", generic_name=idata_a_name, color="blue", new_time_step=new_time_step)
+    ymax_a = ax_observe[0].get_ylim()[1]
+    xmax_a = ax_observe[0].get_xlim()[1]
+    xmin_a = ax_observe[0].get_xlim()[0]
+    plot_observe(idata_b, ax=ax_observe[0], kind="pressure", generic_name=idata_b_name, color="red", new_time_step=new_time_step)
+    ymax_b = ax_observe[0].get_ylim()[1]
+    xmax_b = ax_observe[0].get_xlim()[1]
+    xmin_b = ax_observe[0].get_xlim()[0]
+    ymax = max(ymax_a, ymax_b)
+    xmax = min(xmax_a, xmax_b)
+    xmin = max(xmin_a, xmin_b)
+    ax_observe[0].set_ylim([0, ymax])
+    ax_observe[0].set_xlim([xmin, xmax])
+
+
+    # flow distribution plot
+    plot_observe(idata_a, ax_observe[1], kind="flow", color="blue", generic_name=idata_a_name)
+    plot_observe(idata_b, ax=ax_observe[1], kind="flow", color="red", generic_name=idata_b_name)
+    flow_values_a = idata_a.posterior_predictive["obs_0"].values.flatten()
+    flow_values_a = np.clip(flow_values_a, -20, 20)
+    flow_values_b = idata_b.posterior_predictive["obs_0"].values.flatten()
+    flow_values_b = np.clip(flow_values_b, -20, 20)
+    merged = np.concatenate([flow_values_a, flow_values_b])
+    low, high = np.percentile(merged, [0.1, 99.9])
+    ax_observe[1].set_xlim([low, high])
+    
+
 
     figs.append(fig_observe)
 
