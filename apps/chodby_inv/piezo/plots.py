@@ -42,7 +42,7 @@ def plot_idata(idata):
 
     plot_merged(idata_cut, idata)
 
-def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
+def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, generic_name="WPT", kind="both", color="red"):
     if ax is None:
         _, ax = plt.subplots(figsize=(16, 18), nrows=2)
 
@@ -76,6 +76,7 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
 
     observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
     observe_length = len(pressure_list)
+    origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
 
     #print(idata.sample_stats)
     likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
@@ -83,7 +84,8 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
     #posterior_data = idata.posterior["K"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
     #print(posterior_data[best_fit_idx])
     best_fit = observe_arr.isel(flat_dim=slice(best_fit_idx * observe_length, (best_fit_idx + 1) * observe_length)).values
-    
+    observe_arr = observe_arr.values.flatten()
+
     if kind == "both":
         fig = ax[0].get_figure()
     else:
@@ -94,25 +96,46 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
             ax_pressure = ax[0]
         else:
             ax_pressure = ax
+        
+        # setup existing indexes
+        indexes_extended = np.arange(origin_offset, pressure_output_extended.size + origin_offset)
+        if "observed_timeseries" in idata.sample_stats.attrs:
+            indexes_extended = idata.sample_stats.attrs["observed_timeseries"]
+        indexes = indexes_extended[indexes_extended >= 0]
 
-        hist2d_x = np.tile(np.arange(observe_length), chains * draws)
+        # resample to new time step, if specified
+        if new_time_step > 0:
+            indexes_tile = np.tile(indexes, chains * draws)
+            new_indexes_extended = np.arange(indexes_extended[0], indexes_extended[-1], new_time_step)
+            new_indexes = new_indexes_extended[new_indexes_extended > 0]
+            new_indexes_tile = np.tile(new_indexes, chains * draws)
+            print(indexes_extended.size, new_indexes_extended.size)
+            observe_arr = np.interp(new_indexes_tile, indexes_tile, observe_arr, period=indexes.size)
+            pressure_output_extended = np.interp(new_indexes_extended, indexes_extended, pressure_output_extended)
+            best_fit = np.interp(new_indexes, indexes, best_fit)
+            indexes = new_indexes
+            indexes_extended = new_indexes_extended
+            observe_length = len(indexes)
+            origin_offset = observe_length - len(pressure_output_extended)
 
-        ax_pressure.hist2d(hist2d_x, observe_arr.values, bins=[observe_length, bins], cmap="viridis", cmin=1e-7)
-        origin_offset = observe_length - len(pressure_output_extended) # compute origin offset to plot extended data
-        ax_pressure.plot(np.arange(origin_offset, observe_length), pressure_output_extended, "r-", label="Predicted observation (extended)", lw=1)
-        ax_pressure.plot(np.arange(observe_length), best_fit, "k--", label="Best fit", lw=1)
+        # plot pressure data
+        hist2d_x = np.tile(indexes, chains * draws)
+        #ax_pressure.hist2d(hist2d_x, observe_arr, bins=[observe_length, bincount], cmap="viridis", cmin=1e-7)
+        ax_pressure.plot(indexes_extended, pressure_output_extended, label=f"{generic_name} - Predicted observation (extended)", lw=1, color=color, linestyle="dashed")
+        ax_pressure.plot(indexes, best_fit, label=f"{generic_name} - Best pressure fit", lw=1, color=color)
         ax_minima =  [
             np.min([observe_arr.min(), pressure_output_extended.min()]),
             np.max([observe_arr.max(), pressure_output_extended.max()])
         ]
-        ax_pressure.set_ylim(ax_minima)
+        #ax_pressure.set_ylim(ax_minima)
+        ax_pressure.set_xlim([indexes_extended[0], indexes_extended[-1]])
 
-        ax_pressure.set_xlim([origin_offset, observe_length])
+        #ax_pressure.set_xlim([origin_offset, observe_length])
         ax_pressure.set_xlabel("Time (integer steps)")
         ax_pressure.set_ylabel("Pressure")
         ax_pressure.legend()
         plt.suptitle(f"{generic_name} - distibution of pressure series values")
-        plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
+        #plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
 
     if kind in ["both", "flow"]:
         if kind in ["both"]:
@@ -125,14 +148,15 @@ def plot_observe(idata, ax=None, bins=100, generic_name="WPT", kind="both"):
         ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
 
         # plot flow rate distribution
-        counts, bin_edges, _ = ax_flow.hist(flow_values, alpha=0.7, bins=bins, color="orange", label="Flow rate fit")
+        bins = np.arange(flow_values.min(), flow_values.max(), binsize)
+        counts, bin_edges, _ = ax_flow.hist(flow_values, alpha=0.7, bins=bins, color=color, label=f"{generic_name} - Flow rate fit", rwidth=0.45)
         total_area = (bin_edges[1] - bin_edges[0]) * np.sum(counts)
 
         # plot observed flow rate distribution
         if idata.attrs["plot_observed_flow"]:
-            observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bins)
+            observed_xvals = np.linspace(flow_rate_observed - 3 * flow_rate_sigma, flow_rate_observed + 3 * flow_rate_sigma, bincount)
             observed_yvals = norm.pdf(observed_xvals, flow_rate_observed, flow_rate_sigma)
-            ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label="Observed flow rate distribution")
+            ax_flow.plot(observed_xvals, observed_yvals * total_area, color="red", linestyle="dashed", label=f"{generic_name} - Observed flow rate distribution", linewidth=1.5, alpha=0.7)
         
         ax_flow.legend()
 
