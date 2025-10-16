@@ -191,6 +191,13 @@ def transport_run(cfg, tags, param_dict):
     return parametrized_run(cfg, large_model, input_msh, tags, param_dict)
 
 
+@exp.rethrow_as(exp.Flow123dException, "Flow123d exception")
+def call_flow_wrap(cfg:'dotdict', file_in:File, params: Dict[str,str]) -> common.FlowOutput:
+    """Wrapper to catch Exception and set return code"""
+    fo = common.call_flow(cfg.machine_config, file_in, params)
+    return fo
+
+
 def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     cfg_fine = cfg.transport_fullscale
     params = cfg_fine.copy()
@@ -219,8 +226,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
         completed = subprocess.CompletedProcess([], 0, None, None)
         fo = common.FlowOutput(completed, stdout_path, stderr_path)
     else:
-        fo = common.call_flow(cfg.machine_config, template, params)
-
+        fo = call_flow_wrap(cfg.machine_config, template, params)
 
     time.sleep(0.5)  # give the FS a moment (tune as needed)
 

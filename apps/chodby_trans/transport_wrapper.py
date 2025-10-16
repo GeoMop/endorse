@@ -92,9 +92,9 @@ class Wrapper:
         cfg = self._config
 
         def print_exp(_e: Exception, _tags: list):
-            sys.stdout.write("-" * 60)
-            sys.stdout.write(f"Traceback sample tags:{_tags}")
-            sys.stdout.write(f"transport_wrapper failed with exception: {_e}")
+            sys.stdout.write("-\n" * 60)
+            sys.stdout.write(f"Traceback sample tags:{_tags}\n")
+            sys.stdout.write(f"transport_wrapper failed with exception: {_e}\n")
             traceback.print_exc()
             sys.stdout.write("-" * 60)
             sys.stdout.flush()

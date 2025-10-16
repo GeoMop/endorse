@@ -2,11 +2,14 @@
 from contextlib import ContextDecorator
 
 class ReturnCode():
+    OK = 0
     UNKNOWN_ERROR = -1000
     BGEM_GEOM_ERROR = -1001
     BGEM_GMSH_ERROR = -1002
     BGEM_HEAL_ERROR = -1003
+    FLOW123_ERROR = -1010
     ZARR_ERROR = -1100
+    NONE = -2000
 
 
 class WrapperException(Exception):
@@ -36,6 +39,9 @@ class HealException(WrapperException):
     """Errors originating from Gmsh HealMesh operations."""
     code=ReturnCode.BGEM_HEAL_ERROR
 
+class Flow123dException(WrapperException):
+    """Errors originating from running Flow123d."""
+    code=ReturnCode.FLOW123_ERROR
 
 
 
