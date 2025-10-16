@@ -193,7 +193,7 @@ class Wrapper:
                     'return_code': (['i_sample', 'i_saltelli'], np.array(rc)[np.newaxis, np.newaxis, ...]),
                     'eval_time': (['i_sample', 'i_saltelli'], np.array(sample_time)[np.newaxis, np.newaxis, ...])
                 })
-                ds_coords.to_zarr(store_path, mode='a', region=region)
+                ds_coords.to_zarr(store_path, mode='r+', region=region)
             except Exception as e:
                 print_exp(e, tags)
                 rc = exp.ReturnCode.ZARR_ERROR
