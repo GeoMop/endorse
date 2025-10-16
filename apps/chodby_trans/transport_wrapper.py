@@ -320,13 +320,7 @@ class Wrapper:
 
             return rc, slice_array
         except Exception as e:
-            sys.stdout.write("-"*60)
-            sys.stdout.write(f"Traceback sample tags:{tags}")
-            sys.stdout.write(f"transport_wrapper failed with exception: {e}")
-            traceback.print_exc()
-            sys.stdout.write("-"*60)
-            sys.stdout.flush()
-            # empty_block = np.zeros(18, 20, 20, 2)
+            print_exp(e, tags)
             return -1000, slice_array
 
     def calculate(self, cfg):
