@@ -39,6 +39,7 @@ import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
+from chodby_trans.exception_wrapper import ReturnCode
 
 
 import logging
@@ -358,7 +359,7 @@ def setup_data_storage(cfg: dotdict,
         data_vars={
             'i_eval': (tuple(sid_coords), da.from_array(sid_matrix, chunks=sid_chunks)),
             'eval_time': (tuple(sid_coords), da.full(res_shapes, fill_value=-1, chunks=sid_chunks, dtype=float)),
-            'return_code': (tuple(sid_coords), da.full(res_shapes, fill_value=-2000, chunks=sid_chunks, dtype=int)),
+            'return_code': (tuple(sid_coords), da.full(res_shapes, fill_value=ReturnCode.NONE, chunks=sid_chunks, dtype=int)),
             'conc': (tuple(conc_coords), da.zeros(conc_shapes, chunks=conc_chunks)),
             'parameter': (tuple(par_coords), da.from_array(par_matrix, chunks=par_chunks)),
             # 'A_sample': (tuple(A_coords), da.from_array(A_matrix, chunks=A_chunks)),
@@ -398,6 +399,7 @@ def read_failed_parameters():
     v_time = ds['eval_time'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
+    plot_failed_return_codes(v_rc, v_ieval)
 
     mask = v_rc < 0
     f_param = v_param[mask]
@@ -409,6 +411,66 @@ def read_failed_parameters():
 
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     return tags, f_param
+
+
+def plot_failed_return_codes(v_rc, v_ieval):
+    # Flatten the matrix and count occurrences
+    unique_vals, counts = np.unique(v_rc, return_counts=True)
+
+    # Build {value: name} automatically from class attributes
+    def value_to_name_map(cls):
+        mapping = {}
+        for name, val in vars(cls).items():
+            if name.startswith("_"):
+                continue
+            if isinstance(val, (int, np.integer)):
+                # If multiple names share a value, keep the first (or join if you prefer)
+                mapping.setdefault(int(val), name)
+        return mapping
+
+    labels_map = value_to_name_map(ReturnCode)
+    labels = [labels_map.get(int(v), str(v)) for v in unique_vals]
+
+    # Print the counts nicely
+    print("Return Code Counts:")
+    for val, lab, count in zip(unique_vals, labels, counts):
+        print(f"{lab} [{val}]: {count}")
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(8, 8))
+    mask = unique_vals != 0
+    counts_plot = counts[mask]
+    labels_plot = [labels_map.get(int(v), str(v)) for v in unique_vals[mask]]
+    ax.bar(labels_plot, counts_plot)
+    ax.set_title(f"Return Code Distribution (n={np.sum(counts)})")
+    ax.set_xlabel("Return Code")
+    ax.set_ylabel("Count")
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    for tick in ax.get_xticklabels():
+        tick.set_rotation(45)
+        tick.set_ha("right")
+
+    # Add numeric labels on top of bars
+    # Prefer bar_label if available; otherwise fallback to annotate
+    bars = ax.bar(labels_plot, counts_plot)
+    try:
+        ax.bar_label(bars, padding=3)
+    except Exception:
+        for rect, cnt in zip(bars, counts_plot):
+            height = rect.get_height()
+            ax.annotate(f"{int(cnt)}",
+                        xy=(rect.get_x() + rect.get_width() / 2, height),
+                        xytext=(0, 3), textcoords="offset points",
+                        ha="center", va="bottom")
+
+    # Add a bit of headroom so labels don’t clip
+    ymax = counts_plot.max() if len(counts_plot) else 1
+    ax.set_ylim(0, ymax * 1.5)
+
+    fig.tight_layout()
+    fig.savefig(job.output.plots / 'return_code.pdf', format='pdf')
+    # plt.show()
+
 
 def plot_sample_time_hist(st):
     upper_limit = 2000
