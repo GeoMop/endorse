@@ -5,6 +5,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator, LogFormatter, FuncFormatter
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.gridspec import GridSpec
 from scipy.stats import norm, lognorm
 import logging
 from sys import argv, exit
@@ -42,7 +43,7 @@ def plot_idata(idata):
 
     plot_merged(idata_cut, idata)
 
-def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, generic_name="WPT", kind="both", color="red"):
+def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, generic_name="WPT", kind="both", color="red", cmap="viridis"):
     if ax is None:
         _, ax = plt.subplots(figsize=(16, 18), nrows=2)
 
@@ -105,14 +106,26 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
 
         # resample to new time step, if specified
         if new_time_step > 0:
-            indexes_tile = np.tile(indexes, chains * draws)
+            # old indexes, tiled for chains
+            #indexes_tile = np.tile(indexes, chains * draws)
+            # new indexes, including the extension
             new_indexes_extended = np.arange(indexes_extended[0], indexes_extended[-1], new_time_step)
             new_indexes = new_indexes_extended[new_indexes_extended > 0]
+            # new indexes tiles for chains
             new_indexes_tile = np.tile(new_indexes, chains * draws)
-            print(indexes_extended.size, new_indexes_extended.size)
-            observe_arr = np.interp(new_indexes_tile, indexes_tile, observe_arr, period=indexes.size)
+
+            # interpolate data to new indexes
+            #observe_arr = np.interp(new_indexes_tile, indexes_tile, observe_arr, period=indexes.size)
+            new_observe_arr = np.zeros(new_indexes_tile.size)
+            for i in np.arange(chains * draws):
+                #print(i)
+                new_observe_arr[i * new_indexes.size:(i + 1) * new_indexes.size] = np.interp(new_indexes, indexes, observe_arr[i * indexes.size:(i + 1) * indexes.size])
+            observe_arr = new_observe_arr
+            # interpolate extended observed series
             pressure_output_extended = np.interp(new_indexes_extended, indexes_extended, pressure_output_extended)
+            # interpolate best fit
             best_fit = np.interp(new_indexes, indexes, best_fit)
+            # reassign to original variables
             indexes = new_indexes
             indexes_extended = new_indexes_extended
             observe_length = len(indexes)
@@ -120,7 +133,8 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
 
         # plot pressure data
         hist2d_x = np.tile(indexes, chains * draws)
-        #ax_pressure.hist2d(hist2d_x, observe_arr, bins=[observe_length, bincount], cmap="viridis", cmin=1e-7)
+        print(hist2d_x.shape, observe_arr.shape)
+        ax_pressure.hist2d(hist2d_x, observe_arr, bins=[observe_length, 50], cmap=cmap, cmin=1e-7)
         ax_pressure.plot(indexes_extended, pressure_output_extended, label=f"{generic_name} - Predicted observation (extended)", lw=1, color=color, linestyle="dashed")
         ax_pressure.plot(indexes, best_fit, label=f"{generic_name} - Best pressure fit", lw=1, color=color)
         ax_minima =  [
@@ -131,8 +145,8 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
         ax_pressure.set_xlim([indexes_extended[0], indexes_extended[-1]])
 
         #ax_pressure.set_xlim([origin_offset, observe_length])
-        ax_pressure.set_xlabel("Time (integer steps)")
-        ax_pressure.set_ylabel("Pressure")
+        ax_pressure.set_xlabel("Time [days]")
+        ax_pressure.set_ylabel("Pressure [Pa]")
         ax_pressure.legend()
         plt.suptitle(f"{generic_name} - distibution of pressure series values")
         #plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
@@ -218,7 +232,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
             print(sd)
             xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
             yvals = norm.pdf(xvals, mean, sd)
-            axes.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
+            axes.plot(xvals, yvals, color="green", linestyle="dashed", label="Prior")
 
             if axes.get_title() not in ["p_far"]:
                 axes.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
@@ -241,7 +255,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
                     print(sd)
                     xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                     yvals = norm.pdf(xvals, mean, sd)
-                    ax.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
+                    ax.plot(xvals, yvals, color="green", linestyle="dashed", label="Prior")
             else:
                 idx = x
                 # if empty axis, skip
@@ -252,7 +266,7 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
                 print(sd)
                 xvals = np.linspace(mean - 3 * sd, mean + 3 * sd, 100)
                 yvals = norm.pdf(xvals, mean, sd)
-                ax_row.plot(xvals, yvals, color="red", linestyle="dashed", label="Prior")
+                ax_row.plot(xvals, yvals, color="green", linestyle="dashed", label="Prior")
 
     # set scientific notation for axes
     for ax_row in axes:
@@ -473,8 +487,6 @@ def plot_merged(idata, idata_uncut):
     save_plots_pdf_pages(f"{generic_name}_summary.pdf", figs)
 
 def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, *args, **kwargs):
-
-
     
     if axes is None:
         _, axes = plt.subplots(2, 1)
@@ -523,51 +535,122 @@ def compare_plot(idata_a, idata_b):
 
     idata_a_name = f"{idata_a.attrs['year']}_{idata_a.attrs['month']:02d} posterior"
     idata_b_name = f"{idata_b.attrs['year']}_{idata_b.attrs['month']:02d} posterior"
-    ax_posterior = plot_posterior_modified(idata_a, generic_name=name, grid=(11, 1), figsize=(16, 32), hdi_prob="hide")
     idata_a_patch = Patch(color="blue", label=idata_a_name)
-    plot_posterior_modified(idata_b, ax=ax_posterior, color="red", grid=(11, 1), hdi_prob="hide")
     idata_b_patch = Patch(color="red", label=idata_b_name)
+    #ax_posterior = plot_posterior_modified(idata_a, generic_name=name, grid=(11, 1), figsize=(16, 32), hdi_prob="hide")
+    #plot_posterior_modified(idata_b, ax=ax_posterior, color="red", grid=(11, 1), hdi_prob="hide")
 
-    handles, labels = ax_posterior[0].get_legend_handles_labels()
+    handles, labels = [], []
     handles.append(idata_a_patch)
     handles.append(idata_b_patch)
     labels.append(idata_a_name)
     labels.append(idata_b_name)
 
-    fig_posterior = ax_posterior[0].figure
-    fig_posterior.legend(handles[1:], labels[1:], loc='upper right', title='Legend')
-    figs.append(fig_posterior)
+    #fig_posterior = ax_posterior[0].figure
+    #fig_posterior.legend(handles[1:], labels[1:], loc='upper right', title='Legend')
+    #figs.append(fig_posterior)
 
 
-    fig_observe, ax_observe = plt.subplots(2, 1, figsize=(32, 18))
-    new_time_step = 1 / (24 * 30)
-    plot_observe(idata_a, ax_observe[0], kind="pressure", generic_name=idata_a_name, color="blue", new_time_step=new_time_step)
-    ymax_a = ax_observe[0].get_ylim()[1]
-    xmax_a = ax_observe[0].get_xlim()[1]
-    xmin_a = ax_observe[0].get_xlim()[0]
-    plot_observe(idata_b, ax=ax_observe[0], kind="pressure", generic_name=idata_b_name, color="red", new_time_step=new_time_step)
-    ymax_b = ax_observe[0].get_ylim()[1]
-    xmax_b = ax_observe[0].get_xlim()[1]
-    xmin_b = ax_observe[0].get_xlim()[0]
+    # pressure distribution plot
+    #fig_observe, ax_observe = plt.subplots(2, 2, figsize=(16, 9))
+    fig_observe = plt.figure(figsize=(16, 9))
+    # Main grid: 1 row × 2 columns
+    outer = GridSpec(1, 2, figure=fig_observe, width_ratios=[1, 1], wspace=0.5, hspace=0.1)
+
+    # Left column: 2 rows × 1 column
+    left = outer[0].subgridspec(2, 1, hspace=0.3)
+    ax_pressure = fig_observe.add_subplot(left[0, 0])
+    ax_flow = fig_observe.add_subplot(left[1, 0])
+
+    # Right column: 6 rows × 2 columns
+    right = outer[1].subgridspec(6, 2, wspace=0.05, hspace=0.1)
+    ax_posterior = right.subplots()
+
+    # define new shared time step
+    time_step_a = idata_a.sample_stats.attrs["observed_timeseries"][1] - idata_a.sample_stats.attrs["observed_timeseries"][0]
+    time_step_b = idata_b.sample_stats.attrs["observed_timeseries"][1] - idata_b.sample_stats.attrs["observed_timeseries"][0]
+    print(time_step_a, time_step_b)
+
+    #new_time_step = 1 / 24
+    new_time_step = min(time_step_a, time_step_b) * 4
+    plot_observe(idata_a, ax=ax_pressure, kind="pressure", generic_name=idata_a_name, color="blue", new_time_step=new_time_step, cmap="viridis")
+    ymax_a = ax_pressure.get_ylim()[1]
+    xmax_a = ax_pressure.get_xlim()[1]
+    xmin_a = ax_pressure.get_xlim()[0]
+    plot_observe(idata_b, ax=ax_pressure, kind="pressure", generic_name=idata_b_name, color="red", new_time_step=new_time_step, cmap="magma")
+    ymax_b = ax_pressure.get_ylim()[1]
+    xmax_b = ax_pressure.get_xlim()[1]
+    xmin_b = ax_pressure.get_xlim()[0]
     ymax = max(ymax_a, ymax_b)
-    xmax = min(xmax_a, xmax_b)
-    xmin = max(xmin_a, xmin_b)
-    ax_observe[0].set_ylim([0, ymax])
-    ax_observe[0].set_xlim([xmin, xmax])
+    xmax = max(xmax_a, xmax_b)
+    xmin = min(xmin_a, xmin_b)
+    ax_pressure.set_ylim([0, ymax])
+    ax_pressure.set_xlim([xmin, xmax])
 
 
     # flow distribution plot
-    plot_observe(idata_a, ax_observe[1], kind="flow", color="blue", generic_name=idata_a_name)
-    plot_observe(idata_b, ax=ax_observe[1], kind="flow", color="red", generic_name=idata_b_name)
+    plot_observe(idata_a, ax=ax_flow, kind="flow", color="blue", generic_name=idata_a_name)
+    plot_observe(idata_b, ax=ax_flow, kind="flow", color="red", generic_name=idata_b_name)
     flow_values_a = idata_a.posterior_predictive["obs_0"].values.flatten()
     flow_values_a = np.clip(flow_values_a, -20, 20)
     flow_values_b = idata_b.posterior_predictive["obs_0"].values.flatten()
     flow_values_b = np.clip(flow_values_b, -20, 20)
     merged = np.concatenate([flow_values_a, flow_values_b])
     low, high = np.percentile(merged, [0.1, 99.9])
-    ax_observe[1].set_xlim([low, high])
-    
+    ax_flow.set_xlim([low, high])
 
+    # posterior distributions
+    # data to align all plot groups to the same axis
+    k_params = [v for v in idata_a.posterior.data_vars if v.startswith("log_k_")]
+    E_params = [v for v in idata_a.posterior.data_vars if v.startswith("log_E_")]
+    
+    k_vals_a = np.concatenate([idata_a.posterior[v].values.flatten() for v in k_params])
+    k_vals_b = np.concatenate([idata_b.posterior[v].values.flatten() for v in k_params])
+    E_vals_a = np.concatenate([idata_a.posterior[v].values.flatten() for v in E_params])
+    E_vals_b = np.concatenate([idata_b.posterior[v].values.flatten() for v in E_params])
+
+    k_vals = np.concatenate([k_vals_a, k_vals_b])
+    E_vals = np.concatenate([E_vals_a, E_vals_b])
+
+    k_min, k_max = np.min(k_vals), np.max(k_vals)
+    E_min, E_max = np.min(E_vals), np.max(E_vals)
+
+    with plt.rc_context({'axes.labelsize': 0, "axes.titlesize": 12, 'xtick.labelsize': 12, 'ytick.labelsize': 12}):
+        # k parameters
+        for i, k in enumerate(k_params):
+            plot_posterior_modified(idata_a, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue")
+            plot_posterior_modified(idata_b, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_b_name, hdi_prob="hide", color="red")
+            ax_posterior[i, 0].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
+            ax_posterior[i, 0].set_xlim([k_min, k_max])
+            for spine in ax_posterior[i, 0].spines.values():
+                spine.set_visible(True)
+                spine.set_color('gray')
+
+        # E parameters
+        for i, E in enumerate(E_params):
+            plot_posterior_modified(idata_a, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_a_name, hdi_prob="hide", color="blue")
+            plot_posterior_modified(idata_b, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_b_name, hdi_prob="hide", color="red")
+            ax_posterior[i, 1].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
+            ax_posterior[i, 1].set_xlim([E_min, E_max])
+            for spine in ax_posterior[i, 1].spines.values():
+                spine.set_visible(True)
+                spine.set_color('gray')
+
+        # p_far
+        plot_posterior_modified(idata_a, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue")
+        plot_posterior_modified(idata_b, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_b_name, hdi_prob="hide", color="red")
+        for spine in ax_posterior[-1, 0].spines.values():
+            spine.set_visible(True)
+            spine.set_color('gray')
+
+        # hide last empty plot and add legend into it
+        ax_posterior[-1, 1].axis('off')
+        handles, labels = ax_posterior[0, 0].get_legend_handles_labels()
+        handles.append(idata_a_patch)
+        handles.append(idata_b_patch)
+        labels.append(idata_a_name)
+        labels.append(idata_b_name)
+        fig_observe.legend(handles[1:], labels[1:], loc='lower right', title='', fontsize=14)
 
     figs.append(fig_observe)
 
