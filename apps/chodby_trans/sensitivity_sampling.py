@@ -559,6 +559,12 @@ bash $PROJECT_DIR/dask_cluster.sh $output_dir stop
 bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 
 clean_scratch
+
+
+PYEXEC="$PROJECT_DIR/venv/bin/python"
+APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+"$PYEXEC" -u "$APP_PY" "$output_dir" read
+
 echo "FINISHED"
 """
 
