@@ -253,7 +253,7 @@ def load_boundary_mesh(filename):
     gmsh.merge(filename)
 
 
-def make_gmsh(cfg:'dotdict'):
+def make_gmsh(cfg:'dotdict', real_geometry=True):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
@@ -269,23 +269,41 @@ def make_gmsh(cfg:'dotdict'):
     # gopt.Tolerance = 0.0001
     # gopt.ToleranceBoolean = 0.001
 
-    tunnel_laser_scan = factory.import_shapes(str(boundary_brep_filename), highestDimOnly=False)
+    if real_geometry is True:
+        tunnel_laser_scan = factory.import_shapes(str(boundary_brep_filename), highestDimOnly=False)
 
-    # print(tunnel_laser_scan.dim_tags)
-    # print(tunnel_laser_scan.regions)
+        # print(tunnel_laser_scan.dim_tags)
+        # print(tunnel_laser_scan.regions)
 
-    tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
-    tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
-    tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
+        tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
+        tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
+        tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
 
-    # transform tunnel coordinate system
-    # move to center to origin
-    tunnel_group.translate(-np.array(cfg.geometry.center))
-    # rotate
-    oax = cfg.geometry.orig_x_axis
-    # add 180 degrees to reorient Y-axis to follow L5
-    angle = math.pi + math.atan(oax[0]/oax[1])
-    tunnel_group.rotate(axis=[0,0,1], angle=angle)
+        # transform tunnel coordinate system
+        # move to center to origin
+        tunnel_group.translate(-np.array(cfg.geometry.center))
+        # rotate
+        oax = cfg.geometry.orig_x_axis
+        # add 180 degrees to reorient Y-axis to follow L5
+        angle = math.pi + math.atan(oax[0]/oax[1])
+        tunnel_group.rotate(axis=[0,0,1], angle=angle)
+    else:
+        # simplified tunnel shape (cylinders):
+        cfg_geom = cfg.geometry
+        box_dim = cfg_geom.box_dimensions
+        r_l5 = cfg_geom.main_tunnel.height / 2
+        r_zk = cfg_geom.lateral_tunnel.height / 2
+        offset_zk = cfg_geom.laterals_distance / 2
+        l_zk = cfg_geom.lateral_tunnel.length
+        offset_z = r_l5/2 # elevation of tunnel axis
+        l5 = factory.cylinder(r=r_l5, center=[0, -box_dim[1]/2, offset_z], axis=[0, box_dim[1], 0])
+        zk51j = factory.cylinder(r=r_zk, center=[0, -offset_zk, offset_z], axis=[l_zk, 0, 0])
+        zk51s = factory.cylinder(r=r_zk, center=[0, offset_zk, offset_z], axis=[-l_zk, 0, 0])
+        tunnel_laser_scan = l5.fuse(l5, zk51s, zk51j)
+        tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
+        tunnel_boundary = tunnel_laser_scan.get_boundary().split_by_dimension()[2]
+        tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
+
     factory.synchronize()
 
     # factory.show()
@@ -300,7 +318,7 @@ def make_gmsh(cfg:'dotdict'):
 
 
 def make_mesh(cfg):
-    mesh_file = make_gmsh(cfg)
+    mesh_file = make_gmsh(cfg, real_geometry=False)
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
