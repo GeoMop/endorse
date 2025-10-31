@@ -8,6 +8,8 @@ mesh_name: L5_mesh_6
 boundary_meshfile: ./scan_meshes/L5_local_6.msh
 boundary_brepfile: ./scan_meshes/freecad/L5_mesh_healed2.brep
 
+boreholes: !include ./boreholes.yaml
+
 # 0] preprocess - call heal mesh on laser scan
 # FreeCAD
 # 1] GMSH - save msh to stl
@@ -79,3 +81,39 @@ geometry:
     height: 4
     width: 4
     length: 10
+
+
+line_objects:
+  L5-37R: None
+  L5-37UR: None
+  L5:
+    start_pt: [0, -25, 0]
+    direction: [0, 1, 0]
+    length: 50
+
+
+generated_fractures:
+  fr1:
+    points:
+      - line_object: L5
+        position: 10
+        weight: 1
+      - line_object: L5-37R
+        position: 8
+        weight: 10000
+    normal: [0.7, -0.2, 0]
+    weight_normal: 10000
+    weight_normal_size: 0
+
+  fr2:
+    points:
+      - line_object: L5
+        position: 10
+        weight: 1
+      - line_object: L5-37UR
+        position: 0
+        weight: 1
+    normal: [0.7, -0.2, 0]
+#    normal: [1, -1, 0]
+    weight_normal: 10000
+    weight_normal_size: 0
