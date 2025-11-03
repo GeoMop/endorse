@@ -404,6 +404,13 @@ def read_failed_parameters():
     mask = v_rc < 0
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
+    f_rc = v_rc[mask]
+
+    # np.column_stack((f_ieval, v_rc[mask]))
+    codes = np.unique(f_rc)
+    rc_dict = {code: f_ieval[f_rc == code] for code in codes}
+    for code, ids in rc_dict.items():
+        print(f"{code}: {ids}")
 
     i_idx, q_idx = np.where(mask)  # integer indices
     f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
@@ -412,6 +419,33 @@ def read_failed_parameters():
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     return tags, f_param
 
+
+def select_single(i_eval: int):
+
+    print("=========== READ ZARR ==============")
+    ds = xr.open_zarr(str(job.output.zarr_store_path))
+    print(ds)
+    print("=========== END READ ZARR ==============")
+    i_evals = [i_eval]
+
+    mask = ds['i_eval'].isin(i_evals)
+
+    v_param = ds['parameter'].to_numpy()
+    f_param = v_param[mask]
+
+    i_idx, q_idx = np.where(mask)  # integer indices
+    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
+    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
+
+    tags = np.column_stack((i_evals, f_isample, f_isaltelli))
+    return tags, f_param
+
+def run_single_sample(tags, params):
+    data_schema_key, data_schema = initialize_data_schema()
+    assert job.output.zarr_store_path.exists()
+    sample_args = (job.output.dir_path, data_schema_key, tags, params)
+    logging.info(f"eval_args:\n{sample_args}\n")
+    single_sample(sample_args)
 
 def plot_failed_return_codes(v_rc, v_ieval):
     # Flatten the matrix and count occurrences
@@ -689,6 +723,13 @@ def main():
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         read_failed_parameters()
+    elif cmd == 'select':
+        # zarr_path = sys.argv[2]
+        # read_failed_parameters()
+        assert len(sys.argv) == 4
+        i_eval = int(sys.argv[3])
+        tags, params = select_single(i_eval)
+        run_single_sample(tags[0], params[0])
     elif cmd == 'meta' or cmd == 'local':
         # optional: cap hidden threading for your FEM libs
         os.environ.setdefault("OMP_NUM_THREADS", "1")
