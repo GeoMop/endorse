@@ -137,6 +137,7 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
     # then cut it by the tunnel
     csb = cfg_geom.storage_borehole
     storage_boreholes = []
+    storage_boreholes_lines = []
     plug, container = None, None
     d = cfg_geom.storage_borehole_distance
     s = -((cfg_geom.n_storage_boreholes - 1) / 2.0) * d  # y coordinate of the first storage
@@ -159,6 +160,11 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
             sbh.set_region(f"storage_{i}").mesh_step(mesh_step)
             storage_boreholes.append(sbh)
 
+        # start the line at the bottom of the tunnel and extrude down (against z axis)
+        sbh_top = factory.point(np.array([0, s + i * d, tunnel_bottom_z]))
+        sbh_line = sbh_top.extrude(vector=[0, 0, -csb.length])[1]
+        storage_boreholes_lines.append(sbh_line)
+
         # # possibly create plug
         # # for some reason, tunnel does not get meshed this way
         # sbh = factory.cylinder(r=csb.diameter/2, axis=[0, 0, -csb.length + tunnel_bottom_z], center=[0, s + i * d, 0])
@@ -172,7 +178,7 @@ def create_storage_boreholes(factory, cfg_geom:'dotdict', tunnel, tunnel_bottom_
         #     sbh.set_region(f"storage_{i}").mesh_step(csb.mesh_step)
         #     storage_boreholes.append(sbh)
 
-    return storage_boreholes, plug, container
+    return storage_boreholes, plug, container, storage_boreholes_lines
 
 
 def fragment(factory, object_dict: dict[str, ObjectSet], boundary_object_dict: dict[str, ObjectSet])\
@@ -237,7 +243,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
     vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg)
 
     if "boreholes" in cfg_geom.include:
-        storage_boreholes, vol_dict["plug"], vol_dict["container"] \
+        storage_boreholes, vol_dict["plug"], vol_dict["container"], storage_boreholes_lines \
             = create_storage_boreholes(factory, cfg_geom, vol_dict["tunnel"], tunnel_bottom_z, cfg_mesh.boreholes_mesh_step)
         vol_dict["storage_boreholes_group"] = factory.group(*storage_boreholes)
 
@@ -348,25 +354,28 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         if "drilled_volume" not in cfg_geom.include:
             geometry_set.append(b_fractures_in)
 
-    if "drilled_volume" in cfg_geom.include:
-        fr_dict["tunnel_fr"].mesh_step(cfg_mesh.main_tunnel_mesh_step)
-        fr_dict["storage_boreholes_group_fr"].mesh_step(cfg_mesh.boreholes_mesh_step)
-
-    geometry_final = factory.group(*geometry_set)
-
     # create refinement fields around drifts
-    # tunnel_center_lines = []
-    # line_fields = (line_distance_edz(factory, line, cfg_mesh.line_refinement)
-    #                for line in tunnel_center_lines)
-    line_fields = [line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement)]
+    line_fields = [line_distance_edz(factory, line, cfg_mesh.storage_borehole_refinement) \
+                   for line in storage_boreholes_lines]
+    line_fields.append(line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement))
     common_field = field.minimum(*line_fields)
     factory.set_mesh_step_field(common_field)
+    refinement_lines = [tunnel_center_line, *storage_boreholes_lines]
+
+    # THE FOLLOWING HAS NO EFFECT - it is done through line fields
+    # if "drilled_volume" in cfg_geom.include:
+        # fr_dict["tunnel_fr"].mesh_step(cfg_mesh.main_tunnel_mesh_step)
+        # fr_dict["storage_boreholes_group_fr"].mesh_step(cfg_mesh.boreholes_mesh_step)
+        # fr_dict["storage_boreholes_group_fr"].get_boundary().split_by_dimension()[2] \
+        #     .mesh_step(cfg_mesh.boreholes_mesh_step)
+
+    geometry_final = factory.group(*geometry_set)
 
     # exit(0)
     print("Finalize geometry...")
     factory.synchronize()
     # need to keep tunnel lines due to refinement fields
-    factory.keep_only(geometry_final, tunnel_center_line)
+    factory.keep_only(geometry_final, *refinement_lines)
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()
@@ -384,6 +393,8 @@ def meshing(factory, objects, mesh_filename):
     factory.write_brep()
     #factory.mesh_options.CharacteristicLengthMin = cfg.get("min_mesh_step", cfg.boreholes_mesh_step)
     #factory.mesh_options.CharacteristicLengthMax = cfg.boundary_mesh_step
+    # factory.mesh_options.CharacteristicLengthMin = 0.001
+    # factory.mesh_options.CharacteristicLengthMax = 15
     factory.mesh_options.MinimumCirclePoints = 6
     factory.mesh_options.MinimumCurvePoints = 3
     #factory.mesh_options.Algorithm = options.Algorithm3d.MMG3D

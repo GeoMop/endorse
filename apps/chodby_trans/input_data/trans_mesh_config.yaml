@@ -25,10 +25,10 @@ mesh:
       h_inf: *boundary_mesh_step
 
     storage_borehole_refinement:
-      r_inner: 0.2
+      r_inner: 0.1
       h_inner: *boreholes_mesh_step
-      r_outer: 2
-      h_outer: 1 # 0.6
+      r_outer: 0.825 # half of sbh diameter
+      h_outer: *boreholes_mesh_step
       q_outer: 1
       r_inf: 30
       h_inf: *boundary_mesh_step
