@@ -637,8 +637,8 @@ def compare_plot(idata_a, idata_b):
                 spine.set_color('gray')
 
         # p_far
-        plot_posterior_modified(idata_a, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue")
-        plot_posterior_modified(idata_b, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_b_name, hdi_prob="hide", color="red")
+        plot_posterior_modified(idata_a, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue", point_estimate=None)
+        plot_posterior_modified(idata_b, var_names=["p_far"], ax=ax_posterior[-1, 0], generic_name=idata_b_name, hdi_prob="hide", color="red", point_estimate=None)
         for spine in ax_posterior[-1, 0].spines.values():
             spine.set_visible(True)
             spine.set_color('gray')
