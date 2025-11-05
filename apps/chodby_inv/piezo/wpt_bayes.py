@@ -114,7 +114,7 @@ def _run_inversion(inv_cfg, epoch_df):
     # Rock and fluid parameters.
     biot = 0.2
     phi = 0.02  # Porosity (dimensionless)
-    E_prior = 50e9  # Young's modulus [Pa]
+    E_prior = 5e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
     solver = PoroElasticSolver(r_b, R, N, geom_power, dt, T_final, p_b0)
     def forward_model(param_vec):
