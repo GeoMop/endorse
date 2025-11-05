@@ -148,7 +148,7 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
         ax_pressure.set_xlabel("Time [days]")
         ax_pressure.set_ylabel("Pressure [Pa]")
         ax_pressure.legend()
-        plt.suptitle(f"{generic_name} - distibution of pressure series values")
+        #plt.suptitle(f"{generic_name} - distibution of pressure series values")
         #plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
 
     if kind in ["both", "flow"]:
@@ -156,7 +156,6 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
             ax_flow = ax[1]
         else:
             ax_flow = ax
-        plt.suptitle(f"{generic_name} - flow rate distribution")
         ax_flow.set_xlabel("Flow rate [m^3/s]")
         ax_flow.set_ylabel("Counts")
         ax_flow.xaxis.set_major_formatter(FuncFormatter(exp_formatter))
@@ -180,7 +179,7 @@ def plot_trace_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
     borehole = idata.attrs["borehole"]
     section = idata.attrs["section"]
-    plt.suptitle(f"{generic_name} - trace plot")
+    #plt.suptitle(f"{generic_name} - trace plot")
 
     for ax_row in axes:
         for ax in ax_row:
@@ -204,7 +203,6 @@ def plot_posterior_modified(idata, generic_name="WPT", *args, **kwargs):
 
     borehole = idata.attrs["borehole"]
     section = idata.attrs["section"]
-    plt.suptitle(f"{generic_name} - posterior distributions")
     
     # add prior, if available
     if np.all([
