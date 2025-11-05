@@ -617,8 +617,8 @@ def compare_plot(idata_a, idata_b):
     with plt.rc_context({'axes.labelsize': 0, "axes.titlesize": 12, 'xtick.labelsize': 12, 'ytick.labelsize': 12}):
         # k parameters
         for i, k in enumerate(k_params):
-            plot_posterior_modified(idata_a, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue")
-            plot_posterior_modified(idata_b, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_b_name, hdi_prob="hide", color="red")
+            plot_posterior_modified(idata_a, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_a_name, hdi_prob="hide", color="blue", point_estimate=None)
+            plot_posterior_modified(idata_b, var_names=[k], ax=ax_posterior[i, 0], generic_name=idata_b_name, hdi_prob="hide", color="red", point_estimate=None)
             ax_posterior[i, 0].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
             ax_posterior[i, 0].set_xlim([k_min, k_max])
             for spine in ax_posterior[i, 0].spines.values():
@@ -627,8 +627,8 @@ def compare_plot(idata_a, idata_b):
 
         # E parameters
         for i, E in enumerate(E_params):
-            plot_posterior_modified(idata_a, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_a_name, hdi_prob="hide", color="blue")
-            plot_posterior_modified(idata_b, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_b_name, hdi_prob="hide", color="red")
+            plot_posterior_modified(idata_a, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_a_name, hdi_prob="hide", color="blue", point_estimate=None)
+            plot_posterior_modified(idata_b, var_names=[E], ax=ax_posterior[i, 1], generic_name=idata_b_name, hdi_prob="hide", color="red", point_estimate=None)
             ax_posterior[i, 1].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
             ax_posterior[i, 1].set_xlim([E_min, E_max])
             for spine in ax_posterior[i, 1].spines.values():
