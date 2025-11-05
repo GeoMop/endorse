@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter, SymmetricalLogLocator, LogFormatter, FuncFormatter
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.gridspec import GridSpec
+from matplotlib import colors
 from scipy.stats import norm, lognorm
 import logging
 from sys import argv, exit
