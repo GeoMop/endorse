@@ -650,10 +650,13 @@ def compare_plot(idata_a, idata_b):
     name = "WPT_compare"
     figs = []
 
-    idata_a_name = f"{idata_a.attrs['year']}_{idata_a.attrs['month']:02d} posterior"
-    idata_b_name = f"{idata_b.attrs['year']}_{idata_b.attrs['month']:02d} posterior"
+    idata_a_name = f"{idata_a.attrs['year']}_{idata_a.attrs['month']:02d}"
+    idata_b_name = f"{idata_b.attrs['year']}_{idata_b.attrs['month']:02d}"
     idata_a_patch = Patch(color="blue", label=idata_a_name)
     idata_b_patch = Patch(color="red", label=idata_b_name)
+    borehole = idata_a.attrs["borehole"]
+    section = idata_a.attrs["section"]
+    wpt_event = borehole + "_" + str(section)
     #ax_posterior = plot_posterior_modified(idata_a, generic_name=name, grid=(11, 1), figsize=(16, 32), hdi_prob="hide")
     #plot_posterior_modified(idata_b, ax=ax_posterior, color="red", grid=(11, 1), hdi_prob="hide")
 
@@ -671,6 +674,7 @@ def compare_plot(idata_a, idata_b):
     # pressure distribution plot
     #fig_observe, ax_observe = plt.subplots(2, 2, figsize=(16, 9))
     fig_observe = plt.figure(figsize=(16, 9))
+    fig_observe.suptitle(f"{wpt_event} - {idata_a_name} vs {idata_b_name} comparison")
     # Main grid: 1 row × 2 columns
     outer = GridSpec(1, 2, figure=fig_observe, width_ratios=[1, 1], wspace=0.5, hspace=0.1)
 
