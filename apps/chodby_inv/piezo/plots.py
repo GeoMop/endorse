@@ -530,6 +530,122 @@ def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, cmap="viridis",
 
     return axes
 
+def plot_observe_error(idata, times, generic_name="WPT", axes=None, new_time_step=0, color="blue", cmap="viridis", offset=0, width=0.4, *args, **kwargs):
+    if axes is None:
+        _, axes = plt.subplots(len(times), 1, figsize=(16, 9 * len(times)))
+    
+
+    observe = idata.posterior_predictive
+    pressure_vars = sorted([v for v in observe.data_vars if v.startswith("obs_") and v not in ["obs_0"]],
+                      key=lambda s: int(s.split("_", 1)[1]))
+
+    pressure_list = [observe[v] for v in pressure_vars]
+    observe_arr = xr.concat(pressure_list, dim="time")
+    chains = observe_arr.sizes["chain"]
+    draws = observe_arr.sizes["draw"]
+
+    observe_arr = observe_arr.stack(flat_dim=("chain", "draw", "time")).reset_index("flat_dim", drop=True)
+    observe_length = len(pressure_list)
+    observe_arr = observe_arr.values.flatten()
+
+    observed_pressure = idata.sample_stats.attrs["observed_pressure"]
+    observe_times_extended = idata.sample_stats.attrs["observed_timeseries"]
+    observe_times = observe_times_extended[observe_times_extended >= 0]
+    observed_pressure_sigma = idata.sample_stats.attrs["observed_pressure_sigma"]
+
+    # resample to new time step, if specified
+    if new_time_step > 0:
+        # old indexes, tiled for chains
+        #indexes_tile = np.tile(indexes, chains * draws)
+        # new indexes, including the extension
+        new_indexes_extended = np.arange(observe_times_extended[0], observe_times_extended[-1], new_time_step)
+        new_indexes = new_indexes_extended[new_indexes_extended > 0]
+        # new indexes tiles for chains
+        new_indexes_tile = np.tile(new_indexes, chains * draws)
+
+        # interpolate data to new indexes
+        #observe_arr = np.interp(new_indexes_tile, indexes_tile, observe_arr, period=indexes.size)
+        new_observe_arr = np.zeros(new_indexes_tile.size)
+        for i in np.arange(chains * draws):
+            new_observe_arr[i * new_indexes.size:(i + 1) * new_indexes.size] = np.interp(new_indexes, observe_times, observe_arr[i * observe_times.size:(i + 1) * observe_times.size])
+        observe_arr = new_observe_arr
+
+        # interpolate observed series
+        observed_pressure = np.interp(new_indexes, observe_times, observed_pressure)
+        
+        # interpolate observed sigma (constant, so fitting is unnecessary, but for consistency)
+        observed_pressure_sigma = np.interp(new_indexes, observe_times, observed_pressure_sigma)
+
+        # reassign to original variables
+        observe_times = new_indexes
+        observe_times_extended = new_indexes_extended
+        observe_length = len(observe_times)
+
+
+    # compute error from observed data
+    series_count = observe_arr.size // observe_length
+    observed_pressure_tiled = np.tile(observed_pressure, series_count)
+    observed_errors = observe_arr - observed_pressure_tiled
+
+    # compute error quantiles for every time point
+    # error computed across the whole series
+    reshaped = observed_errors.reshape((series_count, observe_length))
+    q5 = np.percentile(reshaped, 5, axis=0)
+    q25 = np.percentile(reshaped, 25, axis=0)
+    med = np.median(reshaped, axis=0)
+    q75 = np.percentile(reshaped, 75, axis=0)
+    q95 = np.percentile(reshaped, 95, axis=0)
+
+    # errors computed in individual time points
+    #reshaped = observed_errors.reshape((series_count, observe_length))
+    #error_sums = np.sum(observed_errors, axis=1)
+    #q5, med, q95 = np.quantile(error_sums, [0.05, 0.5, 0.95])
+
+    axes.plot(observe_times, med, label=f"{generic_name} - median error", color=color, linestyle="solid", lw=1)
+    axes.plot(observe_times, q5, color=color, linestyle="dashed", lw=1)
+    axes.plot(observe_times, q95, label=f"{generic_name} - 5th/95th quantile", color=color, linestyle="dashed", lw=1) # both lines have same label
+    #axes.plot(observe_times, q25, color=color, linestyle="dashed")
+    #axes.plot(observe_times, q75, label=f"{generic_name} - 25th and 75th percentile", color=color, linestyle="dashed") # both lines have same label
+
+    # plot best fit error line
+    likelihood_data = idata.sample_stats["likelihood"].stack(flat_dim=("chain", "draw")).reset_index("flat_dim", drop=True).values
+    best_fit_idx = np.argmax(likelihood_data)
+    best_fit = observe_arr[best_fit_idx * observe_length:(best_fit_idx + 1) * observe_length]
+    best_fit_error = best_fit - observed_pressure
+    #axes.plot(observe_times, best_fit_error, label=f"{generic_name} - best pressure fit", color=color, linestyle="dashdot", lw=1)
+
+    # plot expected noise levels
+    axes.fill_between(observe_times, -observed_pressure_sigma, observed_pressure_sigma, color=color, alpha=0.2, label=f"{generic_name} - 1-sigma noise")
+
+    cmap = plt.get_cmap(cmap)
+    # plot histogram at certain times
+    for time in times:
+        # find closest time index
+        time_deltas = (np.abs(observe_times - time))
+        print(time_deltas.min(), (observe_times[1] - observe_times[0]))
+        if time_deltas.min() > (observe_times[1] - observe_times[0]):
+            print("skipping time", time)
+            continue
+        time_idx = np.argmin(time_deltas)
+        # extract error values at given time index
+        error_values = reshaped[:, time_idx]
+
+        # plot vertical lines to visualize histogram
+        hist_counts, hist_bins = np.histogram(error_values, bins=10)
+        hist_bin_centers = (hist_bins[:-1] + hist_bins[1:]) / 2
+        norm = colors.Normalize(vmin=0, vmax=hist_counts.max())
+
+        for i, h in enumerate(hist_counts):
+            y0, y1 = hist_bins[i], hist_bins[i+1]
+            color = cmap(norm(h))
+            axes.fill_betweenx([y0, y1], time-width/2+offset, time+width/2+offset, color=color, edgecolor=None, alpha=0.9)
+
+    axes.set_xlabel("Time [days]")
+    axes.set_ylabel("Pressure error [Pa]")
+    axes.legend(loc="upper center", ncol=3, fontsize=8)
+
+    return axes
+
 def compare_plot(idata_a, idata_b):
     name = "WPT_compare"
     figs = []
