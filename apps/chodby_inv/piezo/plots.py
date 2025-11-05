@@ -485,7 +485,7 @@ def plot_merged(idata, idata_uncut):
 
     save_plots_pdf_pages(f"{generic_name}_summary.pdf", figs)
 
-def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, *args, **kwargs):
+def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, cmap="viridis", *args, **kwargs):
     
     if axes is None:
         _, axes = plt.subplots(2, 1)
@@ -654,8 +654,8 @@ def compare_plot(idata_a, idata_b):
     figs.append(fig_observe)
 
     fig_hist2d, ax_hist2d = plt.subplots(2, 2, figsize=(16, 9))
-    plot_posterior_hist_2d(idata_a, axes=[ax_hist2d[0, 0], ax_hist2d[1, 0]])
-    plot_posterior_hist_2d(idata_b, axes=[ax_hist2d[0, 1], ax_hist2d[1, 1]])
+    plot_posterior_hist_2d(idata_a, axes=[ax_hist2d[0, 0], ax_hist2d[1, 0]], cmap="viridis")
+    plot_posterior_hist_2d(idata_b, axes=[ax_hist2d[0, 1], ax_hist2d[1, 1]], cmap="magma")
 
     ymin = min(ax_hist2d[0, 0].get_ylim()[0], ax_hist2d[0, 1].get_ylim()[0])
     ymax = max(ax_hist2d[0, 0].get_ylim()[1], ax_hist2d[0, 1].get_ylim()[1])
