@@ -679,9 +679,10 @@ def compare_plot(idata_a, idata_b):
     outer = GridSpec(1, 2, figure=fig_observe, width_ratios=[1, 1], wspace=0.5, hspace=0.1)
 
     # Left column: 2 rows × 1 column
-    left = outer[0].subgridspec(2, 1, hspace=0.3)
+    left = outer[0].subgridspec(3, 1, hspace=0.05)
     ax_pressure = fig_observe.add_subplot(left[0, 0])
-    ax_flow = fig_observe.add_subplot(left[1, 0])
+    ax_error = fig_observe.add_subplot(left[1, 0])
+    ax_flow = fig_observe.add_subplot(left[2, 0])
 
     # Right column: 6 rows × 2 columns
     right = outer[1].subgridspec(6, 2, wspace=0.05, hspace=0.1)
