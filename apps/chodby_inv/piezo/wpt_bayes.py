@@ -84,6 +84,7 @@ def _run_inversion(inv_cfg, epoch_df):
     dt = inv_cfg.get("dt", 6 * 60 * 60)  # Default to 6 hours if not specified
     dt_days = dt / (24 * 3600)  # Convert to days
     regular_pb_measured_extended, time_series = interpolate_pressure_series(epoch_df, dt_days)
+    regular_pb_measured_extended = regular_pb_measured_extended / 1e3  # Convert from Pa to kPa for numerical stability
 
     print(regular_pb_measured_extended)
     #print(time_series)
@@ -103,12 +104,13 @@ def _run_inversion(inv_cfg, epoch_df):
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
     #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
     #p_b0 = selected_test["tlak"]
-    p_b0 = regular_pb_measured[0]
+    p_b0 = regular_pb_measured[0] * 1e3  # solver needs Pa - convert from kPa
     # load p_far_prior from config, if available
     # or default to the last measured pressure
     # same for deviation, default to 10kPa if not specified
-    p_far_prior = inv_cfg.get("p_far_prior", regular_pb_measured[-1])
-    p_far_std = inv_cfg.get("p_far_std", 10 * 1000)
+    # converting to kPa for numerical stability
+    p_far_prior = inv_cfg.get("p_far_prior", regular_pb_measured[-1] * 1e3) / 1e3  # convert from Pa to kPa
+    p_far_std = inv_cfg.get("p_far_std", 1e4) / 1e3  # convert from Pa to kPa
     k_prior = 1e-9
 
     # Rock and fluid parameters.
@@ -120,11 +122,13 @@ def _run_inversion(inv_cfg, epoch_df):
     def forward_model(param_vec):
         k_field = np.power(10, param_vec[:N])  # Convert log(k) to k
         E_field = np.power(10, param_vec[N:2*N])
-        p_far = param_vec[-1]
+        p_far = param_vec[-1] * 1e3  # Convert kPa back to Pa
         try:
             t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
             flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
-            return np.concatenate((np.log10([flux]), p_b))
+            p_b = p_b / 1e3  # Convert Pa to kPa for numerical stability
+            output = np.concatenate((np.log10([flux]), p_b))
+            return output
         except Exception as e:
             print(f"Simulation failed for parameters: {param_vec}, error: {e}")
             # Return a large penalty value to indicate failure
@@ -193,7 +197,7 @@ def _run_inversion(inv_cfg, epoch_df):
         flow_rate_observed = np.array([1e6])
         plot_observed_flow = False
 
-    pressure_output_sigma = 3 * 1000
+    pressure_output_sigma = 3 # kPa
     pressure_output_sigma = np.full(len(regular_pb_measured), pressure_output_sigma)
 
     observed = np.concatenate([
