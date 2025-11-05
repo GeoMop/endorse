@@ -739,15 +739,16 @@ def compare_plot(idata_a, idata_b):
     k_params = [v for v in idata_a.posterior.data_vars if v.startswith("log_k_")]
     E_params = [v for v in idata_a.posterior.data_vars if v.startswith("log_E_")]
     
-    k_vals_a = np.concatenate([idata_a.posterior[v].values.flatten() for v in k_params])
-    k_vals_b = np.concatenate([idata_b.posterior[v].values.flatten() for v in k_params])
+    #k_vals_a = np.concatenate([idata_a.posterior[v].values.flatten() for v in k_params])
+    #k_vals_b = np.concatenate([idata_b.posterior[v].values.flatten() for v in k_params])
     E_vals_a = np.concatenate([idata_a.posterior[v].values.flatten() for v in E_params])
     E_vals_b = np.concatenate([idata_b.posterior[v].values.flatten() for v in E_params])
 
-    k_vals = np.concatenate([k_vals_a, k_vals_b])
+    #k_vals = np.concatenate([k_vals_a, k_vals_b])
     E_vals = np.concatenate([E_vals_a, E_vals_b])
 
-    k_min, k_max = np.min(k_vals), np.max(k_vals)
+    #k_min, k_max = np.min(k_vals), np.max(k_vals)
+    k_min, k_max = -13, 5
     E_min, E_max = np.min(E_vals), np.max(E_vals)
 
     with plt.rc_context({'axes.labelsize': 0, "axes.titlesize": 12, 'xtick.labelsize': 12, 'ytick.labelsize': 12}):
