@@ -707,6 +707,17 @@ def compare_plot(idata_a, idata_b):
     xmin = min(xmin_a, xmin_b)
     ax_pressure.set_ylim([0, ymax])
     ax_pressure.set_xlim([xmin, xmax])
+    ax_pressure.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    times = np.linspace(0, xmax, 16)
+    plot_observe_error(idata_a, times, axes=ax_error, color="blue", offset=-0.1, generic_name=idata_a_name, cmap="viridis", width=0.2, new_time_step=new_time_step)
+    plot_observe_error(idata_b, times, axes=ax_error, color="red", offset=0.1, generic_name=idata_b_name, cmap="magma", width=0.2, new_time_step=new_time_step)
+    # setup y limit to be 3 sigma of larger dataset
+    sigma_a = idata_a.sample_stats.attrs["observed_pressure_sigma"]
+    sigma_b = idata_b.sample_stats.attrs["observed_pressure_sigma"]
+    ymax_error = 3 * max(max(sigma_a), max(sigma_b))
+    ax_error.set_ylim([-ymax_error, ymax_error])
+    ax_error.grid(True, which='both', linestyle='--', linewidth=0.5)
 
 
     # flow distribution plot
