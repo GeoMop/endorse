@@ -63,7 +63,7 @@ water_pressure_tests:
         section: 0
         dt: 21600 # time step in seconds
         p_far_prior: 55000
-        p_far_std: 8000
+        p_far_std: 30000
 
     -   start: "25/03/26 11:05:00"
         # start of extracted window
@@ -96,13 +96,13 @@ water_pressure_tests:
         origin: "24/03/07 08:00:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/03/08 20:00:00"
+        end: "24/03/14 08:00:00"
         # end of extracted window
         borehole: L5-26R
         section: 0
-        dt: 1920 # time step in seconds
+        dt: 7200 # time step in seconds
         p_far_prior: 55000
-        p_far_std: 8000
+        p_far_std: 20000
 
     -   start: "24/02/28 10:50:00"
         # start of extracted window
@@ -122,24 +122,24 @@ water_pressure_tests:
         origin: "24/02/21 15:00:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/02/21 23:00:00"
+        end: "24/02/22 15:00:00"
         # end of extracted window
         borehole: L5-37R
         section: 1
-        dt: 480 # time step in seconds
+        dt: 900 # time step in seconds
         p_far_prior: 30000
         p_far_std: 5000
     
-    -   start: "24/02/27 17:00:00"
+    -   start: "24/02/27 16:00:00"
         # start of extracted window
         origin: "24/02/27 17:09:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/02/27 20:00:00"
+        end: "24/02/29 17:09:00"
         # end of extracted window
         borehole: L5-50UL
         section: 0
-        dt: 60 # time step in seconds
+        dt: 1800 # time step in seconds
         p_far_prior: 80000
         p_far_std: 10000
 
@@ -154,18 +154,18 @@ water_pressure_tests:
         section: 1
         dt: 60 # time step in seconds
         p_far_prior: 150000
-        p_far_std: 10000
+        p_far_std: 60000
 
-    -   start: "24/02/27 16:50:00"
+    -   start: "24/02/27 16:00:00"
         # start of extracted window
         origin: "24/02/27 17:00:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/02/28 19:00:00"
+        end: "24/02/29 17:00:00"
         # end of extracted window
         borehole: L5-50UL
         section: 2
-        dt: 600 # time step in seconds
+        dt: 1800 # time step in seconds
         p_far_prior: 40000
         p_far_std: 10000
 
@@ -174,11 +174,11 @@ water_pressure_tests:
         origin: "24/02/21 15:11:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/02/22 04:00:00"
+        end: "24/02/23 15:11:00"
         # end of extracted window
         borehole: L5-49DL
         section: 0
-        dt: 360 # time step in seconds
+        dt: 1800 # time step in seconds
         p_far_prior: 50000
         p_far_std: 10000
 
@@ -227,13 +227,13 @@ water_pressure_tests:
         origin: "24/02/21 15:00:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/02/22 00:00:00"
+        end: "24/02/22 15:00:00"
         # end of extracted window
         borehole: L5-37R
         section: 2
-        dt: 480 # time step in seconds
-        p_far_prior: 90000
-        p_far_std: 10000
+        dt: 900 # time step in seconds
+        p_far_prior: 100000
+        p_far_std: 40000
 
     -   start: "24/02/28 10:40:00"
         # start of extracted window
@@ -245,8 +245,8 @@ water_pressure_tests:
         borehole: L5-37UR
         section: 2
         dt: 3600 # time step in seconds
-        p_far_prior: 50000
-        p_far_std: 5000
+        p_far_prior: 60000
+        p_far_std: 25000
 
     -   start: "24/02/28 10:40:00"
         # start of extracted window
@@ -305,13 +305,13 @@ water_pressure_tests:
         origin: "24/03/07 10:48:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/03/07 13:00:00"
+        end: "24/03/08 11:00:00"
         # end of extracted window
         borehole: L5-23UR
         section: 0
-        dt: 60 # time step in seconds
+        dt: 600 # time step in seconds
         p_far_prior: 180000
-        p_far_std: 10000
+        p_far_std: 60000
 
     -   start: "24/03/07 07:30:00"
         # start of extracted window
@@ -344,13 +344,13 @@ water_pressure_tests:
         origin: "24/03/06 16:14:00"
         # origin = time zero after extraction (shift)
         # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "24/03/07 00:00:00"
+        end: "24/03/07 17:00:00"
         # end of extracted window
         borehole: L5-24DR
         section: 0
-        dt: 180 # time step in seconds
-        p_far_prior: 20000
-        p_far_std: 5000
+        dt: 480 # time step in seconds
+        p_far_prior: 50000
+        p_far_std: 20000
 
     -   start: "24/03/06 16:00:00"
         # start of extracted window
@@ -362,8 +362,8 @@ water_pressure_tests:
         borehole: L5-24DR
         section: 1
         dt: 1800 # time step in seconds
-        p_far_prior: 20000
-        p_far_std: 5000
+        p_far_prior: 50000
+        p_far_std: 20000
 
     -   start: "24/03/06 14:40:00"
         # start of extracted window
@@ -375,8 +375,8 @@ water_pressure_tests:
         borehole: L5-24DR
         section: 2
         dt: 5400 # time step in seconds
-        p_far_prior: 20000
-        p_far_std: 5000
+        p_far_prior: 50000
+        p_far_std: 20000
 
     -   start: "24/03/07 06:00:00"
         # start of extracted window
@@ -388,8 +388,8 @@ water_pressure_tests:
         borehole: L5-26R
         section: 1
         dt: 600 # time step in seconds
-        p_far_prior: 250000
-        p_far_std: 8000
+        p_far_prior: 200000
+        p_far_std: 100000
 
     -   start: "24/03/07 07:00:00"
         # start of extracted window
@@ -402,7 +402,7 @@ water_pressure_tests:
         section: 2
         dt: 1200 # time step in seconds
         p_far_prior: 350000
-        p_far_std: 8000
+        p_far_std: 100000
 
     -   start: "25/03/25 00:00:00"
         # start of extracted window
@@ -414,8 +414,8 @@ water_pressure_tests:
         borehole: L5-26R
         section: 1
         dt: 5400 # time step in seconds
-        p_far_prior: 55000
-        p_far_std: 8000
+        p_far_prior: 200000
+        p_far_std: 100000
 
     -   start: "25/03/22 00:00:00"
         # start of extracted window
@@ -427,8 +427,8 @@ water_pressure_tests:
         borehole: L5-26R
         section: 2
         dt: 5400 # time step in seconds
-        p_far_prior: 200000
-        p_far_std: 8000
+        p_far_prior: 350000
+        p_far_std: 100000
 
     -   start: "25/03/25 06:40:00"
         # start of extracted window
