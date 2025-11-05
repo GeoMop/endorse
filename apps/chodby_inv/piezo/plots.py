@@ -711,8 +711,10 @@ def compare_plot(idata_a, idata_b):
     ax_pressure.grid(True, which='both', linestyle='--', linewidth=0.5)
 
     times = np.linspace(0, xmax, 16)
-    plot_observe_error(idata_a, times, axes=ax_error, color="blue", offset=-0.1, generic_name=idata_a_name, cmap="viridis", width=0.2, new_time_step=new_time_step)
-    plot_observe_error(idata_b, times, axes=ax_error, color="red", offset=0.1, generic_name=idata_b_name, cmap="magma", width=0.2, new_time_step=new_time_step)
+    width = (times[1] - times[0]) * 0.4
+    offset = width / 2
+    plot_observe_error(idata_a, times, axes=ax_error, color="blue", offset=-offset, generic_name=idata_a_name, cmap="viridis", width=width, new_time_step=new_time_step)
+    plot_observe_error(idata_b, times, axes=ax_error, color="red", offset=offset, generic_name=idata_b_name, cmap="magma", width=width, new_time_step=new_time_step)
     # setup y limit to be 3 sigma of larger dataset
     sigma_a = idata_a.sample_stats.attrs["observed_pressure_sigma"]
     sigma_b = idata_b.sample_stats.attrs["observed_pressure_sigma"]
