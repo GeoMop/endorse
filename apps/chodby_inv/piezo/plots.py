@@ -134,7 +134,7 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
         # plot pressure data
         hist2d_x = np.tile(indexes, chains * draws)
         print(hist2d_x.shape, observe_arr.shape)
-        ax_pressure.hist2d(hist2d_x, observe_arr, bins=[observe_length, 50], cmap=cmap, cmin=1e-7)
+        #ax_pressure.hist2d(hist2d_x, observe_arr, bins=[observe_length, 50], cmap=cmap, cmin=1e-7)
         ax_pressure.plot(indexes_extended, pressure_output_extended, label=f"{generic_name} - Predicted observation (extended)", lw=1, color=color, linestyle="dashed")
         ax_pressure.plot(indexes, best_fit, label=f"{generic_name} - Best pressure fit", lw=1, color=color)
         ax_minima =  [
