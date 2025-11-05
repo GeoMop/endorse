@@ -685,6 +685,14 @@ if __name__ == "__main__":
         if file.is_file() and string in file.name and string2 in file.name
     ]
     assert len(matching) == 2, f"Invalid number of files - {len(matching)}"
+    assert np.all([
+        "2024" in matching[0].name or "2024" in matching[1].name,
+        "2025" in matching[0].name or "2025" in matching[1].name,
+    ]), "Could not find data for both years"
+    # idata a - 2024-xx
+    # if reverse order, swap
+    if "2024" in matching[1].name:
+        matching = [matching[1], matching[0]]
     
     idata_a = read_idata_from_file(str(matching[0]))
     idata_a = remove_burnin(idata_a)
