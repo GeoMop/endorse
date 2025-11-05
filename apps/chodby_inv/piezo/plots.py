@@ -512,7 +512,9 @@ def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, cmap="viridis",
         radii = [0, 1, 2, 3, 4]
     labels = [f"{r:.2f}" for r in radii]
 
-    counts, xedges, yedges, im = axes[0].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
+    y_resolution = 20
+
+    counts, xedges, yedges, im = axes[0].hist2d(x, y, bins=[n_samples, y_resolution], cmap=cmap, cmin=1e-7)
     axes[0].set_xlabel("distance from borehole [m]")
     axes[0].set_ylabel("k parameter value")
     x_centers = (xedges[:-1] + xedges[1:]) / 2
@@ -520,7 +522,7 @@ def plot_posterior_hist_2d(idata, generic_name="WPT", axes=None, cmap="viridis",
     axes[0].yaxis.set_major_formatter(FuncFormatter(exp_formatter))
 
     y = E_values.flatten()
-    axes[1].hist2d(x, y, bins=[n_samples, 100], cmap="viridis", cmin=1e-7)
+    axes[1].hist2d(x, y, bins=[n_samples, y_resolution], cmap=cmap, cmin=1e-7)
     axes[1].set_xlabel("distance from borehole [m]")
     axes[1].set_ylabel("E parameter value")
     axes[1].set_xticks(ticks=x_centers, labels=labels)
