@@ -157,7 +157,7 @@ def _run_inversion(inv_cfg, epoch_df):
     k_correlation_length = 0.1  # [m] (adjust as needed)
     k_prior_std_log10 = 2   # Variance of the log(k) field (adjust based on your prior belief)
     E_correlation_length = 0.1  # [m] (adjust as needed)
-    E_prior_std_log10 = 0.3  # Variance of the log(k) field (adjust based on your prior belief)
+    E_prior_std_log10 = 1.2  # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
         np.full(param_dim, np.log10(k_prior)),
         np.full(param_dim, np.log10(E_prior)),
