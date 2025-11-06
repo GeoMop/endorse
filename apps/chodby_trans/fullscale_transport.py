@@ -175,8 +175,11 @@ def transport_run(cfg, tags, param_dict):
     # with open("foo.txt", "a", encoding="utf-8") as f:
     #         f.write("lalala\n")
     # time.sleep(5)
-
-    input_msh = prepare_msh_input(job.output.dir_path, cfg, param_dict)
+    input_msh_filepath = Path("input_fields.msh")
+    if input_msh_filepath.exists():
+        input_msh = File(str(input_msh_filepath))
+    else:
+        input_msh = prepare_msh_input(job.output.dir_path, cfg, param_dict)
 
     # META SCOOP PROBLEM: cannot access home input_dir
     # input_msh_filepath = input_dir / "input_fields.msh"
@@ -188,7 +191,10 @@ def transport_run(cfg, tags, param_dict):
     # input_msh = File(input_msh_filepath)
 
     # return 0, []
-    return parametrized_run(cfg, large_model, input_msh, tags, param_dict)
+    res, fo = parametrized_run(cfg, large_model, input_msh, tags, param_dict)
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    values = process_results(cfg, fo)
+    return res, values
 
 
 @exp.rethrow_as(exp.Flow123dException, "Flow123d exception")
@@ -199,26 +205,6 @@ def call_flow_wrap(cfg_machine:'dotdict', file_in:File, params: Dict[str,str]) -
 
 
 def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
-    cfg_fine = cfg.transport_fullscale
-    params = cfg_fine.copy()
-    times = output_times(cfg_fine)
-
-    new_params = dict(
-        mesh_file=input_fields_file,
-        # piezo_head_input_file=large_model,
-        input_fields_file = input_fields_file,
-        dg_penalty = cfg_fine.dg_penalty,
-        end_time_years = cfg_fine.end_time,
-        trans_solver__a_tol= cfg_fine.trans_solver__a_tol,
-        trans_solver__r_tol= cfg_fine.trans_solver__r_tol,
-        output_times = [[t, 'y'] for t in times]
-        #max_time_step = dt,
-        #output_step = 10 * dt
-    )
-    params.update(new_params)
-    params.update(set_source_term(cfg))
-    template = job.input.dir_path / cfg_fine.input_template
-
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
     if stdout_path.exists():
@@ -226,9 +212,45 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
         completed = subprocess.CompletedProcess([], 0, None, None)
         fo = common.FlowOutput(completed, stdout_path, stderr_path)
     else:
+        cfg_fine = cfg.transport_fullscale
+        params = cfg_fine.copy()
+        times = output_times(cfg_fine)
+
+        new_params = dict(
+            mesh_file=input_fields_file,
+            # piezo_head_input_file=large_model,
+            input_fields_file=input_fields_file,
+            dg_penalty=cfg_fine.dg_penalty,
+            end_time_years=cfg_fine.end_time,
+            trans_solver__a_tol=cfg_fine.trans_solver__a_tol,
+            trans_solver__r_tol=cfg_fine.trans_solver__r_tol,
+            output_times=[[t, 'y'] for t in times]
+            # max_time_step = dt,
+            # output_step = 10 * dt
+        )
+        params.update(new_params)
+        params.update(set_source_term(cfg))
+        template = job.input.dir_path / cfg_fine.input_template
         fo = call_flow_wrap(cfg.machine_config, template, params)
 
-    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    if fo.process.returncode == 0:
+        res = fo.failed_convergence_reason
+    else:
+        res = fo.process.returncode
+
+    return res, fo
+
+
+def process_results(cfg: dotdict, fo: common.FlowOutput):
+    data_schema_path = job.input.data_schema_yaml
+    with data_schema_path.open("r", encoding="utf-8") as file:
+        content = file.read()
+        data_schema = yaml.safe_load(content)
+        grid_size = data_schema[cfg.data_schema_key]["ATTRS"]["grid_step"]
+
+    grid, values = get_indicator(cfg, fo, grid_size)
+
+    return values
 
     # TODO: get grid, output times, values -> zarr_fuse
     # times
@@ -237,15 +259,6 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     # root_node = zf.open_storage(data_schema, **kwargs)
     # current_node = root_node[cfg.data_schema_key]
     # grid_size = current_node.schema.ATTRS["grid_step"]
-
-    data_schema_path = job.input.data_schema_yaml
-    with data_schema_path.open("r", encoding="utf-8") as file:
-        content = file.read()
-        data_schema = yaml.safe_load(content)
-        grid_size = data_schema[cfg.data_schema_key]["ATTRS"]["grid_step"]
-
-    print(f"sample tags:{tags}")
-    grid, values = get_indicator(cfg, fo, grid_size)
 
     # print(f"sample tags:{tags}")
     # grid, values = get_indicator(cfg, fo, [20, 20])
@@ -270,17 +283,8 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
     #     param= parameters[np.newaxis, np.newaxis, np.newaxis, :], # coords: [ "iid", "qmc", "param_name"]
     #     conc=slice_array[np.newaxis, np.newaxis, np.newaxis, ...] # coords: [ "iid", "qmc", "block", "time", "X", "Y", "Z"]
     # ))
-    
+
     # current_node.update_dense()
-
-    # values = []
-
-    if fo.process.returncode == 0:
-        res = fo.failed_convergence_reason
-    else:
-        res = fo.process.returncode
-
-    return res, values
 
 
 def write_zarr_slice(store_path: str,
