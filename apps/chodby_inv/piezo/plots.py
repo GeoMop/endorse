@@ -147,7 +147,7 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
 
         #ax_pressure.set_xlim([origin_offset, observe_length])
         ax_pressure.set_xlabel("Time [days]")
-        ax_pressure.set_ylabel("Pressure [Pa]")
+        ax_pressure.set_ylabel("Pressure [kPa]")
         ax_pressure.legend()
         #plt.suptitle(f"{generic_name} - distibution of pressure series values")
         #plt.colorbar(ax_pressure.collections[0], ax=ax_pressure, label="Counts")
@@ -641,7 +641,7 @@ def plot_observe_error(idata, times, generic_name="WPT", axes=None, new_time_ste
             axes.fill_betweenx([y0, y1], time-width/2+offset, time+width/2+offset, color=color, edgecolor=None, alpha=0.9)
 
     axes.set_xlabel("Time [days]")
-    axes.set_ylabel("Pressure error [Pa]")
+    axes.set_ylabel("Pressure error [kPa]")
     axes.legend(loc="upper center", ncol=3, fontsize=8)
 
     return axes
