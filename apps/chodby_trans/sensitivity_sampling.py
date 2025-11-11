@@ -130,10 +130,6 @@ def single_sample(args):
     job.set_workdir(workdir)
     setup_logging(name=f"T{tags[0]}")
 
-    # host = socket.gethostname()
-    pid  = os.getpid()
-    sample_dirname = f"sample_{str(tags[0]).zfill(3)}_{pid}"
-
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
@@ -144,8 +140,15 @@ def single_sample(args):
     #         logging.info(f"SAMPLE already done: {flag_file}")
     #         return json.load(f)["res"]
 
-    sample_dir = sample_subdir / sample_dirname
-    sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
+    # search for the sample_dir
+    sample_dirname_search = f"sample_{str(tags[0]).zfill(3)}"
+    sample_dir = next((p for p in sample_subdir.glob(f"{sample_dirname_search}*") if p.is_dir()), None)
+    if sample_dir is None:
+        # host = socket.gethostname()
+        pid = os.getpid()
+        sample_dirname = f"{sample_dirname_search}_{pid}"
+        sample_dir = sample_subdir / sample_dirname
+        sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
 
     # read config file
     conf_file = job.input.transport_cfg_path
@@ -184,10 +187,10 @@ def single_sample(args):
             if cfg["ot_sensitivity"]["clean_sample_dir"]:
                 shutil.rmtree(sample_dir)
     else:
-        if not cfg["ot_sensitivity"]["clean_sample_dir"]:
+        if cfg["ot_sensitivity"]["compress_sample"]:
             make_tarfile(sample_dir)
-        shutil.rmtree(sample_dir)   # always remove sample dir
-
+        if cfg["ot_sensitivity"]["clean_sample_dir"]:
+            shutil.rmtree(sample_dir)   # always remove sample dir
     return res
 
 

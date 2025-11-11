@@ -4,6 +4,7 @@ recompute_failed: True
 clean_sample_dir: False
 # if True, it removes some intermediate files and tar the sample dir
 clean_soft_sample_dir: True
+compress_sample: False
 
 
 # collect_only: False
