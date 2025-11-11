@@ -74,6 +74,19 @@ def make_tarfile(source_dir: Path, output_file: Path = None):
     with tarfile.open(output_file, "w:gz") as tar:
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
+def decompress_tarfile(tar_path: Path):
+    # Destination directory = archive name without .tar.gz
+    dest_dir = tar_path.parent / Path(tar_path.name).with_suffix('').with_suffix('')
+
+    with tarfile.open(tar_path, mode="r:gz") as tf:
+        members = tf.getmembers()
+        dirname = members[0].path
+        if dirname in dest_dir.name:
+            tf.extractall(path=tar_path.parent)
+        else:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            tf.extractall(path=dest_dir)
+    return dest_dir
 
 @memoize
 def salib_samples(cfg: dotdict, seed):
@@ -142,13 +155,22 @@ def single_sample(args):
 
     # search for the sample_dir
     sample_dirname_search = f"sample_{str(tags[0]).zfill(3)}"
+    # search for dir
     sample_dir = next((p for p in sample_subdir.glob(f"{sample_dirname_search}*") if p.is_dir()), None)
-    if sample_dir is None:
+    sample_tarpath = sorted(sample_subdir.glob("sample_000_*.tar.gz"))
+    # search for tar.gz
+    if sample_dir is not None:
+        pass
+    elif len(sample_tarpath) == 1:
+        sample_dir = decompress_tarfile(sample_tarpath[0])
+    else:
         # host = socket.gethostname()
         pid = os.getpid()
         sample_dirname = f"{sample_dirname_search}_{pid}"
         sample_dir = sample_subdir / sample_dirname
         sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
+
+
 
     # read config file
     conf_file = job.input.transport_cfg_path
