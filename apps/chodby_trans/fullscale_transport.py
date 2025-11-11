@@ -1,3 +1,4 @@
+import math
 import os, sys
 import subprocess
 import pickle
@@ -347,9 +348,9 @@ def write_zarr_slice(store_path: str,
     )
 
 # @report
-def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
+def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[IndicatorFn]:
     #extractor = Extractor.from_point_data(attr_name, z_loc)
-    extractor = Extractor.from_cell_data(attr_name, z_loc)
+    # extractor = Extractor.from_cell_data(attr_name, z_loc)
     
     try:
         print(pvd_in.path)
@@ -365,13 +366,110 @@ def indicators(pvd_in : File, attr_name, z_loc, grid): # -> List[IndicatorFn]:
     print("pvd times: ", times)
 
     result = np.empty((len(times), grid.n_cells), dtype=np.float64)
-    for i, t in enumerate(times):
-        pvd_content.set_active_time_point(i)
+    for ti, t in enumerate(times):
+        pvd_content.set_active_time_point(ti)
         dataset = pvd_content.read()
-        values = extractor(dataset, grid, i)
-        result[i, :] = values
+
+        if intp_ver == 1:
+            values = interpolate_v1(dataset, z_loc, attr_name)
+        elif intp_ver == 2:
+            values = interpolate_v2(dataset, grid, attr_name, ti)
+        elif intp_ver == 3:
+            values = interpolate_v3(dataset, grid, attr_name, ti)
+
+        # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+        # values = interpolated.cell_data[attr_name]
+
+        result[ti, :] = values
 
     return result
+
+
+def interpolate_v1(dataset, z_loc, attr_name):
+    plane1 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, z_loc[0]])
+    plane2 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, z_loc[1]])
+    surface = plane1[0].merge(plane2[0])
+    return surface.cell_data[attr_name]
+
+
+def interpolate_v2(dataset, grid, attr_name, ti):
+    interpolated = grid.sample(dataset[0],
+                               # tolerance=1e-5,
+                               # tolerance=1e-7,
+                               # tolerance=1e-9,
+                               tolerance=1e-11,
+                               # tolerance=1e-16,
+                               # locator='cell', # 'cell' 'obb_tree' 'static_cell'
+                               # locator='cell_tree',
+                               # locator='static_cell',
+                               snap_to_closest_point=True)
+    interpolated = interpolated.point_data_to_cell_data()
+    interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    return interpolated.cell_data[attr_name]
+
+
+def interpolate_v3(dataset, grid, attr_name, ti):
+    # refinement coefficient (n splits in each dim)
+    rf = 4
+
+    # grid.field_data["origins"] = origins
+    # grid.field_data["spacing_xy"] = spacing
+    # grid.field_data["dims_xy"] = dims
+    cNx = grid.field_data["dims_xy"][0] - 1 # coarse
+    cNy = grid.field_data["dims_xy"][1] - 1
+    Nx = cNx * rf + 1 # fine
+    Ny = cNy * rf + 1
+    fine_spacing = grid.field_data["spacing_xy"] / rf
+    fine_grid = make_grid(dims=[Nx, Ny, 1],
+                          origins=grid.field_data["origins"],
+                          spacing=fine_spacing)
+    fine_grid.save(f"slice_fine_grid.vtu", binary=False)
+
+    # 2 x smallest ball around a single fine cell
+    cell_radius = 2 * np.linalg.norm(fine_spacing[:2])
+    # weight ratio of closest and furthest points
+    decline_ratio = 0.8
+    # sharpness of the Gaussian kernel
+    sharpness = math.sqrt(-math.log(decline_ratio))
+    # interpolation
+    fine_interpolated = fine_grid.interpolate(dataset[0], radius=cell_radius, sharpness=sharpness)
+    fine_interpolated = fine_interpolated.point_data_to_cell_data()
+    # fine_interpolated.save(f"slice_intp_fv3_{ti:02d}.vtu", binary=False) # debug output
+    fine_values = fine_interpolated.cell_data[attr_name]
+    # fine_values = fine_interpolated.cell_data["cell_id"]  # debug ids
+
+    # map fine grid to coarse grid - find max over coarse cell
+    coarse_values = fine_values.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
+    grid.cell_data[attr_name] = coarse_values.reshape(-1)
+    grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    return grid.cell_data[attr_name]
+
+def plane_cell_ids(grid, plane_id):
+    # npx = nx+1, npy = ny+1
+    npx = grid.dimensions[0]
+    npy = grid.dimensions[1]
+    start = plane_id * npx * npy
+    return np.arange(start, start + npx * npy)
+
+def make_grid(dims, origins, spacing):
+    # Create 2D grid in the XY plane (z=0)
+    grid1 = pv.ImageData(dimensions=dims,
+                         origin=origins[0],
+                         spacing=spacing  # spacing in z doesn't matter for 2D
+                         )
+    grid2 = pv.ImageData(dimensions=dims,
+                         origin=origins[1],
+                         spacing=spacing  # spacing in z doesn't matter for 2D
+                         )
+    grid1["cell_id"] = np.arange(grid1.n_cells)
+    grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
+    grid = grid1.merge(grid2)
+
+    grid.field_data["origins"] = origins
+    grid.field_data["spacing_xy"] = spacing
+    grid.field_data["dims_xy"] = dims
+    return grid
+
 
 def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     # Define grid resolution
@@ -380,31 +478,33 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     tol = 1e-6
     bx, by = bx-tol, by-tol
     origin_x, origin_y = -bx/2, -by/2
-
     # Compute spacing
     dx = bx / nx
     dy = by / ny
 
-    # Create 2D grid in the XY plane (z=0)
-    # Set grid dimensions and spacing
-    # grid = pv.ImageData()
-    # grid.dimensions = [nx+1, ny+1, 1]
-    # grid.origin = (origin_x, origin_y, 0.0)
-    # grid.spacing = (dx, dy, 1.0)  # spacing in z doesn't matter for 2D
+    dims = [nx+1, ny+1, 1]
+    origins = np.array([[origin_x, origin_y, z_cuts[0]],
+                        [origin_x, origin_y, z_cuts[1]]])
+    spacing = np.array([dx, dy, 1])
 
-    grid1 = pv.ImageData(dimensions=[nx + 1, ny + 1, 1],
-                         origin=(origin_x, origin_y, z_cuts[0]),
-                         spacing=(dx, dy, 1.0)  # spacing in z doesn't matter for 2D
-                        )
-    grid2 = pv.ImageData(dimensions=[nx + 1, ny + 1, 1],
-                         origin=(origin_x, origin_y, z_cuts[1]),
-                         spacing=(dx, dy, 1.0)  # spacing in z doesn't matter for 2D
-                         )
-    grid1["cell_id"] = np.arange(grid1.n_cells)
-    grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
-    grid = grid1.merge(grid2)
+    grid = make_grid(dims, origins, spacing)
+
+    # If spacing is uniform, ImageData also works. Else use pv.RectilinearGrid(x,y,z)
+    # grid = pv.ImageData(
+    #     origin=(origin_x, origin_y, z_cuts[0]),
+    #     spacing=(dx, dy, z_cuts[1]-z_cuts[0]),
+    #     dimensions=(nx + 1, ny + 1, nz + 1),
+    # )
+    # ids0 = plane_cell_ids(grid, 0)
+    # ids1 = plane_cell_ids(grid, 1)
+
+    # n_cells_by_plane = grid.n_cells / nz
+    # cell_id_arr = np.empty(grid.n_cells)
+    # cell_id_arr[plane_cell_ids(grid, 0)] = np.arange(n_cells_by_plane)
+    # cell_id_arr[plane_cell_ids(grid, 1)] = np.arange(n_cells_by_plane) + n_cells_by_plane
+    # grid.cell_data["cell_id"] = cell_id_arr
+
     grid.save(f"slice_grid.vtu", binary=False)
-
     return grid
 # def quantity_times(o_times):
 #     """
@@ -429,7 +529,7 @@ def get_indicator(cfg, fo, grid_step):
     cfg_fine = cfg.transport_fullscale
     z_cuts = z_cuts_fn(cfg.geometry)
     grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
-    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid)
+    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid, intp_ver=3)
     print(np.shape(values))
     n_times = np.shape(values)[0]
     block = values.reshape(n_times, *grid_step)
