@@ -549,6 +549,7 @@ pbs_script_template = """
 #PBS -l walltime={walltime}
 #PBS -q {queue}
 #PBS -N {job_name}
+#PBS -W umask=0002
 #PBS -o {out_log}
 #PBS -j oe
 #PBS -m e
