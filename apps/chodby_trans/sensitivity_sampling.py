@@ -131,9 +131,9 @@ def prepare_sampling(cfg: dotdict, seed):
     """
     
     sensitivity_dir = Path(job.scratch.sensitivity_dir)
-    if sensitivity_dir.exists():
-        shutil.rmtree(sensitivity_dir)
-    sensitivity_dir.mkdir()
+    if not sensitivity_dir.exists():
+        # shutil.rmtree(sensitivity_dir)
+        sensitivity_dir.mkdir()
 
     return pp.ot_samples(cfg, seed)
 
@@ -157,7 +157,7 @@ def single_sample(args):
     sample_dirname_search = f"sample_{str(tags[0]).zfill(3)}"
     # search for dir
     sample_dir = next((p for p in sample_subdir.glob(f"{sample_dirname_search}*") if p.is_dir()), None)
-    sample_tarpath = sorted(sample_subdir.glob("sample_000_*.tar.gz"))
+    sample_tarpath = sorted(sample_subdir.glob(f"{sample_dirname_search}_*.tar.gz"))
     # search for tar.gz
     if sample_dir is not None:
         pass
