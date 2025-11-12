@@ -404,7 +404,8 @@ def interpolate_v2(dataset, grid, attr_name, ti):
                                # locator='static_cell',
                                snap_to_closest_point=True)
     interpolated = interpolated.point_data_to_cell_data()
-    interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    # debug grid output
+    # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
     return interpolated.cell_data[attr_name]
 
 
@@ -423,7 +424,8 @@ def interpolate_v3(dataset, grid, attr_name, ti):
     fine_grid = make_grid(dims=[Nx, Ny, 1],
                           origins=grid.field_data["origins"],
                           spacing=fine_spacing)
-    fine_grid.save(f"slice_fine_grid.vtu", binary=False)
+    # debug grid output - fine grid indexing
+    # fine_grid.save(f"slice_fine_grid.vtu", binary=False)
 
     # 2 x smallest ball around a single fine cell
     cell_radius = 2 * np.linalg.norm(fine_spacing[:2])
@@ -441,7 +443,8 @@ def interpolate_v3(dataset, grid, attr_name, ti):
     # map fine grid to coarse grid - find max over coarse cell
     coarse_values = fine_values.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
     grid.cell_data[attr_name] = coarse_values.reshape(-1)
-    grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    # debug grid output
+    # grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
     return grid.cell_data[attr_name]
 
 def plane_cell_ids(grid, plane_id):
@@ -461,8 +464,9 @@ def make_grid(dims, origins, spacing):
                          origin=origins[1],
                          spacing=spacing  # spacing in z doesn't matter for 2D
                          )
-    grid1["cell_id"] = np.arange(grid1.n_cells)
-    grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
+    # debug grid output - cell indexing
+    # grid1["cell_id"] = np.arange(grid1.n_cells)
+    # grid2["cell_id"] = np.arange(grid2.n_cells) + grid1.n_cells
     grid = grid1.merge(grid2)
 
     grid.field_data["origins"] = origins
@@ -488,23 +492,7 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     spacing = np.array([dx, dy, 1])
 
     grid = make_grid(dims, origins, spacing)
-
-    # If spacing is uniform, ImageData also works. Else use pv.RectilinearGrid(x,y,z)
-    # grid = pv.ImageData(
-    #     origin=(origin_x, origin_y, z_cuts[0]),
-    #     spacing=(dx, dy, z_cuts[1]-z_cuts[0]),
-    #     dimensions=(nx + 1, ny + 1, nz + 1),
-    # )
-    # ids0 = plane_cell_ids(grid, 0)
-    # ids1 = plane_cell_ids(grid, 1)
-
-    # n_cells_by_plane = grid.n_cells / nz
-    # cell_id_arr = np.empty(grid.n_cells)
-    # cell_id_arr[plane_cell_ids(grid, 0)] = np.arange(n_cells_by_plane)
-    # cell_id_arr[plane_cell_ids(grid, 1)] = np.arange(n_cells_by_plane) + n_cells_by_plane
-    # grid.cell_data["cell_id"] = cell_id_arr
-
-    grid.save(f"slice_grid.vtu", binary=False)
+    # grid.save(f"slice_grid.vtu", binary=False)
     return grid
 # def quantity_times(o_times):
 #     """
