@@ -218,8 +218,12 @@ def single_sample(args):
 
 def prepare_sample_args(cfg, seed):
     data_schema_key, data_schema = initialize_data_schema()
-    if job.output.zarr_store_path.exists() and cfg.ot_sensitivity.recompute_failed:
-        tags, parameters = read_failed_parameters()
+    recompute = cfg.ot_sensitivity.recompute_failed or cfg.ot_sensitivity.recompute_done
+    if job.output.zarr_store_path.exists() and recompute:
+        if cfg.ot_sensitivity.recompute_failed:
+            tags, parameters = read_failed_parameters()
+        elif cfg.ot_sensitivity.recompute_done:
+            tags, parameters = read_done_parameters()
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
@@ -444,6 +448,32 @@ def read_failed_parameters():
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     return tags, f_param
 
+def read_done_parameters():
+
+    print("=========== READ ZARR ==============")
+    ds = xr.open_zarr(str(job.output.zarr_store_path))
+    print(ds)
+    # print(read_ds['A_sample'].to_numpy())
+    # print("sample_id:\n", ds['sample_id'].to_numpy())
+    # print(ds['parameter'].to_numpy())
+    # print("return_code:\n", ds['return_code'].to_numpy())
+    print("=========== END READ ZARR ==============")
+
+    logging.info("getting done samples...")
+    v_param = ds['parameter'].to_numpy()
+    v_ieval = ds['i_eval'].to_numpy()
+    v_rc = ds['return_code'].to_numpy()
+
+    mask = v_rc == 0
+    f_param = v_param[mask]
+    f_ieval = v_ieval[mask]
+
+    i_idx, q_idx = np.where(mask)  # integer indices
+    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
+    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
+
+    tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
+    return tags, f_param
 
 def select_single(i_eval: int):
 
