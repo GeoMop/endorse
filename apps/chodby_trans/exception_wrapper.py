@@ -8,6 +8,7 @@ class ReturnCode():
     BGEM_GMSH_ERROR = -1002
     BGEM_HEAL_ERROR = -1003
     FLOW123_ERROR = -1010
+    SAMPLE_ERROR = -1020
     ZARR_ERROR = -1100
     NONE = -2000
 

@@ -10,6 +10,7 @@ import copy
 import subprocess
 import json
 import tarfile
+import traceback
 
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -75,18 +76,26 @@ def make_tarfile(source_dir: Path, output_file: Path = None):
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
 def decompress_tarfile(tar_path: Path):
-    # Destination directory = archive name without .tar.gz
-    dest_dir = tar_path.parent / Path(tar_path.name).with_suffix('').with_suffix('')
+    try:
+        # Destination directory = archive name without .tar.gz
+        dest_dir = tar_path.parent / Path(tar_path.name).with_suffix('').with_suffix('')
 
-    with tarfile.open(tar_path, mode="r:gz") as tf:
-        members = tf.getmembers()
-        dirname = members[0].path
-        if dirname in dest_dir.name:
-            tf.extractall(path=tar_path.parent)
-        else:
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            tf.extractall(path=dest_dir)
-    return dest_dir
+        with tarfile.open(tar_path, mode="r:gz") as tf:
+            members = tf.getmembers()
+            dirname = members[0].path
+            if dirname in dest_dir.name:
+                tf.extractall(path=tar_path.parent)
+            else:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                tf.extractall(path=dest_dir)
+        return dest_dir
+    except Exception as e:
+        sys.stdout.write("-\n" * 60)
+        sys.stdout.write(f"Decompressing tar with exception: {e}\n")
+        traceback.print_exc()
+        sys.stdout.write("-" * 60)
+        sys.stdout.flush()
+        return None
 
 @memoize
 def salib_samples(cfg: dotdict, seed):
@@ -143,6 +152,11 @@ def single_sample(args):
     job.set_workdir(workdir)
     setup_logging(name=f"T{tags[0]}")
 
+    # read config file
+    conf_file = job.input.transport_cfg_path
+    cfg = common.config.load_config(str(conf_file))
+    cfg["data_schema_key"] = data_schema_key
+
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
@@ -157,63 +171,71 @@ def single_sample(args):
     sample_dirname_search = f"sample_{str(tags[0]).zfill(3)}"
     # search for dir
     sample_dir = next((p for p in sample_subdir.glob(f"{sample_dirname_search}*") if p.is_dir()), None)
-    sample_tarpath = sorted(sample_subdir.glob(f"{sample_dirname_search}_*.tar.gz"))
     # search for tar.gz
-    if sample_dir is not None:
-        pass
-    elif len(sample_tarpath) == 1:
-        sample_dir = decompress_tarfile(sample_tarpath[0])
-    else:
-        # host = socket.gethostname()
-        pid = os.getpid()
-        sample_dirname = f"{sample_dirname_search}_{pid}"
-        sample_dir = sample_subdir / sample_dirname
-        sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
-
-
-
-    # read config file
-    conf_file = job.input.transport_cfg_path
-    cfg = common.config.load_config(str(conf_file))
-    cfg["data_schema_key"] = data_schema_key
-
-    logging.info("=========================== RUNNING CALCULATION " +
-                 "sample {} ===========================".format(tags[0]).zfill(3))
-    logging.info(f"tags={tags}, parameters={parameters}, sample_dir={str(sample_dir)}")
-
-    wrap = transport_wrapper.Wrapper(cfg=cfg)
-    with common.workdir(str(sample_dir), clean=False):
-        res, sample_data = wrap.get_observations(tags, parameters)
-        logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
-        # print("LEN:", len(obs_data))
+    if sample_dir is None:
+        sample_tarpath = sorted(sample_subdir.glob(f"{sample_dirname_search}_*.tar.gz"))
+        if len(sample_tarpath) == 1:
+          sample_dir = decompress_tarfile(sample_tarpath[0])
     
-    # result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
-    # atomic_write_json(flag_file, result)
-
-    # soft clean
-    if cfg["ot_sensitivity"]["clean_soft_sample_dir"]:
-        shutil.rmtree(sample_dir / "joblib_cache", ignore_errors=True)
-        for file in sample_dir.glob("*healed_modified.msh2"):
-            if file.is_file(): file.unlink()
-
-    if res < 0:
-        failed_subdir = sensitivity_dir / "failed_samples"
-        failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
-
-        num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
-
-        if num_dirs <= 10:
-            logging.info(f"Moving failed sample {sample_dir.name}")
-            sample_dir.rename(failed_subdir / sample_dir.name)
+    # create empty dir
+    if sample_dir is None:
+        if cfg["ot_sensitivity"]["collect_only"]:
+            logging.info("=========================== SAMPLE NOT FOUND " +
+                    "sample {} ===========================".format(tags[0]).zfill(3))
+            logging.info(f"tags={tags}")
+            return ReturnCode.SAMPLE_ERROR
         else:
+            # host = socket.gethostname()
+            pid = os.getpid()
+            sample_dirname = f"{sample_dirname_search}_{pid}"
+            sample_dir = sample_subdir / sample_dirname
+            sample_dir.mkdir(mode=0o775, parents=True, exist_ok=True)
+
+    try:
+        logging.info("=========================== RUNNING CALCULATION " +
+                    "sample {} ===========================".format(tags[0]).zfill(3))
+        logging.info(f"tags={tags}, parameters={parameters}, sample_dir={str(sample_dir)}")
+
+        wrap = transport_wrapper.Wrapper(cfg=cfg)
+        with common.workdir(str(sample_dir), clean=False):
+            res, sample_data = wrap.get_observations(tags, parameters)
+            logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
+            # print("LEN:", len(obs_data))
+        
+        # result = {"res": res, "sample": str(sample_dir), "ts": time.time()}
+        # atomic_write_json(flag_file, result)
+
+        # soft clean
+        if cfg["ot_sensitivity"]["clean_soft_sample_dir"]:
+            shutil.rmtree(sample_dir / "joblib_cache", ignore_errors=True)
+            for file in sample_dir.glob("*healed_modified.msh2"):
+                if file.is_file(): file.unlink()
+
+        if res < 0:
+            failed_subdir = sensitivity_dir / "failed_samples"
+            failed_subdir.mkdir(mode=0o775, parents=True, exist_ok=True)
+
+            num_dirs = sum(1 for p in failed_subdir.iterdir() if p.is_dir())
+
+            if num_dirs <= 10:
+                logging.info(f"Moving failed sample {sample_dir.name}")
+                sample_dir.rename(failed_subdir / sample_dir.name)
+            else:
+                if cfg["ot_sensitivity"]["clean_sample_dir"]:
+                    shutil.rmtree(sample_dir)
+        else:
+            if cfg["ot_sensitivity"]["compress_sample"]:
+                make_tarfile(sample_dir)
             if cfg["ot_sensitivity"]["clean_sample_dir"]:
-                shutil.rmtree(sample_dir)
-    else:
-        if cfg["ot_sensitivity"]["compress_sample"]:
-            make_tarfile(sample_dir)
-        if cfg["ot_sensitivity"]["clean_sample_dir"]:
-            shutil.rmtree(sample_dir)   # always remove sample dir
-    return res
+                shutil.rmtree(sample_dir)   # always remove sample dir
+        return res
+    except Exception as e:
+        sys.stdout.write("-\n" * 60)
+        sys.stdout.write(f"Sample error with exception: {e}\n")
+        traceback.print_exc()
+        sys.stdout.write("-" * 60)
+        sys.stdout.flush()
+        return ReturnCode.SAMPLE_ERROR
 
 
 def prepare_sample_args(cfg, seed):
@@ -472,6 +494,7 @@ def read_done_parameters():
     f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
     f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
 
+    logging.info(f"{len(f_ieval)}")
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     return tags, f_param
 
