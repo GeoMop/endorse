@@ -55,9 +55,9 @@ start_scheduler() {
 
 start_workers() {
   local procs="${1:-1}"   # number of worker processes (1–4)
-  if (( procs < 1 || procs > 4 )); then
-    echo "[worker] Invalid worker count '$procs' (try 1–4)"; exit 1
-  fi
+  #if (( procs < 1 || procs > 4 )); then
+  #  echo "[worker] Invalid worker count '$procs' (try 1–4)"; exit 1
+  #fi
   if [[ ! -f "$SCHED_ADDR_FILE" ]]; then
     echo "[worker] Scheduler address file not found: $SCHED_ADDR_FILE"
     exit 1
