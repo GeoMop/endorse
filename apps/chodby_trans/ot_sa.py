@@ -239,26 +239,32 @@ class InputDesign:
         Xs = ot.Sample(X)
         Ys = ot.Sample(Y)
         base_size = int(self.n_blocks)
-
-        algo = ot.SaltelliSensitivityAlgorithm(Xs, Ys, base_size)
-        algo.setConfidenceLevel(self.confidence_level)  # your class already exposes 95% CI as outputs
-
         n_outputs = Y.shape[1]
-        S1, ST, S2 = [], [], []
-        for i in range(n_outputs):
-            S1.append(algo.getFirstOrderIndices(i))
-            ST.append(algo.getTotalOrderIndices(i))
-            S2.append(self.second_order_indices(algo, i))
-        
-        S1 = np.stack(S1, axis=1)
-        ST = np.stack(ST, axis=1)
-        S2 = np.stack(S2, axis=2)
-        #agg_S1 = algo.getAggregatedFirstOrderIndices()
-        #agg_ST = algo.getAggregatedTotalOrderIndices()
-        stack_ci = lambda CI: np.stack([CI.getLowerBound(), CI.getUpperBound()], axis=1)
-        agg_S1_ci = stack_ci(algo.getFirstOrderIndicesInterval())
-        agg_ST_ci = stack_ci(algo.getTotalOrderIndicesInterval())
-        
+        n_groups = X.shape[1]
+        try:
+            algo = ot.SaltelliSensitivityAlgorithm(Xs, Ys, base_size)
+            algo.setConfidenceLevel(self.confidence_level)  # your class already exposes 95% CI as outputs            
+
+            S1, ST, S2 = [], [], []
+            for i in range(n_outputs):
+                S1.append(algo.getFirstOrderIndices(i))
+                ST.append(algo.getTotalOrderIndices(i))
+                S2.append(self.second_order_indices(algo, i))
+            
+            S1 = np.stack(S1, axis=1)
+            ST = np.stack(ST, axis=1)
+            S2 = np.stack(S2, axis=2)
+            #agg_S1 = algo.getAggregatedFirstOrderIndices()
+            #agg_ST = algo.getAggregatedTotalOrderIndices()
+            stack_ci = lambda CI: np.stack([CI.getLowerBound(), CI.getUpperBound()], axis=1)
+            agg_S1_ci = stack_ci(algo.getFirstOrderIndicesInterval())
+            agg_ST_ci = stack_ci(algo.getTotalOrderIndicesInterval())
+        except TypeError as e:
+            print("Warning: ", e)
+            ST = S1 = np.zeros((n_groups, n_outputs))        
+            S2 = np.zeros((n_groups, n_groups, n_outputs))
+            agg_ST_ci = agg_S1_ci = np.zeros((n_groups, 2))
+            
 
         coords = dict(
             group=np.array(self.groups, dtype=object),
