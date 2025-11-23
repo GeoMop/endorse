@@ -193,11 +193,11 @@ def select_params(
     I, J = np.triu_indices(G, k=1)
     S2_pairs = ds["S2"].values[I, J, 0]              # (P, M) with P = G*(G-1)/2
     SI_all = np.concatenate([S1, S2_pairs])  # (T, ) T=G+P    
-    
+
     # Per-output ranking → cum-sum → cut
-    print(SI_all)
     order = np.argsort(-SI_all)                           # (T,) descending
     sorted_vals = SI_all[order]      # (T,)
+
     valid_mask = (sorted_vals >= si_threshold)                    # (T,)    
     cs = (sorted_vals * valid_mask).cumsum()              
     
@@ -208,10 +208,17 @@ def select_params(
 
     groups = ds["group"].values
     g_labels = groups.astype(str)
-    labels_all = [("S1", g, (i,)) for i, g in enumerate(g_labels)]
+    labels_all = [("S1", str(g), (i,)) for i, g in enumerate(g_labels)]
     labels_all.extend(
          [("S2", f"{g_labels[i]}×{g_labels[j]}", (i, j)) for i, j in zip(I, J)]
     )
+    print("Sorted S1, S2 values:\n")
+    for i in order:
+        st = ds['ST'].values[i][0] if i < G else 0.0
+        order, label, indices = labels_all[i]
+        print(f"  {order} {label}: {SI_all[i]:.6f}  | ST = {st}")
+
+
     labels_all_sel = [labels_all[i] for i in range(len(labels_all)) if final_mask[i]]
     assert 0 <= len(labels_all_sel) <= len(labels_all), \
         f"Wrong selection: 0 < {len(labels_all_sel)} <= {len(labels_all)}"
@@ -434,13 +441,13 @@ def make_transport_plots(cfg, seed):
     ds_stat = compute_statistics(ds, var_name)
     print(list(ds_stat.data_vars.keys()))
     sobol = lambda conc_da: compute_sobol(input_design, conc_da)
-    print("Computing Sobol indices for 'conc_q99' ...")
+    print("Computing Sobol indices for 'conc.q99(time & space)' ...")
     si_conc = sobol(ds_stat[f'{var_name}_q99'])
-    param_selection = select_params(si_conc, var_threshold=0.9, si_threshold=0.05)
+    param_selection = select_params(si_conc, var_threshold=0.9, si_threshold=0.01)
     
     sobol_sel = lambda conc_da: select_sobol(param_selection, sobol(conc_da))
     #plot_vtk(ds_stat, sobol_sel(ds['conc']), sobol_sel(ds_stat['conc_q99_time']))
-    print(f"Computing Sobol indices for '{var_name}_q99[_XYZ]' ...")
+    print(f"Computing Sobol indices for '{var_name}_q99(space)' ...")
     si_q99 = sobol_sel(ds_stat[f'{var_name}_q99'])
     si_q99_XYZ = sobol_sel(ds_stat[f'{var_name}_q99_XYZ'])
     

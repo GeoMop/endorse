@@ -309,7 +309,7 @@ SobolResult = Dict[str, SobolResultGroup]
 class SensitivityAnalysis:
    
     parameters: Dict[str, Parameter]
-    sampler: Literal["sobol", "mc"] = "sobol"
+    sampler: Literal["sobol", "mc", "lhs"] = "sobol"
     compute_s2: bool = False
     n_samples: int = 0
     confidence_level: float = 0.95
