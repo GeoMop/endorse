@@ -3,12 +3,15 @@ import numpy as np
 import xarray as xr
 import pyvista as pv
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib import colors as mcolors, cm as cm
+
 import endorse
 
 from pathlib import Path
-import chodby_trans.job as job
 from chodby_trans import ot_sa
-from chodby_trans.plots import save_conc_and_si_pdf
+from chodby_trans import job
+from chodby_trans import plots
 
 def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
     cfg_sens = cfg.ot_sensitivity
@@ -24,13 +27,22 @@ def sampling_data(cfg, seed):
     input_design = ot_samples(cfg, seed)
     store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
-    ds1 = ds.rename_dims({"i_sample": "iid1", "i_saltelli": "qmc1"})
-    print(ds1.dims)
-    ds2 = ds1.rename_dims({"iid1": "QMC", "qmc1": "IID"})
-    print(ds2.dims)
-    print("IID", ds2['IID'].values)
-    print("QMC", ds2['QMC'].values)
-    # print samples with bad concentrations; limit them
+    print(ds)
+    #print("i_sample", ds['i_sample'].values)
+    #print("i_saltelli", ds['i_saltelli'].values)
+    
+    print(ds.dims)
+    #print("IID", ds2['IID'].values)
+    #print("QMC", ds2['QMC'].values)
+    plots.conc_tail_ecdf_plot(ds,
+                 sample_dim = {'i_saltelli', 'i_sample'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
+                 output_pdf=job.output.plots/"conc_ecdf.pdf")
+    ds2 = ds.rename_dims({"i_sample": "IID", "i_saltelli": "QMC"})
+
+    # plots.raw_conc_plot(ds2,
+    #               sample_dim = {'QMC', 'IID'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
+    #               output_pdf=job.output.plots/"conc_ecdf.pdf")
+    # # print samples with bad concentrations; limit them
     # 1) mask for out-of-range values (outside [-0.1, 1.1])
     lo, hi = 1e-40, 1.1
     reduce_dims = ("sim_time", "X", "Y", "Z")
@@ -41,18 +53,21 @@ def sampling_data(cfg, seed):
     conc_max = conc.max(dim=reduce_dims, skipna=True)
 
     # 2) mask over (iid,qmc) only
-    mask = (conc_min < lo) | (conc_max > hi).compute()
+    mask_bad = (conc_min < lo) | (conc_max > hi).compute()
 
    # print offending iid,qmc with their min/max
     df_bad = (
         xr.Dataset({"conc_min": conc_min, "conc_max": conc_max})
-        .where(mask)
+        .where(mask_bad)
         .to_dataframe()
         .reset_index()
         .dropna(subset=["conc_min", "conc_max"])
         [['IID', 'QMC', "conc_min", "conc_max"]]
     )
-    print(df_bad.to_string(index=False))
+    #print(df_bad.to_string(index=False))
+    print("Number of bad value samples:", len(df_bad))
+
+    q99_space_max_time = conc.quantile(0.99, dim=("X", "Y", "Z"), skipna=True).max(dim="sim_time")
 
     # 3) limit the dataset to those values -> ds3
     #    (keep only 'conc' filtered to the mask; drop coords where all values became NaN)
@@ -64,8 +79,9 @@ def sampling_data(cfg, seed):
     
     # filter out failed runs
     # bad samples return -1000, good samples return 0
-    bad_iid = (ds3['return_code'] < 0).any(dim='QMC').compute().to_numpy()
-    print(bad_iid)
+    bad_conc = ((q99_space_max_time < lo) | (q99_space_max_time > hi)).values
+    bad_iid = (ds3['return_code'] < 0 | bad_conc).any(dim='QMC').compute().to_numpy()
+    #print(bad_iid)
     ds_ok = ds3.sel(IID=~bad_iid)
     print("Remaining IIDs:", len(ds_ok['IID'].values))
     return input_design, ds3, var_name  #ds_ok
@@ -177,11 +193,11 @@ def select_params(
     I, J = np.triu_indices(G, k=1)
     S2_pairs = ds["S2"].values[I, J, 0]              # (P, M) with P = G*(G-1)/2
     SI_all = np.concatenate([S1, S2_pairs])  # (T, ) T=G+P    
-    
+
     # Per-output ranking → cum-sum → cut
-    print(SI_all)
     order = np.argsort(-SI_all)                           # (T,) descending
     sorted_vals = SI_all[order]      # (T,)
+
     valid_mask = (sorted_vals >= si_threshold)                    # (T,)    
     cs = (sorted_vals * valid_mask).cumsum()              
     
@@ -192,10 +208,17 @@ def select_params(
 
     groups = ds["group"].values
     g_labels = groups.astype(str)
-    labels_all = [("S1", g, (i,)) for i, g in enumerate(g_labels)]
+    labels_all = [("S1", str(g), (i,)) for i, g in enumerate(g_labels)]
     labels_all.extend(
          [("S2", f"{g_labels[i]}×{g_labels[j]}", (i, j)) for i, j in zip(I, J)]
     )
+    print("Sorted S1, S2 values:\n")
+    for i in order:
+        st = ds['ST'].values[i][0] if i < G else 0.0
+        order, label, indices = labels_all[i]
+        print(f"  {order} {label}: {SI_all[i]:.6f}  | ST = {st}")
+
+
     labels_all_sel = [labels_all[i] for i in range(len(labels_all)) if final_mask[i]]
     assert 0 <= len(labels_all_sel) <= len(labels_all), \
         f"Wrong selection: 0 < {len(labels_all_sel)} <= {len(labels_all)}"
@@ -418,23 +441,25 @@ def make_transport_plots(cfg, seed):
     ds_stat = compute_statistics(ds, var_name)
     print(list(ds_stat.data_vars.keys()))
     sobol = lambda conc_da: compute_sobol(input_design, conc_da)
-    print("Computing Sobol indices for 'conc_q99' ...")
+    print("Computing Sobol indices for 'conc.q99(time & space)' ...")
     si_conc = sobol(ds_stat[f'{var_name}_q99'])
-    param_selection = select_params(si_conc, var_threshold=0.9, si_threshold=0.05)
+    param_selection = select_params(si_conc, var_threshold=0.9, si_threshold=0.01)
     
     sobol_sel = lambda conc_da: select_sobol(param_selection, sobol(conc_da))
     #plot_vtk(ds_stat, sobol_sel(ds['conc']), sobol_sel(ds_stat['conc_q99_time']))
-    print(f"Computing Sobol indices for '{var_name}_q99[_XYZ]' ...")
+    print(f"Computing Sobol indices for '{var_name}_q99(space)' ...")
     si_q99 = sobol_sel(ds_stat[f'{var_name}_q99'])
     si_q99_XYZ = sobol_sel(ds_stat[f'{var_name}_q99_XYZ'])
     
 
     print("Plot VTK ...")
-    plot_vtk(ds_stat, None, sobol_sel(ds_stat[f'{var_name}_q99_time']), var_name)
+    plot_vtk(ds_stat, None, sobol_sel(ds_stat[f'{var_name}_q99_time']), var_name, 
+             fout=job.output.plots/"transport_statistics.pvd")
     #plot_vtk(ds_stat, None, None)
     print("Plot conc & SI ...")
-    save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, var_name,
-                         figsize=(11, 5), si_ci_level=0.90)
+    plots.save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, var_name,
+                         figsize=(11, 5), si_ci_level=0.90,
+                         out_pdf_path=job.output.plots/"conc_and_si.pdf")
     
     # input_design_val, ds_val = valid_sample_data(input_design, ds)
     # rc = ds['return_code'].to_numpy()
