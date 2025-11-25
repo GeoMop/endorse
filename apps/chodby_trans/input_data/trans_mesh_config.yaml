@@ -1,5 +1,5 @@
 
-test_random_data: True
+test_random_data: False
 
 # base of the mesh file name
 mesh_name: trans_mesh
@@ -9,8 +9,8 @@ ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
     # mesh step on outer boundary
-    boundary_mesh_step: &boundary_mesh_step 15
-    fracture_mesh_step: 4
+    boundary_mesh_step: &boundary_mesh_step 5
+    fracture_mesh_step: 2
     main_tunnel_mesh_step: &main_tunnel_mesh_step 1.25 # 1
     boreholes_mesh_step: &boreholes_mesh_step 0.5 # 0.25
 
@@ -94,8 +94,8 @@ transport_fullscale:
     #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
     #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
     diffusivity_effective: 1e-15    # should be smaller then advection
-    dispersivity_L: 1    # [m]
-    dispersivity_T: 0.1     # [m]
+    dispersivity_L: 0.5    # [m]
+    dispersivity_T: 0.05     # [m]
     #dispersivity_L: 0    # [m]
     #dispersivity_T: 0     # [m]
     dg_penalty: 1
@@ -212,13 +212,21 @@ machine_config:
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
         pbs:
-            n_cores: 18
-            n_nodes: 2
+            n_cores: 16
+            n_nodes: 10
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             mem: 80Gb
             queue: charon
             pbs_name: chodby_trans
-            walltime: "08:00:00"
+            walltime: "18:00:00"
+        # pbs:
+        #     n_cores: 10
+        #     n_nodes: 4
+        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+        #     mem: 80Gb
+        #     queue: charon_2h
+        #     pbs_name: chodby_trans
+        #     walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d
