@@ -38,30 +38,29 @@ fi
 
 
 # COMPRESS output
-nproc=4
-# create
-# zip -r $ROOT/logs.zip $ROOT/logs_charon*
-# zip -r $ROOT/workers.zip $ROOT/workdir_charon*
+tar_cd() {
+  local root=$1
+  local delete=${2:-0}   # 0 = keep sources, 1 = delete sources
+  local archive=$3
+  local nproc=4
+  shift 3                # now "$@" = source paths/patterns
+  ( cd "$root" || exit 1
+    tar -I "pigz -9 -p $(nproc)" -cf "$archive" $@
+    if (( delete )); then
+      echo "Deleting sources in '$root': $*"
+      rm -rf -- $@
+    fi
+  )
+}
+
 echo "Compressing zarr storage..."
-tar cf - $ROOT/transport_sampling -C $ROOT| pigz -9 -p $(nproc) > $ROOT/transport_sampling.tar.gz
-if (( DELETE )); then
-  echo "Deleting zarr storage..."
-  rm -r $ROOT/transport_sampling
-fi
+tar_cd $ROOT 0 transport_sampling.tar.gz transport_sampling
 
 echo "Compressing logs..."
-tar cf - $ROOT/logs_charon* | pigz -9 -p $(nproc) > $ROOT/logs.tar.gz
-if (( DELETE )); then
-  echo "Deleting logs..."
-  rm -r $ROOT/logs_charon*
-fi
+tar_cd $ROOT $DELETE logs.tar.gz logs_charon*
 
-echo "Compressing nodes workdirs..."
-tar cf - $ROOT/workdir_charon* | pigz -9 -p $(nproc) > $ROOT/workers.tar.gz
-if (( DELETE )); then
-  echo "Deleting nodes workdirs..."
-  rm -r $ROOT/workdir_charon*
-fi
+# echo "Compressing nodes workdirs..."
+# tar_cd $ROOT $DELETE workers.tar.gz workdir_charon*
 
 # list
 # tar -I pigz -tf workers.tar.gz | head

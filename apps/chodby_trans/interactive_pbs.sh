@@ -11,5 +11,9 @@ QUEUE=charon_2h
 WALLTIME=02:00:00
 
 # ---- request interactive shell ----
-qsub -I -q "$QUEUE" -l "select=${NODES}:ncpus=${PPN}:mem=${MEM_PER_NODE}:scratch_local=${SCRATCH_PER_NODE}" \
-    -l place=scatter -l walltime="$WALLTIME" -N dask-debug
+# qsub -I -q "$QUEUE" -l "select=${NODES}:ncpus=${PPN}:mem=${MEM_PER_NODE}:scratch_local=${SCRATCH_PER_NODE}" \
+#     -l place=scatter -l walltime="$WALLTIME" -N chodby_trans_int
+
+# no scratch
+qsub -I -q "$QUEUE" -l "select=${NODES}:ncpus=${PPN}:mem=${MEM_PER_NODE}" \
+    -l place=scatter -l walltime="$WALLTIME" -N chodby_trans_int
