@@ -39,6 +39,12 @@ parameters:
     args: [1.0, 0.1 ]
     group: dfn_transport
 
+  # material parameters
+  dispersivity_L:
+    distr: LogNormal
+    args: { mean_log10: -0.6, std_log10: 0.3 } # log10(0.25)=-0.6,
+    group: materials
+
   dfn_macro_seed: 
     # seed for small fractures
     distr: Seed         #ot_sa.Seed

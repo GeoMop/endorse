@@ -5,7 +5,8 @@
 # origin: floor of the lateral tunnel, center, interface with center borehole.
 
 # x,y,z dimension
-box_dimensions: &box [40, 40, 40]
+box_dimensions: [40, 40, 40]
+box_center: [0,0,-10]
 clip_box_dimensions: [40, 40, 40]
 
 edz_radius: 2.5

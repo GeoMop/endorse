@@ -264,7 +264,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
     # boundary of drilled volume
     bnd_dict["drill_surface_group"] = drill_group.get_boundary().copy().split_by_dimension()[2]
 
-    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions, cfg_geom.box_center)
     # bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).copy()  # keep the original sides
     bnd_dict = {**bnd_dict, **box_sides_dict}
 
@@ -273,7 +273,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
     vol_dict["box_drilled"].set_region("box")
 
     if "fractures" in cfg_geom.include:
-        fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, [0,0,0], factory.rectangle())
+        fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, cfg_geom.box_center, factory.rectangle())
         vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box_drilled"])
         vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step)
         # determine fracture outer boundary

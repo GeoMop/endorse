@@ -7,12 +7,12 @@ from bgem.stochastic import fracture
 from endorse.common import dotdict
 
 
-def box_with_sides(factory, dimensions):
+def box_with_sides(factory, dimensions, center=[0,0,0]):
     """
     Make a box and dictionary of its sides named: 'side_[xyz][01]'
     :return: box, sides_dict
     """
-    box = factory.box(dimensions).set_region("box")
+    box = factory.box(dimensions).translate(center).set_region("box")
     side_z = factory.rectangle([dimensions[0], dimensions[1]])
     side_y = factory.rectangle([dimensions[0], dimensions[2]])
     side_x = factory.rectangle([dimensions[2], dimensions[1]])
@@ -25,7 +25,7 @@ def box_with_sides(factory, dimensions):
         side_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
     )
     for name, side in sides.items():
-        side.modify_regions(name)
+        side.translate(center).modify_regions(name)
     return box, sides
 
 
