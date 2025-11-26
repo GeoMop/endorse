@@ -481,18 +481,22 @@ def create_structured_grid(cfg_geom: dotdict, z_cuts, grid_step):
     bx, by, bz = cfg_geom.box_dimensions
     tol = 1e-6
     bx, by = bx-tol, by-tol
-    origin_x, origin_y = -bx/2, -by/2
+
+    shift = np.array(cfg_geom.box_center)
+    origin = shift + [-bx/2, -by/2, 0]
+    # origin_x, origin_y = -bx/2, -by/2
+
     # Compute spacing
     dx = bx / nx
     dy = by / ny
 
     dims = [nx+1, ny+1, 1]
-    origins = np.array([[origin_x, origin_y, z_cuts[0]],
-                        [origin_x, origin_y, z_cuts[1]]])
+    origins = np.array([origin + [0,0,z_cuts[0]],
+                        origin + [0,0,z_cuts[1]]])
     spacing = np.array([dx, dy, 1])
 
     grid = make_grid(dims, origins, spacing)
-    # grid.save(f"slice_grid.vtu", binary=False)
+    grid.save(f"slice_grid.vtu", binary=False)
     return grid
 # def quantity_times(o_times):
 #     """
