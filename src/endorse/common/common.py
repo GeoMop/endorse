@@ -91,6 +91,20 @@ class workdir:
             shutil.rmtree(self.work_dir)
 
 
+def force_mkdir(path, force=False):
+    """
+    Make directory 'path' with all parents,
+    remove the leaf dir recursively if it already exists.
+    :param path: path to directory
+    :param force: if dir already exists then remove it and create new one
+    :return: None
+    """
+    if force:
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+    os.makedirs(path, mode=0o775, exist_ok=True)
+
+
 def substitute_placeholders(file_in: str, file_out: str, params: Dict[str, Any]):
     """
     In the template `file_in` substitute the placeholders in format '<name>'
