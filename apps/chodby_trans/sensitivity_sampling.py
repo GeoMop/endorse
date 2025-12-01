@@ -259,7 +259,6 @@ def prepare_sample_args(cfg, seed):
     logging.info(f"eval_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
     return sample_args
 
-
 def all_samples(cfg, sample_args, client=None):
     
     # Set directories to avoid NFS IO errors
@@ -440,11 +439,14 @@ def read_parameters_by_rc(rc_select: list[int]):
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
+    logging.info("plotting eval time histogram...")
+    plot_sample_time_hist(ds['eval_time'].to_numpy().ravel())
 
     logging.info(f"getting samples by RC: {rc_select}")
     v_param = ds['parameter'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
+    plot_failed_return_codes(v_rc, v_ieval)
 
     mask = np.isin(v_rc, rc_select)
     f_param = v_param[mask]
@@ -497,19 +499,8 @@ def plot_failed_return_codes(v_rc, v_ieval):
     # Flatten the matrix and count occurrences
     unique_vals, counts = np.unique(v_rc, return_counts=True)
 
-    # Build {value: name} automatically from class attributes
-    def value_to_name_map(cls):
-        mapping = {}
-        for name, val in vars(cls).items():
-            if name.startswith("_"):
-                continue
-            if isinstance(val, (int, np.integer)):
-                # If multiple names share a value, keep the first (or join if you prefer)
-                mapping.setdefault(int(val), name)
-        return mapping
-
-    labels_map = value_to_name_map(ReturnCode)
-    labels = [labels_map.get(int(v), str(v)) for v in unique_vals]
+    labels_map = ReturnCode.to_dict()
+    labels = [k for k, v in labels_map.items() if v in unique_vals]
 
     # Print the counts nicely
     print("Return Code Counts:")
@@ -771,7 +762,8 @@ def main():
         # zarr_path = sys.argv[2]
         # read_parameters_by_rc([ReturnCode.NONE])
         # read_parameters_by_rc([ReturnCode.OK])
-        read_parameters_by_rc(ReturnCode.failed_list())
+        # read_parameters_by_rc(ReturnCode.failed_list())
+        read_parameters_by_rc(ReturnCode.to_list())
     elif cmd == 'select':
         # zarr_path = sys.argv[2]
         # read_failed_parameters()
