@@ -11,6 +11,7 @@ OUTPUT_DIR=${1}
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
+APP_CMD_DEFAULT="local"
 # =================================
 
 PYEXEC="$VENV/bin/python"
@@ -129,10 +130,11 @@ run_example() {
     echo "[run] No scheduler found. Start it first: bash $0 start"
     exit 1
   fi
-  local sched
-  sched="$(cat "$SCHED_ADDR_FILE")"
+  local app_cmd=${1}
+  echo "app_cmd = $app_cmd"
+  local sched="$(cat "$SCHED_ADDR_FILE")"
   echo "[run] $APP_PY -> $sched"
-  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR local "$sched" 2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
+  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR $app_cmd "$sched" 2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
 }
 
 cmd=${2:-help}
@@ -149,7 +151,7 @@ case "$cmd" in
     ;;
   run)
     require_env
-    run_example
+    run_example "${3:-$APP_CMD_DEFAULT}"
     ;;
   stop)
     require_env

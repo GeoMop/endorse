@@ -254,6 +254,9 @@ def prepare_sample_args(cfg, seed):
         tags = setup_data_storage(cfg, str(job.output.zarr_store_path), data_schema, input_design)
     # data_schema_key = "run_XXX"
 
+    return gather_sample_args(data_schema_key, tags, parameters)
+
+def gather_sample_args(data_schema_key, tags, parameters):
     n_samples, n_params = parameters.shape
     sample_args = [(job.output.dir_path, data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
     logging.info(f"eval_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
@@ -488,12 +491,12 @@ def select_single(i_eval: int):
     tags = np.column_stack((i_evals, f_isample, f_isaltelli))
     return tags, f_param
 
-def run_single_sample(tags, params):
+def run_single_sample(tags, parameters):
     data_schema_key, data_schema = initialize_data_schema()
+    sample_args = gather_sample_args(data_schema_key, tags, parameters)
     assert job.output.zarr_store_path.exists()
-    sample_args = (job.output.dir_path, data_schema_key, tags, params)
-    logging.info(f"eval_args:\n{sample_args}\n")
-    single_sample(sample_args)
+    assert len(sample_args) == 1
+    single_sample(sample_args[0])
 
 def plot_failed_return_codes(v_rc, v_ieval):
     # Flatten the matrix and count occurrences
@@ -615,7 +618,7 @@ bash $PROJECT_DIR/dask_cluster.sh $output_dir start
 
 cd "$SCRATCHDIR"
 echo "START SAMPLING"
-bash $PROJECT_DIR/dask_cluster.sh $output_dir run
+bash $PROJECT_DIR/dask_cluster.sh $output_dir run {app_cmd}
 echo "FINISHED SAMPLING"
 
 echo "Copying results back ..."
@@ -636,11 +639,12 @@ clean_scratch
 PYEXEC="$PROJECT_DIR/venv/bin/python"
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 "$PYEXEC" -u "$APP_PY" "$output_dir" read
+"$PYEXEC" -u "$APP_PY" "$output_dir" plots
 
 echo "FINISHED"
 """
 
-def submit_pbs(cfg):
+def submit_pbs(cfg, cmd='meta'):
     cfg_pbs = cfg.machine_config.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
     pbs_path = job.output.pbs_script
@@ -658,7 +662,8 @@ def submit_pbs(cfg):
         script_path=script_path,
         workdir=job.scratch.dir_path,
         outputdir=job.output.dir_path,
-        out_log=(job.output.dir_path / (cfg_pbs.pbs_name + '.out'))
+        out_log=(job.output.dir_path / (cfg_pbs.pbs_name + '.out')),
+        app_cmd=cmd
     )
     print(parameters['python'])
     pbs_script = pbs_script_template.format(**parameters)
@@ -707,6 +712,13 @@ def make_plots(cfg, seed):
     filtered_ds = vsp.select_sobol_terms_with_others(si_space_agg, 0.9, output_dim='sim_time', si_threshold=0.05)
     vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=job.output.plots / "sobol_stacked.pdf")
 
+
+def set_threadsafe_environ():
+    # optional: cap hidden threading for your FEM libs
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 def main():
     # common.EndorseCache.instance().expire_all()
@@ -757,7 +769,12 @@ def main():
         job.output.plots.mkdir()
 
     if cmd == 'submit':
-        submit_pbs(cfg)
+        if len(sys.argv) == 4:
+            app_cmd = sys.argv[3]
+            assert app_cmd in ["read", "continue", "meta", "plots"]
+            submit_pbs(cfg, cmd=app_cmd) # given app command
+        else:   # default app command
+            submit_pbs(cfg)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         # read_parameters_by_rc([ReturnCode.NONE])
@@ -770,14 +787,21 @@ def main():
         assert len(sys.argv) == 4
         i_eval = int(sys.argv[3])
         tags, params = select_single(i_eval)
-        run_single_sample(tags[0], params[0])
+        run_single_sample(tags, params)
+    elif cmd == 'continue':
+        set_threadsafe_environ()
+        client = Client(scheduler)
+        logging.info(f"Connected to: {client}")
+
+        with common.workdir(str(work_dir), clean=False):
+            # data_schema_key is not valid - zarr_fuse not used currently
+            # if needed, we have to pass the correct key which was originally used
+            data_schema_key, data_schema = initialize_data_schema()
+            tags, parameters = read_parameters_by_rc([ReturnCode.NONE])
+            sample_args = gather_sample_args(data_schema_key, tags, parameters)
+            all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'meta' or cmd == 'local':
-        # optional: cap hidden threading for your FEM libs
-        os.environ.setdefault("OMP_NUM_THREADS", "1")
-        os.environ.setdefault("MKL_NUM_THREADS", "1")
-        os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-        os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
-        
+        set_threadsafe_environ()
         client = Client(scheduler)
         logging.info(f"Connected to: {client}")
         

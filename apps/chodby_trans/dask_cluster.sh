@@ -12,6 +12,7 @@ OUTPUT_DIR=${1}
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
+APP_CMD_DEFAULT="meta"
 # =================================
 
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
@@ -125,7 +126,11 @@ run_example() {
   # Run your driver against the live scheduler (can call this many times).
   SCHED=$(cat "$SCRATCHDIR/SCHED_ADDR.txt")
   echo "[run] Running driver against $SCHED ..."
-  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR meta "$SCHED" \
+
+  local app_cmd=${1}
+  echo "app_cmd = $app_cmd"
+
+  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR $app_cmd "$SCHED" \
       2>&1 | tee "$SCRATCHDIR/logs/driver_$(date +%H%M%S).log"
 }
 
@@ -147,7 +152,7 @@ case "$cmd" in
     ;;
   run)
     require_env
-    run_example
+    run_example "${3:-$APP_CMD_DEFAULT}"
     ;;
   stop)
     require_env
