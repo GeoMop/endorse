@@ -243,9 +243,9 @@ def prepare_sample_args(cfg, seed):
     recompute = cfg.ot_sensitivity.recompute_failed or cfg.ot_sensitivity.recompute_done
     if job.output.zarr_store_path.exists() and recompute:
         if cfg.ot_sensitivity.recompute_failed:
-            tags, parameters = read_failed_parameters()
+            tags, parameters = read_parameters_by_rc(ReturnCode.failed_list())
         elif cfg.ot_sensitivity.recompute_done:
-            tags, parameters = read_done_parameters()
+            tags, parameters = read_parameters_by_rc([ReturnCode.OK])
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
@@ -431,9 +431,7 @@ def setup_data_storage(cfg: dotdict,
     tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
-
-def read_failed_parameters():
-
+def read_parameters_by_rc(rc_select: list[int]):
     print("=========== READ ZARR ==============")
     ds = xr.open_zarr(str(job.output.zarr_store_path))
     print(ds)
@@ -442,22 +440,19 @@ def read_failed_parameters():
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy().ravel())
 
-    logging.info("getting failed samples...")
+    logging.info(f"getting samples by RC: {rc_select}")
     v_param = ds['parameter'].to_numpy()
-    v_time = ds['eval_time'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
-    plot_failed_return_codes(v_rc, v_ieval)
 
-    mask = v_rc < 0
+    mask = np.isin(v_rc, rc_select)
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
     f_rc = v_rc[mask]
+    logging.info(f"found n_evals: {len(f_ieval)}")
 
-    # np.column_stack((f_ieval, v_rc[mask]))
+    # just print a summary of found RC
     codes = np.unique(f_rc)
     rc_dict = {code: f_ieval[f_rc == code] for code in codes}
     for code, ids in rc_dict.items():
@@ -468,34 +463,7 @@ def read_failed_parameters():
     f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
 
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
-    return tags, f_param
-
-def read_done_parameters():
-
-    print("=========== READ ZARR ==============")
-    ds = xr.open_zarr(str(job.output.zarr_store_path))
-    print(ds)
-    # print(read_ds['A_sample'].to_numpy())
-    # print("sample_id:\n", ds['sample_id'].to_numpy())
-    # print(ds['parameter'].to_numpy())
-    # print("return_code:\n", ds['return_code'].to_numpy())
-    print("=========== END READ ZARR ==============")
-
-    logging.info("getting done samples...")
-    v_param = ds['parameter'].to_numpy()
-    v_ieval = ds['i_eval'].to_numpy()
-    v_rc = ds['return_code'].to_numpy()
-
-    mask = v_rc == 0
-    f_param = v_param[mask]
-    f_ieval = v_ieval[mask]
-
-    i_idx, q_idx = np.where(mask)  # integer indices
-    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
-    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
-
-    logging.info(f"{len(f_ieval)}")
-    tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
+    logging.info(f"first 20 tags:\n{tags[:20]}")
     return tags, f_param
 
 def select_single(i_eval: int):
@@ -801,7 +769,9 @@ def main():
         submit_pbs(cfg)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
-        read_failed_parameters()
+        # read_parameters_by_rc([ReturnCode.NONE])
+        # read_parameters_by_rc([ReturnCode.OK])
+        read_parameters_by_rc(ReturnCode.failed_list())
     elif cmd == 'select':
         # zarr_path = sys.argv[2]
         # read_failed_parameters()

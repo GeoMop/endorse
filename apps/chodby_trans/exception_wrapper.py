@@ -12,6 +12,33 @@ class ReturnCode():
     ZARR_ERROR = -1100
     NONE = -2000
 
+    @classmethod
+    def to_list(cls):
+        """Return a list of all return code values."""
+        return [
+            value
+            for name, value in vars(cls).items()
+            if isinstance(value, int)
+        ]
+
+    @classmethod
+    def to_dict(cls):
+        """Return a dict of {name: value} for all return codes."""
+        return {
+            name: value
+            for name, value in vars(cls).items()
+            if isinstance(value, int)
+        }
+
+    @classmethod
+    def failed_list(cls):
+        """Return all negative codes except the NONE code."""
+        return [
+            v
+            for name, v in cls.to_dict().items()
+            if v < 0 and name != "NONE"
+        ]
+
 
 class WrapperException(Exception):
     """Common wrapper Exception."""
