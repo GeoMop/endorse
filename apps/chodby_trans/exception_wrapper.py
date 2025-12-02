@@ -15,20 +15,23 @@ class ReturnCode():
     @classmethod
     def to_list(cls):
         """Return a list of all return code values."""
-        return [
+        return sorted([
             value
             for name, value in vars(cls).items()
-            if isinstance(value, int)
-        ]
+            if isinstance(value, int) and name is not '__firstlineno__'
+        ])
 
     @classmethod
     def to_dict(cls):
-        """Return a dict of {name: value} for all return codes."""
-        return {
-            name: value
+        """Return dict of {name: value}, sorted by value ascending."""
+        items = [
+            (name, value)
             for name, value in vars(cls).items()
-            if isinstance(value, int)
-        }
+            if isinstance(value, int) and name is not '__firstlineno__'
+        ]
+        # Sort by the integer value
+        items_sorted = sorted(items, key=lambda x: x[1])
+        return dict(items_sorted)
 
     @classmethod
     def failed_list(cls):

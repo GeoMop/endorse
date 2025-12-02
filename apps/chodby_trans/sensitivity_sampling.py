@@ -514,7 +514,7 @@ def plot_failed_return_codes(v_rc, v_ieval):
     fig, ax = plt.subplots(figsize=(8, 8))
     mask = unique_vals != 0
     counts_plot = counts[mask]
-    labels_plot = [labels_map.get(int(v), str(v)) for v in unique_vals[mask]]
+    labels_plot = [k for k, v in labels_map.items() if v in unique_vals[mask]]
     ax.bar(labels_plot, counts_plot)
     ax.set_title(f"Return Code Distribution (n={np.sum(counts)})")
     ax.set_xlabel("Return Code")
