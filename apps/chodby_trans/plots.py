@@ -32,12 +32,12 @@ def plot_conc_timeseries(
     Expects in ds_stat:
       sim_time, conc_q99_XYZ_q025, conc_q99_XYZ_q500, conc_q99_XYZ_q975, conc_q99_XYZ_mean, conc_q99_XYZ_std
     """
-    x_label: str = "Simulation time",
-    y_label: str = f"{var_name}_q99_XYZ",
+    x_label = "Simulation time (1000 y)"
+    y_label = f"{var_name}_q99_XYZ"
     logx: bool = False
     logy: bool = False
 
-    t = np.asarray(ds_stat["sim_time"].values)
+    t = np.asarray(ds_stat["sim_time"].values) / 1000
     q025 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q025"].values, dtype=float)
     q500 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q500"].values, dtype=float)
     q975 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q975"].values, dtype=float)
@@ -61,7 +61,9 @@ def plot_conc_timeseries(
     if not var_name.startswith("log"):
         ax.set_yscale("log")
     ax.grid(alpha=0.25)
-    ax.legend(loc="best", frameon=False)
+    ax.legend(loc="center left",
+        bbox_to_anchor=(1.02, 0.5),  # x > 1 moves it outside the axes
+        borderaxespad=0.,)
     fig.tight_layout()
     return fig, ax
 
@@ -84,7 +86,7 @@ def plot_sobol_time_and_agg(
       sobol_time: coords ('group','sim_time'); vars 'SI' (and optionally 'ST')
       sobol_agg : coords ('group','bound'); vars 'SI','SI_ci' and optionally 'ST'
     """
-    x_label: str = "Simulation time",
+    x_label = "Simulation time (1000 y)"
     sobol_agg = sobol_agg.squeeze('aux', drop=True)  # remove 'aux' dim 
     # Sort by aggregated SI descending (controls both left order and right stacking)
     labels = sobol_agg["group"].values.astype(str)
@@ -100,7 +102,7 @@ def plot_sobol_time_and_agg(
 
     # Time-dependent SI arranged in the same order
     sobol_time = sobol_time.squeeze('aux', drop=True)  # remove 'aux' dim 
-    t = np.asarray(sobol_time["sim_time"].values)
+    t = np.asarray(sobol_time["sim_time"].values) / 1000
     SI_t = np.asarray(sobol_time["SI"].sel(group=labels_s).values, dtype=float)  # (P, T)
 
     # Colors (special-case "others" as gray)
