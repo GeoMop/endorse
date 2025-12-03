@@ -514,7 +514,7 @@ def plot_failed_return_codes(v_rc, v_ieval):
     fig, ax = plt.subplots(figsize=(8, 8))
     mask = unique_vals != 0
     counts_plot = counts[mask]
-    labels_plot = [labels_map.get(int(v), str(v)) for v in unique_vals[mask]]
+    labels_plot = [k for k, v in labels_map.items() if v in unique_vals[mask]]
     ax.bar(labels_plot, counts_plot)
     ax.set_title(f"Return Code Distribution (n={np.sum(counts)})")
     ax.set_xlabel("Return Code")
@@ -581,7 +581,7 @@ def plot_sample_time_hist(st):
 pbs_script_template = """
 #!/bin/bash
 #PBS -S /bin/bash
-#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local=10gb
+#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local={scratch}
 #PBS -l place=scatter
 #PBS -l walltime={walltime}
 #PBS -q {queue}
@@ -654,6 +654,7 @@ def submit_pbs(cfg, cmd='meta'):
         n_cpus=cfg_pbs.n_cores,
         queue=cfg_pbs.queue,
         mem=cfg_pbs.mem,
+        scratch=cfg_pbs.scratch,
         walltime=cfg_pbs.walltime,
         job_name=cfg_pbs.pbs_name,
 
