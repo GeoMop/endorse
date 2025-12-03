@@ -157,7 +157,7 @@ def select_params(
     var_threshold: float,
     si_threshold: float = 0.0,
 
-) -> List[Tuple[str, str, Tuple[int, ...]]]:
+) -> (List[Tuple[str, str, Tuple[int, ...]]], List[str]):
     """
     Vectorized selection of dominant S1 and S2 terms across outputs.
     Adds an 'others' row so that each output column sums to 1.0.
@@ -212,17 +212,33 @@ def select_params(
     labels_all.extend(
          [("S2", f"{g_labels[i]}×{g_labels[j]}", (i, j)) for i, j in zip(I, J)]
     )
-    print("Sorted S1, S2 values:\n")
+
+    tab_lines = []
+    header = (f"{'ord':>3}  {'groups':<32}  {'S1':<7} < {'S1_low':<6}  {'S1_high':<6}> |  "
+          f"{'ST':<7} < {'ST_low':<6}  {'ST_high':<6}>")
+    tab_lines.append(header)
+    double_fmt = "3.4f"
     for i in order:
         st = ds['ST'].values[i][0] if i < G else 0.0
-        order, label, indices = labels_all[i]
-        print(f"  {order} {label}: {SI_all[i]:.6f}  | ST = {st}")
-
+        S1_agg_ci = ds['S1_agg_ci'].values[i]  if i < G else [0.0, 0.0]
+        ST_agg_ci = ds['ST_agg_ci'].values[i] if i < G else [0.0, 0.0]
+        ord_i, label, indices = labels_all[i]
+        line = (
+            f"{ord_i:<3}  "  # order, right-aligned in 3 chars
+            f"{label:<32} "  # label, left-aligned in 20 chars
+            f"{SI_all[i]: {double_fmt}}  "  # S1, width 10, 6 decimals
+            f"<{S1_agg_ci[0]: {double_fmt}} "  # S1 CI low
+            f"{S1_agg_ci[1]: {double_fmt}}>  | "  # S1 CI high
+            f"{st: {double_fmt}}  "  # ST
+            f"<{ST_agg_ci[0]: {double_fmt}} "  # ST CI low
+            f"{ST_agg_ci[1]: {double_fmt}}>"  # ST CI high
+        )
+        tab_lines.append(line)
 
     labels_all_sel = [labels_all[i] for i in range(len(labels_all)) if final_mask[i]]
     assert 0 <= len(labels_all_sel) <= len(labels_all), \
         f"Wrong selection: 0 < {len(labels_all_sel)} <= {len(labels_all)}"
-    return labels_all_sel
+    return labels_all_sel, tab_lines
  
 
 
@@ -443,23 +459,26 @@ def make_transport_plots(cfg, seed):
     sobol = lambda conc_da: compute_sobol(input_design, conc_da)
     print("Computing Sobol indices for 'conc.q99(time & space)' ...")
     si_conc = sobol(ds_stat[f'{var_name}_q99'])
-    param_selection = select_params(si_conc, var_threshold=0.9, si_threshold=0.01)
+    param_selection, si_table = select_params(si_conc, var_threshold=0.9, si_threshold=0.01)
+
+    print("Sorted S1, S2 values:\n")
+    print("\n".join(si_table))
     
     sobol_sel = lambda conc_da: select_sobol(param_selection, sobol(conc_da))
     #plot_vtk(ds_stat, sobol_sel(ds['conc']), sobol_sel(ds_stat['conc_q99_time']))
     print(f"Computing Sobol indices for '{var_name}_q99(space)' ...")
     si_q99 = sobol_sel(ds_stat[f'{var_name}_q99'])
     si_q99_XYZ = sobol_sel(ds_stat[f'{var_name}_q99_XYZ'])
-    
+
+    print("Plot conc & SI ...")
+    plots.save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, var_name, job.output.dir_path.stem,
+                               figsize=(11, 5), si_ci_level=0.90, si_table=si_table,
+                               out_pdf_path=job.output.plots / "conc_and_si.pdf")
 
     print("Plot VTK ...")
     plot_vtk(ds_stat, None, sobol_sel(ds_stat[f'{var_name}_q99_time']), var_name, 
              fout=job.output.plots/"transport_statistics.pvd")
     #plot_vtk(ds_stat, None, None)
-    print("Plot conc & SI ...")
-    plots.save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, var_name,
-                         figsize=(11, 5), si_ci_level=0.90,
-                         out_pdf_path=job.output.plots/"conc_and_si.pdf")
     
     # input_design_val, ds_val = valid_sample_data(input_design, ds)
     # rc = ds['return_code'].to_numpy()

@@ -176,9 +176,11 @@ def save_conc_and_si_pdf(
     sobol_time: xr.Dataset,
     sobol_agg: xr.Dataset,
     var_name: str,
+    title: str,
     *,
     figsize=(11, 5),
     si_ci_level: float = 0.90,
+    si_table = None,
     out_pdf_path: str | Path = "conc_and_si.pdf",
 ):
     """
@@ -194,6 +196,31 @@ def save_conc_and_si_pdf(
                                             figsize=figsize, si_ci_level=si_ci_level)
             pdf.savefig(fig2, bbox_inches="tight")
             plt.close(fig2)
+
+        if si_table is not None:
+            fig3, ax = plt.subplots(figsize=figsize)
+            ax.axis("off")
+
+            # Title
+            ax.text(
+                0.5, 0.95,
+                f"Sobol indices – {var_name}\n{title}",
+                ha="center", va="top",
+                fontsize=14, fontweight="bold",
+            )
+
+            table_text = "\n".join(si_table)
+            # Table (monospace so columns stay aligned)
+            ax.text(
+                0.5, 0.80,
+                table_text,
+                ha="center", va="top",
+                family="monospace",
+                fontsize=10,
+            )
+
+            pdf.savefig(fig3, bbox_inches="tight")
+            plt.close(fig3)
 
 
 
