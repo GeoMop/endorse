@@ -20,15 +20,56 @@ err_est_confidence_level: 0.90
 parameters:
   # DFN Geometry group
   # type:seed -> ?? bounds: [ 0.1 ] # std = 0.1*<par_mean>
-  p_32_scale:
-    distr: Normal       # ot.Normal(mean, std)
-    args: [1.0, 0.1]
+#  p_32_scale:
+#    distr: Normal       # ot.Normal(mean, std)
+#    args: [1.0, 0.1]
+#    group: dfn_geometry
+#  power_scale:
+#    distr: Normal
+#    args: [ 1.0, 0.1 ]
+#    group: dfn_geometry
+
+  dfn_pop_1:
+    distr: Population
     group: dfn_geometry
-  power_scale:
-    distr: Normal
-    args: [ 1.0, 0.1 ]
+    args: {file: "fr_Bukov_bayes/P30_alpha_pop1.csv"}
+    parameters:
+      p30: {column: "P30"}
+      alpha: {column: "alpha"}
+
+  dfn_pop_2:
+    distr: Population
     group: dfn_geometry
-  
+    args: {file: "fr_Bukov_bayes/P30_alpha_pop2.csv"}
+    parameters:
+      p30: {column: "P30"}
+      alpha: {column: "alpha"}
+
+  dfn_pop_3:
+    distr: Population
+    group: dfn_geometry
+    args: { file: "fr_Bukov_bayes/P30_alpha_pop3.csv" }
+    parameters:
+      p30: { column: "P30" }
+      alpha: { column: "alpha" }
+
+  dfn_pop_4:
+    distr: Population
+    group: dfn_geometry
+    args: { file: "fr_Bukov_bayes/P30_alpha_pop4.csv" }
+    parameters:
+      p30: { column: "P30" }
+      alpha: { column: "alpha" }
+
+  dfn_pop_5:
+    distr: Population
+    group: dfn_geometry
+    args: { file: "fr_Bukov_bayes/P30_alpha_pop5.csv" }
+    parameters:
+      p30: { column: "P30" }
+      alpha: { column: "alpha" }
+
+
   # DFN transport parameters group
   tr_a_scale:
     distr: LogNormal    #ot_sa.LogNormal
