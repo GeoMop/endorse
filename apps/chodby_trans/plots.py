@@ -15,6 +15,18 @@ from matplotlib import colors as mcolors
 from matplotlib.backends.backend_pdf import PdfPages
 
 
+def save_close_fig(fig: plt.Figure, pdf: PdfPages, fname):
+    """
+    Helper function for saving a figure - both individually and into PdfPages.
+    :param fig: matplotlib.pyplot.Figure object
+    :param pdf: PdfPages (path already known)
+    :param fname: filepath to individual figure file
+    :return:
+    """
+    fig.savefig(fname=fname, bbox_inches="tight")
+    pdf.savefig(fig, bbox_inches="tight")
+    plt.close(fig)
+
 
 def plot_conc_timeseries(
     ds_stat: xr.Dataset,
@@ -188,16 +200,18 @@ def save_conc_and_si_pdf(
     """
     Convenience: render the two figures and save each on its own page of a single PDF.
     """
+    # split the figures for publication
+    subdir = out_pdf_path.parents[0] / "pub" / out_pdf_path.stem
+    subdir.mkdir(parents=True, exist_ok=True)
 
     with PdfPages(out_pdf_path) as pdf:
         fig1, _ = plot_conc_timeseries(ds_stat, var_name, figsize=figsize)
-        pdf.savefig(fig1, bbox_inches="tight")
-        plt.close(fig1)
+        save_close_fig(fig1, pdf, subdir / "hist_conc_over_time.pdf")
+
         if sobol_time is not None and sobol_agg is not None:
             fig2, _ = plot_sobol_time_and_agg(sobol_time, sobol_agg, var_name,
                                             figsize=figsize, si_ci_level=si_ci_level)
-            pdf.savefig(fig2, bbox_inches="tight")
-            plt.close(fig2)
+            save_close_fig(fig2, pdf, subdir / "sobol_agg_over_time.pdf")
 
         if si_table is not None:
             fig3, ax = plt.subplots(figsize=figsize)
@@ -221,8 +235,7 @@ def save_conc_and_si_pdf(
                 fontsize=10,
             )
 
-            pdf.savefig(fig3, bbox_inches="tight")
-            plt.close(fig3)
+            save_close_fig(fig3, pdf, subdir / "sobol_agg_table.pdf")
 
 
 
@@ -534,6 +547,9 @@ def conc_tail_ecdf_plot(
     # conc = ds["conc"]
     # i_eval = ds['i_eval']
 
+    subdir = output_pdf.parents[0] / "pub" / output_pdf.stem
+    subdir.mkdir(parents=True, exist_ok=True)
+
     s_dims = tuple(sample_dim)
     x_dims = tuple(space_dim)
     for d in s_dims + x_dims + (time_dim,):
@@ -685,7 +701,6 @@ def conc_tail_ecdf_plot(
                 f"Top {100*frac_samples:.1f}% samples; tail = top {100*p_tail:.1f}%"
             )
 
-            pdf.savefig(fig)
-            plt.close(fig)
+            save_close_fig(fig, pdf, subdir / f"conc_ecdf_{ti}.pdf")
 
     print("Tail ECDF plot DONE:", output_pdf)
