@@ -231,6 +231,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
         )
         params.update(new_params)
         params.update(set_source_term(cfg))
+        params.update(param_dict)
         template = job.input.dir_path / cfg_fine.input_template
         fo = call_flow_wrap(cfg.machine_config, template, params)
 
