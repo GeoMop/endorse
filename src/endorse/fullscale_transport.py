@@ -255,7 +255,7 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
 
     # Fracture
     if "fractures" in cfg.geometry.include and fractures is not None:
-        cfg_fr = cfg_trans.fractures
+        cfg_fr = cfg.fractures
         cfg_fr_fields = cfg_trans.fr_field_params
         el_slice_fr = mesh.el_dim_slice(dim - 1)
         logging.info(f"fr slice: {el_slice_fr}")
