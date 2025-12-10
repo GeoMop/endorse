@@ -11,10 +11,9 @@ from sys import argv, exit
 
 # Import the borehole pressure model module.
 from . import PoroElasticSolver
-#from chodby_inv import input_data, piezo
+from chodby_inv import input_data, piezo
 from endorse import common
 from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_file, to_datetime
-from chodby_inv import input_data
 
 # Import TinyDA (assumes TinyDA is installed; adjust the import if needed)
 import tinyDA as tda
