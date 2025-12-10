@@ -342,7 +342,7 @@ def _run_inversion(inv_cfg, epoch_df):
 
     return idata
 
-def load_pressure_tests(path):
+def load_pressure_tests(path=input_data.wpt_multipacker):
     try:
         df = pd.read_excel(path, sheet_name="data (2)")
     except Exception as e:
