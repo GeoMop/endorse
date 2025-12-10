@@ -11,15 +11,14 @@ from sys import argv, exit
 
 # Import the borehole pressure model module.
 from . import PoroElasticSolver
-from chodby_inv import input_data, piezo
+#from chodby_inv import input_data, piezo
 from endorse import common
-from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_file
+from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_file, to_datetime
 
 # Import TinyDA (assumes TinyDA is installed; adjust the import if needed)
-import xarray as xr
 import tinyDA as tda
 
-
+FORCE_UNKNOWN_FLOW = True
 
 
 def exponential_covariance(n, dx, correlation_length, variance):
@@ -183,14 +182,11 @@ def _run_inversion(inv_cfg, epoch_df):
     prior = multivariate_normal(mean_prior, cov_prior)
 
 
-    if piezo.to_datetime(inv_cfg["origin"]).year > 2024:
+    if to_datetime(inv_cfg["origin"]).year > 2024 and not FORCE_UNKNOWN_FLOW:
         flow_rate_observed = np.array([selected_test["spotreba"]])
         #flow_rate_sigma = np.array([1e-6])
         #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
         flow_rate_sigma = np.log10(100 / 94) / 3
-        if flow_rate_sigma == 0:
-            # cover cases when sigma is zero
-            flow_rate_sigma = np.array([1e-11])
         plot_observed_flow = True
     else:
         flow_rate_sigma = 10000
@@ -339,14 +335,14 @@ def _run_inversion(inv_cfg, epoch_df):
     # add metadata to the InferenceData object
     idata.attrs["borehole"] = inv_cfg["borehole"]
     idata.attrs["section"] = inv_cfg["section"]
-    idata.attrs["year"] = piezo.to_datetime(inv_cfg["origin"]).year
-    idata.attrs["month"] = piezo.to_datetime(inv_cfg["origin"]).month
+    idata.attrs["year"] = to_datetime(inv_cfg["origin"]).year
+    idata.attrs["month"] = to_datetime(inv_cfg["origin"]).month
     idata.attrs["plot_observed_flow"] = plot_observed_flow
     idata.attrs["solver_radii"] = solver.r
 
     return idata
 
-def load_pressure_tests(path=input_data.wpt_multipacker):
+def load_pressure_tests(path):
     try:
         df = pd.read_excel(path, sheet_name="data (2)")
     except Exception as e:
