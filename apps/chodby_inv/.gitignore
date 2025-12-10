@@ -1,6 +1,7 @@
 workdir
 **/workdir
 outputs/
-*.ssh/
+*.ssh*
 *.pdf
 tinyDA/
+*.idata
