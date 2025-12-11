@@ -399,6 +399,19 @@ def plot_chamber_pressures(pressure_fname,
     else:
         fig.savefig(output_compared_fname)
 
+
+def print_initial_pressures():
+    bhs = Boreholes()
+    df_pressure = piezo.excavation_epoch_df()
+    for bhi in range(bhs.n_boreholes):
+        bhname = bhs.bh_name(bhi)
+        df_filtered = df_pressure[(df_pressure['borehole'] == bhname) & (df_pressure['time_days'] == 0)]
+        pressure = df_filtered['pressure'].to_numpy() / 10
+        chamber = df_filtered['section'].to_numpy()
+        for ch,p in zip(chamber,pressure):
+            print(bhname, ch, p)
+
+
 if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
     # output_fname = 'chamber_pressure_averages_refined.pdf'
@@ -407,4 +420,6 @@ if __name__ == "__main__":
     #                        work_dir / output_fname,
     #                        output_compared_fname= work_dir / output_compared_fname)
 
-    Boreholes().make_vtk_visualization("boreholes.vtp")
+    # Boreholes().make_vtk_visualization("boreholes.vtp")
+
+    print_initial_pressures()
