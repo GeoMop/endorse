@@ -24,7 +24,7 @@ def run_init_pressure_calibration(cfg:'dotdict'):
         region_str_indented = "\n".join(" "*10 + l for l in region_str.split("\n"))
         yaml_replacements["fracture_input_params"] = region_str_indented
 
-        common.call_flow(machine_config, input_data.input_dir / "config_sim_calibr_init_p_tmpl.yaml",
+        common.call_flow(machine_config, input_data.config_sim_calibration_tmpl_yaml,
                                        yaml_replacements)
 
         obs = ObservePointData(bhs, "output/flow_observe.yaml")
