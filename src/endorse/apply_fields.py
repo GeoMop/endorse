@@ -5,6 +5,16 @@ from .mesh_class import Mesh
 from endorse import hm_simulation
 
 def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+    """
+    Produce a conductivity field mockup and write it to a file.
+    Conductivity is cond_min for points out of ellipse with axis:
+    (h_axis * edz_r, v_axis * edz_r)
+    and cond_max in the ellipse:
+    (h_axis * in_r, v_axis * in_r)
+
+    We assume in_r < edz_r.
+    Geometric mean interpolation in between.
+    """
     X, Y, Z = output_mesh.el_barycenters().T
     cond_file = "fine_conductivity.msh2"
     cond_max = float(cfg_fields.cond_max)
@@ -17,13 +27,13 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     Y_rel = Y / cfg_fields.h_axis
     Z_rel = Z / cfg_fields.v_axis
 
-    # distance from center, 1== edz_radius
-    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel)) / (edz_r)
-
-    theta = (1 - distance)/(1 - in_r)
-    cond_field = np.minimum(cond_max, np.maximum(cond_min, np.exp(theta * np.log(cond_max) + (1-theta) * np.log(cond_min))))
-    abs_dist = np.sqrt(Y * Y + Z * Z)
-    cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
+    # distance from center = edz_radius on the outer ellipse
+    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel))
+    theta = (distance - in_r) / (edz_r - in_r)
+    theta = np.clip(theta, 0.0, 1.0)
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min))
+    #abs_dist = np.sqrt(Y * Y + Z * Z)
+    #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
     #print({(i+1):cond for i,cond in enumerate(cond_field)})
     output_mesh.write_fields(cond_file,
                             dict(conductivity=cond_field))
