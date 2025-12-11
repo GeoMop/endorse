@@ -43,8 +43,11 @@ class Boreholes:
         return self.config.boreholes[bh_index].id
 
     def bh_index_from_name(self, bh_name):
-        idx = next(i for i,bh in enumerate(self.config.boreholes) if bh.name == bh_name)
-        return idx
+        try:
+            idx = next(i for i,bh in enumerate(self.config.boreholes) if bh.name == bh_name)
+            return idx
+        except StopIteration:
+            return -1
 
     def bh_start(self, bh_index):
         bh = self.config.boreholes[bh_index]
