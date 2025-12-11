@@ -1,3 +1,5 @@
+# Source of borehole data: SURAO report 795/2024 (Porove tlaky PVP)
+
 geometry:
   l5_azimuth: 110 # azimuth (clockwise from North) of L5 gallery [degrees]
   y_offset: 37 # offset of model center from beginning of L5 [meters]
@@ -63,6 +65,88 @@ boreholes:
         width: 21.5e-3
         flag: 1
 
+
+
+
+
+  - name: L5-22DR
+    id: P-13+59-12
+    stationing: 21.7
+    starting_height: 1.18
+    azimuth: 140.3
+    inclination: -12.7
+    length: 16
+    packer_width: 1
+    packer_centers: [7.5, 10, 13.5]
+    sensor_positions: [8.65, 11.19, 14.66]
+    fractures:
+      - position: 2.96
+        azimuth: 230.24
+        inclination: 47.43
+        width: 39.87e-3
+        flag: 1
+#      - position: 3.41
+#        azimuth: 233.47
+#        inclination: 58.09
+#        width: 35.42e-3
+#        flag: 1
+
+  - name: L5-23UR
+    id: P-13+66+12
+    stationing: 22.7
+    starting_height: 2.79
+    azimuth: 133
+    inclination: 12.35
+    length: 12
+    packer_width: 1
+    packer_centers: [2.5, 6, 9]
+    sensor_positions: [3.68, 7.18, 10.12]
+    fractures: []
+
+  - name: L5-24DR
+    id: P-13+70-15
+    stationing: 23.5
+    starting_height: 0.98
+    azimuth: 129.5
+    inclination: -15.4
+    length: 11
+    packer_width: 1
+    packer_centers: [1.5, 5, 8]
+    sensor_positions: [2.79, 6.2, 9.15]
+    fractures:
+      - position: 0.6
+        azimuth: 343.38
+        inclination: 65.17
+        width: 17.37e-3
+        flag: 1
+      - position: 10.05
+        azimuth: 338.47
+        inclination: 48.82
+        width: 31.7e-3
+        flag: 2
+
+  - name: L5-26R
+    id: P -6+13+00
+    stationing: 26.38
+    starting_height: 2.1
+    azimuth: 186.6
+    inclination: -3
+    length: 12
+    packer_width: 1
+    packer_centers: [2.5, 6, 9]
+    sensor_positions: [3.74, 7.19, 10.1]
+    fractures:
+      - position: 0.68
+        azimuth: 18.06
+        inclination: 78.6
+        width: 22.58e-3
+        flag: 1
+      - position: 2.73
+        azimuth: 218.01
+        inclination: 49.37
+        width: 14.57e-3
+        flag: 3
+
   - name: L5-37R
     id: P +5-09+00
     stationing: 36.75
@@ -94,40 +178,6 @@ boreholes:
         inclination: 78.97
         width: 53.09e-3
         flag: 1
-
-  - name: L5-26R
-    id: P -6+13+00
-    stationing: 26.38
-    starting_height: 2.1
-    azimuth: 186.6
-    inclination: -3
-    length: 12
-    packer_width: 1
-    packer_centers: [2.5, 6, 9]
-    sensor_positions: [3.74, 7.19, 10.1]
-    fractures:
-      - position: 0.68
-        azimuth: 18.06
-        inclination: 78.6
-        width: 22.58e-3
-        flag: 1
-      - position: 2.73
-        azimuth: 218.01
-        inclination: 49.37
-        width: 14.57e-3
-        flag: 3
-
-  - name: L5-23UR
-    id: P-13+66+12
-    stationing: 22.7
-    starting_height: 2.79
-    azimuth: 133
-    inclination: 12.35
-    length: 12
-    packer_width: 1
-    packer_centers: [2.5, 6, 9]
-    sensor_positions: [3.68, 7.18, 10.12]
-    fractures: []
 
   - name: L5-37UR
     id: P +5-25+15
@@ -166,49 +216,5 @@ boreholes:
 #        width: 5.66e-3
 #        flag: 2
 
-
-  - name: L5-24DR
-    id: P-13+70-15
-    stationing: 23.5
-    starting_height: 0.98
-    azimuth: 129.5
-    inclination: -15.4
-    length: 11
-    packer_width: 1
-    packer_centers: [1.5, 5, 8]
-    sensor_positions: [2.79, 6.2, 9.15]
-    fractures:
-      - position: 0.6
-        azimuth: 343.38
-        inclination: 65.17
-        width: 17.37e-3
-        flag: 1
-      - position: 10.05
-        azimuth: 338.47
-        inclination: 48.82
-        width: 31.7e-3
-        flag: 2
-
-  - name: L5-22DR
-    id: P-13+59-12
-    stationing: 21.7
-    starting_height: 1.18
-    azimuth: 140.3
-    inclination: -12.7
-    length: 16
-    packer_width: 1
-    packer_centers: [7.5, 10, 13.5]
-    sensor_positions: [8.65, 11.19, 14.66]
-    fractures:
-      - position: 2.96
-        azimuth: 230.24
-        inclination: 47.43
-        width: 39.87e-3
-        flag: 1
-#      - position: 3.41
-#        azimuth: 233.47
-#        inclination: 58.09
-#        width: 35.42e-3
-#        flag: 1
 
 
