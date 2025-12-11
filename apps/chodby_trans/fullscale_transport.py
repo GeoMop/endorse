@@ -129,6 +129,20 @@ def population_parametrized(fr_families, parameters):
     return new_fr_families
 
 
+def update_dfn_params(cfg, param_dict):
+    # replace random parameters in fracture population config
+    fr_population_fname = "fr_population"
+    common.substitute_placeholders(file_in=job.input.dir_path / cfg.fractures.population_template,
+                                   file_out=fr_population_fname,
+                                   params=param_dict)
+    with Path(fr_population_fname).open("r", encoding="utf-8") as file:
+        content = file.read()
+        fr_dict = yaml.safe_load(content)
+        cfg.fractures.population = dotdict.create(fr_dict)
+        logging.info(f"param_dict:\n{param_dict}")
+        logging.info(f"DFN REPO:\n{cfg.fractures.population}")
+
+
 #@memoize
 @run_in_subprocess
 def prepare_msh_input(workdir, cfg, param_dict):
@@ -138,9 +152,12 @@ def prepare_msh_input(workdir, cfg, param_dict):
     fracture_box = cfg.fractures.clip_box_ratio * np.array(cfg.geometry.box_dimensions)
     logging.info(f"box: {cfg.geometry.box_dimensions}")
     logging.info(f"fracture_box: {fracture_box}")
-    
-    dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
-    fr_pop = Population.initialize_3d(dfn_cfg, fracture_box)
+    logging.info(f"DFN REPO:\n{cfg.fractures.population}")
+
+    # randomize fracture populations parameters with Forsmark data
+    # dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
+
+    fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
     dfn_seed = ot_sa.Seed.get_seedsequence(param_dict['dfn_macro_seed'])
     meshing_seed = ot_sa.Seed.get_seedsequence(param_dict['meshing_seed'])
     mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, meshing_seed)
@@ -173,9 +190,8 @@ def transport_run(cfg, tags, param_dict):
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
 
-    # with open("foo.txt", "a", encoding="utf-8") as f:
-    #         f.write("lalala\n")
-    # time.sleep(5)
+    update_dfn_params(cfg, param_dict)
+
     input_msh_filepath = Path("input_fields.msh")
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
@@ -231,6 +247,7 @@ def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
         )
         params.update(new_params)
         params.update(set_source_term(cfg))
+        params.update(param_dict)
         template = job.input.dir_path / cfg_fine.input_template
         fo = call_flow_wrap(cfg.machine_config, template, params)
 

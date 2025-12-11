@@ -4,7 +4,7 @@ test_random_data: False
 # base of the mesh file name
 mesh_name: trans_mesh
 
-geometry: &geometry !include _geometry.yaml
+geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
@@ -35,7 +35,9 @@ mesh:
 
 fractures: &fractures
     # SKB fracture population for repository domain
-    population:  !include _fr_Forsmark_repo.yaml
+#    population:  !include _fr_Forsmark_repo.yaml
+    population: {}
+    population_template:  _fr_Bukov_repo.yaml
     # upper limit on the number of (small) fractures
     n_frac_limit: 100
 
@@ -68,8 +70,6 @@ bulk_field_parametric: &bulk_field_parametric
 
 # parameters substituted into the TH model template
 transport_fullscale:
-    geometry: *geometry
-    fractures: *fractures
     # The mesh to use in both simulations.
     meshing_seed: 1
 

@@ -10,6 +10,9 @@ import hashlib
 import attrs
 import openturns as ot
 
+import pandas as pd
+from chodby_trans import job
+
 # ===== float lattice constants derived from dtype
 _FLOAT = np.float64
 _FIN = np.finfo(_FLOAT)
@@ -63,6 +66,25 @@ def LogNormal(*args, **kwargs):
     shift = float(kwargs.get('shift', '0.0'))
     return ot.LogNormal(mean, std, shift)
 
+
+def Population(*args, **kwargs):
+    """
+    :param args:
+    :param kwargs:
+        file: CSV file with sample points of the population
+        column: column header to select the points
+    :return:
+    """
+    if args:
+        kwargs['file'] = args[0]
+        kwargs['column'] = args[1]
+
+    df = pd.read_csv(job.input.dir_path / kwargs["file"])
+    points_vec = df[kwargs["column"]].to_numpy().reshape(-1,1)
+    points = ot.Sample(points_vec)
+    return ot.UserDefined(points)
+
+
 class Seed(ot.PythonDistribution):
     def __init__(self):
         self._distr = ot.Uniform(0.0, 1.0)
@@ -101,7 +123,7 @@ class Parameter:
     name: str
     group: str
     distribution: ot.Distribution
-    
+    param_hash: bytes
 
     @staticmethod
     def distr_factory(distr_name, args):
@@ -118,25 +140,30 @@ class Parameter:
             return distr_class(*args)
         
     @staticmethod
-    def from_cfg(name, cfg):
-        
+    def from_cfg(name, cfg, mixing_name=None):
+
+        if mixing_name is None:
+            mixing_name = name
+
+        param_hash = Parameter._param_hash(mixing_name)
+
         distr = Parameter.distr_factory(
             cfg.get('distr', 'Uniform'),
             cfg.get('args', []))
         group = cfg.get('group', name)
-        return Parameter(name, group, distr)
+        return Parameter(name, group, distr, param_hash)
 
     def __attrs_post_init__(self):
         if self.group is None:
             self.group = self.name
 
-    @property
-    def param_hash(self):
+    @staticmethod
+    def _param_hash(name):
         """
         Hash param name.
         masked to significand bits.
         """
-        return hashlib.blake2b(self.name.encode("utf-8"), digest_size=8).digest()
+        return hashlib.blake2b(name.encode("utf-8"), digest_size=8).digest()
  
 
     def map_from_group(self, u_col: np.ndarray) -> np.ndarray:
@@ -322,7 +349,21 @@ class SensitivityAnalysis:
     @staticmethod
     def from_cfg(sa_cfg):
         param_cfg = sa_cfg['parameters']
-        parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
+        # parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
+        parameters = dict()
+        for name, p_cfg in param_cfg.items():
+            if p_cfg['distr'] == 'Population':
+                # if not set, give a unique common group
+                sub_group = p_cfg['group'] if 'group' in p_cfg else name
+                for subname, sub_args in p_cfg['parameters'].items():
+                    sub_p_cfg = p_cfg.copy()
+                    sub_p_cfg['group'] = sub_group
+                    sub_p_cfg['args'].update(sub_args)
+                    _subname = name + '_' + subname
+                    parameters[_subname] = Parameter.from_cfg(_subname, sub_p_cfg, name)
+            else:
+                parameters[name] = Parameter.from_cfg(name, p_cfg)
+
         return SensitivityAnalysis(
             parameters,
             sa_cfg.get('sampler', "sobol"),
