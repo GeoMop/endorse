@@ -86,7 +86,7 @@ class Wrapper:
                 assert pname in cfg.transport_fullscale, pname + " not in transport_fullscale"
                 cfg.transport_fullscale[pname] = data_par[idx]
 
-    def get_observations(self, tags, parameters):
+    def get_observations(self, tags, param_dict):
         t = time.time()
         logging.info(f"transport_wrapper: get observations tags={tags}")
         cfg = self._config
@@ -107,9 +107,6 @@ class Wrapper:
                 slice_array = np.random.rand(len(times), ng, ng, 2)
                 rc = 42
             else:
-                #self.set_parameters(parameters)
-                sa = ot_sa.SensitivityAnalysis.from_cfg(self._config.ot_sensitivity)
-                param_dict = sa.param_vec_to_dict(parameters)
                 rc, slice_array = transport.transport_run(
                     self._config, 
                     tags, param_dict)
