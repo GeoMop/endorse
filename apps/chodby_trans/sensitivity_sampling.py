@@ -208,6 +208,7 @@ def single_sample(args):
         wrap = transport_wrapper.Wrapper(cfg=new_cfg)
         with common.workdir(str(sample_dir), clean=False):
             common.dump_config(new_cfg)
+            res, sample_data = wrap.get_observations(tags, param_dict)
             logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
             # print("LEN:", len(obs_data))
         

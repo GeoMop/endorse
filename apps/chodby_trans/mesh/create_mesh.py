@@ -114,9 +114,12 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     main_tunnel_points_clustered = merge_along_sequence(main_tunnel_points, cluster_tol)
 
     # create polygon
-    tunnel_polygon = factory.make_polygon(points=main_tunnel_points_clustered)
+    tunnel_polygon = (factory.make_polygon(points=main_tunnel_points_clustered)
+                      .translate([cfg.geometry.box_center[0], cfg.geometry.box_center[1], 0]))
     # compute center of polygon
     cfg_mt.center = np.average(main_tunnel_points_clustered, axis=0)
+    cfg_mt.center[:1] = cfg_mt.center[:1] + cfg.geometry.box_center[:1]
+
     tunnel_center = factory.point(cfg_mt.center)
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
     tunnel_polygon.translate(vector=[0, -cfg_mt.length / 2, 0])
