@@ -262,16 +262,10 @@ class InputDesign:
             da = da.isel(sim_time=slice(1, None))  # skip t = 0
 
         # 2) Stack to (sample, output)
-        #    Ensure there's always at least one output dim by adding 'aux'
-        output_dims = set(da.dims).union({"aux"}) - {"IID", "QMC"}
-        conc_2d = (
-            da.expand_dims({"aux": [0]})
-            .stack(sample=("IID", "QMC"), output=sorted(output_dims))
-        )
+        conc_2d, _ = self._flatten_da_to_conc_2d(da)
 
         # 3) Low-level Sobol on 2D (sample, output)
-        #    Use .transpose so axis 0 is sample, axis 1 is output
-        sobol_ds = self.compute_sobol(conc_2d.transpose("sample", "output").compute())
+        sobol_ds = self.compute_sobol(conc_2d.compute())
         # unstack 'output' MultiIndex back to original dims (+ 'aux')
         sobol_ds = sobol_ds.unstack("output")
 
@@ -358,18 +352,30 @@ class InputDesign:
         ds = xr.Dataset(data_vars=data_vars, coords=coords)
         return ds
 
+    def _flatten_da_to_conc_2d(
+        self,
+        da: xr.DataArray,
+    ) -> tuple[xr.DataArray, list[str]]:
+        """Stack (IID, QMC) → sample and everything else → output."""
+        output_dims = set(da.dims).union({"aux"})
+        output_dims -= {"IID", "QMC"}
+        output_dims = sorted(output_dims)
+        conc_2d = (
+            da.expand_dims({"aux": [0]})
+            .stack(sample=("IID", "QMC"), output=output_dims)
+            .transpose("sample", "output")
+        )
+        return conc_2d, output_dims
+
     def _bootstrap_sobol_errors_from_da(
         self,
         da: xr.DataArray,
-        conc_2d: xr.DataArray,
         n_boot: int,
         seed: int | None = None,
     ) -> xr.Dataset:
         """
         Internal helper:
         - da: original xarray with dims including 'IID' and 'QMC'
-        - conc_2d: 2D DataArray (sample, output) built from `da`
-                   where 'output' is a MultiIndex with levels = original output dims
         - n_boot: number of bootstrap replicates
         - seed: RNG seed
 
@@ -381,73 +387,20 @@ class InputDesign:
         """
         assert isinstance(da, xr.DataArray)
         assert "IID" in da.dims and "QMC" in da.dims
-        assert "sample" in conc_2d.dims and "output" in conc_2d.dims
         assert n_boot > 0
 
         rng = np.random.default_rng(seed)
-
-        # --- base 2D numeric output array ---
-        # conc_2d: (sample, output) where 'output' is a MultiIndex
-        Y = np.asarray(conc_2d.transpose("sample", "output").data)
-        N, n_out = Y.shape
-        assert N == self.group_mat.shape[0]
-
-        # Original output MultiIndex and its level names (e.g. ['aux', 'out', ...])
-        out_index = conc_2d["output"].to_index()   # pandas.MultiIndex
-        output_dims = out_index.names
-
-        # --- Saltelli block layout: bootstrap units are blocks (IID) ---
-        i_sample = np.asarray(self.i_sample)
-        unique_blocks = np.unique(i_sample)
-        assert len(i_sample) == len(np.unique(i_sample))
-        n_blocks = unique_blocks.size
-        assert n_blocks == len(i_sample)
-        rows_by_block = [np.where(i_sample == k)[0] for k in unique_blocks]
-        block_sizes = [len(r) for r in rows_by_block]
-        assert len(set(block_sizes)) == 1  # all blocks same size
-        block_len = block_sizes[0]
-
-        rows_by_block = np.stack(rows_by_block, axis=0)  # (n_blocks, block_len)
-        assert rows_by_block.shape == (n_blocks, block_len)
-
-        # --- bootstrap indices: (n_boot, N) ---
-        idx_block_ids = rng.integers(0, n_blocks, size=(n_boot, n_blocks))
-        idx_boot = rows_by_block[idx_block_ids, :]  # (n_boot, n_blocks, block_len)
-        idx_boot = idx_boot.reshape(n_boot, -1)     # (n_boot, N)
-        assert idx_boot.shape[1] == N
-
-        # --- build all bootstrap Y as 3D: (sample, boot, out_i) ---
-        # Use a simple integer output index out_i = 0..n_out-1 to avoid nested MultiIndex issues
-        Y_boot = np.empty((n_boot, N, n_out), dtype=Y.dtype)
-        for b in range(n_boot):
-            Y_boot[b, :, :] = Y[idx_boot[b, :], :]
-        Y_boot = np.transpose(Y_boot, (1, 0, 2))  # (N, n_boot, n_out)
-
         boot_coord = np.arange(n_boot, dtype=int)
-        out_i_coord = np.arange(n_out, dtype=int)
 
-        conc_boot = xr.DataArray(
-            Y_boot,
-            dims=("sample", "boot", "out_i"),
-            coords={
-                "sample": conc_2d["sample"],
-                "boot": boot_coord,
-                "out_i": out_i_coord,
-            },
-        )
+        # --- bootstrap along IID dimension ---
+        iid_size = da.sizes["IID"]
+        idx_boot = rng.integers(0, iid_size, size=(n_boot, iid_size))
+        da_boot = da.isel(IID=("boot", idx_boot)).assign_coords(boot=boot_coord)
 
-        # --- stack (boot, out_i) into a single 'output' and call OT once ---
-        conc_boot_2d = conc_boot.stack(output=("boot", "out_i"))  # (sample, output)
-        # Important: pass as DataArray so compute_sobol preserves this 'output' MultiIndex
-        sobol_boot = self.compute_sobol(
-            conc_boot_2d.transpose("sample", "output")
-        )
-
-        # sobol_boot has coords:
-        #   - 'output': MultiIndex with levels ('boot', 'out_i')
-        # We want dims: group, boot, out_i
-        sobol_boot = sobol_boot.assign_coords(output=conc_boot_2d["output"])
-        sobol_boot = sobol_boot.unstack("output")  # → dims include 'boot' and 'out_i'
+        # --- flatten (sample, output) including boot in output dims ---
+        conc_boot_2d, output_dims = self._flatten_da_to_conc_2d(da_boot)
+        sobol_boot = self.compute_sobol(conc_boot_2d)
+        sobol_boot = sobol_boot.unstack("output")
 
         # --- compute percentile CIs over 'boot' dimension ---
         alpha = 1.0 - self.confidence_level
@@ -456,35 +409,16 @@ class InputDesign:
         quantiles = [q_low, q_high]
         bound = np.array(["low", "high"], dtype=object)
 
-        S1 = sobol_boot["S1"]  # dims: ('group', 'boot', 'out_i')
-        ST = sobol_boot["ST"]  # same
-        S2 = sobol_boot["S2"]  # dims: ('group', 'group2', 'boot', 'out_i')
+        base_output_dims = [dim for dim in output_dims if dim != "boot"]
 
-        # quantiles along 'boot' → dims ('group', 'quantile', 'out_i') etc.
+        S1 = sobol_boot["S1"]  # dims: ('group', 'boot', *output_dims)
+        ST = sobol_boot["ST"]  # same
+        S2 = sobol_boot["S2"]  # dims: ('group', 'group2', 'boot', *output_dims)
+
+        # quantiles along 'boot' → dims ('group', 'quantile', *output_dims)
         S1_q = S1.quantile(quantiles, dim="boot")
         ST_q = ST.quantile(quantiles, dim="boot")
         S2_q = S2.quantile(quantiles, dim="boot")
-
-        # attach original MultiIndex to out_i, then unstack to original output dims
-        # S1_q: dims ('group', 'quantile', 'out_i') → ('group', 'quantile', *output_dims)
-        S1_q = (
-            S1_q
-            .assign_coords(output=("out_i", out_index))
-            .swap_dims({"out_i": "output"})
-            .unstack("output")
-        )
-        ST_q = (
-            ST_q
-            .assign_coords(output=("out_i", out_index))
-            .swap_dims({"out_i": "output"})
-            .unstack("output")
-        )
-        S2_q = (
-            S2_q
-            .assign_coords(output=("out_i", out_index))
-            .swap_dims({"out_i": "output"})
-            .unstack("output")
-        )
 
         # rename quantile → bound
         S1_q = S1_q.rename(quantile="bound").assign_coords(bound=bound)
@@ -492,10 +426,9 @@ class InputDesign:
         S2_q = S2_q.rename(quantile="bound").assign_coords(bound=bound)
 
         # Reorder dims to match base S1/ST/S2 + 'bound'
-        # base S1 has dims ('group', *output_dims), so we want ('group', *output_dims, 'bound')
-        S1_err = S1_q.transpose("group", *output_dims, "bound")
-        ST_err = ST_q.transpose("group", *output_dims, "bound")
-        S2_err = S2_q.transpose("group", "group2", *output_dims, "bound")
+        S1_err = S1_q.transpose("group", *base_output_dims, "bound")
+        ST_err = ST_q.transpose("group", *base_output_dims, "bound")
+        S2_err = S2_q.transpose("group", "group2", *base_output_dims, "bound")
 
         ds_err = xr.Dataset(
             data_vars=dict(
