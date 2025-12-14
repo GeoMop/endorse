@@ -196,9 +196,19 @@ def single_sample(args):
                     "sample {} ===========================".format(tags[0]).zfill(3))
         logging.info(f"tags={tags}, parameters={parameters}, sample_dir={str(sample_dir)}")
 
-        wrap = transport_wrapper.Wrapper(cfg=cfg)
+        sa = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+        param_dict = sa.param_vec_to_dict(parameters)
+        logging.info(f"param_dict:\n{param_dict}")
+        variant_patch = dict()
+        for k, v in cfg.ot_sensitivity.parameters.items():
+            if "path" in v:
+                variant_patch[v.path] = param_dict[k]
+        new_cfg = common.apply_variant(cfg, variant_patch)
+
+        wrap = transport_wrapper.Wrapper(cfg=new_cfg)
         with common.workdir(str(sample_dir), clean=False):
-            res, sample_data = wrap.get_observations(tags, parameters)
+            common.dump_config(new_cfg)
+            res, sample_data = wrap.get_observations(tags, param_dict)
             logging.info(f"Flow123d res: {res, np.shape(sample_data)}")
             # print("LEN:", len(obs_data))
         

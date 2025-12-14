@@ -6,7 +6,7 @@
 
 # x,y,z dimension
 box_dimensions: [40, 40, 40]
-box_center: [0,0,-10]
+box_center: [0,5,-5]
 clip_box_dimensions: [40, 40, 40]
 
 edz_radius: 2.5
@@ -25,7 +25,7 @@ main_tunnel:
   center: [0,0,0] # to be filled automatically as center of csv_points
 
 storage_borehole_distance: 4.750
-n_storage_boreholes: 5
+n_storage_boreholes: 7
 damaged_storage_borehole: 0  # can be negative => no damaged container
 
 # Storage boreholes

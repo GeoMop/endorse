@@ -94,6 +94,23 @@ parameters:
     args: { mean_log10: -0.6, std_log10: 0.3 } # log10(0.25)=-0.6,
     group: materials
 
+  edz_cond_min:
+    distr: LogNormal
+    args: { mean_log10: -12.52, std_log10: 0.3 } # log10(3×10^(-13))=-12.52,
+    group: materials
+    path: bulk_field_parametric/cond_min
+  edz_cond_max:
+    distr: LogNormal
+    args: { mean_log10: -8, std_log10: 0.3 }
+    group: materials
+    path: bulk_field_parametric/cond_max
+
+  edz_r:
+    distr: Normal
+    args: [2.5, 0.25]
+    group: materials
+    path: geometry/edz_radius
+
   dfn_macro_seed: 
     # seed for small fractures
     distr: Seed         #ot_sa.Seed
