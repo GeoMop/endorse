@@ -1,6 +1,7 @@
 # test_sensitivity.py
 import numpy as np
 import openturns as ot
+import xarray as xr
 import pytest
 from chodby_trans import ot_sa as sa  # e.g., `import sensitivity as sa`
 
@@ -150,7 +151,177 @@ def test_sa_end_to_end_3params_2outputs():
     assert lo1 <= hi1 and -0.1 <= lo1 <= 0.2 and 0.1 <= hi1 <= 0.5
     assert loT <= hiT and -0.1 <= loT <= 0.2 and 0.1 <= hiT <= 0.5
 
+def test_sa_end_to_end_3params_2outputs():
+    """
+    End-to-end: 3 params, 2 outputs.
+    - k1 (LogNormal) and k2 (Uniform) share group 'g1'
+    - S  (Normal)    in its own group 'S'
+    Model:
+        y1 = k1 + k2            (depends only on group 'g1')
+        y2 = S                  (depends only on group 'S')
+    Expectations (per-output S1 at group level):
+        - For y1: S1['g1'] ~ 1, S1['S'] ~ 0
+        - For y2: S1['S'] ~ 1, S1['g1'] ~ 0
+    """
+    sa_cfg = {
+        "n_samples": 512,
+        "sampler": "sobol",
+        "second_order": False,
+        "confidence_level": 0.95,
+        "parameters": {
+            "k1": {"distr": "LogNormal",
+                   "args": [0.0, 0.25],
+                   "group": "g1"},
+            "k2": {"distr": "Uniform",  "args": [0.1, 0.5],   "group": "g1"},
+            "S":  {"distr": "Normal",   "args": [0.0, 1.0]},  # own group "S"
+        },
+    }
+    sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
 
+    # design + mapping
+    in_design = sa_obj.sample(seed=2024, n_samples=sa_obj.n_samples)
+    Xp = in_design.param_mat
+
+    # build outputs: y1 = k1 + k2, y2 = S
+    name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
+    y1 = Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
+    y2 = Xp[:, name_to_col["S"]]
+    Y = np.column_stack([y1, y2])
+
+    # compute Sobol’ at group level using InputDesign.compute_sobol
+    ds = in_design.compute_sobol(Y)  # xr.Dataset
+
+    # group indices
+    groups = list(ds.coords["group"].values)
+    g1_idx = groups.index("g1")
+    S_idx = groups.index("S")
+
+    # shapes
+    assert ds["S1"].shape == (len(groups), 2)
+    assert ds["ST"].shape == (len(groups), 2)
+
+    S1 = ds["S1"].values  # (group, output)
+    ST = ds["ST"].values
+
+    S1_g1 = S1[g1_idx, :]
+    S1_S  = S1[S_idx, :]
+
+    # per-output expectations (use relaxed tolerances due to QMC randomness & hashing)
+    # y1 depends only on group g1
+    assert S1_g1[0] > 0.8
+    assert S1_S[0] < 0.1
+
+    # y2 depends only on group S
+    assert S1_S[1] > 0.8
+    assert S1_g1[1] < 0.1
+
+    # aggregated CI sanity (uses OT's aggregated intervals)
+    S1_agg_ci = ds["S1_agg_ci"].values  # (group, bound)
+    ST_agg_ci = ds["ST_agg_ci"].values
+
+    lo1, hi1 = S1_agg_ci[g1_idx, :]
+    loT, hiT = ST_agg_ci[g1_idx, :]
+    assert lo1 <= hi1
+    assert loT <= hiT
+    # loose but non-trivial ranges
+    assert -0.1 <= lo1 <= 0.2 and 0.1 <= hi1 <= 0.9
+    assert -0.1 <= loT <= 0.2 and 0.1 <= hiT <= 0.9
+
+
+def test_compute_sobol_xr_with_bootstrap():
+    """
+    Test the high-level InputDesign.compute_sobol_xr with bootstrapping.
+    We build a simple 2-group, 1-output model and check that:
+      - S1_boot_err / ST_boot_err are present,
+      - OT point estimates S1/ST lie inside bootstrap CIs (per group).
+    """
+    sa_cfg = {
+        "n_samples": 256,
+        "sampler": "sobol",
+        "second_order": False,
+        "confidence_level": 0.95,
+        "parameters": {
+            "k1": {"distr": "LogNormal",
+                   "args": [0.0, 0.25],
+                   "group": "g1"},
+            "k2": {"distr": "Uniform",
+                   "args": [0.1, 0.5],
+                   "group": "g1"},
+            "S":  {"distr": "Normal",
+                   "args": [0.0, 1.0]},  # own group "S"
+        },
+    }
+    sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
+
+    # design + mapping
+    in_design = sa_obj.sample(seed=2025, n_samples=sa_obj.n_samples)
+    Xp = in_design.param_mat
+
+    # Single-output model: y = k1 + k2 + 0*S  (only group g1 matters)
+    name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
+    y = Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
+    Y = y.reshape(-1, 1)
+
+    # Build xarray DataArray with dims ('IID','QMC','out') from flat sample index
+    N = Y.shape[0]
+    i_sample = np.asarray(in_design.i_sample)
+    i_saltelli = np.asarray(in_design.i_saltelli)
+    assert i_sample.shape == (N,) and i_saltelli.shape == (N,)
+
+    Y_da = xr.DataArray(
+        Y,
+        dims=("sample", "out"),
+        coords={
+            "sample": np.arange(N),
+            "IID": ("sample", i_sample),
+            "QMC": ("sample", i_saltelli),
+            "out": np.arange(Y.shape[1]),
+        },
+    )
+    da = Y_da.set_index(sample=("IID", "QMC")).unstack("sample")  # dims ('IID','QMC','out')
+
+    # High-level Sobol with bootstrap
+    ds = in_design.compute_sobol_xr(da, n_boot=1024, boot_seed=43)
+
+    # Check that bootstrap variables exist
+    assert "S1_boot_err" in ds.data_vars
+    assert "ST_boot_err" in ds.data_vars
+    assert "S2_boot_err" in ds.data_vars
+
+    # For this test: dims 'group','aux','out' (S1/ST) and 'group','aux','out','bound' (bootstrap)
+    groups = list(ds.coords["group"].values)
+    g1_idx = groups.index("g1")
+    S_idx = groups.index("S")
+
+    # Base OT estimates (single output: aux=0, out=0)
+    S1_base = ds["S1"].sel(aux=0).isel(out=0).values  # (group,)
+    ST_base = ds["ST"].sel(aux=0).isel(out=0).values  # (group,)
+
+    # Bootstrap CIs
+    S1_low  = ds["S1_boot_err"].sel(aux=0, bound="low").isel(out=0).values
+    S1_high = ds["S1_boot_err"].sel(aux=0, bound="high").isel(out=0).values
+    ST_low  = ds["ST_boot_err"].sel(aux=0, bound="low").isel(out=0).values
+    ST_high = ds["ST_boot_err"].sel(aux=0, bound="high").isel(out=0).values
+
+    # Check OT point estimates lie inside bootstrap CIs (per group)
+    print("S1 bounds: ", S1_low, "\n<=\n", S1_base, "\n<=\n",  S1_high)
+    print("S1 OT CI: ", ds['S1_agg_ci'].values)
+    assert np.all(S1_low <= S1_base)
+    assert np.all(S1_base <= S1_high)
+    print("ST bounds: ", ST_low, "\n<=\n", ST_base, "\n<=\n",  ST_high)
+    print("ST OT CI: ", ds['ST_agg_ci'].values)
+    assert np.all(ST_low <= ST_base)
+    assert np.all(ST_base <= ST_high)
+
+    # Sanity: length of intervals is positive and < 1
+    assert np.all((S1_high - S1_low) > 0.0)
+    assert np.all((S1_high - S1_low) < 1.0)
+    assert np.all((ST_high - ST_low) > 0.0)
+    assert np.all((ST_high - ST_low) < 1.0)
+
+    # And the model structure: only group g1 should matter for this output
+    assert S1_base[g1_idx] > 0.8
+    assert S1_base[S_idx] < 0.1
 
 def _first_order_block_params(Ap, Bp, group_of_param, n_groups):
     """
