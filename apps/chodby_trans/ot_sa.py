@@ -11,6 +11,8 @@ import attrs
 import openturns as ot
 
 import pandas as pd
+from scipy.stats import alpha
+
 from chodby_trans import job
 
 # ===== float lattice constants derived from dtype
@@ -273,6 +275,7 @@ class InputDesign:
         if n_boot > 0:
             boot_err_ds = self._bootstrap_sobol_errors_from_da(
                 da=da,
+                #da_sobol=sobol_ds,
                 n_boot=n_boot,
                 seed=boot_seed,
             )
@@ -358,18 +361,88 @@ class InputDesign:
     ) -> tuple[xr.DataArray, list[str]]:
         """Stack (IID, QMC) → sample and everything else → output."""
         output_dims = set(da.dims).union({"aux"})
-        output_dims -= {"IID", "QMC"}
+        output_dims -= { "QMC", "IID"}
         output_dims = sorted(output_dims)
         conc_2d = (
             da.expand_dims({"aux": [0]})
-            .stack(sample=("IID", "QMC"), output=output_dims)
+            .stack(sample=("QMC", "IID"), output=output_dims)
             .transpose("sample", "output")
         )
         return conc_2d, output_dims
 
+    # def plot_bootstrap(self, ds_sobol, s1_boot):
+    #     """
+    #        Plot jittered scatter of bootstrap S1 indices for the given output,
+    #        for all groups, using matplotlib OO API.
+    #
+    #        Parameters
+    #        ----------
+    #        S1_boot : np.ndarray
+    #            Array of shape (n_boot, n_groups, n_outputs).
+    #        ds_sobol : xr.Dataset
+    #            Dataset returned by InputDesign.compute_sobol_xr (n_boot can be 0 or >0).
+    #            Used only to get group names and base S1 estimates.
+    #        output_index : int, default 0
+    #            Which output index to visualize (along the last axis of S1_boot).
+    #        jitter_width : float, default 0.15
+    #            Half-width of horizontal jitter.
+    #        alpha : float, default 0.5
+    #            Marker alpha for bootstrap points.
+    #        """
+    #     import matplotlib.pyplot as plt
+    #     s1_boot = s1_boot.isel(aux=0, out=0).drop_vars("aux").drop_vars("out")
+    #     ds_sobol = ds_sobol.isel(aux=0, out=0).drop_vars("aux").drop_vars("out")
+    #     output_index = 0
+    #     jitter_width = 0.15
+    #     alpha = 0.5
+    #
+    #     groups = list(s1_boot["group"].values)
+    #     n_groups = len(groups)
+    #     n_boot = len(s1_boot['boot'])
+    #
+    #     # base S1 estimates for that output (aux=0 if present)
+    #     S1_base = ds_sobol["S1"].values
+    #
+    #     # Build figure / axes (OO API)
+    #     fig, ax = plt.subplots(figsize=(1.8 * n_groups, 5.0))
+    #
+    #     x_positions = np.arange(n_groups, dtype=float)
+    #
+    #     for j in range(n_groups):
+    #         x0 = x_positions[j]
+    #         # jittered x for bootstrap points
+    #         x_j = x0 + (np.random.rand(n_boot) - 0.5) * 2.0 * jitter_width
+    #         y_j = s1_boot.isel(group=j).values
+    #
+    #         # scatter all bootstrap draws
+    #         ax.scatter(x_j, y_j, s=10, alpha=alpha)
+    #
+    #         # overlay base estimate as a horizontal marker
+    #         ax.scatter(
+    #             [x0],
+    #             [S1_base[j]],
+    #             s=60,
+    #             edgecolor="k",
+    #             facecolor="none",
+    #             linewidth=1.2,
+    #             zorder=3,
+    #         )
+    #
+    #     ax.set_xticks(x_positions)
+    #     ax.set_xticklabels(groups, rotation=45, ha="right")
+    #     ax.set_ylabel(f"S1 bootstrap samples (output {output_index})")
+    #     ax.set_xlabel("Group")
+    #     ax.set_title("Bootstrap S1 indices – jittered scatter")
+    #
+    #     ax.grid(True, axis="y", linestyle=":", linewidth=0.5)
+    #
+    #     fig.tight_layout()
+    #     plt.show()
+
     def _bootstrap_sobol_errors_from_da(
         self,
         da: xr.DataArray,
+        # da_sobol,
         n_boot: int,
         seed: int | None = None,
     ) -> xr.Dataset:
@@ -395,12 +468,23 @@ class InputDesign:
         # --- bootstrap along IID dimension ---
         iid_size = da.sizes["IID"]
         idx_boot = rng.integers(0, iid_size, size=(n_boot, iid_size))
-        da_boot = da.isel(IID=("boot", idx_boot)).assign_coords(boot=boot_coord)
+        idx_da = xr.DataArray(
+            idx_boot,
+            dims=("boot", "IID"),
+            coords={"boot": np.arange(n_boot)},
+        )
+
+        da_boot = (
+            da.isel(IID=idx_da)
+            .reset_coords("IID", drop=True)
+            .assign_coords(IID=da.coords["IID"])
+        )
 
         # --- flatten (sample, output) including boot in output dims ---
         conc_boot_2d, output_dims = self._flatten_da_to_conc_2d(da_boot)
         sobol_boot = self.compute_sobol(conc_boot_2d)
         sobol_boot = sobol_boot.unstack("output")
+        # self.plot_bootstrap(da_sobol, sobol_boot["S1"])
 
         # --- compute percentile CIs over 'boot' dimension ---
         alpha = 1.0 - self.confidence_level
@@ -503,7 +587,8 @@ class SensitivityAnalysis:
         List of unique group names, order unrelated to the order of parameters.
         Returns:
         """
-        return list({p.group for p in self.parameters.values()})
+        # unique groups in the order they first appear in parameters
+        return list(dict.fromkeys(p.group for p in self.parameters.values()))
 
     
     def __attrs_post_init__(self):

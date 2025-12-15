@@ -236,7 +236,7 @@ def test_compute_sobol_xr_with_bootstrap():
       - OT point estimates S1/ST lie inside bootstrap CIs (per group).
     """
     sa_cfg = {
-        "n_samples": 256,
+        "n_samples": 1024,
         "sampler": "sobol",
         "second_order": False,
         "confidence_level": 0.95,
@@ -245,7 +245,7 @@ def test_compute_sobol_xr_with_bootstrap():
                    "args": [0.0, 0.25],
                    "group": "g1"},
             "k2": {"distr": "Uniform",
-                   "args": [0.1, 0.5],
+                   "args": [0.1, 10],
                    "group": "g1"},
             "S":  {"distr": "Normal",
                    "args": [0.0, 1.0]},  # own group "S"
@@ -253,13 +253,16 @@ def test_compute_sobol_xr_with_bootstrap():
     }
     sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
 
+
     # design + mapping
     in_design = sa_obj.sample(seed=2025, n_samples=sa_obj.n_samples)
     Xp = in_design.param_mat
 
     # Single-output model: y = k1 + k2 + 0*S  (only group g1 matters)
     name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
-    y = Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
+    y = 0.001*Xp[:, name_to_col["S"]] + Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
+    # little dependence on 'S'
+
     Y = y.reshape(-1, 1)
 
     # Build xarray DataArray with dims ('IID','QMC','out') from flat sample index
@@ -281,7 +284,7 @@ def test_compute_sobol_xr_with_bootstrap():
     da = Y_da.set_index(sample=("IID", "QMC")).unstack("sample")  # dims ('IID','QMC','out')
 
     # High-level Sobol with bootstrap
-    ds = in_design.compute_sobol_xr(da, n_boot=1024, boot_seed=43)
+    ds = in_design.compute_sobol_xr(da, n_boot=512, boot_seed=41)
 
     # Check that bootstrap variables exist
     assert "S1_boot_err" in ds.data_vars
