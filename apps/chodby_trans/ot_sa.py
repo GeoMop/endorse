@@ -190,7 +190,8 @@ class Parameter:
 @attrs.define(frozen=False)
 class InputDesign:
     groups: List[str]
-    param_names: List[str]
+    n_samples: int
+    param_groups: Dict[str, str]
     group_mat: np.ndarray
     param_mat: np.ndarray
     confidence_level: float = 0.95    
@@ -198,11 +199,11 @@ class InputDesign:
 
     @cached_property
     def saltelli_layout(self):
-        return infer_saltelli_layout(self.param_mat, self.n_groups)
+        return self.get_saltelli_layout_ot()
 
     @property
     def name_to_col(self):
-        return {k:i for i, k in enumerate(self.param_names)}
+        return {k:i for i, k in enumerate(self.param_groups.keys())}
 
     @property
     def n_groups(self):
@@ -211,10 +212,6 @@ class InputDesign:
     @property
     def n_evals(self):
         return self.group_mat.shape[0]
-
-    @property
-    def n_samples(self):
-        return len(np.unique(self.i_sample))
 
     @property
     def n_saltelli(self):
@@ -229,6 +226,15 @@ class InputDesign:
     def i_saltelli(self):
         i_sample, i_saltelli, A_mask = self.saltelli_layout
         return i_saltelli
+
+    @property
+    def block_size(self):
+        L = self.n_evals // self.n_samples
+        L1 = 2 + self.n_groups
+        L2 = 2 + 2 * self.n_groups
+        assert L in (L1, L2)
+        return L
+
 
     @property
     def A_mask(self):
@@ -264,7 +270,7 @@ class InputDesign:
             da = da.isel(sim_time=slice(1, None))  # skip t = 0
 
         # 2) Stack to (sample, output)
-        conc_2d, _ = self._flatten_da_to_conc_2d(da)
+        conc_2d, _ = self._flatten_da_to_2d(da)
 
         # 3) Low-level Sobol on 2D (sample, output)
         sobol_ds = self.compute_sobol(conc_2d.compute())
@@ -355,7 +361,7 @@ class InputDesign:
         ds = xr.Dataset(data_vars=data_vars, coords=coords)
         return ds
 
-    def _flatten_da_to_conc_2d(
+    def _flatten_da_to_2d(
         self,
         da: xr.DataArray,
     ) -> tuple[xr.DataArray, list[str]]:
@@ -368,6 +374,15 @@ class InputDesign:
             .stack(sample=("QMC", "IID"), output=output_dims)
             .transpose("sample", "output")
         )
+
+        # verify correct flattening with respect to design layout
+        sample_index = conc_2d.indexes["sample"]
+        iid = np.asarray(sample_index.get_level_values("IID"), dtype=int)
+        qmc = np.asarray(sample_index.get_level_values("QMC"), dtype=int)
+
+        block_index, saltelli_index, _ = self.saltelli_layout
+        assert np.array_equal(iid, block_index) and np.array_equal(qmc, saltelli_index)
+
         return conc_2d, output_dims
 
     # def plot_bootstrap(self, ds_sobol, s1_boot):
@@ -481,7 +496,7 @@ class InputDesign:
         )
 
         # --- flatten (sample, output) including boot in output dims ---
-        conc_boot_2d, output_dims = self._flatten_da_to_conc_2d(da_boot)
+        conc_boot_2d, output_dims = self._flatten_da_to_2d(da_boot)
         sobol_boot = self.compute_sobol(conc_boot_2d)
         sobol_boot = sobol_boot.unstack("output")
         # self.plot_bootstrap(da_sobol, sobol_boot["S1"])
@@ -520,9 +535,148 @@ class InputDesign:
                 ST_boot_err=ST_err,
                 S2_boot_err=S2_err,
             ),
+            coords=S2_err.coords
         )
         return ds_err
 
+    @staticmethod
+    def _compute_block_mask_from_representative_block(block0: np.ndarray) -> np.ndarray:
+        """
+        Given representative rows of a single Saltelli block (shape (L, Mp)),
+        compute block_mask[i, j] = True iff column j in row i equals the A-row column j.
+        """
+        L, Mp = block0.shape
+
+        # Identify A-row: row with maximum agreement with all rows
+        equal_cols = (block0[:, None, :] == block0[None, :, :])      # (L, L, Mp)
+        equality_counts = equal_cols.sum(axis=2).sum(axis=1)         # (L,)
+        a_idx = int(np.argmax(equality_counts))
+
+        block_mask = (block0 == block0[a_idx, :])                    # (L, Mp) bool
+        return block_mask
+
+    @staticmethod
+    def _assert_layout_fits_matrix(
+            X: np.ndarray,
+            block_index: np.ndarray,
+            saltelli_index: np.ndarray,
+            block_mask: np.ndarray,
+            n_samples: int,
+    ) -> None:
+        """
+        Assert that for every block, each within-block row is a mix of that block's A and B rows
+        according to block_mask.
+        """
+        X = np.asarray(X)
+        N, Mp = X.shape
+        L = block_mask.shape[0]
+        assert N == n_samples * L
+        assert block_mask.shape == (L, Mp)
+        assert block_index.shape == (N,)
+        assert saltelli_index.shape == (N,)
+
+        # Find A-row and B-row positions inside the block by True-count extremes
+        true_counts = block_mask.sum(axis=1)
+        a_pos = int(np.argmax(true_counts))
+        b_pos = int(np.argmin(true_counts))
+
+        # Basic sanity: A-row should be all True, B-row should be all False
+        assert true_counts[a_pos] == Mp
+        assert true_counts[b_pos] == 0
+
+        A_mask = np.repeat(block_mask, n_samples, axis = 0)
+        ref_pos = np.where(A_mask, a_pos, b_pos)
+        cols = np.arange(Mp)[None, :]  # shape (1, D)
+        expected = X[ref_pos*n_samples + block_index[:,None], cols]
+        # Values must be equal exactly
+        good_param = X[:, :] == expected
+        if not np.all(good_param):
+            print("Layout assertion failed: some parameter values do not match the expected Saltelli mixing.")
+            bad_rows = np.where(np.min(good_param, axis=1)==False, np.arange(N))
+            for r in bad_rows:
+                print(f"{r:d3}  X: {X[r,:]}")
+                print(f"  expc: {expected[r,:]}")
+        #
+        # # Every block must have exactly one row per within-block position
+        # for b in range(n_samples):
+        #     rows_b = np.where(block_index == b)[0]
+        #     assert rows_b.size == L
+        #     # each saltelli_index appears exactly once in this block
+        #     for i in range(L):
+        #         assert np.sum((block_index == b) & (saltelli_index == i)) == 1
+        #
+        #     rA = np.where((block_index == b) & (saltelli_index == a_pos))[0][0]
+        #     rB = np.where((block_index == b) & (saltelli_index == b_pos))[0][0]
+        #     Arow = X[rA, :]
+        #     Brow = X[rB, :]
+        #
+        #     for i in range(L):
+        #         r = np.where((block_index == b) & (saltelli_index == i))[0][0]
+        #         mixed = np.where(block_mask[i, :], Arow, Brow)
+        #         assert np.allclose(X[r, :], mixed), (
+        #             f"Layout mismatch in block {b}, pos {i}.\n"
+        #             f"X[r]= {X[r, :]}\n"
+        #             f"mix= {mixed}"
+        #         )
+
+
+    def get_saltelli_layout_ot(self):
+        """
+        OpenTURNS-like contiguous block layout:
+          block_index    = row // L
+          saltelli_index = row %  L
+        """
+        X = np.asarray(self.param_mat)
+        assert X.ndim == 2
+        N, Mp = X.shape
+        assert N == self.n_samples * self.block_size
+        L = self.block_size
+        block_index = (np.arange(N, dtype=int) % self.n_samples)
+        assert len(np.unique(block_index)) == self.n_samples
+        saltelli_index = (np.arange(N, dtype=int) // self.n_samples)
+
+        # A block mask for the group matrix
+        D = self.n_groups
+        A_block_mask = np.zeros((L, D), dtype=bool)
+        A_block_mask[0, :] = 1 # first row is A-row
+        A_block_mask[2:D+2, :] = 1 # rows 2..D-1 are A-rows
+        for i in range(0, D):
+            A_block_mask[i+2, i] = 0 # B diagonal in A -rows
+            if L > D+2:
+                A_block_mask[i + 2 + D, i] = 1  # A diagonal in B -rows
+
+        # A block matrix for the parameter matrix
+        group_idx = np.array([self.groups.index(p_group)
+                              for p_group in self.param_groups.values()], dtype=int)
+        A_param_block = A_block_mask[:, group_idx]
+
+        self._assert_layout_fits_matrix(X, block_index, saltelli_index, A_param_block, self.n_samples)
+        return block_index, saltelli_index, A_block_mask
+
+
+    def get_saltelli_layout_sa(self):
+        """
+        SALib-like transposed layout (grouped by within-block index first):
+          block_index    = row %  B
+          saltelli_index = row // B
+        where B = n_samples and L = N / B.
+        """
+        X = np.asarray(self.param_mat)
+        assert X.ndim == 2
+        N, Mp = X.shape
+        L = self.block_size
+        B = self.n_samples
+
+        block_index = (np.arange(N, dtype=int) % B)
+        saltelli_index = (np.arange(N, dtype=int) // B)
+
+        # representative rows for block 0 are positions [0, B, 2B, ..., (L-1)B]
+        rows_block0 = np.arange(L, dtype=int) * B
+        block0 = X[rows_block0, :]
+        block_mask = self._compute_block_mask_from_representative_block(block0)
+
+        self._assert_layout_fits_matrix(X, block_index, saltelli_index, block_mask, B)
+        return block_index, saltelli_index, block_mask
 # @attrs.define
 # class SobolResultGroup:
 #     """
@@ -546,7 +700,7 @@ class InputDesign:
 class SensitivityAnalysis:
    
     parameters: Dict[str, Parameter]
-    sampler: Literal["sobol", "mc", "lhs"] = "sobol"
+    sampler: Literal["QMC", "MonteCarlo", "LHS"] = "QMC"
     compute_s2: bool = False
     n_samples: int = 0
     confidence_level: float = 0.95
@@ -576,7 +730,7 @@ class SensitivityAnalysis:
 
         return SensitivityAnalysis(
             parameters,
-            sa_cfg.get('sampler', "sobol"),
+            sa_cfg.get('sampler', "QMC"),
             sa_cfg.get('second_order', False),
             sa_cfg['n_samples'],
             sa_cfg.get('err_est_confidence_level', 0.95))
@@ -604,35 +758,42 @@ class SensitivityAnalysis:
 
         # set sampler
         exp_design_functions= {
-            'sobol': self._qmc_experiment, 
-            'mc': self._mc_experiment, 
-            'lhs': self._lhs_experiment} 
+            'QMC': self._qmc_experiment,
+            'MonteCarlo': self._mc_experiment,
+            'LHS': self._lhs_experiment}
         try:
             self._experiment_design = exp_design_functions[self.sampler]
         except KeyError:
             raise KeyError(f"Unknown sampler '{self.sampler}'. Valid: {list(exp_design_functions.keys())}")
-        
+
         # groups via comprehension (order preserved with dict.fromkeys)
         #self._groups: List[str] = list(dict.fromkeys([p.group for p in self.parameters.values()]))
         #self._group_to_col: Dict[str, int] = {g: j for j, g in enumerate(self._groups)}
         #self._param_names: List[str] = list(self.parameters.keys())
 
-    def _qmc_experiment(self, distr) -> ot.WeightedExperiment:
+    @staticmethod
+    def _qmc_experiment(distr, n_samples) -> ot.WeightedExperiment:
         n_groups = distr.getDimension()
         seq = ot.SobolSequence(n_groups)
         restart_with_distr=False
-        return ot.LowDiscrepancyExperiment(seq, distr, self.n_samples, restart_with_distr)
+        exp = ot.LowDiscrepancyExperiment(seq, distr, n_samples, restart_with_distr)
+        exp.setRandomize(True)  # IMPORTANT: otherwise results can be wrong
+        exp.setRestart(False)
+        return exp
 
-    def _mc_experiment(self, distr) -> ot.WeightedExperiment:
-        return ot.MonteCarloExperiment(distr, self.n_samples)
+    @staticmethod
+    def _mc_experiment(distr, n_samples) -> ot.WeightedExperiment:
+        return ot.MonteCarloExperiment(distr, n_samples)
 
-    def _lhs_experiment(self, distr) -> ot.WeightedExperiment:
-        always_shuffle = False
-        random_shift = False
-        return ot.LHSExperiment(distr, self.n_samples, always_shuffle, random_shift)
-    
-    def saltelli_design(self, distr):
-        exp = self._experiment_design(distr)
+    @staticmethod
+    def _lhs_experiment(distr, n_samples) -> ot.WeightedExperiment:
+        exp = ot.LHSExperiment(distr, n_samples)
+        exp.setAlwaysShuffle(True)  # IMPORTANT: otherwise results can be wrong
+        exp.setRandomShift(True)
+        return exp
+
+    def saltelli_design(self, distr, n_samples):
+        exp = self._experiment_design(distr, n_samples)
         #assert isinstance(exp, ot.WeightedExperiment), type(exp)
         sobol_exp = ot.SobolIndicesExperiment(exp, self.compute_s2)
         inputs_design = sobol_exp.generate()
@@ -646,7 +807,7 @@ class SensitivityAnalysis:
         assert n_samples > 0
         ot.RandomGenerator.SetSeed(seed)
         group_distrs = ot.JointDistribution([ot.Uniform(0.0, 1.0)] * len(self.groups))
-        group_samples = self.saltelli_design(group_distrs)
+        group_samples = self.saltelli_design(group_distrs, n_samples)
         raw_input_design_mat = np.array(group_samples)
         # map to parameter samples
         j_group = {g:j for j, g in enumerate(self.groups)}
@@ -656,8 +817,9 @@ class SensitivityAnalysis:
         ]
         param_samples = np.column_stack(cols)
 
-        param_names = list(self.parameters.keys())
-        return InputDesign(self.groups, param_names, raw_input_design_mat, param_samples, self.confidence_level)
+        param_groups = {k: v.group for k, v in self.parameters.items()}
+        return InputDesign(self.groups,
+                           n_samples, param_groups, raw_input_design_mat, param_samples, self.confidence_level)
     
     @property
     def name_to_col(self):
@@ -671,83 +833,83 @@ class SensitivityAnalysis:
 
 
 
-
-def infer_saltelli_layout(input_design: np.ndarray, n_groups: int):
-    """
-    Infer Saltelli block structure for a design whose columns are parameters (M_p),
-    but blocks were generated for n_groups = M_g.
-
-    Supports two layouts:
-      1) Contiguous blocks: rows [b*L : (b+1)*L) form a block.
-      2) Transposed (SALib-style): rows grouped by within-block index first.
-
-    Returns:
-      block_index    : (N,) int block id per row
-      saltelli_index : (N,) int position in block per row
-      block_mask     : (L, M_p) bool; for each within-block row i, mask[i, j] is True
-                       iff column j takes its value from A (False ⇒ from B).
-    """
-    X = np.asarray(input_design)
-    if X.ndim != 2:
-        raise ValueError("input_design must be a 2D array")
-    N, Mp = X.shape
-    if N == 0 or Mp == 0:
-        raise ValueError("input_design must have positive shape in both dims")
-    if not isinstance(n_groups, int) or n_groups <= 0:
-        raise ValueError("n_groups must be a positive integer")
-
-    # Candidate block lengths (first-order vs second-order)
-    L1 = 2 + n_groups
-    L2 = 2 + 2 * n_groups
-    candidates = [L for L in (L1, L2) if N % L == 0]
-    if not candidates:
-        raise ValueError(
-            f"N={N} not divisible by 2+M_g={L1} or 2+2*M_g={L2}; cannot infer Saltelli block size."
-        )
-
-    def looks_like_contiguous(Ltest: int) -> bool:
-        # In a Saltelli block, each parameter column only takes A or B (≤2 unique values)
-        if Ltest > N:
-            return False
-        block0 = X[:Ltest, :]
-        uniq_per_col = [np.unique(block0[:, j]).size for j in range(block0.shape[1])]
-        return (max(uniq_per_col) <= 2)
-
-    # Choose block length and layout
-    if len(candidates) == 1:
-        L = candidates[0]
-        contiguous = looks_like_contiguous(L)
-    else:
-        c0 = looks_like_contiguous(candidates[0])
-        c1 = looks_like_contiguous(candidates[1])
-        if c0 and not c1:
-            L, contiguous = candidates[0], True
-        elif c1 and not c0:
-            L, contiguous = candidates[1], True
-        else:
-            # ambiguous; prefer first-order length, still infer layout
-            L = min(candidates)
-            contiguous = looks_like_contiguous(L)
-
-    B = N // L  # number of blocks
-
-    if contiguous:
-        block_index    = np.arange(N, dtype=int) // L
-        saltelli_index = np.arange(N, dtype=int) %  L
-        rows_block0 = np.arange(L)
-    else:
-        block_index    = np.arange(N, dtype=int) %  B
-        saltelli_index = np.arange(N, dtype=int) // B
-        rows_block0 = np.arange(L) * B  # pick the first block’s representative rows
-
-    block0 = X[rows_block0, :]  # (L, Mp)
-
-    # Identify the A-row within the block: row most similar (by equal columns) to all rows
-    equal_cols = (block0[:, None, :] == block0[None, :, :])   # (L, L, Mp)
-    equality_counts = equal_cols.sum(axis=2).sum(axis=1)      # (L,)
-    a_idx = int(np.argmax(equality_counts))
-
-    # For each within-block row, a column equals A-row ⇒ that column comes from A
-    block_mask = (block0 == block0[a_idx, :])                 # (L, Mp) boolean
-
-    return block_index, saltelli_index, block_mask
+#
+# def get_saltelli_layout_ot(input_design: np.ndarray, n_groups: int, n_samples: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+#     """
+#     Infer Saltelli block structure for a design whose columns are parameters (M_p),
+#     but blocks were generated for n_groups = M_g.
+#
+#     Supports two layouts:
+#       1) Contiguous blocks: rows [b*L : (b+1)*L) form a block.
+#       2) Transposed (SALib-style): rows grouped by within-block index first.
+#
+#     Returns:
+#       block_index    : (N,) int block id per row
+#       saltelli_index : (N,) int position in block per row
+#       block_mask     : (L, M_p) bool; for each within-block row i, mask[i, j] is True
+#                        iff column j takes its value from A (False ⇒ from B).
+#     """
+#     X = np.asarray(input_design)
+#     if X.ndim != 2:
+#         raise ValueError("input_design must be a 2D array")
+#     N, Mp = X.shape
+#     if N == 0 or Mp == 0:
+#         raise ValueError("input_design must have positive shape in both dims")
+#     if not isinstance(n_groups, int) or n_groups <= 0:
+#         raise ValueError("n_groups must be a positive integer")
+#
+#     # Candidate block lengths (first-order vs second-order)
+#     L1 = 2 + n_groups
+#     L2 = 2 + 2 * n_groups
+#     candidates = [L for L in (L1, L2) if N % L == 0]
+#     if not candidates:
+#         raise ValueError(
+#             f"N={N} not divisible by 2+M_g={L1} or 2+2*M_g={L2}; cannot infer Saltelli block size."
+#         )
+#
+#     def looks_like_contiguous(Ltest: int) -> bool:
+#         # In a Saltelli block, each parameter column only takes A or B (≤2 unique values)
+#         if Ltest > N:
+#             return False
+#         block0 = X[:Ltest, :]
+#         uniq_per_col = [np.unique(block0[:, j]).size for j in range(block0.shape[1])]
+#         return (max(uniq_per_col) <= 2)
+#
+#     # Choose block length and layout
+#     if len(candidates) == 1:
+#         L = candidates[0]
+#         contiguous = looks_like_contiguous(L)
+#     else:
+#         c0 = looks_like_contiguous(candidates[0])
+#         c1 = looks_like_contiguous(candidates[1])
+#         if c0 and not c1:
+#             L, contiguous = candidates[0], True
+#         elif c1 and not c0:
+#             L, contiguous = candidates[1], True
+#         else:
+#             # ambiguous; prefer first-order length, still infer layout
+#             L = min(candidates)
+#             contiguous = looks_like_contiguous(L)
+#
+#     B = N // L  # number of blocks
+#
+#     if contiguous:
+#         block_index    = np.arange(N, dtype=int) // L
+#         saltelli_index = np.arange(N, dtype=int) %  L
+#         rows_block0 = np.arange(L)
+#     else:
+#         block_index    = np.arange(N, dtype=int) %  B
+#         saltelli_index = np.arange(N, dtype=int) // B
+#         rows_block0 = np.arange(L) * B  # pick the first block’s representative rows
+#
+#     block0 = X[rows_block0, :]  # (L, Mp)
+#
+#     # Identify the A-row within the block: row most similar (by equal columns) to all rows
+#     equal_cols = (block0[:, None, :] == block0[None, :, :])   # (L, L, Mp)
+#     equality_counts = equal_cols.sum(axis=2).sum(axis=1)      # (L,)
+#     a_idx = int(np.argmax(equality_counts))
+#
+#     # For each within-block row, a column equals A-row ⇒ that column comes from A
+#     block_mask = (block0 == block0[a_idx, :])                 # (L, Mp) boolean
+#
+#     return block_index, saltelli_index, block_mask

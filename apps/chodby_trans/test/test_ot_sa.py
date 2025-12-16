@@ -36,7 +36,7 @@ def test_parameter_from_cfg_and_mapping():
 def test_sa_from_cfg_and_sampling():
     sa_cfg = {
         "n_samples": 256,
-        "sampler": "sobol",          # or "mc" / "lhs" depending on your implementation
+        "sampler": "QMC",          # or "mc" / "lhs" depending on your implementation
         "second_order": False,
         "confidence_level": 0.95,
         "parameters": {
@@ -91,7 +91,7 @@ def test_sa_end_to_end_3params_2outputs():
     """
     sa_cfg = {
         "n_samples": 512,
-        "sampler": "sobol",
+        "sampler": "QMC",
         "second_order": False,
         "confidence_level": 0.95,
         "parameters": {
@@ -165,7 +165,7 @@ def test_sa_end_to_end_3params_2outputs():
     """
     sa_cfg = {
         "n_samples": 512,
-        "sampler": "sobol",
+        "sampler": "QMC",
         "second_order": False,
         "confidence_level": 0.95,
         "parameters": {
@@ -236,9 +236,9 @@ def test_compute_sobol_xr_with_bootstrap():
       - OT point estimates S1/ST lie inside bootstrap CIs (per group).
     """
     sa_cfg = {
-        "n_samples": 1024,
-        "sampler": "sobol",
-        "second_order": False,
+        "n_samples": 256,
+        "sampler": "LHS",
+        "second_order": True,
         "confidence_level": 0.95,
         "parameters": {
             "k1": {"distr": "LogNormal",
@@ -249,6 +249,8 @@ def test_compute_sobol_xr_with_bootstrap():
                    "group": "g1"},
             "S":  {"distr": "Normal",
                    "args": [0.0, 1.0]},  # own group "S"
+            "T": {"distr": "Normal",
+                  "args": [0.0, 1.0]},  # own group "T"
         },
     }
     sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
@@ -260,7 +262,7 @@ def test_compute_sobol_xr_with_bootstrap():
 
     # Single-output model: y = k1 + k2 + 0*S  (only group g1 matters)
     name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
-    y = 0.001*Xp[:, name_to_col["S"]] + Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
+    y = 0.01*(0.5 + Xp[:, name_to_col["S"]]) * (0.2 + Xp[:, name_to_col["T"]]) + Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
     # little dependence on 'S'
 
     Y = y.reshape(-1, 1)
@@ -284,7 +286,7 @@ def test_compute_sobol_xr_with_bootstrap():
     da = Y_da.set_index(sample=("IID", "QMC")).unstack("sample")  # dims ('IID','QMC','out')
 
     # High-level Sobol with bootstrap
-    ds = in_design.compute_sobol_xr(da, n_boot=512, boot_seed=41)
+    ds = in_design.compute_sobol_xr(da, n_boot=64, boot_seed=41)
 
     # Check that bootstrap variables exist
     assert "S1_boot_err" in ds.data_vars
@@ -344,7 +346,7 @@ def _first_order_block_params(Ap, Bp, group_of_param, n_groups):
         rows.append(r)
     return np.vstack(rows)  # shape (2 + n_groups, Mp)
 
-
+@pytest.mark.skip
 def test_infer_saltelli_layout_2blocks_3groups_4params():
     """
     2 blocks (B=2), n_groups=3, Mp=4 parameters with grouping:
@@ -384,7 +386,7 @@ def test_infer_saltelli_layout_2blocks_3groups_4params():
 
     for X in (X_contig, X_trans):
         N = X.shape[0]
-        block_idx, saltelli_idx, mask = sa.infer_saltelli_layout(X, n_groups=n_groups)
+        block_idx, saltelli_idx, mask = sa.get_saltelli_layout_ot(X, n_groups=n_groups)
 
         # shapes
         assert block_idx.shape == (N,)

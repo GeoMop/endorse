@@ -35,10 +35,11 @@ def sampling_data(cfg, seed):
     print(ds.dims)
     #print("IID", ds2['IID'].values)
     #print("QMC", ds2['QMC'].values)
-    plots.conc_tail_ecdf_plot(ds,
-                 sample_dim = {'i_saltelli', 'i_sample'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
-                 output_pdf=job.output.plots/"conc_ecdf.pdf")
-    ds2 = ds.rename({"i_sample": "IID", "i_saltelli": "QMC"})
+    #plots.conc_tail_ecdf_plot(ds,
+    #             sample_dim = {'i_saltelli', 'i_sample'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
+    #             output_pdf=job.output.plots/"conc_ecdf.pdf")
+    ds2 = ds.rename_dims({"i_sample": "IID", "i_saltelli": "QMC"})
+    ds2 = ds2.rename({"i_sample": "IID", "i_saltelli": "QMC"})
 
     # plots.raw_conc_plot(ds2,
     #               sample_dim = {'QMC', 'IID'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
@@ -46,7 +47,7 @@ def sampling_data(cfg, seed):
     # # print samples with bad concentrations; limit them
     # 1) mask for out-of-range values (outside [-0.1, 1.1])
     lo, hi = 1e-40, 1.1
-    reduce_dims = ("sim_time", "X", "Y", "Z")
+    reduce_dims = ("sim_time", "X", "Y", "Z", "QMC")
 
     # 1) per-(iid,qmc) min/max over space-time
     conc = ds2["conc"]
@@ -63,7 +64,7 @@ def sampling_data(cfg, seed):
         .to_dataframe()
         .reset_index()
         .dropna(subset=["conc_min", "conc_max"])
-        [['IID', 'QMC', "conc_min", "conc_max"]]
+        [['IID', "conc_min", "conc_max"]]
     )
     #print(df_bad.to_string(index=False))
     print("Number of bad value samples:", len(df_bad))
@@ -295,7 +296,7 @@ def select_params(
     contrib = df["si"].where(df["valid"], 0.0).to_numpy()
     cs = np.cumsum(contrib)
     df["selected"] = df["valid"] & (cs <= var_threshold)
-
+    print(df)
     return df
 
 def select_sobol(
@@ -307,8 +308,7 @@ def select_sobol(
 
     Inputs
     ------
-    param_selection : output of select_params()
-        [('S1'|'S2', <label>, (i,)| (i,j)), ...]
+    df_si: DataFrame with summary of the Sobol indices for scalar QoF (quantile over both time and space)
     ds : Dataset with at least:
         S1(group,*out), S2(group,group2,*out), ST(group,*out),
         S1_agg(group), ST_agg(group),
@@ -517,7 +517,7 @@ def sobol_ds_summary(ds: xr.Dataset, df_si:pd.DataFrame) -> None:
         if si_agg is not None:
             line += (
                 f" AGG: <{si_agg[0]: {double_fmt}}, "  # S1 CI low
-                f"{si_agg[1]: {double_fmt}}>  | "  # S1 CI high
+                f"{si_agg[1]: {double_fmt}}>"  # S1 CI high
             )
         return line
 
@@ -534,9 +534,11 @@ def sobol_ds_summary(ds: xr.Dataset, df_si:pd.DataFrame) -> None:
         )
         if base == 'S1':
             tab_lines.append(
-                line('ST', label,
+                line('ST', len(label)*" ",
                      (ds['ST'].values[indices, 0])[0],
-                     (ds['ST_boot_err'].values[indices])[0])
+                     (ds['ST_boot_err'].values[indices])[0],
+                     (ds[f"ST_agg_ci"].values[indices])
+                     )
             )
 
     return tab_lines
