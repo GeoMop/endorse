@@ -13,7 +13,7 @@ compress_sample: True
 # make_plots: False
 
 second_order: False
-sampler: sobol
+sampler: QMC # Valid: ['QMC', 'MonteCarlo', 'LHS']
 
 # confidence level of the estimated error of sobol indices 
 err_est_confidence_level: 0.90

@@ -360,7 +360,7 @@ def setup_data_storage(cfg: dotdict,
     # DIRECT ZARR
     # temporary shortcut for direct zarr
 
-    param_names = input_design.param_names
+    param_names = list(input_design.name_to_col.keys())   # suppose order as in param_mat
     n_params = len(param_names)
     n_samples = input_design.n_samples
     n_saltelli = input_design.n_saltelli
