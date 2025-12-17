@@ -6,7 +6,7 @@
 
 # x,y,z dimension
 box_dimensions: [40, 40, 40]
-box_center: [0,5,-5]
+box_center: [0,2,-5]
 clip_box_dimensions: [40, 40, 40]
 
 edz_radius: 2.5
