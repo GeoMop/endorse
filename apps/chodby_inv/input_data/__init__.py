@@ -16,7 +16,8 @@ events_yaml = input_dir / "events.yaml"
 # smallest file
 #piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"
 # last file
-piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
+#piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
+piezo_measurement_file = input_dir / "piezo_2025_09_24.xlsx"
 # configuration of the filtering sections
 # named sections of the data corresponding to interesting time intervals
 
