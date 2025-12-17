@@ -571,7 +571,7 @@ def set_source_term(cfg):
         sources_buffer_thickness=cfg_src.buffer_thickness,
         conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
-        storage_regions = [f"storage_{i}" for i in range(5) if i != dsb_idx],
+        storage_regions = [f"storage_{i}" for i in range(cfg.geometry.n_storage_boreholes) if i != dsb_idx],
         plug_region = f"plug_{dsb_idx}",
         container_region = f"container_{dsb_idx}",
     )
