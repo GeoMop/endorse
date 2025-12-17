@@ -117,7 +117,9 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
     # distance from center, 1== edz_radius (main tunnel boundary)
     distance = np.sqrt((X_rel * X_rel + Z_rel * Z_rel)) - in_r
     theta = distance / (edz_r - in_r)
-    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2, Y <= cfg_geom.main_tunnel.length/2), 1.0, 0.0)
+    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2 + cfg_geom.box_center[1],
+                                        Y <= cfg_geom.main_tunnel.length/2) + cfg_geom.box_center[1],
+                                        1.0, 0.0)
 
     if cond is None:
         cond_max = float(cfg_bulk_fields.cond_max)
