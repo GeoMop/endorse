@@ -82,7 +82,7 @@ problem: !Coupling_Sequential
         sigma: 0.01
       # TODO: bentonite
       - region: [ main_tunnel, storages, plug, container ]
-        conductivity: 1e-13
+        conductivity: <backfill_cond>
 
     output:
       fields:
@@ -135,11 +135,11 @@ problem: !Coupling_Sequential
 
         # TODO: bentonite
         - region: [ main_tunnel, storages, plug, container ]
-          porosity: 0.003
-          dg_penalty: 10
-          diff_m: 1e-15
-          disp_l: 0.5
-          disp_t: 0.05
+          porosity: <backfill_por>
+          # dg_penalty: 10
+          diff_m: <backfill_diff_m>
+          disp_l: 0.05
+          disp_t: 0.005
 
         # TODO: file contains flux, compute volume source!
         - region: [ container ]

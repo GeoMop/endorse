@@ -111,52 +111,24 @@ parameters:
     group: materials
     path: geometry/edz_radius
 
+  # backfill_por:
+  #   distr: TruncatedNormal
+  #   # TODO: check values
+  #   # for other distributions create flag for using ot_sa.TruncatedDistribution
+  #   args: [0.05, 0.01, 0.001, 0.4]  # mu, std, a, b
+  #   group: materials
+  # backfill_cond:
+  #   distr: LogNormal
+  #   args: { mean_log10: -13, std_log10: 0.3 }
+  #   group: materials
+  # backfill_diff_m:
+  #   distr: LogNormal
+  #   args: { mean_log10: -15, std_log10: 0.3 }
+  #   group: materials
+
   dfn_macro_seed: 
     # seed for small fractures
     distr: Seed         #ot_sa.Seed
   meshing_seed: 
     # seed for gmsh fractures
     distr: Seed
-
-#  - name: storativity
-#    type: lognorm
-#    bounds: [-14.5662279378421, 2.0]
-#  - name: young_modulus
-#    type: lognorm
-#    bounds: [24.8176103991685, 0.5]
-#  - name: init_stress_x
-#    type: lognorm
-#    bounds: [ 17.5531801762476, 0.3]
-#  - name: init_stress_y
-#    type: lognorm
-#    bounds: [ 16.7599495371307, 0.3]
-#  - name: init_stress_z
-#    type: lognorm
-#    bounds: [ 16.4545678875795, 0.3]
-##  - name: init_pressure
-##    type: norm
-##    bounds: [ 100, 10 ]
-#  - name: perm_k0
-#    type: lognorm
-#    bounds: [ -44.9530895712128, 2.0]
-##  - name: perm_kr
-##    type: lognorm
-##    bounds: [ -43.7491167668869, 0.5]
-#  - name: perm_eps
-#    type: truncnorm
-#    bounds : [1.1, 1000, 33, 9]
-#  - name: perm_delta
-#    type: lognorm
-#    bounds: [ -36.8413614879047, 0.1]
-#  - name: perm_gamma
-#    type: lognorm
-#    bounds: [ 1.79175946922806, 0.1]
-#  - name: conductivity_a
-#    type: unif
-#    bounds: [ -1, 1 ]
-#  - name: conductivity_b
-#    type: unif
-#    bounds: [ -1, 1 ]
-#  - name: conductivity_c
-#    type: unif
-#    bounds: [ -1, 1 ]
