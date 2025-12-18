@@ -130,17 +130,24 @@ def population_parametrized(fr_families, parameters):
 
 
 def update_dfn_params(cfg, param_dict):
-    # replace random parameters in fracture population config
-    fr_population_fname = "fr_population"
-    common.substitute_placeholders(file_in=job.input.dir_path / cfg.fractures.population_template,
-                                   file_out=fr_population_fname,
-                                   params=param_dict)
-    with Path(fr_population_fname).open("r", encoding="utf-8") as file:
-        content = file.read()
-        fr_dict = yaml.safe_load(content)
-        cfg.fractures.population = dotdict.create(fr_dict)
-        logging.info(f"param_dict:\n{param_dict}")
-        logging.info(f"DFN REPO:\n{cfg.fractures.population}")
+    if "population_template" in cfg.fractures:
+        # replace random parameters in fracture population config
+        fr_population_fname = "fr_population"
+        common.substitute_placeholders(file_in=job.input.dir_path / cfg.fractures.population_template,
+                                       file_out=fr_population_fname,
+                                       params=param_dict)
+        with Path(fr_population_fname).open("r", encoding="utf-8") as file:
+            content = file.read()
+            fr_dict = yaml.safe_load(content)
+            cfg.fractures.population = dotdict.create(fr_dict)
+            logging.info(f"param_dict:\n{param_dict}")
+            logging.info(f"DFN REPO:\n{cfg.fractures.population}")
+
+    elif len(cfg.fractures.population) > 0:
+        # randomize fracture populations parameters with Forsmark data
+        dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
+    else:
+        raise Exception("Fracture population not set, neither template file given.")
 
 
 #@memoize
@@ -153,9 +160,6 @@ def prepare_msh_input(workdir, cfg, param_dict):
     logging.info(f"box: {cfg.geometry.box_dimensions}")
     logging.info(f"fracture_box: {fracture_box}")
     logging.info(f"DFN REPO:\n{cfg.fractures.population}")
-
-    # randomize fracture populations parameters with Forsmark data
-    # dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
 
     fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
     dfn_seed = ot_sa.Seed.get_seedsequence(param_dict['dfn_macro_seed'])
