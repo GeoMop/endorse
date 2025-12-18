@@ -18,7 +18,7 @@ from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_
 # Import TinyDA (assumes TinyDA is installed; adjust the import if needed)
 import tinyDA as tda
 
-FORCE_UNKNOWN_FLOW = True
+FORCE_UNKNOWN_FLOW = False
 
 
 def exponential_covariance(n, dx, correlation_length, variance):
