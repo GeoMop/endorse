@@ -134,9 +134,10 @@ if __name__ == "__main__":
     # write pressure data
     pressure_summary_file = parent / "pressure_summary.csv"
     with open(pressure_summary_file, "w", newline="") as f:
-        sniffer = csv.Sniffer()
-        has_header = sniffer.has_header(f.read(2048))
-        f.seek(0)        
+        reader = csv.reader(f)
+        first_row = next(reader, None)
+        has_header = first_row is not None and first_row == pressure_header
+
         writer = csv.writer(f)
         if not has_header:
             writer.writerow(pressure_header)
@@ -145,9 +146,10 @@ if __name__ == "__main__":
     # write flow data
     flow_summary_file = parent / "flow_summary.csv"
     with open(flow_summary_file, "w", newline="") as f:
-        sniffer = csv.Sniffer()
-        has_header = sniffer.has_header(f.read(2048))
-        f.seek(0)
+        reader = csv.reader(f)
+        first_row = next(reader, None)
+        has_header = first_row is not None and first_row == flow_header
+
         writer = csv.writer(f)
         if not has_header:
             writer.writerow(flow_header)
