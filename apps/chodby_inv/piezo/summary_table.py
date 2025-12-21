@@ -125,9 +125,9 @@ if __name__ == "__main__":
         del idata
 
         if not known:
-            pressure_data.append(posterior_summary.loc["p_far", ["mean", "sd"]].values)
+            pressure_data.extend(*posterior_summary.loc["p_far", ["mean", "sd"]].values)
 
-        flow_data.append(output_summary.loc["obs_0", ["mean", "sd"]].values)
+        flow_data.extend(*output_summary.loc["obs_0", ["mean", "sd"]].values)
 
     print("Writing to summary files...")
 
