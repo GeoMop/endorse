@@ -131,29 +131,34 @@ if __name__ == "__main__":
 
     print("Writing to summary files...")
 
-    # write pressure data
+    # check for pressure data header
     pressure_summary_file = parent / "pressure_summary.csv"
-    with open(pressure_summary_file, "a", newline="", encoding="utf-8") as f:
-        has_header = False
-        if pressure_summary_file.exists() and pressure_summary_file.stat().st_size > 0:
+    has_header = False
+
+    if pressure_summary_file.exists() and pressure_summary_file.stat().st_size > 0:
+        with open(pressure_summary_file, "r", newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             first_row = next(reader, None)
             has_header = first_row is not None and first_row == pressure_header
 
+    # write pressure data
+    with open(pressure_summary_file, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if not has_header:
             writer.writerow(pressure_header)
         writer.writerow(pressure_data)
 
-    # write flow data
+    # check for flow data header
     flow_summary_file = parent / "flow_summary.csv"
-    with open(flow_summary_file, "a", newline="", encoding="utf-8") as f:
-        has_header = False
-        if flow_summary_file.exists() and flow_summary_file.stat().st_size > 0:
+    has_header = False
+    if flow_summary_file.exists() and flow_summary_file.stat().st_size > 0:
+        with open(flow_summary_file, "r", newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             first_row = next(reader, None)
             has_header = first_row is not None and first_row == flow_header
 
+    # write flow data
+    with open(flow_summary_file, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if not has_header:
             writer.writerow(flow_header)
