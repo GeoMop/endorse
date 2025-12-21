@@ -120,8 +120,8 @@ if __name__ == "__main__":
 
         # read idata, extract summary, unreference idata
         idata = read_idata_from_file(str(file))
-        posterior_summary = arviz.summary(idata)
-        output_summary = arviz.summary(idata, group="posterior_predictive")
+        posterior_summary = arviz.summary(idata, group="posterior", var_names=["p_far"])
+        output_summary = arviz.summary(idata, group="posterior_predictive", var_names=["obs_0"])
         del idata
 
         if not known:
