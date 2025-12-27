@@ -51,589 +51,660 @@ blasts:
 # Approximate date time positions of the
 # applied pressuarization
 # Details could be get by the search_wpt function.
+
+
 water_pressure_tests:
-    # -   start: "25/03/22 00:00:00"
-    #     # start of extracted window
-    #     origin: "25/03/26 11:40:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "25/10/25 00:00:00"
-    #     # end of extracted window
-    #     borehole: L5-26R
-    #     section: 0
-    #     dt: 21600 # time step in seconds
-    #     p_far_prior: 55000
-    #     p_far_std: 30000
+  # ---- Year 24 ----
+  - start: "24/03/06 13:04:00"
+    origin: "24/03/06 15:04:00"
+    end: "24/03/13 15:00:00"
+    borehole: L5-22DR
+    section: 0
+    dt: 3600
+    p_far_prior: 90000
+    p_far_std: 5000
 
-    # -   start: "25/03/26 11:05:00"
-    #     # start of extracted window
-    #     origin: "25/03/26 11:40:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "25/03/26 23:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37UR
-    #     section: 1
-    #     dt: 480 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/03/06 17:00:00"
+    origin: "24/03/06 17:30:00"
+    end: "24/03/08 07:00:00"
+    borehole: L5-22DR
+    section: 1
+    dt: 1800
+    p_far_prior: 30000
+    p_far_std: 5000
 
-    # -   start: "25/03/25 13:40:00"
-    #     # start of extracted window
-    #     origin: "25/03/25 13:50:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "25/04/02 00:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37R
-    #     section: 1
-    #     dt: 3600 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/03/06 14:00:00"
+    origin: "24/03/06 20:00:00"
+    end: "24/09/12 00:00:00"
+    borehole: L5-22DR
+    section: 2
+    dt: 172800
+    p_far_prior: 30000
+    p_far_std: 5000
 
-    # -   start: "24/03/07 05:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/07 08:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/14 08:00:00"
-    #     # end of extracted window
-    #     borehole: L5-26R
-    #     section: 0
-    #     dt: 7200 # time step in seconds
-    #     p_far_prior: 55000
-    #     p_far_std: 20000
+  - start: "24/03/07 10:06:00"
+    origin: "24/03/07 10:46:00"
+    end: "24/03/08 11:00:00"
+    borehole: L5-23UR
+    section: 0
+    dt: 600
+    p_far_prior: 180000
+    p_far_std: 60000
 
-    # -   start: "24/02/28 10:50:00"
-    #     # start of extracted window
-    #     origin: "24/02/28 10:56:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/28 14:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37UR
-    #     section: 1
-    #     dt: 60 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/03/07 07:30:00"
+    origin: "24/03/07 10:46:00"
+    end: "24/03/22 11:00:00"
+    borehole: L5-23UR
+    section: 1
+    dt: 10800
+    p_far_prior: 180000
+    p_far_std: 10000
 
-    # -   start: "24/02/21 14:50:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 15:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/22 15:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37R
-    #     section: 1
-    #     dt: 900 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
-    
-    # -   start: "24/02/27 16:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/27 17:09:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/29 17:09:00"
-    #     # end of extracted window
-    #     borehole: L5-50UL
-    #     section: 0
-    #     dt: 1800 # time step in seconds
-    #     p_far_prior: 80000
-    #     p_far_std: 10000
+  - start: "24/03/07 10:30:00"
+    origin: "24/03/07 10:41:00"
+    end: "24/03/22 11:00:00"
+    borehole: L5-23UR
+    section: 2
+    dt: 10800
+    p_far_prior: 180000
+    p_far_std: 10000
 
-    # -   start: "24/02/27 17:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/27 17:07:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/27 19:00:00"
-    #     # end of extracted window
-    #     borehole: L5-50UL
-    #     section: 1
-    #     dt: 60 # time step in seconds
-    #     p_far_prior: 150000
-    #     p_far_std: 60000
+  - start: "24/03/06 16:00:00"
+    origin: "24/03/06 16:14:00"
+    end: "24/03/07 17:00:00"
+    borehole: L5-24DR
+    section: 0
+    dt: 480
+    p_far_prior: 50000
+    p_far_std: 20000
 
-    # -   start: "24/02/27 16:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/27 17:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/29 17:00:00"
-    #     # end of extracted window
-    #     borehole: L5-50UL
-    #     section: 2
-    #     dt: 1800 # time step in seconds
-    #     p_far_prior: 40000
-    #     p_far_std: 10000
+  - start: "24/03/06 16:00:00"
+    origin: "24/03/06 16:14:00"
+    end: "24/03/11 00:00:00"
+    borehole: L5-24DR
+    section: 1
+    dt: 1800
+    p_far_prior: 50000
+    p_far_std: 20000
 
-    # -   start: "24/02/21 15:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 15:11:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/23 15:11:00"
-    #     # end of extracted window
-    #     borehole: L5-49DL
-    #     section: 0
-    #     dt: 1800 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 10000
+  - start: "24/03/06 14:40:00"
+    origin: "24/03/06 16:10:00"
+    end: "24/03/12 16:00:00"
+    borehole: L5-24DR
+    section: 2
+    dt: 5400
+    p_far_prior: 50000
+    p_far_std: 20000
+
+  - start: "24/03/07 05:00:00"
+    origin: "24/03/07 08:00:00"
+    end: "24/03/14 08:00:00"
+    borehole: L5-26R
+    section: 0
+    dt: 7200
+    p_far_prior: 55000
+    p_far_std: 20000
+
+  - start: "24/03/07 06:00:00"
+    origin: "24/03/07 08:00:00"
+    end: "24/03/08 08:00:00"
+    borehole: L5-26R
+    section: 1
+    dt: 600
+    p_far_prior: 200000
+    p_far_std: 100000
+
+  - start: "24/03/07 07:00:00"
+    origin: "24/03/07 08:00:00"
+    end: "24/03/09 08:00:00"
+    borehole: L5-26R
+    section: 2
+    dt: 1200
+    p_far_prior: 350000
+    p_far_std: 100000
+
+  - start: "24/02/21 14:50:00"
+    origin: "24/02/21 14:56:00"
+    end: "24/02/23 12:00:00"
+    borehole: L5-37R
+    section: 0
+    dt: 1200
+    p_far_prior: 90000
+    p_far_std: 10000
+
+  - start: "24/02/21 14:50:00"
+    origin: "24/02/21 15:00:00"
+    end: "24/02/22 15:00:00"
+    borehole: L5-37R
+    section: 1
+    dt: 900
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "24/02/21 14:50:00"
+    origin: "24/02/21 15:00:00"
+    end: "24/02/22 15:00:00"
+    borehole: L5-37R
+    section: 2
+    dt: 900
+    p_far_prior: 100000
+    p_far_std: 40000
+
+  - start: "24/02/28 10:40:00"
+    origin: "24/02/28 10:58:00"
+    end: "24/03/01 00:00:00"
+    borehole: L5-37UR
+    section: 0
+    dt: 600
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "24/02/28 10:50:00"
+    origin: "24/02/28 10:56:00"
+    end: "24/02/28 14:00:00"
+    borehole: L5-37UR
+    section: 1
+    dt: 60
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "24/02/28 10:40:00"
+    origin: "24/02/28 10:53:00"
+    end: "24/03/04 14:00:00"
+    borehole: L5-37UR
+    section: 2
+    dt: 3600
+    p_far_prior: 60000
+    p_far_std: 25000
+
+  - start: "24/02/21 15:00:00"
+    origin: "24/02/21 15:11:00"
+    end: "24/02/23 15:11:00"
+    borehole: L5-49DL
+    section: 0
+    dt: 1800
+    p_far_prior: 50000
+    p_far_std: 10000
+
+  - start: "24/02/21 15:00:00"
+    origin: "24/02/21 15:07:00"
+    end: "24/02/21 16:00:00"
+    borehole: L5-49DL
+    section: 1
+    dt: 60
+    p_far_prior: 50000
+    p_far_std: 10000
+
+  - start: "24/02/21 15:00:00"
+    origin: "24/02/21 15:05:00"
+    end: "24/02/22 10:00:00"
+    borehole: L5-49DL
+    section: 2
+    dt: 300
+    p_far_prior: 50000
+    p_far_std: 10000
+
+  - start: "24/02/27 16:00:00"
+    origin: "24/02/27 17:09:00"
+    end: "24/02/29 17:09:00"
+    borehole: L5-50UL
+    section: 0
+    dt: 1800
+    p_far_prior: 80000
+    p_far_std: 10000
+
+  - start: "24/02/27 17:00:00"
+    origin: "24/02/27 17:07:00"
+    end: "24/02/27 19:00:00"
+    borehole: L5-50UL
+    section: 1
+    dt: 60
+    p_far_prior: 150000
+    p_far_std: 60000
+
+  - start: "24/02/27 16:00:00"
+    origin: "24/02/27 17:00:00"
+    end: "24/02/29 17:00:00"
+    borehole: L5-50UL
+    section: 2
+    dt: 1800
+    p_far_prior: 40000
+    p_far_std: 10000
 
 
-    # -   start: "24/02/21 15:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 15:07:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/21 16:00:00"
-    #     # end of extracted window
-    #     borehole: L5-49DL
-    #     section: 1
-    #     dt: 60 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 10000
+# (2) 2024 autumn section: copied from 2025 items, shifted by -7 months
+# (3) For autumn: dt / p_far_prior / p_far_std are set to null
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:24:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-22DR
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/02/21 15:00:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 15:05:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/22 10:00:00"
-    #     # end of extracted window
-    #     borehole: L5-49DL
-    #     section: 2
-    #     dt: 300 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:24:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-22DR
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/02/21 14:50:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 14:56:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/23 12:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37R
-    #     section: 0
-    #     dt: 1200 # time step in seconds
-    #     p_far_prior: 90000
-    #     p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:24:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-22DR
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/02/21 14:50:00"
-    #     # start of extracted window
-    #     origin: "24/02/21 15:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/02/22 15:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37R
-    #     section: 2
-    #     dt: 900 # time step in seconds
-    #     p_far_prior: 100000
-    #     p_far_std: 40000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:24:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-23UR
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/02/28 10:40:00"
-    #     # start of extracted window
-    #     origin: "24/02/28 10:53:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/04 14:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37UR
-    #     section: 2
-    #     dt: 3600 # time step in seconds
-    #     p_far_prior: 60000
-    #     p_far_std: 25000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:01:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-23UR
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/02/28 10:40:00"
-    #     # start of extracted window
-    #     origin: "24/02/28 10:58:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/01 00:00:00"
-    #     # end of extracted window
-    #     borehole: L5-37UR
-    #     section: 0
-    #     dt: 600 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/09/11 00:00:00"
+    origin: "24/09/08 08:35:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-23UR
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/06 13:04:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 15:04:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/13 15:00:00"
-    #     # end of extracted window
-    #     borehole: L5-22DR
-    #     section: 0
-    #     dt: 3600 # time step in seconds
-    #     p_far_prior: 90000
-    #     p_far_std: 5000
-    
-    # -   start: "24/03/06 17:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 17:30:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/08 7:00:00"
-    #     # end of extracted window
-    #     borehole: L5-22DR
-    #     section: 1
-    #     dt: 1800 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/09/18 00:00:00"
+    origin: "24/08/26 08:15:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-24DR
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/06 14:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 20:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/09/12 00:00:00"
-    #     # end of extracted window
-    #     borehole: L5-22DR
-    #     section: 2
-    #     dt: 172800 # time step in seconds
-    #     p_far_prior: 30000
-    #     p_far_std: 5000
+  - start: "24/09/18 00:00:00"
+    origin: "24/08/26 07:54:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-24DR
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/07 10:06:00"
-    #     # start of extracted window
-    #     origin: "24/03/07 10:46:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/08 11:00:00"
-    #     # end of extracted window
-    #     borehole: L5-23UR
-    #     section: 0
-    #     dt: 600 # time step in seconds
-    #     p_far_prior: 180000
-    #     p_far_std: 60000
+  - start: "24/09/18 00:00:00"
+    origin: "24/08/26 07:25:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-24DR
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/07 07:30:00"
-    #     # start of extracted window
-    #     origin: "24/03/07 10:46:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/22 11:00:00"
-    #     # end of extracted window
-    #     borehole: L5-23UR
-    #     section: 1
-    #     dt: 10800 # time step in seconds
-    #     p_far_prior: 180000
-    #     p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 11:40:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-26R
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # # -   start: "24/03/07 10:30:00"
-    # #     # start of extracted window
-    # #     origin: "24/03/07 10:41:00"
-    # #     # origin = time zero after extraction (shift)
-    # #     # assume same as start and corresponding to the end of the WPT pressurisation
-    # #     end: "24/03/22 11:00:00"
-    # #     # end of extracted window
-    # #     borehole: L5-23UR
-    # #     section: 2  
-    # #     dt: 10800 # time step in seconds
-    # #     p_far_prior: 180000
-    # #     p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 10:11:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-26R
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/06 16:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 16:14:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/07 17:00:00"
-    #     # end of extracted window
-    #     borehole: L5-24DR
-    #     section: 0
-    #     dt: 480 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 20000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 09:50:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-26R
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/06 16:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 16:14:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/11 00:00:00"
-    #     # end of extracted window
-    #     borehole: L5-24DR
-    #     section: 1
-    #     dt: 1800 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 20000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 14:25:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-37R
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/06 14:40:00"
-    #     # start of extracted window
-    #     origin: "24/03/06 16:10:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/12 16:00:00"
-    #     # end of extracted window
-    #     borehole: L5-24DR
-    #     section: 2
-    #     dt: 5400 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 20000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 13:50:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-37R
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/07 06:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/07 08:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/08 08:00:00"
-    #     # end of extracted window
-    #     borehole: L5-26R
-    #     section: 1
-    #     dt: 600 # time step in seconds
-    #     p_far_prior: 200000
-    #     p_far_std: 100000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 13:38:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-37R
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    # -   start: "24/03/07 07:00:00"
-    #     # start of extracted window
-    #     origin: "24/03/07 08:00:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "24/03/09 08:00:00"
-    #     # end of extracted window
-    #     borehole: L5-26R
-    #     section: 2
-    #     dt: 1200 # time step in seconds
-    #     p_far_prior: 350000
-    #     p_far_std: 100000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 12:40:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-37UR
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 00:00:00"
-        # start of extracted window
-        origin: "25/03/26 10:11:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-26R
-        section: 1
-        dt: 5400 # time step in seconds
-        p_far_prior: 200000
-        p_far_std: 100000
+#  Seems WPT wasn't conducted for L5-37UR section 1 in 2024 autumn
+#  - start: "24/09/11 00:00:00"
+#    origin: "24/08/26 11:40:00"
+#    end: "24/11/01 00:00:00"
+#    borehole: L5-37UR
+#    section: 1
+#    dt: null
+#    p_far_prior: null
+#    p_far_std: null
 
-    -   start: "25/03/22 00:00:00"
-        # start of extracted window
-        origin: "25/03/26 09:50:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-26R
-        section: 2
-        dt: 5400 # time step in seconds
-        p_far_prior: 350000
-        p_far_std: 100000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 11:45:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-37UR
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 06:40:00"
-        # start of extracted window
-        origin: "25/03/25 12:40:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-37UR
-        section: 0
-        dt: 5400 # time step in seconds
-        p_far_prior: 70000
-        p_far_std: 5000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 12:50:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-49DL
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 05:45:00"
-        # start of extracted window
-        origin: "25/03/25 11:45:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-37UR
-        section: 2
-        dt: 5400 # time step in seconds
-        p_far_prior: 170000
-        p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 10:43:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-49DL
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 11:25:00"
-        # start of extracted window
-        origin: "25/03/25 14:25:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/02 00:00:00"
-        # end of extracted window
-        borehole: L5-37R
-        section: 0
-        dt: 3600 # time step in seconds
-        p_far_prior: 50000
-        p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 10:27:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-49DL
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 10:38:00"
-        # start of extracted window
-        origin: "25/03/25 13:38:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/28 00:00:00"
-        # end of extracted window
-        borehole: L5-37R
-        section: 2
-        dt: 900 # time step in seconds
-        p_far_prior: 280000
-        p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 09:43:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-50UL
+    section: 0
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 06:43:00"
-        # start of extracted window
-        origin: "25/03/25 09:43:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-50UL
-        section: 0
-        dt: 5400 # time step in seconds
-        p_far_prior: 40000
-        p_far_std: 10000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/25 09:05:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-50UL
+    section: 1
+    dt: null
+    p_far_prior: null
+    p_far_std: null
 
-    -   start: "25/03/25 08:05:00"
-        # start of extracted window
-        origin: "25/03/25 09:05:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/25 20:00:00"
-        # end of extracted window
-        borehole: L5-50UL
-        section: 1
-        dt: 300 # time step in seconds
-        p_far_prior: 30000
-        p_far_std: 5000
+  - start: "24/09/11 00:00:00"
+    origin: "24/08/26 10:44:00"
+    end: "24/11/01 00:00:00"
+    borehole: L5-50UL
+    section: 2
+    dt: null
+    p_far_prior: null
+    p_far_std: null
+  # ---- Year 25 ----
+  # (1) Added: L5-22DR copied from 2024 with year -> 25
+  - start: "25/04/08 08:00:00"
+    origin: "25/04/08 08:35:00"
+    end: "25/06/01 00:00:00"
+    borehole: L5-22DR
+    section: 0
+    dt: 3600
+    p_far_prior: 90000
+    p_far_std: 5000
 
-    -   start: "25/03/26 10:05:00"
-        # start of extracted window
-        origin: "25/03/26 10:44:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/07 00:00:00"
-        # end of extracted window
-        borehole: L5-50UL
-        section: 2
-        dt: 5400 # time step in seconds
-        p_far_prior: -10000
-        p_far_std: 5000
+  - start: "25/04/08 08:00:00"
+    origin: "25/04/08 08:35:00"
+    end: "25/06/01 00:00:00"
+    borehole: L5-22DR
+    section: 1
+    dt: 1800
+    p_far_prior: 30000
+    p_far_std: 5000
 
-    -   start: "25/03/25 09:50:00"
-        # start of extracted window
-        origin: "25/03/25 12:50:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/30 00:00:00"
-        # end of extracted window
-        borehole: L5-49DL
-        section: 0
-        dt: 1800 # time step in seconds
-        p_far_prior: -10000
-        p_far_std: 5000
+  - start: "25/04/08 08:00:00"
+    origin: "25/04/08 08:35:00"
+    end: "25/06/01 00:00:00"
+    borehole: L5-22DR
+    section: 2
+    dt: 172800
+    p_far_prior: 30000
+    p_far_std: 5000
 
-    -   start: "25/03/25 10:00:00"
-        # start of extracted window
-        origin: "25/03/25 10:43:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/25 16:00:00"
-        # end of extracted window
-        borehole: L5-49DL
-        section: 1
-        dt: 120 # time step in seconds
-        p_far_prior: -10000
-        p_far_std: 5000
+  - start: "25/03/26 08:54:00"
+    origin: "25/03/26 09:24:00"
+    end: "25/03/28 12:00:00"
+    borehole: L5-23UR
+    section: 0
+    dt: 900
+    p_far_prior: 50000
+    p_far_std: 10000
 
-    -   start: "25/03/25 09:59:00"
-        # start of extracted window
-        origin: "25/03/25 10:27:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/26 00:00:00"
-        # end of extracted window
-        borehole: L5-49DL
-        section: 2
-        dt: 480 # time step in seconds
-        p_far_prior: -10000
-        p_far_std: 5000
+  - start: "25/03/26 06:01:00"
+    origin: "25/03/26 09:01:00"
+    end: "25/04/01 00:00:00"
+    borehole: L5-23UR
+    section: 1
+    dt: 2700
+    p_far_prior: 10000
+    p_far_std: 10000
 
-    -   start: "25/03/26 08:54:00"
-        # start of extracted window
-        origin: "25/03/26 09:24:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/03/28 12:00:00"
-        # end of extracted window
-        borehole: L5-23UR
-        section: 0
-        dt: 900 # time step in seconds
-        p_far_prior: 50000
-        p_far_std: 10000
+  - start: "25/04/08 08:00:00"
+    origin: "25/04/08 08:35:00"
+    end: "25/04/08 10:00:00"
+    borehole: L5-23UR
+    section: 2
+    dt: 60
+    p_far_prior: 50000
+    p_far_std: 10000
 
-    -   start: "25/03/26 06:01:00"
-        # start of extracted window
-        origin: "25/03/26 09:01:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/01 00:00:00"
-        # end of extracted window
-        borehole: L5-23UR
-        section: 1
-        dt: 2700 # time step in seconds
-        p_far_prior: 10000
-        p_far_std: 10000
+  - start: "25/03/26 05:20:00"
+    origin: "25/03/26 08:15:00"
+    end: "25/04/02 00:00:00"
+    borehole: L5-24DR
+    section: 0
+    dt: 3600
+    p_far_prior: 10000
+    p_far_std: 10000
 
-    # -   start: "25/04/08 08:00:00"
-    #     # start of extracted window
-    #     origin: "25/04/08 08:35:00"
-    #     # origin = time zero after extraction (shift)
-    #     # assume same as start and corresponding to the end of the WPT pressurisation
-    #     end: "25/04/08 10:00:00"
-    #     # end of extracted window
-    #     borehole: L5-23UR
-    #     section: 2
-    #     dt: 60 # time step in seconds
-    #     p_far_prior: 50000
-    #     p_far_std: 10000
+  - start: "25/03/26 04:54:00"
+    origin: "25/03/26 07:54:00"
+    end: "25/04/02 00:00:00"
+    borehole: L5-24DR
+    section: 1
+    dt: 3600
+    p_far_prior: 10000
+    p_far_std: 10000
 
-    -   start: "25/03/26 05:20:00"
-        # start of extracted window
-        origin: "25/03/26 08:15:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/02 00:00:00"
-        # end of extracted window
-        borehole: L5-24DR
-        section: 0
-        dt: 3600 # time step in seconds
-        p_far_prior: 10000
-        p_far_std: 10000
+  - start: "25/03/26 04:30:00"
+    origin: "25/03/26 07:25:00"
+    end: "25/04/02 00:00:00"
+    borehole: L5-24DR
+    section: 2
+    dt: 3600
+    p_far_prior: 10000
+    p_far_std: 10000
 
-    -   start: "25/03/26 04:54:00"
-        # start of extracted window
-        origin: "25/03/26 07:54:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/02 00:00:00"
-        # end of extracted window
-        borehole: L5-24DR
-        section: 1
-        dt: 3600 # time step in seconds
-        p_far_prior: 10000
-        p_far_std: 10000
+  - start: "25/03/22 00:00:00"
+    origin: "25/03/26 11:40:00"
+    end: "25/10/25 00:00:00"
+    borehole: L5-26R
+    section: 0
+    dt: 21600
+    p_far_prior: 55000
+    p_far_std: 30000
 
-    -   start: "25/03/26 04:30:00"
-        # start of extracted window
-        origin: "25/03/26 07:25:00"
-        # origin = time zero after extraction (shift)
-        # assume same as start and corresponding to the end of the WPT pressurisation
-        end: "25/04/02 00:00:00"
-        # end of extracted window
-        borehole: L5-24DR
-        section: 2
-        dt: 3600 # time step in seconds
-        p_far_prior: 10000
-        p_far_std: 10000
+  - start: "25/03/25 00:00:00"
+    origin: "25/03/26 10:11:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-26R
+    section: 1
+    dt: 5400
+    p_far_prior: 200000
+    p_far_std: 100000
+
+  - start: "25/03/22 00:00:00"
+    origin: "25/03/26 09:50:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-26R
+    section: 2
+    dt: 5400
+    p_far_prior: 350000
+    p_far_std: 100000
+
+  - start: "25/03/25 11:25:00"
+    origin: "25/03/25 14:25:00"
+    end: "25/04/02 00:00:00"
+    borehole: L5-37R
+    section: 0
+    dt: 3600
+    p_far_prior: 50000
+    p_far_std: 10000
+
+  - start: "25/03/25 13:40:00"
+    origin: "25/03/25 13:50:00"
+    end: "25/04/02 00:00:00"
+    borehole: L5-37R
+    section: 1
+    dt: 3600
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "25/03/25 10:38:00"
+    origin: "25/03/25 13:38:00"
+    end: "25/03/28 00:00:00"
+    borehole: L5-37R
+    section: 2
+    dt: 900
+    p_far_prior: 280000
+    p_far_std: 10000
+
+  - start: "25/03/25 06:40:00"
+    origin: "25/03/25 12:40:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-37UR
+    section: 0
+    dt: 5400
+    p_far_prior: 70000
+    p_far_std: 5000
+
+  - start: "25/03/26 11:05:00"
+    origin: "25/03/26 11:40:00"
+    end: "25/03/26 23:00:00"
+    borehole: L5-37UR
+    section: 1
+    dt: 480
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "25/03/25 05:45:00"
+    origin: "25/03/25 11:45:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-37UR
+    section: 2
+    dt: 5400
+    p_far_prior: 170000
+    p_far_std: 10000
+
+  - start: "25/03/25 09:50:00"
+    origin: "25/03/25 12:50:00"
+    end: "25/03/30 00:00:00"
+    borehole: L5-49DL
+    section: 0
+    dt: 1800
+    p_far_prior: -10000
+    p_far_std: 5000
+
+  - start: "25/03/25 10:00:00"
+    origin: "25/03/25 10:43:00"
+    end: "25/03/25 16:00:00"
+    borehole: L5-49DL
+    section: 1
+    dt: 120
+    p_far_prior: -10000
+    p_far_std: 5000
+
+  - start: "25/03/25 09:59:00"
+    origin: "25/03/25 10:27:00"
+    end: "25/03/26 00:00:00"
+    borehole: L5-49DL
+    section: 2
+    dt: 480
+    p_far_prior: -10000
+    p_far_std: 5000
+
+  - start: "25/03/25 06:43:00"
+    origin: "25/03/25 09:43:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-50UL
+    section: 0
+    dt: 5400
+    p_far_prior: 40000
+    p_far_std: 10000
+
+  - start: "25/03/25 08:05:00"
+    origin: "25/03/25 09:05:00"
+    end: "25/03/25 20:00:00"
+    borehole: L5-50UL
+    section: 1
+    dt: 300
+    p_far_prior: 30000
+    p_far_std: 5000
+
+  - start: "25/03/26 10:05:00"
+    origin: "25/03/26 10:44:00"
+    end: "25/04/07 00:00:00"
+    borehole: L5-50UL
+    section: 2
+    dt: 5400
+    p_far_prior: -10000
+    p_far_std: 5000
+

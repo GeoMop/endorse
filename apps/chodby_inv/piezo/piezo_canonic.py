@@ -12,14 +12,15 @@ import re
 import numpy as np
 import pandas as pd
 
-
+from chodby_inv.piezo.wpts_summary import wpt_summary
 from endorse import common
 
 from .decorators import common_report
 from chodby_inv import get_logger
 logger = get_logger(__name__)
 
-from .press_plot import plot_pressure_overview, plot_pressure_graphs
+from .press_plot import plot_pressure_overview, plot_pressure_graphs, plot_pressure_overview_phases
+from .plot_wpts import plot_wpts
 from chodby_inv import input_data as inputs
 input_dir = inputs.input_dir
 work_dir = inputs.work_dir
@@ -660,8 +661,19 @@ def full_flat_df():
     """
     Returns the full flat DataFrame of piezo measurements.
     """
-    bh_cfg = common.config.load_config(inputs.bh_cfg_yaml).boreholes
-    return raw_piezo_df(bh_cfg, inputs.piezo_measurement_file)
+    cfg = common.config.load_config(inputs.bh_cfg_yaml)
+    l5_azimuth = cfg.geometry.l5_azimuth
+    bh_cfg = cfg.boreholes
+    df = raw_piezo_df(bh_cfg, inputs.piezo_measurement_file)
+    section_l5_dist = {
+        (bh.name, i_sec): section_depth * np.sin(np.radians(bh.azimuth - l5_azimuth))
+        for bh in bh_cfg
+        for i_sec, section_depth in enumerate(bh.sensor_positions)
+    }
+    df['sensor_l5_dist'] = [section_l5_dist[(bh, sec)] for bh, sec in zip(df['borehole'], df['section'])]
+    print(df.info())
+    return df
+
 
 def denoised_df():
     """
@@ -701,19 +713,33 @@ def excavation_epoch_df():
 
     return epoch_df
 
-if __name__ == '__main__':
-    full_df = full_flat_df()
-    denoised = denoised_df()
-    plot_pressure_overview(denoised, work_dir / "overview_plot.pdf", orig_df = full_df)
 
+def epoch_plots(df):
     epoch = "excavation"
     process_cfg = common.config.load_config(inputs.piezo_filter_yaml)
     events_cfg = common.config.load_config(inputs.events_yaml)
 
     epoch_cfg = process_cfg[epoch]
-    epoch_df = get_epoch(denoised, epoch_cfg)
+    epoch_df = get_epoch(df, epoch_cfg)
 
-    epoch_blasts = [ blast.copy() for blast in events_cfg.blasts]
+    epoch_blasts = [blast.copy() for blast in events_cfg.blasts]
     for blast in epoch_blasts:
         blast['linear_time'] = linear_time([blast['datetime']], epoch_cfg)[0]
     plot_pressure_graphs(epoch_df, epoch, epoch_blasts, work_dir)
+
+def overview_plots(denoised, full_df):
+    #plot_pressure_overview_phases(full_df, work_dir / "overview_plot.pdf")
+
+    # denoising debugging
+    #plot_pressure_overview(denoised, work_dir / "denoise_debug_plot.pdf", orig_df=full_df)
+
+    # WPT comparison
+    #plot_wpts(denoised, work_dir)
+
+    # WPT inversion summary from inversion
+    wpt_summary(inputs.flow_summary_csv, inputs.pressure_summary_csv)
+
+if __name__ == '__main__':
+    full_df = full_flat_df()
+    denoised = denoised_df()
+    overview_plots(denoised, full_df)
