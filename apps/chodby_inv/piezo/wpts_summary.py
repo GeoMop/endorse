@@ -1,8 +1,11 @@
 from pathlib import Path
 from typing import *
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import ticker
+from scipy.integrate import quad
+from scipy.optimize import brentq
 
 from chodby_inv import input_data as inputs
 work_dir = inputs.work_dir
@@ -220,8 +223,64 @@ def plot_flow_errorbars(
     out_file = work_dir / csv_path.with_suffix(".pdf").name
     fig.savefig(out_file)
 
+
+
+def P_cubic(p, H0, p_inf):
+    """
+    Cubic P(p) in the first integral:
+      (H0+p)^2 (p')^2 = c * P(p)
+    """
+    return (2.0/3.0)*p**3 + (H0 - p_inf)*p**2 - 2.0*H0*p_inf*p + (H0*p_inf**2 + (1.0/3.0)*p_inf**3)
+
+
+def x_of_p(p, c, H0, p_inf, p0=0.0):
+    """
+    x(p) = ∫_{p0}^{p} (H0+u)/sqrt(c*P(u)) du
+    Assumes c>0, H0>0, and p is within the physically valid interval where P(u)>0.
+    """
+    if p == p0:
+        return 0.0
+
+    def integrand(u):
+        val = P_cubic(u, H0, p_inf)
+        if val <= 0:
+            # Outside admissible region (or numerical roundoff near root).
+            return np.inf
+        return (H0 + u) / np.sqrt(c * val)
+
+    # quad handles mild endpoint behavior; tighten tolerances if needed
+    res, err = quad(integrand, p0, p, epsabs=1e-10, epsrel=1e-10, limit=200)
+    return res
+
+
+def p_of_x(x, c, H0, p_inf, p0=0.0):
+    """
+    x can be scalar or array-like.
+    Returns scalar or numpy array accordingly.
+    """
+    x_arr = np.asarray(x)
+
+    def solve_one(xs):
+        xs = float(xs)
+        if xs <= 0:
+            return float(p0)
+
+        def f(p):
+            return x_of_p(p, c, H0, p_inf, p0=p0) - xs
+
+        return brentq(f, p0 + 1e-12, p_inf - 1e-12, maxiter=200)
+
+    if x_arr.ndim == 0:
+        return solve_one(x_arr)
+
+    return np.array([solve_one(xs) for xs in x_arr], dtype=float)
+
+
+
+
 def plot_p_far_errorbars_welch(
     csv_path: Path,
+    dist_df: pd.DataFrame,
     *,
     figsize: Tuple[float, float] = (9, 10),
     n_2024: int = 1000,
@@ -246,6 +305,24 @@ def plot_p_far_errorbars_welch(
     NOTE: This function expects `welch_t_from_stats` to be defined in scope:
         welch_t_from_stats(mean1, std1, n1, mean2, std2, n2) -> (t_stat, df, p_value)
     """
+    inf_p = 1000
+    cond = 1e-13
+    source_thickness = 40
+
+    # considering 4 times higher conductivity over 40m rock
+    # and considering 1D problem of thickness 4m (~diameter of l5)
+    cond_source = (cond / source_thickness / 4)
+    lambda_exp = np.sqrt(cond_source / cond)
+    model_p = 0.4*inf_p * (1.0  - np.exp(-lambda_exp * np.abs(dist_df['sensor_l5_dist'])))
+    dist_df = dist_df.copy()
+    dist_df['model_p_far'] = model_p
+    H0 = 3 # effective saturated height at L5 wall (in  [m])
+    cond_frac = 1 / source_thickness 
+    dist_df['model_p2'] = p_of_x(np.abs(dist_df['sensor_l5_dist']),
+                                 c=cond_frac,
+                                 H0=H0,
+                                 p_inf=inf_p,
+                                 p0=0.0,)
 
     df = pd.read_csv(
         csv_path,
@@ -270,13 +347,46 @@ def plot_p_far_errorbars_welch(
     df = df.dropna(subset=["p_far_mean_2024", "p_far_std_2024", "p_far_mean_2025", "p_far_std_2025"]).copy()
 
     # sort
-    if sort_by not in df.columns:
-        raise ValueError(f"sort_by='{sort_by}' not in columns; choose from {list(df.columns)}")
     df['diff'] = df['p_far_mean_2025'] - df['p_far_mean_2024']
-    df = df.sort_values(sort_by, ascending=True).reset_index(drop=True)
+    df = df.sort_values(by='diff', ascending=True).reset_index(drop=True)
 
     df["pair"] = df["borehole"].astype(str) + "-" + df["section"].astype(str)
     y = list(range(len(df)))
+
+    # --- ONLY change: add df['sensor_l5_dist'] and use it as y-coordinate ---
+    dist_df['borehole'] = [s[len('L5-'):] for s in dist_df['borehole'].values]
+    dist_df = dist_df.reset_index()
+    df = df.merge(
+        dist_df[["borehole", "section", "sensor_l5_dist"]],
+        on=["borehole", "section"],
+        how="left",
+    )
+    y = df["sensor_l5_dist"]
+
+    # --- NEW: deterministic jitter for near-identical distances (treat equal if |diff| < 0.2) ---
+    # Cluster distances within 0.2 into the same "row group", then spread within each group.
+    _tol = 0.2
+    _step = 0.3  # vertical separation within a group; adjust if you want
+
+    # make cluster id by walking distances in sorted order (single-linkage in 1D)
+    _d = df["sensor_l5_dist"].values
+    _order = np.argsort(_d)
+    _cluster = np.zeros(len(df), dtype=int)
+    _cid = 0
+    _prev = _d[_order[0]]
+    _cluster[_order[0]] = _cid
+    for idx in _order[1:]:
+        if abs(_d[idx] - _prev) >= _tol:
+            _cid += 1
+        _cluster[idx] = _cid
+        _prev = _d[idx]
+    df["_dist_cluster"] = _cluster
+
+    _k = df.groupby("_dist_cluster").cumcount()  # 0,1,2,...
+    _n = df.groupby("_dist_cluster")["sensor_l5_dist"].transform("size")
+    _centered = _k - (_n - 1) / 2.0  # e.g. n=3 -> [-1,0,1]
+    df["sensor_l5_dist_jitter"] = df["sensor_l5_dist"] + _centered * _step
+    y_j = df["sensor_l5_dist_jitter"]
 
     # Welch significance: 2025 vs 2024
     pvals = []
@@ -294,29 +404,67 @@ def plot_p_far_errorbars_welch(
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    offsets = {"2024": -0.10, "2025": 0.10}
+    # model line directly from dist_df (original distances, no jitter)
+    # model line directly from dist_df, sorted by distance
+    _dplot = dist_df.sort_values("sensor_l5_dist")
+    # ax.plot(
+    #     _dplot["model_p_far"],
+    #     _dplot["sensor_l5_dist"],
+    #     color='grey',
+    #     linestyle="-",
+    #     marker=None,
+    #     alpha=0.5,
+    #     label="homogeneous model",
+    # )
+    ax.plot(
+        _dplot["model_p2"],
+        _dplot["sensor_l5_dist"],
+        color='grey',
+        linestyle="-",
+        marker=None,
+        alpha=0.5,
+        label="homogeneous model",
+    )
+
+    offsets = {"2024": -0.08, "2025": 0.08}
 
     ax.errorbar(
-        df["p_far_mean_2024"], [i + offsets["2024"] for i in y],
+        df["p_far_mean_2024"], y_j + offsets["2024"],
         xerr=df["p_far_std_2024"],
-        fmt="o", capsize=3, color="blue", label="2024 inv"
+        fmt="o", capsize=3, color="blue", label="2024 inversion"
     )
     ax.errorbar(
-        df["p_far_mean_2025"], [i + offsets["2025"] for i in y],
+        df["p_far_mean_2025"], y_j + offsets["2025"],
         xerr=df["p_far_std_2025"],
-        fmt="o", capsize=3, color="red", label="2025 inv"
+        fmt="o", capsize=3, color="red", label="2025 inversion"
     )
 
-    # labels: add p-value only for rejected cases
+
+    # labels: use jittered y coord for tick placement + borehole-section labels (LEFT axis)
     labels = [str(p) for p in df["pair"]]
-    ax.set_yticks(y)
+    ax.set_yticks(y_j)
     ax.set_yticklabels(labels)
+
+    # RIGHT axis: one tick/label per aggregated distance group, at the (original) group distance
+    ax_r = ax.twinx()
+    ax_r.set_ylim(ax.get_ylim())
+
+    # one distance value per cluster (choose mean; could also be min/median)
+    dist_per_group = df.groupby("_dist_cluster")["sensor_l5_dist"].mean().sort_values()
+    y_right = dist_per_group.values
+    labels_right = [f"{v:.2f}" for v in dist_per_group.values]
+
+    ax_r.set_yticks(y_right)
+    ax_r.set_yticklabels(labels_right)
+    ax_r.set_ylabel("sensor distance from L5 [m]", fontsize=14, fontweight="bold")
+
+    # keep your x tick locators on the main axis
     ax.xaxis.set_major_locator(ticker.MultipleLocator(100))
     ax.xaxis.set_minor_locator(ticker.MultipleLocator(10))
 
-    ax.invert_yaxis()
-    ax.set_xlabel("background pressure [kPa]")
-    ax.set_ylabel(f"Borehole-section (sorted by {sort_by})")
+    #ax.invert_yaxis()
+    ax.set_xlabel("pore pressure [kPa]", fontsize=14, fontweight="bold")
+    ax.set_ylabel(f"borehole section", fontsize=14, fontweight="bold")
     ax.grid(True, which="major", axis="both", linestyle="--", linewidth=0.6, alpha=0.5)
     ax.grid(True, which="minor", axis="x", linestyle=":", alpha=0.25, linewidth=0.6)
 
@@ -326,6 +474,5 @@ def plot_p_far_errorbars_welch(
     out_file = work_dir / csv_path.with_suffix(".pdf").name
     fig.savefig(out_file)
 
-def wpt_summary(flow_file, pressure_file):
-    plot_flow_errorbars(flow_file)
-    plot_p_far_errorbars_welch(pressure_file)
+    return fig, ax
+

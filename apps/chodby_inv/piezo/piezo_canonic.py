@@ -12,7 +12,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from chodby_inv.piezo.wpts_summary import wpt_summary
+from chodby_inv.piezo.wpts_summary import plot_flow_errorbars, plot_p_far_errorbars_welch
 from endorse import common
 
 from .decorators import common_report
@@ -20,7 +20,7 @@ from chodby_inv import get_logger
 logger = get_logger(__name__)
 
 from .press_plot import plot_pressure_overview, plot_pressure_graphs, plot_pressure_overview_phases
-from .plot_wpts import plot_wpts
+from .plot_wpts import plot_wpts, large_p, small_p
 from chodby_inv import input_data as inputs
 input_dir = inputs.input_dir
 work_dir = inputs.work_dir
@@ -728,16 +728,38 @@ def epoch_plots(df):
     plot_pressure_graphs(epoch_df, epoch, epoch_blasts, work_dir)
 
 def overview_plots(denoised, full_df):
-    #plot_pressure_overview_phases(full_df, work_dir / "overview_plot.pdf")
-
+    # plot_pressure_overview_phases(full_df, work_dir / "overview_plot.pdf")
+    #
     # denoising debugging
-    #plot_pressure_overview(denoised, work_dir / "denoise_debug_plot.pdf", orig_df=full_df)
+    events_cfg = common.config.load_config(inputs.events_yaml)
+    blasts =  [blast.copy() for blast in events_cfg.blasts]
+    plot_pressure_overview(denoised, work_dir / "denoise_debug_plot.pdf",
+                           orig_df=full_df,
+                           events=blasts)
 
-    # WPT comparison
-    #plot_wpts(denoised, work_dir)
+    plot_pressure_overview(denoised, work_dir / "excavation_large_p.pdf",
+                           sections=large_p,
+                           events=blasts,
+                           xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
+                           ylims=(0, 500),
+                           )
+
+    plot_pressure_overview(denoised, work_dir / "excavation_small_p.pdf",
+                           sections=small_p,
+                           xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
+                           ylims=(-40, 100),
+                           events=blasts)
+
+
+    # # WPT comparison
+    plot_wpts(denoised, work_dir)
 
     # WPT inversion summary from inversion
-    wpt_summary(inputs.flow_summary_csv, inputs.pressure_summary_csv)
+    plot_flow_errorbars(inputs.flow_summary_csv)
+
+    cols = ["borehole", "section", "sensor_l5_dist"]
+    sensor_dist = denoised.drop_duplicates(subset=cols, keep="first")
+    plot_p_far_errorbars_welch(inputs.pressure_summary_csv, dist_df=sensor_dist)
 
 if __name__ == '__main__':
     full_df = full_flat_df()

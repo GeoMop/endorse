@@ -111,7 +111,7 @@ def plot_pressure_overview_phases(df: pd.DataFrame, pdf_path: Path, orig_df: pd.
             grp["timestamp"],
             grp["pressure"],
             color=line_color,
-            linewidth=0.9,
+            linewidth=0.6,
             alpha=0.95,
             zorder=2,
         )
@@ -265,23 +265,98 @@ def plot_pressure_overview_phases(df: pd.DataFrame, pdf_path: Path, orig_df: pd.
     fig.savefig(pdf_path, bbox_inches="tight")
     plt.show()
 
-def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFrame = None):
+def to_datetime(x):
+    return pd.to_datetime(x, format="%y/%m/%d %H:%M:%S")
+
+def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path,
+                           orig_df: pd.DataFrame = None,
+                           events:pd.DataFrame = None,
+                           sections=None,
+                           xlims:Tuple[pd.Timestamp, pd.Timestamp]=None,
+                           ylims:Tuple[float, float]=None):
     """
-       Plot pressure over time for each borehole and section combination,
-       with both legends to the right, weekly date ticks, and tight layout.
-       """
+    Plot pressure over time for each borehole and section combination,
+    with both legends to the right, weekly date ticks, and tight layout.
+    """
     unit = df.attrs['units']['pressure']  # e.g. 'kPa'
     df = df.reset_index()
     #df = df.set_index('timestamp', drop=True)
 
+    if sections is None:
+        # full range present in df
+        sections = list(df[['borehole', 'section']]
+                        .drop_duplicates().itertuples(index=False, name=None))
+
+    else:
+        sections = [(f"L5-{bh}", int(sec)) for bh, sec in sections]
+
+    # keep only requested (borehole, section) pairs
+    pairs = pd.MultiIndex.from_tuples(sections, names=['borehole', 'section'])
+    df_sub = df.set_index(['borehole', 'section']).loc[pairs].reset_index()
+
+
     # color per borehole
     boreholes = df['borehole'].unique()
+
+
     palette = sns.color_palette(n_colors=len(boreholes))
-    color_map = dict(zip(boreholes, palette))
+    color_map = dict([
+        ('L5-49DL', '#c06800'),
+        ('L5-50UL', '#6f22aa'),
+        ('L5-22DR', '#ff0000'),
+        ('L5-23UR', '#00c900'),
+        ('L5-24DR', '#00d6cb'),
+        ('L5-26R',  '#ea60a3'),
+        ('L5-37R',  '#ed9600'),
+        ('L5-37UR', '#1871bf'),
+
+        ])
 
     # linestyle per chamber (section)
     iints = sorted(df['section'].unique())
     assert len(iints) <= 3, "Too many unique sections for line styles."
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # 4) vertical lines for blast events
+    side_map = dict(
+        N=('dashed', 'ZK5-1S'),
+        S=('dotted', 'ZK5-1J'),
+    )
+    for blast in events:
+        ls, label = side_map[blast['side']]
+        blast_time = to_datetime(blast['datetime'])
+        ax.axvline(x=blast_time, color='grey',
+                   linestyle=ls, label=label, alpha=0.5)
+        # label text
+        txt = f"{blast['side']}:{blast['face_stationing']}"
+
+        # put text near the top of the axes at the same x
+        # ax.text(
+        #     blast_time, 0.98, txt,
+        #     transform=ax.get_xaxis_transform(),   # x in data coords, y in axes fraction (0..1)
+        #     xytext=(0.3, 0),  # shift right
+        #     textcoords="offset points",
+        #     rotation=90,
+        #     va="top", ha="left",
+        #     fontsize=8,
+        #     color="grey",
+        #     alpha=0.9
+        # )
+
+        x = mdates.date2num(blast_time)  # <-- key
+        ax.annotate(
+            txt,
+            xy=(x, 0.98),
+            xycoords=ax.get_xaxis_transform(),
+            xytext=(3, 0),          # shift right
+            textcoords="offset points",
+            rotation=90,
+            va="top", ha="left",
+            fontsize=8,
+            color="grey",
+            alpha=0.9,
+        )
+    # 2) Plot series
     style_map = {
         0: (0, ()),  # solid
         1: (0, (10, 4)),  # long dashes
@@ -292,22 +367,10 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
         's',
         'o'
     ]
-    marker_step = len(df['timestamp']) // (20 * len(boreholes) * len(iints))
-    # 2) Plot series
-    fig, ax = plt.subplots(figsize=(12, 6))
-    for (bh, iint), grp in df.groupby(['borehole', 'section']):
-        ax.plot(
-            grp['timestamp'],
-            grp['pressure'],
-            color=color_map[bh],
-            linestyle=style_map[iint],
-            linewidth=0.8,
-            marker=marker_map[iint],  # different marker per “position”
-            markersize=3,
-            markerfacecolor=color_map[bh],
-            markeredgewidth=0.0,
-            markevery=marker_step
-        )
+    marker_step = len(df_sub['timestamp']) // (20 * len(boreholes) * len(iints))
+    for (bh, iint), grp in df_sub.groupby(['borehole', 'section']):
+        line_width = 0.8
+        line_style = 'solid'  # solid by default
         if orig_df is not None:
             orig_grp = orig_df[(orig_df['borehole'] == bh) & (orig_df['section'] == iint)]
             ax.plot(
@@ -315,15 +378,34 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
                 orig_grp['pressure'],
                 color=color_map[bh],
                 linestyle='-',
-                linewidth=1,
+                linewidth=0.7,
                 alpha=0.5
             )
+            line_width = 0.5
+            line_style = (0, (2, 3))    # sparse dots (widely spaced)
+        ax.plot(
+            grp['timestamp'],
+            grp['pressure'],
+            color=color_map[bh],
+            linestyle=line_style,
+            linewidth=line_width,
+            marker=marker_map[iint],  # different marker per “position”
+            markersize=5,
+            markerfacecolor=color_map[bh],
+            markeredgewidth=0.0,
+            markevery=marker_step
+        )
 
     # 3) Axes formatting
     ax.set_title('Pressure Overview by Borehole & Chamber')
     ax.set_xlabel('Date')
     ax.set_ylabel(f'Pressure ({unit})')
-    ax.set_ylim(-200, 1000)
+    ylims = ylims if ylims is not None else (-200, 1000)
+    ax.set_ylim(*ylims)
+    if xlims:
+        xlims = [to_datetime(x) for x in xlims]
+        ax.set_xlim(*xlims)
+
 
     # weekly ticks on Mondays
     # mondays = mdates.WeekdayLocator(byweekday=mdates.MO, interval=1)
@@ -342,7 +424,6 @@ def plot_pressure_overview(df: pd.DataFrame, pdf_path: Path, orig_df: pd.DataFra
     ax.format_xdata = mdates.DateFormatter('%Y-%m-%d %H:%M:%S')
     fig.autofmt_xdate()
 
-    #sns.despine()
 
     # shrink plot area to make room for legends
     fig.subplots_adjust(right=0.75)
@@ -499,4 +580,6 @@ def plot_pressure_graphs(flat_df, epoch, events, work_dir):
         #     print(f'Hotový graf pro {label} v intervalu {tmin} až {tmax}, uložen do {graph_filename}')
         # else:
         #     print(f"Sloupec 'cas' chybí v datech pro {label}.")
+
+
 
