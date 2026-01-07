@@ -115,6 +115,20 @@ class Boreholes:
         z = sin(fr.inclination * pi / 180)
         return np.array([x, y, z])
 
+    def get_initial_pressures(self):
+        pressures = {}
+        df_pressure = piezo.excavation_epoch_df()
+        for bhi in range(self.n_boreholes):
+            bhname = self.bh_name(bhi)
+            df_filtered = df_pressure[(df_pressure['borehole'] == bhname) & (df_pressure['time_days'] == 0)]
+            pressure = df_filtered['pressure'].to_numpy() / 10
+            chamber = df_filtered['section'].to_numpy()
+            bh_pressures = np.zeros(self.n_chambers(bhi))
+            for ch, p in zip(chamber, pressure):
+                bh_pressures[ch] = p
+            pressures[bhname] = bh_pressures
+        return pressures
+
     def make_gmsh_lines(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         lines = []
         for i in range(self.n_boreholes):
@@ -174,31 +188,80 @@ class Boreholes:
                 yaml.dump(point_list, file, default_flow_style=True)
 
     def make_vtk_visualization(self, filename):
+        root = pv.MultiBlock()
+
+        pressures = self.get_initial_pressures()
+
         lines = []
-        texts = []
+        #texts = []
         cyls = []
         labels = []
         label_coords = []
+        line_indices = []
+        cyl_indices = []
         for i in range(self.n_boreholes):
+            bh_block = pv.MultiBlock()
+            bh_name = self.bh_name(i)
+
             dir = self.bh_direction(i)
             p1 = self.bh_start(i)
             p2 = p1 + dir*self.bh_length(i)
-            lines.append(pv.Line(p1, p2))
+
+            line = pv.Line(p1, p2)
+            line.cell_data['bh_index'] = np.full(line.n_cells, i, dtype=int)
+            line.cell_data['ch_index'] = np.full(line.n_cells, -1, dtype=int)
+
+            bh_block['axis'] = line
+
+            # lines.append( line )
+            # line_indices.extend([i] * line.n_cells)
 
             for ch in range(self.n_chambers(i)):
                 chp1 = self.chamber_start(i, ch)
                 chp2 = self.chamber_end(i, ch)
-                cyls.append( pv.Cylinder(center=(chp1+chp2)/2, direction=dir, radius=0.1, height=np.linalg.norm(chp2-chp1)) )
+                cyl = pv.Cylinder(center=(chp1+chp2)/2, direction=dir, radius=0.2, height=np.linalg.norm(chp2-chp1))
 
-            labels.append( self.bh_name(i) )
+                cyl.cell_data['bh_index'] = np.full(cyl.n_cells, i, dtype=int)
+                cyl.cell_data['ch_index'] = np.full(cyl.n_cells, ch, dtype=int)
+                cyl.cell_data['pressure'] = np.full(cyl.n_cells, pressures[bh_name][ch], dtype=float)
+
+                bh_block[f'chamber_{ch}'] = cyl
+
+                # cyls.append( cyl )
+                # cyl_indices.extend([i] * cyl.n_cells)
+
+            # bh_block.field_data['bh_index'] = np.array([i])
+            # bh_block.field_data['bh_name'] = np.array([bh_name])
+
+            root[bh_name] = bh_block
+
+            labels.append( bh_name )
             label_coords.append( p2 )
-            text = pv.Text3D(self.bh_name(i), depth=0.5, center=p2, normal=dir)
-            texts.append( text )
-        mesh = pv.merge(lines + cyls)
-        mesh.add_field_data( np.array(labels), 'Labels' )
-        mesh.add_field_data( np.array(label_coords), 'LabelCoords' )
+            #text = pv.Text3D(self.bh_name(i), depth=0.5, center=p2, normal=dir)
+            #texts.append( text )
 
-        mesh.save(filename)
+        root.field_data['Labels'] = np.array(labels)
+        root.field_data['LabelCoords'] = np.array(label_coords)
+        # root.move_nested_field_data_to_root()
+
+        root.save(filename)
+
+        # mesh = pv.merge(lines + cyls)
+        #
+        # n_line_cells = sum(l.n_cells for l in lines)
+        # n_cyl_cells  = mesh.n_cells - n_line_cells
+        #
+        # # index jen pro vrtové čáry, válce dostanou např. -1
+        # index = np.hstack([
+        #     np.array(line_indices, dtype=int),
+        #     np.array(cyl_indices, dtype=int)
+        # ])
+        # mesh.cell_data['index'] = index
+        #
+        # mesh.add_field_data( np.array(labels), 'Labels' )
+        # mesh.add_field_data( np.array(label_coords), 'LabelCoords' )
+        #
+        # mesh.save(filename)
 
     def visualize_fractures(self, output_file):
 
@@ -420,6 +483,6 @@ if __name__ == "__main__":
     #                        work_dir / output_fname,
     #                        output_compared_fname= work_dir / output_compared_fname)
 
-    # Boreholes().make_vtk_visualization("boreholes.vtp")
+    Boreholes().make_vtk_visualization("boreholes.vtm")
 
-    print_initial_pressures()
+    #print_initial_pressures()

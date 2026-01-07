@@ -1,0 +1,38 @@
+<ServerManagerConfiguration>
+  <ProxyGroup name="representations">
+    <Extension name="GeometryRepresentation">
+      <RepresentationType
+        subproxy="DataLabelRepresentation"
+        text="Labels"
+      />
+
+      <SubProxy>
+        <Proxy
+            name="DataLabelRepresentation"
+            proxygroup="representations"
+            proxyname="DataLabelRepresentation"
+        />
+
+        <ShareProperties subproxy="SurfaceRepresentation">
+          <Exception name="Input" />
+          <Exception name="Visibility" />
+        </ShareProperties>
+
+        <ExposedProperties>
+            <Property name="PointFieldDataArrayName" />
+            <Property name="PointLabelBold" />
+            <Property name="PointLabelColor" />
+            <Property name="PointLabelFontFamily" />
+            <Property name="PointLabelFontSize" />
+            <Property name="PointLabelFormat" />
+            <Property name="PointLabelItalic" />
+            <Property name="PointLabelJustification" />
+            <Property name="PointLabelOpacity" />
+            <Property name="PointLabelShadow" />
+            <Property name="PointLabelVisibility" />
+            <Property name="MaximumNumberOfLabels" />
+        </ExposedProperties>
+      </SubProxy>
+    </Extension>
+  </ProxyGroup>
+</ServerManagerConfiguration>
