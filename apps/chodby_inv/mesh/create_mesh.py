@@ -132,10 +132,13 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
     b_box_fr = box_fr.get_boundary().split_by_dimension()[2]
     b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
     b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
+    print(f"fractures_fr: {fractures_fr}")
+
 
     # CHECK
     print("Checking fragments...")
     res = box_fr.dt_intersection(tunnel_fr)     # = tunnel_fr
+    print(f"res: {res} tunnel_fr: {tunnel_fr}")
     assert res.dt_equal(tunnel_fr)
     # res = box_sides_fr.dt_intersection(tunnel_boundary_fr) # is empty
     res1 = b_box_fr.dt_intersection(tunnel_boundary_fr)  # 81 dimtags
@@ -187,7 +190,7 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
         b_fr_tunnel = fr.get_boundary().split_by_dimension()[1].select_by_intersect(tunnel_walls)
         b_fr_tunnel.set_region(f".{fr_name}_tunnel")
         geometry_set.append(b_fr_tunnel)
-        b_fr = fr.get_boundary().split_by_dimension()[1].dt_drop(b_fr_tunnel)
+        b_fr = fr.get_boundary().split_by_dimension()[1].dt_drop(b_fr_tunnel).select_by_intersect(box_sides_no_tunnel)
         b_fr.set_region(f".{fr_name}")
         geometry_set.append(b_fr)
         print(f"fracture {fr_name} objects: {fr} boundary: {b_fr} boundary_tunnel: {b_fr_tunnel}")
@@ -212,6 +215,7 @@ def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()
+    # factory.show()
 
     print("Geometry finished...")
     return geometry_final, fracs

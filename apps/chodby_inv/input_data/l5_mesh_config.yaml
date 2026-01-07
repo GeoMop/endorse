@@ -97,28 +97,25 @@ line_objects:
 
 
 generated_fractures:
-  fr1:
-    points:
-#      - line_object: L5
-#        position: 10
+#  fr1:
+#    points:
+##      - line_object: L5
+##        position: 10
+##        weight: 0
+#      - line_object: L5-23UR
+#        position: 2
 #        weight: 0
-      - line_object: L5-23UR
-        position: 2
-        weight: 0
-      - line_object: L5-26R
-        position: 2
-        weight: 0
-      - line_object: L5-37R
-        position: 7.71
-        weight: 1
-      - line_object: L5-37UR
-        position: 8
-        weight: 0
-    normal:
-      azimuth: 204
-      inclination: 82
-    weight_normal: 1
-    weight_normal_size: 0
+#      - line_object: L5-26R
+#        position: 2
+#        weight: 0
+#      - line_object: L5-37UR
+#        position: 8
+#        weight: 0
+#    normal:
+#      azimuth: 204
+#      inclination: 82
+#    weight_normal: 1
+#    weight_normal_size: 0
 
   fr2:
     points:
@@ -139,8 +136,11 @@ generated_fractures:
 
   fr3:
     points:
+      - line_object: L5-26R
+        position: 2.73
+        weight: 1
       - line_object: L5-37R
-        position: 10.55
+        position: 7.71
         weight: 1
       - line_object: L5-37UR
         position: 6.17
