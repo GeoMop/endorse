@@ -334,6 +334,7 @@ def plot_p_far_errorbars_welch(
         "borehole", "section",
         "p_far_mean_2024", "p_far_std_2024",
         "p_far_mean_2025", "p_far_std_2025",
+        "p_far manual 2024", "p_far manual 2025",
     ]
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -344,7 +345,7 @@ def plot_p_far_errorbars_welch(
     df[num_cols] = df[num_cols].apply(pd.to_numeric, errors="coerce")
 
     # drop rows missing critical values
-    df = df.dropna(subset=["p_far_mean_2024", "p_far_std_2024", "p_far_mean_2025", "p_far_std_2025"]).copy()
+    df = df.dropna(subset=required[2:]).copy()
 
     # sort
     df['diff'] = df['p_far_mean_2025'] - df['p_far_mean_2024']
@@ -438,7 +439,17 @@ def plot_p_far_errorbars_welch(
         xerr=df["p_far_std_2025"],
         fmt="o", capsize=3, color="red", label="2025 inversion"
     )
-
+    ax.scatter(
+        df["p_far manual 2024"],
+        y_j + offsets["2024"],
+        marker="o",
+        color="cyan",
+        label="2024 manual",
+    )
+    ax.scatter(
+        df["p_far manual 2025"], y_j + offsets["2025"],
+        marker="o", color="orange", label="2025 manual"
+    )
 
     # labels: use jittered y coord for tick placement + borehole-section labels (LEFT axis)
     labels = [str(p) for p in df["pair"]]

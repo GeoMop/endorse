@@ -64,8 +64,8 @@ water_pressure_tests:
     p_far_std: 25000
 
   - start: "24/03/06 17:00:00"
-    origin: "24/03/06 17:30:00"
-    # end: "24/03/08 07:00:00"
+    origin: "24/03/06 17:30:00"     
+    # end: "24/03/08 07:00:00"      # up to anomalous pressure drop
     end: "24/03/10 07:00:00"
     borehole: L5-22DR
     section: 1
@@ -74,9 +74,9 @@ water_pressure_tests:
     p_far_std: 25000
 
   - start: "24/03/06 14:00:00"
-    origin: "24/03/06 20:00:00"
+    origin: "24/03/06 20:00:00"     # inversion doesnt seem consistent
     #end: "24/09/12 00:00:00"
-    end: "24/06/26 00:00:00"
+    end: "24/06/26 00:00:00"        # approximately same data length as for 2025
     borehole: L5-22DR
     section: 2
     dt: 172800
