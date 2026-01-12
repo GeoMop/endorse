@@ -737,18 +737,25 @@ def overview_plots(denoised, full_df):
                            orig_df=full_df,
                            events=blasts)
 
-    plot_pressure_overview(denoised, work_dir / "excavation_large_p.pdf",
-                           sections=large_p,
-                           events=blasts,
-                           xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
-                           ylims=(0, 500),
-                           )
+    # plot_pressure_overview(denoised, work_dir / "excavation_large_p.pdf",
+    #                        sections=large_p,
+    #                        events=blasts,
+    #                        xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
+    #                        ylims=(0, 500),
+    #                        )
+    #
+    # plot_pressure_overview(denoised, work_dir / "excavation_small_p.pdf",
+    #                        sections=small_p,
+    #                        xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
+    #                        ylims=(-40, 100),
+    #                        events=blasts)
 
-    plot_pressure_overview(denoised, work_dir / "excavation_small_p.pdf",
-                           sections=small_p,
-                           xlims=('24/03/09 00:00:00', '24/04/20 00:00:00'),
-                           ylims=(-40, 100),
+    plot_pressure_overview(denoised, work_dir / "init_wpts.pdf",
+                           xlims=('24/02/21 00:00:00', '24/03/23 00:00:00'),
+                           ylims=(-10, 600),
                            events=blasts)
+
+    # correlation
 
 
     # # WPT comparison
@@ -760,6 +767,8 @@ def overview_plots(denoised, full_df):
     cols = ["borehole", "section", "sensor_l5_dist"]
     sensor_dist = denoised.drop_duplicates(subset=cols, keep="first")
     plot_p_far_errorbars_welch(inputs.pressure_summary_csv, dist_df=sensor_dist)
+
+
 
 if __name__ == '__main__':
     full_df = full_flat_df()
