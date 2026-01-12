@@ -62,10 +62,10 @@ bulk_field_parametric: &bulk_field_parametric
     por_min: 0.002
 
     # values with respect to EDZ radius
-    h_axis: 2 #1.5
-    v_axis: 2
+    # h_axis: 2.0
+    # v_axis: 3.35 # 6.7/2
     # radius for c_min
-    inner_radius: 1.0 # 1.1
+    inner_radius: 1.0
 
 # parameters substituted into the TH model template
 transport_fullscale:
