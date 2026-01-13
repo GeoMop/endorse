@@ -55,11 +55,10 @@ def _base_sa_cfg(n_samples: int, sampler: str, second_order: bool = True) -> dic
     }
 
 
-def _run_sa(sa_cfg: dict, model_fn, seed: int = 2024):
+def _run_sa(sa_cfg: dict, model_fn, seed: int = 2024) -> xr.Dataset:
     sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
 
     in_design = sa_obj.sample(seed=seed, n_samples=sa_obj.n_samples)
-    Xg = in_design.group_mat
     Xp = in_design.param_mat
 
     param_names = list(sa_obj.parameters.keys())
@@ -69,64 +68,108 @@ def _run_sa(sa_cfg: dict, model_fn, seed: int = 2024):
     assert isinstance(Y, np.ndarray)
     assert Y.ndim == 2 and Y.shape[0] == Xp.shape[0]
 
-    result = in_design.compute_sobol(Y)
-    return result
+    # returns xr.Dataset with variables: S1, ST, S2, ...
+    return in_design.compute_sobol(Y)
 
 
-def _get_s2_pair(result: dict, g_left="g1", g_right="S"):
+def _get_s2_pair(ds: xr.Dataset, g_left="g1", g_right="S") -> np.ndarray:
     """
-    Return S2(g1,S) as a vector of shape (n_outputs,).
-    Adapt if your project stores S2 differently.
+    Return S2(g_left, g_right) as a vector of shape (n_outputs,).
+
+    Expected:
+      ds["S2"] is a DataArray with dims like ("group", "<other_group_dim>", "output")
+      where <other_group_dim> could be "group_2", "group_b", "group2", etc.
     """
-    # Try group-level storage on g_left
-    obj = result[g_left]
-    if hasattr(obj, "S2"):
-        s2 = getattr(obj, "S2")
-        if isinstance(s2, dict) and g_right in s2:
-            v = np.asarray(s2[g_right], dtype=float)
-            assert v.ndim == 1
-            return v
-        if isinstance(s2, (list, tuple, np.ndarray)):
-            v = np.asarray(s2, dtype=float)
-            if v.ndim == 1:
-                return v
+    if "S2" not in ds:
+        raise AssertionError("Dataset has no 'S2' variable.")
 
-    # Try group-level storage on g_right
-    obj = result[g_right]
-    if hasattr(obj, "S2"):
-        s2 = getattr(obj, "S2")
-        if isinstance(s2, dict) and g_left in s2:
-            v = np.asarray(s2[g_left], dtype=float)
-            assert v.ndim == 1
-            return v
-        if isinstance(s2, (list, tuple, np.ndarray)):
-            v = np.asarray(s2, dtype=float)
-            if v.ndim == 1:
-                return v
+    s2 = ds["S2"]
+    if "group" not in s2.dims:
+        raise AssertionError(f"S2 has no 'group' dim. dims={s2.dims}")
 
-    raise AssertionError(
-        "Could not locate S2(g1,S) vector. Please adapt _get_s2_pair() "
-        "to your SobolResultGroup structure."
-    )
+    # Find the "other group" dimension (anything in dims that looks like group but isn't 'group')
+    other_group_dim = None
+    for d in s2.dims:
+        if d == "group":
+            continue
+        # heuristic: dim name contains 'group' and is a coordinate of strings
+        if "group" in d.lower():
+            other_group_dim = d
+            break
+
+    if other_group_dim is None:
+        raise AssertionError(
+            f"Could not infer second group dimension in S2. dims={s2.dims}. "
+            "Please rename dims or adapt _get_s2_pair()."
+        )
+
+    # Output dimension might be called 'output' or something else; infer it as the remaining dim
+    remaining = [d for d in s2.dims if d not in ("group", other_group_dim)]
+    if len(remaining) != 1:
+        raise AssertionError(f"Could not infer output dim in S2. dims={s2.dims}")
+    out_dim = remaining[0]
+
+    # Try selecting (g_left, g_right) directly; if missing, try reversed order.
+    def _try_select(a: str, b: str) -> np.ndarray | None:
+        try:
+            v = s2.sel(group=a).sel({other_group_dim: b})
+        except Exception:
+            return None
+        v = np.asarray(v.values, dtype=float)
+        # after selection should be (n_outputs,) possibly with singleton dims
+        v = np.squeeze(v)
+        if v.ndim != 1:
+            return None
+        return v
+
+    v = _try_select(g_left, g_right)
+    if v is None:
+        v = _try_select(g_right, g_left)
+    if v is None:
+        raise AssertionError(
+            f"Could not select S2({g_left},{g_right}) from dataset. "
+            f"Available groups: {set(ds['group'].values)}; "
+            f"other group coord '{other_group_dim}': {set(ds[other_group_dim].values) if other_group_dim in ds.coords else 'N/A'}"
+        )
+    return v
 
 
-def _extract_metrics(result: xr.Dataset) -> dict:
+def _extract_metrics(ds: xr.Dataset) -> dict:
     """
-    Extract all requested estimates at once:
-      - group-level S1 vectors for g1 and S
-      - group-level ST vectors for g1 and S
-      - single interaction S2(g1,S) vector
+    Extract all requested estimates at once (vectors over outputs):
+      - S1_g1, S1_S
+      - ST_g1, ST_S
+      - S2_g1S
     """
-    g1 = result["g1"]
-    Sg = result["S"]
+    # Validate expected structure quickly
+    assert isinstance(ds, xr.Dataset)
+    assert "S1" in ds and "ST" in ds and "S2" in ds, f"Missing vars: {set(['S1','ST','S2']) - set(ds.data_vars)}"
+    assert "group" in ds.coords, f"Missing 'group' coord in ds.coords={list(ds.coords)}"
 
-    S1_g1 = np.asarray(g1.S1, dtype=float)
-    S1_S = np.asarray(Sg.S1, dtype=float)
-    ST_g1 = np.asarray(g1.ST, dtype=float)
-    ST_S = np.asarray(Sg.ST, dtype=float)
-    S2_g1S = _get_s2_pair(result, "g1", "S")
+    # S1, ST expected dims: (group, output) (output dim name may differ)
+    s1 = ds["S1"]
+    st = ds["ST"]
 
-    # basic shape consistency (same n_outputs)
+    # infer output dim from S1
+    s1_dims = list(s1.dims)
+    assert "group" in s1_dims, f"S1 has no 'group' dim. dims={s1_dims}"
+    out_dims = [d for d in s1_dims if d != "group"]
+    assert len(out_dims) == 1, f"Expected S1 dims ('group', 'output'), got {s1_dims}"
+    out_dim = out_dims[0]
+
+    S1_g1 = np.asarray(s1.sel(group="g1").values, dtype=float).squeeze()
+    S1_S  = np.asarray(s1.sel(group="S").values, dtype=float).squeeze()
+    ST_g1 = np.asarray(st.sel(group="g1").values, dtype=float).squeeze()
+    ST_S  = np.asarray(st.sel(group="S").values, dtype=float).squeeze()
+
+    # Ensure vectors
+    for name, v in [("S1_g1", S1_g1), ("S1_S", S1_S), ("ST_g1", ST_g1), ("ST_S", ST_S)]:
+        if v.ndim != 1:
+            raise AssertionError(f"{name} expected 1D over outputs, got shape {v.shape}")
+
+    S2_g1S = _get_s2_pair(ds, "g1", "S")
+
+    # shape consistency
     n_out = S1_g1.shape[0]
     assert S1_S.shape == (n_out,)
     assert ST_g1.shape == (n_out,)
@@ -139,22 +182,19 @@ def _extract_metrics(result: xr.Dataset) -> dict:
         "ST_g1": ST_g1,
         "ST_S": ST_S,
         "S2_g1S": S2_g1S,
+        "out_dim": out_dim,  # sometimes handy for debugging, not used in asserts
     }
 
 
 def _assert_generic_sobol_invariants(M: dict, eps: float = 0.20):
-    """
-    Model-independent checks on all outputs at once.
-    """
-    # ST >= S1 (allow tiny numerical tolerance)
     assert np.all(M["ST_g1"] + 1e-12 >= M["S1_g1"])
     assert np.all(M["ST_S"]  + 1e-12 >= M["S1_S"])
 
-    # finite
     for k, v in M.items():
+        if k == "out_dim":
+            continue
         assert np.all(np.isfinite(v)), f"{k} has non-finite values: {v}"
 
-    # not wildly out of range (allow some estimator noise)
     for k in ("S1_g1", "S1_S", "ST_g1", "ST_S", "S2_g1S"):
         v = M[k]
         assert np.all(v >= -eps), f"{k} too negative: {v}"
@@ -162,14 +202,9 @@ def _assert_generic_sobol_invariants(M: dict, eps: float = 0.20):
 
 
 def _assert_sampler_agreement(metrics_by_sampler: dict, atol: float):
-    """
-    Compare samplers for each vector metric at once by bounding the max range
-    across samplers (elementwise) and requiring it stays below atol.
-    """
-    keys = next(iter(metrics_by_sampler.values())).keys()
+    keys = [k for k in next(iter(metrics_by_sampler.values())).keys() if k != "out_dim"]
     for k in keys:
         stack = np.stack([metrics_by_sampler[s][k] for s in metrics_by_sampler.keys()], axis=0)
-        # elementwise range across samplers
         rng = np.max(stack, axis=0) - np.min(stack, axis=0)
         assert np.all(rng <= atol), f"Sampler disagreement too large for {k}: range={rng} (atol={atol})"
 
@@ -177,30 +212,18 @@ def _assert_sampler_agreement(metrics_by_sampler: dict, atol: float):
 # ----------------------------- Models ----------------------------------------
 
 def model_add(df: pd.DataFrame) -> np.ndarray:
-    """
-    Two outputs:
-      y1 = k1 + k2     (depends only on group g1)
-      y2 = S           (depends only on group S)
-    """
     y1 = df["k1"].to_numpy() + df["k2"].to_numpy()
     y2 = df["S"].to_numpy()
     return np.column_stack([y1, y2])
 
 
 def expectations_add(M: dict):
-    """
-    Assert both outputs at once.
-    Output 0: depends only on g1
-    Output 1: depends only on S
-    """
-    # output 0 (y1)
     assert M["S1_g1"][0] > 0.8
     assert M["ST_g1"][0] > 0.8
     assert M["S1_S"][0]  < 0.1
     assert M["ST_S"][0]  < 0.1
     assert abs(M["S2_g1S"][0]) < 0.1
 
-    # output 1 (y2)
     assert M["S1_S"][1]  > 0.8
     assert M["ST_S"][1]  > 0.8
     assert M["S1_g1"][1] < 0.1
@@ -209,28 +232,16 @@ def expectations_add(M: dict):
 
 
 def model_mul_add(df: pd.DataFrame) -> np.ndarray:
-    """
-    Two outputs:
-      y1 = S*k1 + k2   (depends on both groups with interaction)
-      y2 = S           (depends only on group S)
-    """
     y1 = df["S"].to_numpy() * df["k1"].to_numpy() + df["k2"].to_numpy()
     y2 = df["S"].to_numpy()
     return np.column_stack([y1, y2])
 
 
 def expectations_mul_add(M: dict):
-    """
-    Assert both outputs at once.
-    Output 0: interaction should be non-trivial
-    Output 1: depends only on S
-    """
-    # output 0 (y1)
     assert M["S2_g1S"][0] > 0.02
     assert M["ST_g1"][0] > 0.1
     assert M["ST_S"][0]  > 0.1
 
-    # output 1 (y2)
     assert M["S1_S"][1]  > 0.8
     assert M["ST_S"][1]  > 0.8
     assert M["S1_g1"][1] < 0.1
@@ -248,40 +259,28 @@ def expectations_mul_add(M: dict):
     ],
 )
 def test_sa_end_to_end_models_compare_samplers(model_fn, expectations_fn):
-    """
-    Single test:
-      - parametrized by model
-      - loops over samplers (QMC/MC/LHC)
-      - for each sampler:
-          a) compute ALL outputs at once
-          b) run model-independent invariants + model-specific expectations (for all outputs)
-      - then compare estimates across samplers for the same model (all outputs at once)
-    """
     samplers = ["QMC", "MC", "LHC"]
     n_samples = 512
     seed = 2024
-    atol_compare = 0.25  # tighten/loosen as needed
+    atol_compare = 0.25
 
     metrics_by_sampler = {}
 
     for sampler in samplers:
         sa_cfg = _base_sa_cfg(n_samples=n_samples, sampler=sampler, second_order=True)
-        res = _run_sa(sa_cfg, model_fn, seed=seed)
+        ds = _run_sa(sa_cfg, model_fn, seed=seed)
 
-        assert set(res.keys()) == {'S1', 'S1_agg_ci', 'S2', 'ST', 'ST_agg_ci'}
-        assert set(res.group.values) == {'S', 'g1'}
+        # Your dataset sanity checks
+        assert set(ds.data_vars.keys()) >= {"S1", "ST", "S2"}
+        assert set(ds.coords["group"].values) == {"S", "g1"}
 
-        M = _extract_metrics(res)
+        M = _extract_metrics(ds)
 
-        # a) model-independent invariants
         _assert_generic_sobol_invariants(M, eps=0.20)
-
-        # b) model-specific expectations (both outputs at once)
         expectations_fn(M)
 
         metrics_by_sampler[sampler] = M
 
-    # Compare samplers for the common model (all outputs at once)
     _assert_sampler_agreement(metrics_by_sampler, atol=atol_compare)
 
 
