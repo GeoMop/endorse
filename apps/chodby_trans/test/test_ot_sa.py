@@ -33,6 +33,258 @@ def test_parameter_from_cfg_and_mapping():
     assert (x1 > 0).all()
 
 
+import numpy as np
+import pandas as pd
+import pytest
+
+# assumes your package imports like in the original test
+# import sa
+
+
+def _base_sa_cfg(n_samples: int, sampler: str, second_order: bool = True) -> dict:
+    return {
+        "n_samples": n_samples,
+        "sampler": sampler,          # {"QMC","MC","LHC"}
+        "second_order": second_order,
+        "confidence_level": 0.95,
+        "parameters": {
+            "k1": {"distr": "LogNormal", "args": [0.0, 0.25], "group": "g1"},
+            "k2": {"distr": "Uniform",   "args": [0.1, 0.5],  "group": "g1"},
+            "S":  {"distr": "Normal",    "args": [0.0, 1.0]},   # own group "S"
+        },
+    }
+
+
+def _run_sa(sa_cfg: dict, model_fn, seed: int = 2024):
+    sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
+
+    in_design = sa_obj.sample(seed=seed, n_samples=sa_obj.n_samples)
+    Xg = in_design.group_mat
+    Xp = in_design.param_mat
+
+    param_names = list(sa_obj.parameters.keys())
+    df = pd.DataFrame(Xp, columns=param_names)
+
+    Y = model_fn(df)
+    assert isinstance(Y, np.ndarray)
+    assert Y.ndim == 2 and Y.shape[0] == Xp.shape[0]
+
+    result = in_design.compute_sobol(Y)
+    return result
+
+
+def _get_s2_pair(result: dict, g_left="g1", g_right="S"):
+    """
+    Return S2(g1,S) as a vector of shape (n_outputs,).
+    Adapt if your project stores S2 differently.
+    """
+    # Try group-level storage on g_left
+    obj = result[g_left]
+    if hasattr(obj, "S2"):
+        s2 = getattr(obj, "S2")
+        if isinstance(s2, dict) and g_right in s2:
+            v = np.asarray(s2[g_right], dtype=float)
+            assert v.ndim == 1
+            return v
+        if isinstance(s2, (list, tuple, np.ndarray)):
+            v = np.asarray(s2, dtype=float)
+            if v.ndim == 1:
+                return v
+
+    # Try group-level storage on g_right
+    obj = result[g_right]
+    if hasattr(obj, "S2"):
+        s2 = getattr(obj, "S2")
+        if isinstance(s2, dict) and g_left in s2:
+            v = np.asarray(s2[g_left], dtype=float)
+            assert v.ndim == 1
+            return v
+        if isinstance(s2, (list, tuple, np.ndarray)):
+            v = np.asarray(s2, dtype=float)
+            if v.ndim == 1:
+                return v
+
+    raise AssertionError(
+        "Could not locate S2(g1,S) vector. Please adapt _get_s2_pair() "
+        "to your SobolResultGroup structure."
+    )
+
+
+def _extract_metrics(result: xr.Dataset) -> dict:
+    """
+    Extract all requested estimates at once:
+      - group-level S1 vectors for g1 and S
+      - group-level ST vectors for g1 and S
+      - single interaction S2(g1,S) vector
+    """
+    g1 = result["g1"]
+    Sg = result["S"]
+
+    S1_g1 = np.asarray(g1.S1, dtype=float)
+    S1_S = np.asarray(Sg.S1, dtype=float)
+    ST_g1 = np.asarray(g1.ST, dtype=float)
+    ST_S = np.asarray(Sg.ST, dtype=float)
+    S2_g1S = _get_s2_pair(result, "g1", "S")
+
+    # basic shape consistency (same n_outputs)
+    n_out = S1_g1.shape[0]
+    assert S1_S.shape == (n_out,)
+    assert ST_g1.shape == (n_out,)
+    assert ST_S.shape == (n_out,)
+    assert S2_g1S.shape == (n_out,)
+
+    return {
+        "S1_g1": S1_g1,
+        "S1_S": S1_S,
+        "ST_g1": ST_g1,
+        "ST_S": ST_S,
+        "S2_g1S": S2_g1S,
+    }
+
+
+def _assert_generic_sobol_invariants(M: dict, eps: float = 0.20):
+    """
+    Model-independent checks on all outputs at once.
+    """
+    # ST >= S1 (allow tiny numerical tolerance)
+    assert np.all(M["ST_g1"] + 1e-12 >= M["S1_g1"])
+    assert np.all(M["ST_S"]  + 1e-12 >= M["S1_S"])
+
+    # finite
+    for k, v in M.items():
+        assert np.all(np.isfinite(v)), f"{k} has non-finite values: {v}"
+
+    # not wildly out of range (allow some estimator noise)
+    for k in ("S1_g1", "S1_S", "ST_g1", "ST_S", "S2_g1S"):
+        v = M[k]
+        assert np.all(v >= -eps), f"{k} too negative: {v}"
+        assert np.all(v <= 1.0 + eps), f"{k} too large: {v}"
+
+
+def _assert_sampler_agreement(metrics_by_sampler: dict, atol: float):
+    """
+    Compare samplers for each vector metric at once by bounding the max range
+    across samplers (elementwise) and requiring it stays below atol.
+    """
+    keys = next(iter(metrics_by_sampler.values())).keys()
+    for k in keys:
+        stack = np.stack([metrics_by_sampler[s][k] for s in metrics_by_sampler.keys()], axis=0)
+        # elementwise range across samplers
+        rng = np.max(stack, axis=0) - np.min(stack, axis=0)
+        assert np.all(rng <= atol), f"Sampler disagreement too large for {k}: range={rng} (atol={atol})"
+
+
+# ----------------------------- Models ----------------------------------------
+
+def model_add(df: pd.DataFrame) -> np.ndarray:
+    """
+    Two outputs:
+      y1 = k1 + k2     (depends only on group g1)
+      y2 = S           (depends only on group S)
+    """
+    y1 = df["k1"].to_numpy() + df["k2"].to_numpy()
+    y2 = df["S"].to_numpy()
+    return np.column_stack([y1, y2])
+
+
+def expectations_add(M: dict):
+    """
+    Assert both outputs at once.
+    Output 0: depends only on g1
+    Output 1: depends only on S
+    """
+    # output 0 (y1)
+    assert M["S1_g1"][0] > 0.8
+    assert M["ST_g1"][0] > 0.8
+    assert M["S1_S"][0]  < 0.1
+    assert M["ST_S"][0]  < 0.1
+    assert abs(M["S2_g1S"][0]) < 0.1
+
+    # output 1 (y2)
+    assert M["S1_S"][1]  > 0.8
+    assert M["ST_S"][1]  > 0.8
+    assert M["S1_g1"][1] < 0.1
+    assert M["ST_g1"][1] < 0.1
+    assert abs(M["S2_g1S"][1]) < 0.1
+
+
+def model_mul_add(df: pd.DataFrame) -> np.ndarray:
+    """
+    Two outputs:
+      y1 = S*k1 + k2   (depends on both groups with interaction)
+      y2 = S           (depends only on group S)
+    """
+    y1 = df["S"].to_numpy() * df["k1"].to_numpy() + df["k2"].to_numpy()
+    y2 = df["S"].to_numpy()
+    return np.column_stack([y1, y2])
+
+
+def expectations_mul_add(M: dict):
+    """
+    Assert both outputs at once.
+    Output 0: interaction should be non-trivial
+    Output 1: depends only on S
+    """
+    # output 0 (y1)
+    assert M["S2_g1S"][0] > 0.02
+    assert M["ST_g1"][0] > 0.1
+    assert M["ST_S"][0]  > 0.1
+
+    # output 1 (y2)
+    assert M["S1_S"][1]  > 0.8
+    assert M["ST_S"][1]  > 0.8
+    assert M["S1_g1"][1] < 0.1
+    assert M["ST_g1"][1] < 0.1
+    assert abs(M["S2_g1S"][1]) < 0.1
+
+
+# ----------------------------- Single parametrized test ----------------------
+
+@pytest.mark.parametrize(
+    "model_fn, expectations_fn",
+    [
+        (model_add, expectations_add),
+        (model_mul_add, expectations_mul_add),
+    ],
+)
+def test_sa_end_to_end_models_compare_samplers(model_fn, expectations_fn):
+    """
+    Single test:
+      - parametrized by model
+      - loops over samplers (QMC/MC/LHC)
+      - for each sampler:
+          a) compute ALL outputs at once
+          b) run model-independent invariants + model-specific expectations (for all outputs)
+      - then compare estimates across samplers for the same model (all outputs at once)
+    """
+    samplers = ["QMC", "MC", "LHC"]
+    n_samples = 512
+    seed = 2024
+    atol_compare = 0.25  # tighten/loosen as needed
+
+    metrics_by_sampler = {}
+
+    for sampler in samplers:
+        sa_cfg = _base_sa_cfg(n_samples=n_samples, sampler=sampler, second_order=True)
+        res = _run_sa(sa_cfg, model_fn, seed=seed)
+
+        assert set(res.keys()) == {'S1', 'S1_agg_ci', 'S2', 'ST', 'ST_agg_ci'}
+        assert set(res.group.values) == {'S', 'g1'}
+
+        M = _extract_metrics(res)
+
+        # a) model-independent invariants
+        _assert_generic_sobol_invariants(M, eps=0.20)
+
+        # b) model-specific expectations (both outputs at once)
+        expectations_fn(M)
+
+        metrics_by_sampler[sampler] = M
+
+    # Compare samplers for the common model (all outputs at once)
+    _assert_sampler_agreement(metrics_by_sampler, atol=atol_compare)
+
+
 def test_sa_from_cfg_and_sampling():
     sa_cfg = {
         "n_samples": 256,
@@ -151,81 +403,7 @@ def test_sa_end_to_end_3params_2outputs():
     assert lo1 <= hi1 and -0.1 <= lo1 <= 0.2 and 0.1 <= hi1 <= 0.5
     assert loT <= hiT and -0.1 <= loT <= 0.2 and 0.1 <= hiT <= 0.5
 
-def test_sa_end_to_end_3params_2outputs():
-    """
-    End-to-end: 3 params, 2 outputs.
-    - k1 (LogNormal) and k2 (Uniform) share group 'g1'
-    - S  (Normal)    in its own group 'S'
-    Model:
-        y1 = k1 + k2            (depends only on group 'g1')
-        y2 = S                  (depends only on group 'S')
-    Expectations (per-output S1 at group level):
-        - For y1: S1['g1'] ~ 1, S1['S'] ~ 0
-        - For y2: S1['S'] ~ 1, S1['g1'] ~ 0
-    """
-    sa_cfg = {
-        "n_samples": 512,
-        "sampler": "QMC",
-        "second_order": False,
-        "confidence_level": 0.95,
-        "parameters": {
-            "k1": {"distr": "LogNormal",
-                   "args": [0.0, 0.25],
-                   "group": "g1"},
-            "k2": {"distr": "Uniform",  "args": [0.1, 0.5],   "group": "g1"},
-            "S":  {"distr": "Normal",   "args": [0.0, 1.0]},  # own group "S"
-        },
-    }
-    sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
 
-    # design + mapping
-    in_design = sa_obj.sample(seed=2024, n_samples=sa_obj.n_samples)
-    Xp = in_design.param_mat
-
-    # build outputs: y1 = k1 + k2, y2 = S
-    name_to_col = {name: i for i, name in enumerate(sa_obj.parameters.keys())}
-    y1 = Xp[:, name_to_col["k1"]] + Xp[:, name_to_col["k2"]]
-    y2 = Xp[:, name_to_col["S"]]
-    Y = np.column_stack([y1, y2])
-
-    # compute Sobol’ at group level using InputDesign.compute_sobol
-    ds = in_design.compute_sobol(Y)  # xr.Dataset
-
-    # group indices
-    groups = list(ds.coords["group"].values)
-    g1_idx = groups.index("g1")
-    S_idx = groups.index("S")
-
-    # shapes
-    assert ds["S1"].shape == (len(groups), 2)
-    assert ds["ST"].shape == (len(groups), 2)
-
-    S1 = ds["S1"].values  # (group, output)
-    ST = ds["ST"].values
-
-    S1_g1 = S1[g1_idx, :]
-    S1_S  = S1[S_idx, :]
-
-    # per-output expectations (use relaxed tolerances due to QMC randomness & hashing)
-    # y1 depends only on group g1
-    assert S1_g1[0] > 0.8
-    assert S1_S[0] < 0.1
-
-    # y2 depends only on group S
-    assert S1_S[1] > 0.8
-    assert S1_g1[1] < 0.1
-
-    # aggregated CI sanity (uses OT's aggregated intervals)
-    S1_agg_ci = ds["S1_agg_ci"].values  # (group, bound)
-    ST_agg_ci = ds["ST_agg_ci"].values
-
-    lo1, hi1 = S1_agg_ci[g1_idx, :]
-    loT, hiT = ST_agg_ci[g1_idx, :]
-    assert lo1 <= hi1
-    assert loT <= hiT
-    # loose but non-trivial ranges
-    assert -0.1 <= lo1 <= 0.2 and 0.1 <= hi1 <= 0.9
-    assert -0.1 <= loT <= 0.2 and 0.1 <= hiT <= 0.9
 
 
 def test_compute_sobol_xr_with_bootstrap():
