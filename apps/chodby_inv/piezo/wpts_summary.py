@@ -452,8 +452,8 @@ def plot_p_far_errorbars_welch(
     )
 
     # reversed order
-    ax.bxp(stats24[::-1], orientation="horizontal", showfliers=False, positions=y_j + offsets["2024"])
-    ax.bxp(stats25[::-1], orientation="horizontal", showfliers=False, positions=y_j + offsets["2025"])
+    ax.bxp(stats24[::-1], orientation="horizontal", showfliers=False, positions=y_j + offsets["2024"], label="2024 inversion", capsize=3, color="red", fmt="o", widths = 0.2)
+    ax.bxp(stats25[::-1], orientation="horizontal", showfliers=False, positions=y_j + offsets["2025"], label="2025 inversion", capsize=3, color="blue", fmt="o", widths = 0.2)
 
     ax.scatter(
         df["p_far manual 2024"],
