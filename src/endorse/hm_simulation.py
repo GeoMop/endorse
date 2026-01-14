@@ -7,7 +7,7 @@ import scipy as sp
 import endorse.mesh_class
 from .common import File, sample_from_population, workdir, dotdict, FlowOutput
 from .flow123d_simulation import Edz_HM_TSX_2D
-from .plots import plot_field
+#from .plots import plot_field
 
 
 # 2D cross-section mesh is in xy plane with center in zero

@@ -247,6 +247,49 @@ class InputDesign:
         except TypeError:
             return np.eye(self.n_groups)
 
+    @property
+    def param_xr(self) -> xr.DataArray:
+        parameters = list(self.param_groups.keys())
+        return self._sample_mat_xr(self.param_mat, parameters)
+
+    @property
+    def group_xr(self) -> xr.DataArray:
+        return self._sample_mat_xr(self.group_mat, self.groups)
+
+    def _sample_mat_xr(
+            self,
+            mat: np.ndarray,
+            col_names: List[str]
+    ) -> xr.DataArray:
+        """
+        Unstack a 2D matrix (n_evals, n_cols) into a dense 3D array (QMC, IID, col)
+        using explicit row -> (QMC, IID) indices.
+
+        Assumes i_saltelli and i_sample are 0-based integer indices forming a dense grid.
+        No assumption about row ordering.
+        """
+        mat = np.asarray(mat)
+        if mat.ndim != 2:
+            raise ValueError(f"mat must be 2D, got shape {mat.shape}")
+        n_evals, n_cols = mat.shape
+        assert len(col_names) == n_cols, f"len(col_names)={len(col_names)} != n_cols={n_cols}"
+        assert len(self.i_saltelli) == n_evals
+        assert len(self.i_sample) == n_evals
+        assert self.n_samples * self.n_saltelli == n_evals
+
+        data = np.empty((self.n_saltelli, self.n_samples, n_cols), dtype=mat.dtype)
+        data[self.i_saltelli, self.i_sample, :] = mat
+
+        return xr.DataArray(
+            data=data,
+            dims=("QMC", "IID", "param"),
+            coords={
+                "QMC": np.arange(self.n_saltelli, dtype=np.int64),
+                "IID": np.arange(self.n_samples, dtype=np.int64),
+                "param": np.asarray(col_names, dtype=object),
+            }
+        )
+
     def compute_sobol_xr(
             self,
             da: xr.DataArray,
@@ -275,7 +318,7 @@ class InputDesign:
         # 3) Low-level Sobol on 2D (sample, output)
         sobol_ds = self.compute_sobol(conc_2d.compute())
         # unstack 'output' MultiIndex back to original dims (+ 'aux')
-        sobol_ds = sobol_ds.unstack("output")
+        sobol_ds = sobol_ds.unstack("_output")
 
         # 4) Optional bootstrap (done on original da)
         if n_boot > 0:
@@ -298,7 +341,7 @@ class InputDesign:
         
         if isinstance(output_array, xr.DataArray):
             output_matrix = output_array.data  # dask-backed OK
-            output_index = output_array.indexes["output"]
+            output_index = output_array.indexes["_output"]
         else:
             output_matrix = np.asarray(output_array)
             output_index = np.arange(output_matrix.shape[1], dtype=int)
@@ -346,13 +389,13 @@ class InputDesign:
         coords = dict(
             group=np.array(self.groups, dtype=object),
             group2=np.array(self.groups, dtype=object),
-            output=output_index,
+            _output=output_index,
             bound=np.array(["low", "high"], dtype=object),
         )
         data_vars = dict(
-            S1=(("group", "output"), S1),
-            ST=(("group", "output"), ST),
-            S2=(("group", "group2", "output"), S2),
+            S1=(("group", "_output"), S1),
+            ST=(("group", "_output"), ST),
+            S2=(("group", "group2", "_output"), S2),
             #S1_agg=(("group",), agg_S1),
             #ST_agg=(("group",), agg_ST),
             S1_agg_ci=(("group", "bound"), agg_S1_ci),
@@ -366,17 +409,17 @@ class InputDesign:
         da: xr.DataArray,
     ) -> tuple[xr.DataArray, list[str]]:
         """Stack (IID, QMC) → sample and everything else → output."""
-        output_dims = set(da.dims).union({"aux"})
-        output_dims -= { "QMC", "IID"}
-        output_dims = sorted(output_dims)
-        conc_2d = (
-            da.expand_dims({"aux": [0]})
-            .stack(sample=("QMC", "IID"), output=output_dims)
-            .transpose("sample", "output")
+        output_dims = [d for d in da.dims if d not in ("QMC", "IID")]
+        if len(output_dims) == 0:
+            da = da.expand_dims({"aux": [0]})
+            output_dims = ["aux"]
+        conc_2d = (da.stack(_sample=("QMC", "IID"), _output=output_dims)
+                   .transpose("_sample", "_output")
         )
 
+
         # verify correct flattening with respect to design layout
-        sample_index = conc_2d.indexes["sample"]
+        sample_index = conc_2d.indexes["_sample"]
         iid = np.asarray(sample_index.get_level_values("IID"), dtype=int)
         qmc = np.asarray(sample_index.get_level_values("QMC"), dtype=int)
 
@@ -496,9 +539,10 @@ class InputDesign:
         )
 
         # --- flatten (sample, output) including boot in output dims ---
+        da_boot = da_boot.expand_dims({"aux": [0]})
         conc_boot_2d, output_dims = self._flatten_da_to_2d(da_boot)
         sobol_boot = self.compute_sobol(conc_boot_2d)
-        sobol_boot = sobol_boot.unstack("output")
+        sobol_boot = sobol_boot.unstack("_output")
         # self.plot_bootstrap(da_sobol, sobol_boot["S1"])
 
         # --- compute percentile CIs over 'boot' dimension ---
@@ -774,7 +818,7 @@ class SensitivityAnalysis:
     @staticmethod
     def _qmc_experiment(distr, n_samples) -> ot.WeightedExperiment:
         n_groups = distr.getDimension()
-        seq = ot.SobolSequence(n_groups)
+        seq = ot.SobolSequence(4*n_groups) # ChatGPT suggests 2 * n_groups
         restart_with_distr=False
         exp = ot.LowDiscrepancyExperiment(seq, distr, n_samples, restart_with_distr)
         exp.setRandomize(True)  # IMPORTANT: otherwise results can be wrong

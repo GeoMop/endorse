@@ -113,7 +113,8 @@ def plot_sobol_time_and_agg(
                 if isinstance(ST_agg_src, xr.DataArray) else np.zeros_like(SI_agg_s))
 
     # Time-dependent SI arranged in the same order
-    sobol_time = sobol_time.squeeze('aux', drop=True)  # remove 'aux' dim 
+    if 'aux' in sobol_time.dims:
+        sobol_time = sobol_time.squeeze('aux', drop=True)  # remove 'aux' dim
     t = np.asarray(sobol_time["sim_time"].values) / 1000
     SI_t = np.asarray(sobol_time["SI"].sel(group=labels_s).values, dtype=float)  # (P, T)
 

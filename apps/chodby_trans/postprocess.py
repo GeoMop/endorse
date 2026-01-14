@@ -551,6 +551,7 @@ def make_transport_plots(cfg, seed):
     """ 
     input_design, ds, var_name = sampling_data(cfg, seed)
 
+    n = input_design.n_samples
     ds_stat = compute_statistics(ds, var_name)
     print(list(ds_stat.data_vars.keys()))
     sobol_boot = lambda conc_da: input_design.compute_sobol_xr(conc_da, n_boot=100)
