@@ -1,13 +1,16 @@
 from pathlib import Path
 from typing import *
+from arviz import InferenceData
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib import ticker
+from matplotlib.cbook import boxplot_stats
 from scipy.integrate import quad
 from scipy.optimize import brentq
 
 from chodby_inv import input_data as inputs
+from .idata_tools import read_idata_from_file
 work_dir = inputs.work_dir
 
 
@@ -429,16 +432,30 @@ def plot_p_far_errorbars_welch(
 
     offsets = {"2024": -0.08, "2025": 0.08}
 
-    ax.errorbar(
-        df["p_far_mean_2024"], y_j + offsets["2024"],
-        xerr=df["p_far_std_2024"],
-        fmt="o", capsize=3, color="blue", label="2024 inversion"
+    # loop over idatas and get their boxplot stats
+
+    # ax.errorbar(
+    #     df["p_far_mean_2024"], y_j + offsets["2024"],
+    #     xerr=df["p_far_std_2024"],
+    #     fmt="o", capsize=3, color="blue", label="2024 inversion"
+    # )
+    # ax.errorbar(
+    #     df["p_far_mean_2025"], y_j + offsets["2025"],
+    #     xerr=df["p_far_std_2025"],
+    #     fmt="o", capsize=3, color="red", label="2025 inversion"
+    # )
+
+    stats24, stats25 = collect_boxplot_stats_from_rundir(
+        boreholes = [str(p) for p in df["pair"]],
+        dataset = "posterior",
+        var_name = "p_far"
     )
-    ax.errorbar(
-        df["p_far_mean_2025"], y_j + offsets["2025"],
-        xerr=df["p_far_std_2025"],
-        fmt="o", capsize=3, color="red", label="2025 inversion"
-    )
+
+    print(stats24)
+
+    ax.bxp(stats24, orientation="horizontal", showfliers=False)
+    ax.bxp(stats25, orientation="horizontal", showfliers=False)
+
     ax.scatter(
         df["p_far manual 2024"],
         y_j + offsets["2024"],
@@ -487,3 +504,98 @@ def plot_p_far_errorbars_welch(
 
     return fig, ax
 
+def collect_boxplot_stats_from_rundir(
+        boreholes: list[str],
+        dataset: str,
+        var_name: str
+    ) -> list[dict[str, Any]]:
+    """
+    Collect boxplot statistics for multiple boreholes from .idata files in CWD.
+
+    :param order: Order of boreholes to process
+    :type order: list[str]
+    :param dataset: Subset of the InferenceData to analyze (e.g., 'posterior')
+    :type dataset: str
+    :param var_name: Name of the variable to extract boxplot statistics for
+    :type var_name: str
+    :return: List of dictionaries containing boxplot statistics for each InferenceData
+    :rtype: list[dict[str, Any]]
+    """
+
+    rundir = Path.cwd()
+    directory = rundir / "dataset9"
+
+    stats_2024 = []
+    stats_2025 = []
+
+    for borehole in boreholes:
+        borehole_fixed = borehole.replace("-", "_")
+        matching = [
+            file for file in directory.iterdir()
+            if file.is_file() and ".idata" in file.name and borehole_fixed in file.name
+        ]
+
+        assert len(matching) == 2, f"Expected 2 matching .idata files for {borehole}, found {len(matching)}"
+
+        #if (len(matching) != 2):
+        #    print(f"Warning: Expected 2 matching .idata files for {borehole}, found {len(matching)}")
+        #    continue
+
+        for path in matching:
+            idata = read_idata_from_file(path.absolute())
+            stats = get_boxplot_stats(idata, dataset, var_name)
+            stats.pop("fliers", None)  
+            if "2024" in path.name:
+                stats_2024.append(stats)
+            elif "2025" in path.name:
+                stats_2025.append(stats)
+            del idata
+
+    return stats_2024, stats_2025
+
+def collect_boxplot_stats(
+    idata_paths: list[Path],
+    dataset: str,
+    var_name: str
+) -> list[dict[str, Any]]:
+    """
+    Docstring for collect_boxplot_stats
+    
+    :param idata_paths: List of file paths to InferenceData objects
+    :type idata_paths: list[str]
+    :param dataset: Subset of the InferenceData to analyze (e.g., 'posterior')
+    :type dataset: str
+    :param var_name: Name of the variable to extract boxplot statistics for
+    :type var_name: str
+    :return: List of dictionaries containing boxplot statistics for each InferenceData
+    :rtype: list[dict[str, Any]]
+    """
+    stats_list = []
+    for path in idata_paths:
+        idata = read_idata_from_file(path.absolute())
+        stats = get_boxplot_stats(idata, dataset, var_name)
+        stats_list.append(stats)
+        del idata
+    return stats_list
+
+def get_boxplot_stats(
+        idata: InferenceData,
+        dataset: str,
+        var_name: str
+    ) -> dict[str, Any]:
+    """
+    Docstring for get_boxplot_stats
+    
+    :param idata: InferenceData object containing the data to be processed
+    :type idata: InferenceData
+    :param dataset: Subset of the InferenceData to analyze (e.g., 'posterior')
+    :type dataset: str
+    :param var_name: Name of the variable to extract boxplot statistics for
+    :type var_name: str
+    :return: Dictionary containing boxplot statistics
+    :rtype: dict[str, Any]
+    """
+
+    data_array = idata[dataset][var_name].values.flatten()
+    stats = boxplot_stats(data_array, whis=1.5)[0]
+    return stats
