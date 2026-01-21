@@ -454,7 +454,7 @@ def plot_p_far_errorbars_welch(
     # reversed order
     color = "tab:blue"
     ax.bxp(
-        stats24[::-1],
+        stats24,
         orientation="horizontal",
         showfliers=False,
         positions=y_j + offsets["2024"],
@@ -468,7 +468,7 @@ def plot_p_far_errorbars_welch(
 
     color = "tab:red"
     ax.bxp(
-        stats25[::-1], 
+        stats25,
         orientation="horizontal",
         showfliers=False,
         positions=y_j + offsets["2025"],
