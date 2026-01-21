@@ -566,9 +566,10 @@ def collect_boxplot_stats_from_rundir(
         #    continue
 
         for path in matching:
+            print(f"Processing file: {path.name}")
             idata = read_idata_from_file(path.absolute())
             stats = get_boxplot_stats(idata, dataset, var_name)
-            stats.pop("fliers", None)  
+            stats.pop("fliers", None)
             if "2024" in path.name:
                 stats_2024.append(stats)
             elif "2025" in path.name:
