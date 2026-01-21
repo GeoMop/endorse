@@ -547,7 +547,7 @@ def collect_boxplot_stats_from_rundir(
     """
 
     rundir = Path.cwd()
-    directory = rundir / "dataset9"
+    directory = rundir #/ "dataset9"
 
     stats_2024 = []
     stats_2025 = []
