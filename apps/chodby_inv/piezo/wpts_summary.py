@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import *
-from arviz import InferenceData
+from arviz import InferenceData, summary
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -445,8 +445,10 @@ def plot_p_far_errorbars_welch(
     #     fmt="o", capsize=3, color="red", label="2025 inversion"
     # )
 
+    print(y_j)
+
     stats24, stats25 = collect_boxplot_stats_from_rundir(
-        boreholes = [str(p) for p in _dplot["pair"]],
+        boreholes = [str(p) for p in df["pair"]],
         dataset = "posterior",
         var_name = "p_far"
     )
@@ -568,6 +570,7 @@ def collect_boxplot_stats_from_rundir(
         for path in matching:
             print(f"Processing file: {path.name}")
             idata = read_idata_from_file(path.absolute())
+            print(summary(idata, var_names=[var_name], round_to=2))
             stats = get_boxplot_stats(idata, dataset, var_name)
             stats.pop("fliers", None)
             if "2024" in path.name:
