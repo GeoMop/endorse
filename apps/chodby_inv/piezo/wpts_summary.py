@@ -454,11 +454,11 @@ def plot_p_far_errorbars_welch(
     # reversed order
     color = "tab:blue"
     ax.bxp(
-        stats24[::-1], 
-        orientation="horizontal", 
+        stats24[::-1],
+        orientation="horizontal",
         showfliers=False,
-        positions=y_j + offsets["2024"], 
-        label="2024 inversion",  
+        positions=y_j + offsets["2024"],
+        label="2024 inversion",
         widths = 0.2,
         boxprops=dict(color=color),
         whiskerprops=dict(color=color),
@@ -469,10 +469,10 @@ def plot_p_far_errorbars_welch(
     color = "tab:red"
     ax.bxp(
         stats25[::-1], 
-        orientation="horizontal", 
-        showfliers=False, 
-        positions=y_j + offsets["2025"], 
-        label="2025 inversion", 
+        orientation="horizontal",
+        showfliers=False,
+        positions=y_j + offsets["2025"],
+        label="2025 inversion",
         widths = 0.2,
         boxprops=dict(color=color),
         whiskerprops=dict(color=color),
