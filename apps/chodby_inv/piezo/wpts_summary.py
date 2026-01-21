@@ -446,7 +446,7 @@ def plot_p_far_errorbars_welch(
     # )
 
     stats24, stats25 = collect_boxplot_stats_from_rundir(
-        boreholes = [str(p) for p in df["pair"]],
+        boreholes = [str(p) for p in _dplot["pair"]],
         dataset = "posterior",
         var_name = "p_far"
     )
