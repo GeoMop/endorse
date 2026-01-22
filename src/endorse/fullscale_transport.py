@@ -43,7 +43,13 @@ def fullscale_transport(cfg_path, seed):
 
 def time_tuple(item : Union[float, Tuple[float, float]]):
     if isinstance(item, (tuple,list)):
+        # if isinstance(item[1], int):
+        #     return item
+        # else:
+        #     return item[0], 0
         return item
+    elif isinstance(item, dict):
+        return item['begin'][0],  item['step'][0]
     else:
         return (item, np.inf)
 
@@ -54,7 +60,10 @@ def output_times(cfg_fine):
     for item, next in zip(cfg_times[:-1], cfg_times[1:]):
         start, step = time_tuple(item)
         end, _ = time_tuple(next)
-        times.extend((t for t in np.arange(start, end, step)))
+        if isinstance(step, int):
+            times.extend((t for t in np.arange(start, end, step)))
+        else:
+            times.append(start)
     times.append(end_time)
     return times
 
