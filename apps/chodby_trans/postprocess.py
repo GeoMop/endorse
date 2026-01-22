@@ -90,8 +90,8 @@ def sampling_data(cfg, seed):
     mask_big, already_bad_iid = update_and_report("conc_max>hi", conc_max > hi, already_bad_iid, ds2)
     mask_small, already_bad_iid = update_and_report("conc_min<lo", conc_min < lo, already_bad_iid, ds2)
 
-    fig, ax, cat = plot_qmc_iid_mask_heatmap(mask_rc, mask_big, mask_small)
-    plt.show()
+    fig, ax, cat = plot_qmc_iid_mask_heatmap(mask_rc, mask_big, mask_small,
+                                             output_dir=job.output.plots)
     ds3 = ds2.assign(log10_conc=np.log10(ds2["conc"].clip(min=lo, max=hi)))
     var_name = "log10_conc"
     input_design, ds_ok = input_design.mask_samples(~already_bad_iid, ds3)
