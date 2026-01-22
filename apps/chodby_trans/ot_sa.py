@@ -975,3 +975,100 @@ class SensitivityAnalysis:
 #     block_mask = (block0 == block0[a_idx, :])                 # (L, Mp) boolean
 #
 #     return block_index, saltelli_index, block_mask
+
+
+
+def _tri_pairs(d):
+    return [(i, j) for i in range(d) for j in range(i+1, d)]
+
+def _project_one(s1, st, s2):
+    from scipy.optimize import minimize, Bounds, LinearConstraint
+
+    s1 = np.asarray(s1, float)
+    st = np.asarray(st, float)
+    d = s1.size
+    tri = _tri_pairs(d)
+    m = len(tri)
+
+    # variable vector x = [S1(0..d-1), ST(0..d-1), S2_upper(0..m-1)]
+    s2u0 = np.array([s2[i, j] for (i, j) in tri], float)
+    x0 = np.concatenate([s1, st, s2u0])
+
+    n = x0.size
+    bounds = Bounds(np.zeros(n), np.ones(n))
+
+    rows, lb, ub = [], [], []
+
+    # ST_i - S1_i >= 0
+    for i in range(d):
+        r = np.zeros(n); r[i] = -1; r[d+i] = 1
+        rows.append(r); lb.append(0.0); ub.append(np.inf)
+
+    # per-input: S1_i + sum_{j!=i} S2_ij - ST_i <= 0
+    pos = {pair: (2*d+k) for k, pair in enumerate(tri)}
+    for i in range(d):
+        r = np.zeros(n); r[i] = 1; r[d+i] = -1
+        for j in range(d):
+            if j == i: continue
+            a, b = (i, j) if i < j else (j, i)
+            r[pos[(a, b)]] += 1
+        rows.append(r); lb.append(-np.inf); ub.append(0.0)
+
+    # global: sum(S1)+sum(S2_upper) <= 1
+    r = np.zeros(n); r[:d] = 1; r[2*d:] = 1
+    rows.append(r); lb.append(-np.inf); ub.append(1.0)
+
+    lc = LinearConstraint(np.vstack(rows), np.array(lb), np.array(ub))
+
+    def fun(x): return 0.5*np.sum((x-x0)**2)
+    def jac(x): return x-x0
+
+    res = minimize(fun, x0, jac=jac, method="trust-constr",
+                   constraints=[lc], bounds=bounds, options={"verbose": 0})
+    x = res.x
+
+    s1p = x[:d]
+    stp = x[d:2*d]
+    s2up = x[2*d:]
+
+    s2p = np.zeros((d, d), float)
+    for val, (i, j) in zip(s2up, tri):
+        s2p[i, j] = val
+        s2p[j, i] = val
+    return s1p, stp, s2p
+
+def project_sobol_draws(ds_boot: xr.Dataset) -> xr.Dataset:
+    """
+    ds_boot contains S1(group, boot, ...), ST(group, boot, ...), S2(group, group2, boot, ...)
+    Returns projected versions with same dims.
+    """
+    S1 = ds_boot["S1"]
+    ST = ds_boot["ST"]
+    S2 = ds_boot["S2"]
+
+    # Stack all dims except group/group2 into a single axis for looping
+    other_dims = [d for d in S1.dims if d != "group"]
+    S1s = S1.stack(_k=other_dims)
+    STs = ST.stack(_k=other_dims)
+    S2s = S2.stack(_k=other_dims)
+
+    d = S1.sizes["group"]
+    out_S1 = np.empty((d, S1s.sizes["_k"]), float)
+    out_ST = np.empty((d, STs.sizes["_k"]), float)
+    out_S2 = np.empty((d, d, S2s.sizes["_k"]), float)
+
+    for kk in range(S1s.sizes["_k"]):
+        s1 = S1s.isel(_k=kk).to_numpy()
+        st = STs.isel(_k=kk).to_numpy()
+        s2 = S2s.isel(_k=kk).to_numpy()
+        s1p, stp, s2p = _project_one(s1, st, s2)
+        out_S1[:, kk] = s1p
+        out_ST[:, kk] = stp
+        out_S2[:, :, kk] = s2p
+
+    S1p = xr.DataArray(out_S1, dims=("group", "_k"), coords={"group": S1["group"], "_k": S1s["_k"]}).unstack("_k")
+    STp = xr.DataArray(out_ST, dims=("group", "_k"), coords={"group": ST["group"], "_k": STs["_k"]}).unstack("_k")
+    S2p = xr.DataArray(out_S2, dims=("group", "group2", "_k"),
+                       coords={"group": S2["group"], "group2": S2["group2"], "_k": S2s["_k"]}).unstack("_k")
+
+    return xr.Dataset({"S1": S1p, "ST": STp, "S2": S2p})
