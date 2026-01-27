@@ -22,7 +22,11 @@ def load_population(filename):
     # points_vec = df.to_numpy().reshape(-1, 1)
     return df.to_numpy()
 
-
+def load_fixed_population(filename):
+    file = job.input.dir_path / filename
+    df = pd.read_csv(file)
+    # points_vec = df.to_numpy().reshape(-1, 1)
+    return df.to_numpy()
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -197,10 +201,243 @@ def plot_bivariate_samples(
     return ax
 
 
+########################################################################################################################
 
+# ----------------------------
+# Geometry helpers (ENU coords)
+# x = East, y = North, z = Up
+# Azimuth/trend measured clockwise from North.
+# Plunge positive downward.
+# Assumes strike is Right-Hand-Rule (dip direction = strike + 90).
+# ----------------------------
+
+def trend_plunge_to_vector(trend_deg, plunge_deg):
+    t = np.deg2rad(trend_deg)
+    p = np.deg2rad(plunge_deg)
+    # components: East, North, Up
+    e = np.cos(p) * np.sin(t)
+    n = np.cos(p) * np.cos(t)
+    u = -np.sin(p)
+    v = np.stack([e, n, u], axis=-1)
+    return v / np.linalg.norm(v, axis=-1, keepdims=True)
+
+def strike_dip_to_pole(strike_deg, dip_deg):
+    # Pole trend points toward dip direction (RHR): strike + 90
+    pole_trend = (strike_deg + 90.0) % 360.0
+    pole_plunge = 90.0 - dip_deg
+    return trend_plunge_to_vector(pole_trend, pole_plunge)
+
+def vector_to_trend_plunge(v):
+    v = np.asarray(v)
+    v = v / np.linalg.norm(v, axis=-1, keepdims=True)
+    e, n, u = v[..., 0], v[..., 1], v[..., 2]
+    trend = (np.rad2deg(np.arctan2(e, n)) + 360.0) % 360.0
+    plunge = np.rad2deg(np.arctan2(-u, np.sqrt(e**2 + n**2)))
+    return trend, plunge
+
+def pole_to_strike_dip(pole_vec):
+    trend, plunge = vector_to_trend_plunge(pole_vec)
+    dip = 90.0 - plunge
+    strike = (trend - 90.0) % 360.0  # RHR strike
+    return strike, dip
+
+# ----------------------------
+# von Mises–Fisher sampling on S^2 (Fisher in 3D)
+# Uses Wood (1994)-style sampler.
+# ----------------------------
+
+def sample_vmf_3d(mu, kappa, n, rng=None):
+    """
+    Sample n unit vectors from vMF on S^2 with mean direction mu and concentration kappa.
+    """
+    rng = np.random.default_rng(rng)
+    mu = np.asarray(mu, dtype=float)
+    mu = mu / np.linalg.norm(mu)
+
+    if kappa <= 1e-12:
+        # essentially uniform on sphere
+        x = rng.normal(size=(n, 3))
+        return x / np.linalg.norm(x, axis=1, keepdims=True)
+
+    # Step 1: sample w = cos(theta)
+    # For p=3, the distribution of w has a simple form:
+    # w = 1 + (1/kappa) * log(u + (1-u)*exp(-2*kappa))
+    u = rng.random(n)
+    w = 1.0 + (1.0 / kappa) * np.log(u + (1.0 - u) * np.exp(-2.0 * kappa))
+
+    # Step 2: sample a random unit vector orthogonal component
+    phi = 2.0 * np.pi * rng.random(n)
+    s = np.sqrt(1.0 - w**2)
+    x = np.stack([s * np.cos(phi), s * np.sin(phi), w], axis=1)  # around +z
+
+    # Step 3: rotate +z to mu
+    z = np.array([0.0, 0.0, 1.0])
+    if np.allclose(mu, z):
+        return x
+    if np.allclose(mu, -z):
+        x[:, 2] *= -1
+        return x
+
+    v = np.cross(z, mu)
+    c = np.dot(z, mu)
+    s_rot = np.linalg.norm(v)
+    vx = np.array([[0, -v[2], v[1]],
+                   [v[2], 0, -v[0]],
+                   [-v[1], v[0], 0]])
+    R = np.eye(3) + vx + (vx @ vx) * ((1 - c) / (s_rot**2))
+    return x @ R.T
+
+# ----------------------------
+# Rose diagram (axial option for strike)
+# ----------------------------
+
+def set_rlabels_min_density(ax, angles_deg, *, bins=36, axial=False, pad=8):
+    angles = np.asarray(angles_deg) % 360.0
+    if axial:
+        angles = angles % 180.0
+        theta = np.deg2rad(2.0 * angles)
+    else:
+        theta = np.deg2rad(angles)
+
+    counts, edges = np.histogram(theta, bins=bins, range=(0.0, 2*np.pi))
+    centers = edges[:-1] + np.diff(edges)/2.0
+    theta_min = centers[np.argmin(counts)]
+    pos = (np.rad2deg(theta_min)) % 360.0
+
+    ax.set_rlabel_position(pos)
+    ax.tick_params(axis="y", pad=pad)
+    return pos
+
+def add_params_caption(ax, strike_deg, dip_deg, kappa, *, offset_pts=14, fontsize=11):
+    """
+    Places a caption centered under the polar axes.
+    offset_pts controls distance below the axes (in points). Smaller = closer.
+    """
+    caption = rf"strike={strike_deg:.1f}°  dip={dip_deg:.1f}°  $\kappa$={kappa:.1f}"
+
+    ax.annotate(
+        caption,
+        xy=(0.5, 0.0), xycoords="axes fraction",   # bottom-center of axes
+        xytext=(0, -offset_pts), textcoords="offset points",
+        ha="center", va="top",
+        fontsize=fontsize,
+        clip_on=False,
+    )
+
+
+def plot_rose_azimuth(
+    angles_deg,
+    *,
+    bins=36,
+    axial=False,          # True for strike (0–180 equivalence)
+    ax=None,
+    density=True,
+    facecolor=None,
+    edgecolor=None,
+    linewidth=1.0,
+    mean_line=True,
+    mean_kwargs=None,
+):
+    """
+    Rose diagram of azimuth angles (deg). If axial=True, treats theta == theta+180.
+    """
+    angles = np.asarray(angles_deg) % 360.0
+
+    if axial:
+        # map to [0,180) then double-angle to use circular histogram properly
+        angles = angles % 180.0
+        theta = np.deg2rad(2.0 * angles)
+    else:
+        theta = np.deg2rad(angles)
+
+    if ax is None:
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
+
+    # histogram on [0, 2pi)
+    counts, edges = np.histogram(theta, bins=bins, range=(0.0, 2.0 * np.pi), density=density)
+    widths = np.diff(edges)
+    centers = edges[:-1] + widths / 2.0
+
+    bars = ax.bar(
+        centers, counts, width=widths, align="center",
+        facecolor=facecolor, edgecolor=edgecolor, linewidth=linewidth
+    )
+
+    # Polar formatting: geology convention often has 0° at North and clockwise
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+    ax.tick_params(axis="x", pad=12)
+
+    # Mean line
+    if mean_line:
+        mean_kwargs = mean_kwargs or {}
+        # circular mean for directional; for axial we compute mean on doubled angles then halve
+        if axial:
+            m = np.angle(np.mean(np.exp(1j * theta)))
+            mean_theta = (m % (2*np.pi)) / 2.0  # halve back to axial angle in radians
+            # draw line both directions
+            for add in [0.0, np.pi]:
+                ax.plot([mean_theta + add, mean_theta + add], [0, counts.max() if counts.size else 1],
+                        **{"lw": 2.0, **mean_kwargs})
+        else:
+            m = np.angle(np.mean(np.exp(1j * theta))) % (2*np.pi)
+            ax.plot([m, m], [0, counts.max() if counts.size else 1],
+                    **{"lw": 2.0, **mean_kwargs})
+
+    return ax
+
+# ----------------------------
+# High-level: from (strike,dip,kappa) to rose plot
+# ----------------------------
+
+def fisher_fracture_rose(strike_deg, dip_deg, kappa, *, n=10000, bins=36, axial_strike=True, rng=None, ax=None):
+    mu_pole = strike_dip_to_pole(strike_deg, dip_deg)
+    poles = sample_vmf_3d(mu_pole, kappa, n=n, rng=rng)
+    strikes, dips = pole_to_strike_dip(poles)
+
+    ax = plot_rose_azimuth(
+        strikes,
+        ax=ax,
+        bins=bins,
+        axial=axial_strike,
+        facecolor="tab:green",
+        edgecolor="k",
+        linewidth=0.8,
+        mean_line=True,
+        mean_kwargs={"color": "tab:blue"},
+    )
+    set_rlabels_min_density(ax, strikes, bins=36, axial=True, pad=10)
+    add_params_caption(ax, strike_deg, dip_deg, kappa, fontsize=16, offset_pts=40)
+    # ax.text(
+    #     0.5, -0.18,
+    #     rf"strike={strike_deg:.1f}°  dip={dip_deg:.1f}°  $\kappa$={kappa:.1f}",
+    #     transform=ax.transAxes,
+    #     ha="center", va="top",
+    #     fontsize=16,
+    #     clip_on=False,
+    # )
+
+    return ax, strikes, dips, poles
+
+
+
+########################################################################################################################
 
 def main():
+    fish_par = load_fixed_population(f"fr_Bukov_bayes/fixed_params.csv")
+
     for i in range(5):
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(5, 5))
+        dip, strike, kappa = fish_par[i][1], fish_par[i][2], fish_par[i][3]
+        ax, strikes, dips, poles = fisher_fracture_rose(strike, dip, kappa, n=10000, bins=36, axial_strike=True, ax=ax)
+        # plt.show()
+        ax.set_title(f"Population {i+1}", pad=10)
+        # ax.set_title(rf"Strike rose (Fisher/vMF samples) $\kappa={kappa}$", pad=14)
+        fig.tight_layout()
+        fig.savefig(job.output.dir_path / f"fr_rose_{i + 1}.pdf")
+
+        # continue
+
         arr = load_population(f"fr_Bukov_bayes/P30_alpha_minus_pop{i+1}.csv")
 
         fig, ax = plt.subplots()
