@@ -721,21 +721,39 @@ class InputDesign:
 
         self._assert_layout_fits_matrix(X, block_index, saltelli_index, block_mask, B)
         return block_index, saltelli_index, block_mask
-# @attrs.define
-# class SobolResultGroup:
-#     """
-#     Dictionaries maping group name to array of sobol indices
-#     """
-#     S1: np.ndarray                         # (n_outputs,)
-#     ST: np.ndarray                         # (n_outputs,)
-#     S2: Dict[str, np.ndarray]
-#     agg_S1: float
-#     agg_ST: float
-#     agg_S1_ci: Tuple[float, float]
-#     agg_ST_ci: Tuple[float, float]
-#
-#
-# SobolResult = Dict[str, SobolResultGroup]
+
+
+    def mask_samples(self, mask: xr.DataArray, ds: xr.Dataset) -> Tuple["InputDesign", xr.Dataset]:
+        """
+        Keep only IID samples where mask is True.
+
+        Assumptions:
+          - mask is a 1D boolean xarray DataArray with dim ("IID",)
+        """
+        assert isinstance(mask, xr.DataArray)
+        assert mask.dims == ("IID",)
+        assert mask.dtype == bool
+        assert mask.sizes["IID"] == self.n_samples
+
+        i_sample = np.asarray(self.i_sample, dtype=int)               # (n_evals,)
+        row_mask = np.asarray(mask.data, dtype=bool)[i_sample]        # (n_evals,) bool
+        rows_new = np.flatnonzero(row_mask).astype(int)               # (n_kept_evals,) int
+
+        assert rows_new.size > 0
+        assert rows_new.size % self.block_size == 0
+        new_n_samples = rows_new.size // self.block_size
+
+        in_des = InputDesign(
+            groups=self.groups,
+            n_samples=int(new_n_samples),
+            param_groups=self.param_groups,
+            group_mat=np.asarray(self.group_mat)[rows_new, :],
+            param_mat=np.asarray(self.param_mat)[rows_new, :],
+            confidence_level=self.confidence_level,
+        )
+        ds_out = ds.isel(IID=mask)
+        ds_out = ds_out.assign_coords(IID=np.arange(ds_out.sizes["IID"], dtype=np.int64))
+        return in_des, ds_out
 
 
 
@@ -818,7 +836,7 @@ class SensitivityAnalysis:
     @staticmethod
     def _qmc_experiment(distr, n_samples) -> ot.WeightedExperiment:
         n_groups = distr.getDimension()
-        seq = ot.SobolSequence(4*n_groups) # ChatGPT suggests 2 * n_groups
+        seq = ot.SobolSequence(n_groups) # ChatGPT suggests 2 * n_groups
         restart_with_distr=False
         exp = ot.LowDiscrepancyExperiment(seq, distr, n_samples, restart_with_distr)
         exp.setRandomize(True)  # IMPORTANT: otherwise results can be wrong

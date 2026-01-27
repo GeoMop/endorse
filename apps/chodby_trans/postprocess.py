@@ -13,12 +13,50 @@ from pathlib import Path
 from chodby_trans import ot_sa
 from chodby_trans import job
 from chodby_trans import plots
+from chodby_trans.plots import plot_qmc_iid_mask_heatmap
+
 
 def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
     cfg_sens = cfg.ot_sensitivity
     problem = ot_sa.SensitivityAnalysis.from_cfg(cfg_sens)
     return problem.sample(seed)
 
+def report_new_bad_iids(name: str, mask: xr.DataArray, ds: xr.Dataset):
+    """
+    mask: (IID,QMC) boolean mask that is already "new" (i.e., set-minus already_bad_iid)
+    """
+    i_eval_name = "i_eval"
+    n_show = 5
+    new_bad_iid = mask.any(dim="QMC")  # (IID,)
+
+    n_new = int(new_bad_iid.sum().compute().item())
+
+    assert i_eval_name in ds and ("IID" in ds[i_eval_name].dims)
+    vals = ds[i_eval_name].where(mask, drop=True).values.ravel()
+    vals = vals[np.isfinite(vals)]
+    vals = np.rint(vals).astype(np.int64)
+    print(f"[{name}] new bad IIDs (any QMC): {n_new}")
+    print(f"[{name}] first {min(n_show, len(vals))} {i_eval_name} values:", vals[:n_show])
+
+    return new_bad_iid
+
+def update_and_report(name: str, mask: xr.DataArray, already_bad_iid: xr.DataArray,
+                      ds: xr.Dataset):
+    """
+    mask: (IID,QMC) boolean mask for this reason
+    already_bad_iid: (IID,) boolean running mask
+
+    Calls report_new_bad_iids() and returns updated already_bad_iid plus the new_iid mask.
+    """
+    assert mask.dims == ("IID", "QMC")
+    assert already_bad_iid.dims == ("IID",)
+
+    mask = mask.compute()
+    mask_new = (mask) & (~already_bad_iid.broadcast_like(mask))
+    new_bad_iid = report_new_bad_iids(name, mask_new, ds)
+
+    already_bad_iid = already_bad_iid | new_bad_iid
+    return mask_new, already_bad_iid
 
 def sampling_data(cfg, seed):
     # eval ... index of individual model evaluations 
@@ -29,64 +67,36 @@ def sampling_data(cfg, seed):
     store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
     print(ds)
-    #print("i_sample", ds['i_sample'].values)
-    #print("i_saltelli", ds['i_saltelli'].values)
-    
     print(ds.dims)
-    #print("IID", ds2['IID'].values)
-    #print("QMC", ds2['QMC'].values)
-    #plots.conc_tail_ecdf_plot(ds,
-    #             sample_dim = {'i_saltelli', 'i_sample'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
-    #             output_pdf=job.output.plots/"conc_ecdf.pdf")
     ds2 = ds.rename_dims({"i_sample": "IID", "i_saltelli": "QMC"})
     ds2 = ds2.rename({"i_sample": "IID", "i_saltelli": "QMC"})
-
-    # plots.raw_conc_plot(ds2,
-    #               sample_dim = {'QMC', 'IID'}, space_dim={'X','Y','Z'}, time_dim='sim_time',
-    #               output_pdf=job.output.plots/"conc_ecdf.pdf")
-    # # print samples with bad concentrations; limit them
-    # 1) mask for out-of-range values (outside [-0.1, 1.1])
-    lo, hi = 1e-40, 1.1
-    reduce_dims = ("sim_time", "X", "Y", "Z", "QMC")
-
-    # 1) per-(iid,qmc) min/max over space-time
+    ds2 = ds2.isel(sim_time=slice(1, None))  # skip t=0
     conc = ds2["conc"]
-    conc_min = conc.min(dim=reduce_dims, skipna=True)
-    conc_max = conc.max(dim=reduce_dims, skipna=True)
+    conc_max_XYZ = q(conc, 0.99, dim=("X", "Y", "Z")).compute()
+    lo, hi = 1e-40, 2
 
-    # 2) mask over (iid,qmc) only
-    mask_bad = (conc_min < lo) | (conc_max > hi).compute()
+    conc_min = q(conc_max_XYZ,0.01, dim=('sim_time',))
+    conc_max = q(conc_max_XYZ,0.99, dim=('sim_time',))
+    assert conc_min.dims == ("IID", "QMC")
+    assert conc_max.dims == ("IID", "QMC")
 
-   # print offending iid,qmc with their min/max
-    df_bad = (
-        xr.Dataset({"conc_min": conc_min, "conc_max": conc_max})
-        .where(mask_bad)
-        .to_dataframe()
-        .reset_index()
-        .dropna(subset=["conc_min", "conc_max"])
-        [['IID', "conc_min", "conc_max"]]
-    )
-    #print(df_bad.to_string(index=False))
-    print("Number of bad value samples:", len(df_bad))
+    already_bad_iid = xr.zeros_like(ds2["IID"], dtype=bool)
 
-    q99_space_max_time = conc.quantile(0.99, dim=("X", "Y", "Z"), skipna=True).max(dim="sim_time")
+    # order: return_code, big, small (each reports only new IIDs)
+    rc = ds2["return_code"]
+    assert rc.dims == ("IID", "QMC")
+    mask_rc, already_bad_iid = update_and_report("return_code<0", rc < 0, already_bad_iid, ds2)
 
-    # 3) limit the dataset to those values -> ds3
-    #    (keep only 'conc' filtered to the mask; drop coords where all values became NaN)
+    mask_big, already_bad_iid = update_and_report("conc_max>hi", conc_max > hi, already_bad_iid, ds2)
+    mask_small, already_bad_iid = update_and_report("conc_min<lo", conc_min < lo, already_bad_iid, ds2)
+
+    fig, ax, cat = plot_qmc_iid_mask_heatmap(mask_rc, mask_big, mask_small,
+                                             output_dir=job.output.plots)
     ds3 = ds2.assign(log10_conc=np.log10(ds2["conc"].clip(min=lo, max=hi)))
     var_name = "log10_conc"
+    input_design, ds_ok = input_design.mask_samples(~already_bad_iid, ds3)
 
-    #ds3 = ds2.assign(conc=ds2["conc"].clip(min=lo, max=hi))
-    #var_name = "conc"
-    
-    # filter out failed runs
-    # bad samples return -1000, good samples return 0
-    bad_conc = ((q99_space_max_time < lo) | (q99_space_max_time > hi)).values
-    bad_iid = (ds3['return_code'] < 0 | bad_conc).any(dim='QMC').compute().to_numpy()
-    #print(bad_iid)
-    ds_ok = ds3.sel(IID=~bad_iid)
-    print("Remaining IIDs:", len(ds_ok['IID'].values))
-    return input_design, ds3, var_name  #ds_ok
+    return input_design, ds_ok, var_name  #ds_ok
 
 
 def q(da: xr.DataArray, q: float, dim) -> xr.DataArray:
@@ -293,9 +303,9 @@ def select_params(
     df["valid"] = df["si"].ge(si_threshold) & np.isfinite(df["si"])
     df = df.sort_values("si", ascending=False, kind="mergesort").reset_index(drop=True)
 
-    contrib = df["si"].where(df["valid"], 0.0).to_numpy()
+    contrib = df["si"].where(df["valid"], 0.0).to_numpy() # valid SI, descending order
     cs = np.cumsum(contrib)
-    df["selected"] = df["valid"] & (cs <= var_threshold)
+    df["selected"] = df["valid"] & (cs <= var_threshold * cs[-1])
     print(df)
     return df
 
@@ -545,6 +555,7 @@ def sobol_ds_summary(ds: xr.Dataset, df_si:pd.DataFrame) -> None:
 
 def make_transport_plots(cfg, seed):
     """
+    Main processing function.
     Generates transport-related plots and saves them to out_dir.
     1. compute data arrays
     2. SIs for conc_q99_XYZ, conc_q99_time, and conc_q99
@@ -559,10 +570,7 @@ def make_transport_plots(cfg, seed):
 
     print("Computing Sobol indices for 'conc.q99(time & space)' ...")
     si_conc = sobol_boot(ds_stat[f'{var_name}_q99'])
-    df_si = select_params(si_conc, var_threshold=0.9, si_threshold=0.01)
-
-
-
+    df_si = select_params(si_conc, var_threshold=0.99, si_threshold=0.0)
     
     sobol_sel = lambda conc_da: select_sobol(df_si, sobol(conc_da))
     #plot_vtk(ds_stat, sobol_sel(ds['conc']), sobol_sel(ds_stat['conc_q99_time']))

@@ -6,11 +6,12 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.collections import LineCollection
+from matplotlib.colors import LogNorm, ListedColormap
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from scipy import stats
 
-matplotlib.use("Agg")
+#matplotlib.use("Agg")
 from matplotlib import colors as mcolors
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -28,57 +29,193 @@ def save_close_fig(fig: plt.Figure, pdf: PdfPages, fname):
     plt.close(fig)
 
 
-def plot_conc_timeseries(
-    ds_stat: xr.Dataset,
-    var_name: str,
+
+
+def plot_conc_timeseries_distribution1(
+    ds: xr.Dataset,
     *,
-    figsize=(11, 5),
+    Q: float = 0.05,
+    n_slices: int = 7,
+    hist_bins: tuple[int, int] = (220, 60),  # (time_bins, y_bins)
+    max_extreme_lines: int = 80,
+    figsize: tuple[float, float] = (16, 12),
+    time_dim: str = "sim_time",
+    sample_dims: tuple[str, str] = ("QMC", "IID"),
+    # top-slices rendering controls (screen-space sizing, independent of log-x)
+    slice_width_in: float = 0.75,  # inches
+    slice_alpha: float = 0.25,
+    slice_bins_y: int = 90,
 ):
     """
-    Figure 1: time-series of conc_q99_XYZ statistics from ds_stat:
-      - shaded band: q025..q975
-      - mean curve
-      - mean ± std (dashed)
-      - median (dotted)
+    Fixed vars in ds:
+      - ds['log10_conc_q99']         : per-sample max over time (dims: QMC,IID) -> used for extremes via Q,1-Q
+      - ds['log10_conc_q99_XYZ']     : time dependent values (dims: sim_time,QMC,IID) -> plotted as distribution
 
-    Expects in ds_stat:
-      sim_time, conc_q99_XYZ_q025, conc_q99_XYZ_q500, conc_q99_XYZ_q975, conc_q99_XYZ_mean, conc_q99_XYZ_std
+    Output:
+      - bottom ax: 2D histogram (remaining samples) + extreme trajectories (out-of-Q)
+      - top ax:   per-slice inset histograms (remaining samples), widths independent of log time scale
+                 + quantile lines: Q, 0.25, 0.5, 0.75, 1-Q
     """
-    x_label = "Simulation time (1000 y)"
-    y_label = f"{var_name}_q99_XYZ"
-    logx: bool = False
-    logy: bool = False
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    t = np.asarray(ds_stat["sim_time"].values) / 1000
-    q025 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q025"].values, dtype=float)
-    q500 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q500"].values, dtype=float)
-    q975 = np.asarray(ds_stat[f"{var_name}_q99_XYZ_q975"].values, dtype=float)
-    mean = np.asarray(ds_stat[f"{var_name}_q99_XYZ_mean"].values, dtype=float)
-    std  = np.asarray(ds_stat[f"{var_name}_q99_XYZ_std"].values, dtype=float)
+    # --- asserts
+    assert time_dim in ds, f"missing coord/dim {time_dim}"
+    assert "log10_conc_q99" in ds, "missing variable 'log10_conc_q99'"
+    assert "log10_conc_q99_XYZ" in ds, "missing variable 'log10_conc_q99_XYZ'"
+    assert 0.0 < Q < 0.5, "Q must be in (0, 0.5)"
+    assert all(d in ds["log10_conc_q99"].dims for d in sample_dims), ds["log10_conc_q99"].dims
+    assert all(d in ds["log10_conc_q99_XYZ"].dims for d in (time_dim, *sample_dims)), ds["log10_conc_q99_XYZ"].dims
 
-    fig, ax = plt.subplots(figsize=figsize)
+    # --- time (ky), robust for log-x (no zeros)
+    t_raw = np.asarray(ds[time_dim].values, dtype=float) / 1000.0
+    Nt = t_raw.size
+    assert Nt > 0, "empty time axis"
 
-    print(f"Plotting conc_q99_XYZ timeseries t[{t.shape}]: ", q025, q975)
-    ax.fill_between(t, q025, q975, alpha=0.2, label="q[0.025, 0.975]")
-    ax.plot(t, q025, alpha=1, label="q[0.025]")
-    ax.plot(t, q975, alpha=1, label="q[0.975]")
-    ax.plot(t, mean, lw=1.75, label="mean")
-    #ax.plot(t, mean - std, lw=1.0, ls="--", label="mean ± std")
-    ax.plot(t, mean + std, lw=1.0, ls="--")
-    ax.plot(t, q500, lw=1.0, ls=":", label="median (q0.5)")
+    t_pos = t_raw[t_raw > 0]
+    assert t_pos.size > 0, "time axis has no positive values; cannot use log x-scale"
+    t_min_pos = float(t_pos.min())
+    t = np.where(t_raw > 0, t_raw, t_min_pos * 0.999)
 
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    #ax.set_xscale("log")
-    if not var_name.startswith("log"):
-        ax.set_yscale("log")
-    ax.grid(alpha=0.25)
-    ax.legend(loc="center left",
-        bbox_to_anchor=(1.02, 0.5),  # x > 1 moves it outside the axes
-        borderaxespad=0.,)
+    # --- flatten samples consistently for both arrays
+    da_max = ds["log10_conc_q99"].values.ravel()              # (Ns,)
+    da_td  = ds["log10_conc_q99_XYZ"].values.reshape(-1, Nt)  # (Ns, Nt)
+    Ns = da_max.shape[0]
+
+    # --- extremes: apply Q on per-sample max-over-time
+    finite_max = np.isfinite(da_max)
+    vmax = da_max[finite_max]
+    assert vmax.size > 0, "no finite values in log10_conc_q99"
+
+    thr_low = float(np.quantile(vmax, Q))
+    thr_high = float(np.quantile(vmax, 1.0 - Q))
+
+    bottom_samples = np.flatnonzero(finite_max & (da_max <= thr_low))[:max_extreme_lines]
+    top_samples    = np.flatnonzero(finite_max & (da_max >= thr_high))[:max_extreme_lines]
+
+    extreme_mask = np.zeros(Ns, dtype=bool)
+    extreme_mask[bottom_samples] = True
+    extreme_mask[top_samples] = True
+    rem_samples = np.flatnonzero(~extreme_mask)
+
+    da_rem = da_td[rem_samples, :] if rem_samples.size else da_td[:0, :]
+
+    # --- quantiles (computed on ALL samples)
+    q_lo  = np.nanquantile(da_td, Q, axis=0)
+    q_25  = np.nanquantile(da_td, 0.25, axis=0)
+    q_50  = np.nanquantile(da_td, 0.50, axis=0)
+    q_75  = np.nanquantile(da_td, 0.75, axis=0)
+    q_hi  = np.nanquantile(da_td, 1.0 - Q, axis=0)
+
+    # --- y-range for bins
+    y_all = da_td.ravel()
+    y_all = y_all[np.isfinite(y_all)]
+    assert y_all.size > 0, "no finite data in log10_conc_q99_XYZ"
+    y_min, y_max = np.percentile(y_all, [0.5, 99.5])
+    if (not np.isfinite(y_min)) or (not np.isfinite(y_max)) or (y_min == y_max):
+        y_min, y_max = float(np.nanmin(y_all)), float(np.nanmax(y_all))
+
+    # --- figure (TOP and BOTTOM same size)
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2, 1, figsize=figsize, sharex=True, sharey=True, height_ratios=[1, 1]
+    )
+
+    # =======================
+    # Bottom: 2D histogram (remaining samples) + extremes
+    # =======================
+    if rem_samples.size:
+        vals = np.asarray(da_rem, dtype=float)  # (Nrem, Nt)
+        x_flat = np.repeat(t, vals.shape[0])
+        y_flat = vals.T.reshape(-1)
+
+        m = np.isfinite(y_flat) & np.isfinite(x_flat)
+        x_flat, y_flat = x_flat[m], y_flat[m]
+
+        t_min = float(np.min(t[t > 0]))
+        t_max = float(np.max(t))
+        x_edges = np.geomspace(t_min, t_max, hist_bins[0] + 1)
+        y_edges = np.linspace(y_min, y_max, hist_bins[1] + 1)
+
+        H, xe, ye = np.histogram2d(x_flat, y_flat, bins=[x_edges, y_edges])
+
+        vmin = 1 if np.any(H > 0) else None
+        ax_bot.pcolormesh(
+            xe, ye, H.T,
+            shading="auto",
+            norm=LogNorm(vmin=vmin) if vmin is not None else None,
+        )
+
+    # out-of-Q samples (extremes)
+    for s in bottom_samples:
+        ax_bot.plot(t, da_td[s, :], lw=0.8, alpha=0.75, color="red")
+    for s in top_samples:
+        ax_bot.plot(t, da_td[s, :], lw=0.8, alpha=0.75, color="blue")
+
+    fig.suptitle("Log10(conc), 99% quantile over evaluation boundary planes")
+    ax_bot.set_xscale("log")
+    ax_bot.set_xlabel("Time from 60y pulse (ky)")
+    ax_bot.set_ylabel("Log10(conc)")
+    ax_bot.grid(alpha=0.25)
+
+    # =======================
+    # Top: inset hist slices + quantile lines
+    # =======================
+    ax_top.set_ylabel("Log10(conc)")
+    ax_top.grid(alpha=0.2)
+
+    # quantile lines in TOP
+    ax_top.plot(t, q_lo, lw=0.9, alpha=0.9, label=f"q[{Q:g}]")
+    ax_top.plot(t, q_25, lw=0.9, alpha=0.9, label="q[0.25]")
+    ax_top.plot(t, q_50, lw=1.1, ls=":", label="q[0.5]")
+    ax_top.plot(t, q_75, lw=0.9, alpha=0.9, label="q[0.75]")
+    ax_top.plot(t, q_hi, lw=0.9, alpha=0.9, label=f"q[{1.0 - Q:g}]")
+    ax_top.legend(loc="lower right")
+
+    if rem_samples.size and Nt > 1 and n_slices > 0:
+        slice_times = np.geomspace(float(np.min(t[t > 0])), float(np.max(t)), n_slices)
+        idxs = np.unique(np.clip(np.searchsorted(t, slice_times), 0, Nt - 1))
+
+        y_edges_v = np.linspace(y_min, y_max, slice_bins_y + 1)
+        y_centers = 0.5 * (y_edges_v[:-1] + y_edges_v[1:])
+
+        for i in idxs:
+            x0 = float(t[i])
+
+            y_slice = da_rem[:, i]
+            y_slice = y_slice[np.isfinite(y_slice)]
+            if y_slice.size == 0:
+                continue
+
+            counts, _ = np.histogram(y_slice, bins=y_edges_v)
+            if counts.max() == 0:
+                continue
+            dens = counts / counts.max()
+
+            ax_h = inset_axes(
+                ax_top,
+                width=slice_width_in,     # inches (constant on screen)
+                height="100%",
+                loc="lower left",
+                bbox_to_anchor=(x0, y_min, 0.0, y_max - y_min),
+                bbox_transform=ax_top.transData,
+                borderpad=0.0,
+            )
+
+            ax_h.set_facecolor("none")
+            for sp in ax_h.spines.values():
+                sp.set_visible(False)
+            ax_h.set_xticks([])
+            ax_h.set_yticks([])
+            ax_h.set_xlim(0.0, 1.05)
+            ax_h.set_ylim(y_min, y_max)
+
+            ax_h.fill_betweenx(y_centers, 0.0, dens, alpha=slice_alpha, linewidth=0.0)
+            ax_h.plot(dens, y_centers, lw=0.8, alpha=0.9)
+            ax_h.axvline(0.0, lw=0.6, alpha=0.25)
+
+    ax_bot.set_ylim(y_min, y_max)
     fig.tight_layout()
-    return fig, ax
-
+    #plt.show()
+    return fig
 
 def plot_sobol_time_and_agg(
     sobol_time: xr.Dataset,   # select_sobol(...) for conc_q99_XYZ (time-dependent)
@@ -135,7 +272,7 @@ def plot_sobol_time_and_agg(
 
     # Left: stacked area over time
     axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
-    axL.set_ylim(0.0, 1.0)
+    #axL.set_ylim(0.0, 1.0)
     axL.set_xlim(t.min(), t.max())
     axL.set_ylabel(f"Sobol index of {var_name}")
     axL.set_xlabel(x_label)
@@ -166,7 +303,7 @@ def plot_sobol_time_and_agg(
 
         bottom += SI_agg_s[i]
 
-    axR.set_ylim(0.0, 1.0)
+    #axR.set_ylim(0.0, 1.0)
     axR.set_xlim(x0 - 1.0, x0 + 1.0)
     axR.set_xticks([x0])
     axR.set_xticklabels(["aggregated"])
@@ -185,6 +322,148 @@ def plot_sobol_time_and_agg(
     fig.tight_layout()
     return fig, (axL, axR)
 
+
+def plot_sobol_time_and_agg_split(
+    sobol_time: xr.Dataset,
+    sobol_agg: xr.Dataset,
+    var_name: str,
+    *,
+    figsize=(12, 5),
+    si_ci_level: float = 0.90,
+):
+    x_label = "Simulation time (1000 y)"
+
+    # ---- squeeze aux if present
+    sobol_agg = sobol_agg.squeeze("aux", drop=True) if "aux" in sobol_agg.dims else sobol_agg
+    sobol_time = sobol_time.squeeze("aux", drop=True) if "aux" in sobol_time.dims else sobol_time
+
+    # ---- sort by aggregated SI desc
+    labels = sobol_agg["group"].values.astype(str)
+    SI_agg = np.asarray(sobol_agg["SI"].values, dtype=float)  # (P,)
+    order = np.argsort(-SI_agg)
+
+    labels_s = labels[order]
+    SI_agg_s = SI_agg[order]
+    SI_ci_s = np.asarray(sobol_agg["SI_ci"].values, dtype=float)[order, :]  # (P, 2) low/high
+
+    ST_agg_src = sobol_agg.get("ST")
+    ST_agg_s = (
+        np.asarray(ST_agg_src.values, dtype=float)[order]
+        if isinstance(ST_agg_src, xr.DataArray)
+        else np.full_like(SI_agg_s, np.nan)
+    )
+
+    # ---- time-dependent SI in same order
+    t = np.asarray(sobol_time["sim_time"].values) / 1000.0
+    SI_t = np.asarray(sobol_time["SI"].sel(group=labels_s).values, dtype=float)  # (P, T)
+
+    # ---- colors (others gray)
+    cmap = plt.get_cmap("tab20")
+    colors = [(0.6, 0.6, 0.6, 1.0) if lab == "others" else cmap(i % 20)
+              for i, lab in enumerate(labels_s)]
+
+    # ---- layout: left time plot + right two axes (SI and ST)
+    right_plot_frac = 0.26   # wider now because it's 2 axes
+    legend_space_frac = 0.16
+    left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
+
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.25)
+
+    axL = fig.add_subplot(gs[0, 0])
+
+    # right side split into two axes
+    gsR = gs[0, 1].subgridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.25)
+    axSI = fig.add_subplot(gsR[0, 0])
+    axST = fig.add_subplot(gsR[0, 1], sharey=axSI)
+
+    # ---- Left: stacked area
+    axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
+    axL.set_xlim(t.min(), t.max())
+    axL.set_ylabel(f"Sobol index of {var_name}")
+    axL.set_xlabel(x_label)
+    axL.grid(axis="y", alpha=0.2)
+
+    # =========================
+    # Right-A: SI "separate columns, connected corners"
+    # =========================
+    P = len(labels_s)
+    x = np.arange(P)
+    width = 0.9
+
+    cum = 0.0
+    # draw stacked-but-separated look:
+    # each segment i is a bar at x=i with bottom=cum, height=SI_i
+    # plus a thin "connector" line from previous top to next bottom (step)
+    for i in range(P):
+        si = float(SI_agg_s[i])
+        bottom_i = cum
+        top_i = bottom_i + si
+
+        # segment bar at its own column
+        axSI.bar(x[i], si, bottom=bottom_i, width=width, color=colors[i], edgecolor="none")
+
+        # connector: vertical at right edge of previous column to show the step,
+        # and horizontal across to the next column (draw after i>0)
+        if i > 0:
+            # previous column right edge and current column left edge
+            prev_right = x[i-1] + width/2
+            curr_left  = x[i]   - width/2
+            prev_top   = bottom_i  # because bottom_i == cumulative top after i-1
+
+            # vertical rise on prev_right from prev_top - si_prev? no, we want step corner:
+            # draw a horizontal from prev_right to curr_left at y=bottom_i
+            axSI.plot([prev_right, curr_left], [bottom_i, bottom_i], color="k", lw=0.8, alpha=0.7)
+
+        # CI error: lower-only from top_i down to low bound (or use full CI if you prefer)
+        low_i = float(SI_ci_s[i, 0])
+        if np.isfinite(low_i) and (0.0 < low_i < top_i):
+            axSI.errorbar(
+                x[i], top_i,
+                yerr=[[top_i - low_i], [0.0]],
+                fmt="none", ecolor="k", elinewidth=1.2, capsize=3, capthick=1.2
+            )
+
+        cum = top_i
+
+    axSI.set_xticks(x)
+    axSI.set_xticklabels([""] * P)
+    axSI.set_xlim(-0.6, P - 0.4)
+    axSI.set_xlabel("SI (stacked by rank)")
+    axSI.grid(axis="y", alpha=0.2)
+
+    # =========================
+    # Right-B: ST axis
+    # =========================
+    # Option 1: bars (simple + readable)
+    for i in range(P):
+        st = float(ST_agg_s[i]) if np.isfinite(ST_agg_s[i]) else np.nan
+        if np.isfinite(st):
+            axST.bar(x[i], st, width=0.9, color=colors[i], edgecolor="none")
+
+    axST.set_xticks(x)
+    axST.set_xticklabels([""] * P)
+    axST.set_xlim(-0.6, P - 0.4)
+    axST.set_xlabel("ST")
+    axST.grid(axis="y", alpha=0.2)
+
+    # Hide repeated y tick labels on ST panel
+    plt.setp(axST.get_yticklabels(), visible=False)
+    axST.tick_params(axis="y", length=0)
+
+    # ---- legend outside (as you had)
+    ci_proxy = Line2D([], [], color="k", linestyle="-", label=f"CI ({int(round(si_ci_level*100))}%)")
+    proxies = [Patch(facecolor=colors[i], edgecolor="none", label=str(labels_s[i])) for i in range(P)]
+    proxies.append(ci_proxy)
+    labels_legend = list(labels_s) + [ci_proxy.get_label()]
+    fig.legend(
+        handles=proxies, labels=labels_legend,
+        loc="center left", bbox_to_anchor=(0.98, 0.5),
+        ncol=1, frameon=False, title="Parameter / Interaction"
+    )
+
+    fig.tight_layout()
+    return fig, (axL, axSI, axST)
 
 def save_conc_and_si_pdf(
     ds_stat: xr.Dataset,
@@ -206,11 +485,12 @@ def save_conc_and_si_pdf(
     subdir.mkdir(parents=True, exist_ok=True)
 
     with PdfPages(out_pdf_path) as pdf:
-        fig1, _ = plot_conc_timeseries(ds_stat, var_name, figsize=figsize)
+        fig1 = plot_conc_timeseries_distribution1(ds_stat)
+
         save_close_fig(fig1, pdf, subdir / "hist_conc_over_time.pdf")
 
         if sobol_time is not None and sobol_agg is not None:
-            fig2, _ = plot_sobol_time_and_agg(sobol_time, sobol_agg, var_name,
+            fig2, _ = plot_sobol_time_and_agg_split(sobol_time, sobol_agg, var_name,
                                             figsize=figsize, si_ci_level=si_ci_level)
             save_close_fig(fig2, pdf, subdir / "sobol_agg_over_time.pdf")
 
@@ -705,3 +985,70 @@ def conc_tail_ecdf_plot(
             save_close_fig(fig, pdf, subdir / f"conc_ecdf_{ti}.pdf")
 
     print("Tail ECDF plot DONE:", output_pdf)
+
+
+def plot_qmc_iid_mask_heatmap(mask_rc: xr.DataArray,
+                              mask_big: xr.DataArray,
+                              mask_small: xr.DataArray,
+                              title="QMC × IID mask heatmap (exclusive: rc → big → small)",
+                              figsize=(12, 6),
+                              output_dir=None) -> Tuple[plt.Figure, plt.Axes, xr.DataArray]:
+    """
+    Exclusive categorical heatmap over (IID,QMC):
+      0=OK, 1=return_code, 2=too_big, 3=too_small
+    Precedence: return_code -> big -> small.
+    """
+    assert mask_rc.dims == ("IID", "QMC")
+    assert mask_big.dims == ("IID", "QMC")
+    assert mask_small.dims == ("IID", "QMC")
+
+    mask_rc, mask_big, mask_small = xr.align(mask_rc, mask_big, mask_small, join="exact")
+
+    mask_rc = mask_rc.compute()
+    mask_big = mask_big.compute()
+    mask_small = mask_small.compute()
+
+    cat = xr.zeros_like(mask_rc, dtype=np.uint8)
+
+    # numpy-style boolean assignment (masks already exclusive)
+    c = cat.data
+    c[mask_rc.data] = 1
+    c[mask_big.data] = 2
+    c[mask_small.data] = 3
+    arr = cat.values  # shape (IID,QMC), values in {0,1,2,3}
+
+    colors = ["white", "#d62728", "#00ff0e", "#1f77b4"]
+    cmap = ListedColormap(colors)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(arr.T, aspect="auto", interpolation="nearest", cmap=cmap, vmin=0, vmax=3)
+
+    ax.set_title(title)
+    ax.set_xlabel("QMC")
+    ax.set_ylabel("IID")
+
+    import matplotlib.patches as mpatches
+    labels = [
+        f"OK (#{np.sum(arr==0)})",
+        f"return_code<0 (#{np.sum(arr==1)})",
+        f"conc_max>hi (#{np.sum(arr==2)})",
+        f"conc_min<lo (#{np.sum(arr==3)})",
+    ]
+    ax.legend(
+        handles=[
+            mpatches.Patch(facecolor=c, label=l, edgecolor="black")
+            for c, l in
+            zip(colors, labels)
+        ],
+        loc="upper right",
+#        frameon=True,
+    )
+
+    fig.tight_layout()
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_dir / "qmc_iid_mask_heatmap.pdf")
+    else:
+        plt.show()
+
+    return fig, ax, cat
