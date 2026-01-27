@@ -124,6 +124,7 @@ class Wrapper:
             expected_shape = (ds.sizes['sim_time'], ds.sizes['X'], ds.sizes['Y'], ds.sizes['Z'])
             if slice_array.shape != expected_shape:
                 # raise ValueError(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
+                logging.warning(f"slice_array must have shape {expected_shape}, got {slice_array.shape}")
                 slice_array = np.zeros(expected_shape)
                 logging.info(f"sample {i_eval_idx} return code {rc} => create empty slice for zarr")
 
