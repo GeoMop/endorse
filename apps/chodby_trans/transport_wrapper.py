@@ -79,6 +79,7 @@ class Wrapper:
 
         sample_time = time.time() - t
         logging.info(f"SIMULATION TIME: {sample_time}")
+        logging.info(f"slice_array: max {np.max(slice_array)}")
 
         try:
             # ZARR FUSE
