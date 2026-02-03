@@ -114,18 +114,46 @@ transport_fullscale:
 
     # The total simulation time as well as the output times are ese are quite dependent on the
     output_times:
-      - 0
-      - 30
-      - 60
-      - 120
-      - 240
-      - 500
-      - 1100
-      - 2300
-      - 5000
-      - 10000
-      - [20000, 20000]
+      - [0, 'y']
+      - [1, 'y']
+      - [2, 'y']
+      - [4, 'y']
+      - [10, 'y']
+      - [50, 'y']
+      - [100, 'y']
+      - [200, 'y']
+      - [400, 'y']
+      - [600, 'y']
+      - begin: [1000, 'y']
+        step: [1000, 'y']
+      - begin: [10000, 'y']
+        step: [10000, 'y']
+      - begin: [100000, 'y']
+        step: [20000, 'y']
     end_time: 160000
+    dt_limits:
+        - time: [0, 'y']             # 3
+          max_dt: [1, 'y']
+        - time: [4, 'y']             # 3
+          max_dt: [2, 'y']
+        - time: [10, 'y']            # 9
+          max_dt: [10, 'y']
+        - time: [100, 'y']           # 4
+          max_dt: [20, 'y']
+        - time: [200, 'y']           # 3
+          max_dt: [50, 'y']
+        - time: [400, 'y']           # 2
+          max_dt: [100, 'y']
+        - time: [600, 'y']           # 2
+          max_dt: [200, 'y']
+        - time: [1000, 'y']          # 9
+          max_dt: [500, 'y']
+        - time: [5000, 'y']          # 5
+          max_dt: [1000, 'y']
+        - time: [10000, 'y']         # 18
+          max_dt: [5000, 'y']
+        - time: [100000, 'y']        # 9
+          max_dt: [10000, 'y']        
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15

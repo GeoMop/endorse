@@ -183,44 +183,13 @@ problem: !Coupling_Sequential
       format: !vtk
         variant: ascii
 #        variant: binary_zlib
-      times: #<output_times>
-        - [30, 'y']
-        - [60, 'y']
-        - [120, 'y']
-        - [240, 'y']
-        - [500, 'y']
-        - [1100, 'y']
-        - [2300, 'y']
-        - [5000, 'y']
-        - [10000, 'y']
-        - begin: [20000, 'y']
-          step: [20000, 'y']
+      times: <output_times>
 
 
     time:
       end_time: [<end_time_years>, 'y']
       max_dt: [20000, 'y']
-      dt_limits:
-        - time: [0, 'y']
-          max_dt: [30, 'y']
-        - time: [60, 'y']             # 2
-          max_dt: [60, 'y']
-        - time: [540, 'y']            # 10
-          max_dt: [120, 'y']
-        - time: [1100, 'y']           # 15
-          max_dt: [240, 'y']
-        - time: [2300, 'y']          # 20
-          max_dt: [500, 'y']
-        - time: [5000, 'y']          # 25
-          max_dt: [1000, 'y']        #
-        - time: [10000, 'y']          # 30
-          max_dt: [2500, 'y']        #
-        - time: [20000, 'y']          # 34
-          max_dt: [5000, 'y']        #
-        - time: [40000, 'y']          # 38
-          max_dt: [10000, 'y']        #
-        - time: [80000, 'y']          # 42
-          max_dt: [20000, 'y']        # 53
+      dt_limits: <dt_limits>
       common_time_unit: y
       write_used_timesteps: time_steps.yaml
     balance:
