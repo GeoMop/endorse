@@ -61,7 +61,8 @@ problem: !Coupling_Sequential
       - region: [ .side_y0, .side_y1, .fractures_box ]
         bc_type: dirichlet
         bc_piezo_head: !FieldFormula
-          value: -y+30
+          # Kravi hora (local model) pressure gradient estimate: 20 m / 400 m = 0.05 [m/m]
+          value: 0.05*(-y+0.1*z)
 #      - region: [.box_drilled, .fractures_out]
 #        bc_type: dirichlet
 #        bc_piezo_head: !FieldFormula
@@ -104,50 +105,36 @@ problem: !Coupling_Sequential
         - name: <conc_name> # uranium 235; should rather be Iodium with zero K_d.
           molar_mass: 0.235
     transport: !Solute_AdvectionDiffusion_DG
-      user_fields:
-        - name: source_bc_flux_t
-          field: !FieldTimeFunction
-            time_function: # conc_flux_UOS_[kg:y]
-              values: !include_csv
-                file: <conc_flux_file>
-                separator: ","
-                n_head_lines: 1
-                format:
-                  t:
-                    time: $0
-                  value: [ [ $1 ] ]
-                  # CSV reader is not compatible with automatic conversion to the tensor,
-                  # which is the input shape of all FieldConstant and FieldTimeFunction fields.
-
       input_fields:
+        - region: [ALL]
+          # dg_penalty: 1       # mass: 80, error: 4.5, default value, solution highly oscilates
+          # dg_penalty: 10      # mass: 40, error: 4.0,  high error, hard to converge
+          # dg_penalty: 100     # mass: 27, error: 16,  high error, hard to converge
+          dg_penalty: <dg_penalty>
+
+        # ROCK and DFN
         - region: [box, fractures]
           porosity: !FieldFE
             mesh_data_file: <input_fields_file>
             field_name: porosity
 
-          # dg_penalty: 1       # mass: 80, error: 4.5, default value, solution highly oscilates
-          # dg_penalty: 10      # mass: 40, error: 4.0,  high error, hard to converge
-          # dg_penalty: 100     # mass: 27, error: 16,  high error, hard to converge
-          dg_penalty: <dg_penalty>
-          diff_m: <diffusivity_effective>
-          disp_l: <dispersivity_L>
-          disp_t: <dispersivity_T>
+          diff_m: <bulk_diff_m>
+          disp_l: <bulk_disp_L>
+          disp_t: !FieldFormula
+            value: <bulk_disp_L>/10
 
-        # TODO: bentonite
+        # BACKFILL
         - region: [ main_tunnel, storages, plug, container ]
           porosity: <backfill_por>
-          # dg_penalty: 10
           diff_m: <backfill_diff_m>
-          disp_l: 0.05
-          disp_t: 0.005
+          disp_l: <backfill_disp_L>
+          disp_t: !FieldFormula
+            value: <backfill_disp_L>/10
 
-        # TODO: file contains flux, compute volume source!
+        # SOURCE - conc pulse
         - region: [ container ]
-#          sources_density: !FieldFormula
-#            # [kg/y/m2] -> [kg/s/m2] -> (*S) [kg/s] -> (/V) [kg/s/m3]
-#            # UOS surface: S = pi*d*h
-#            # container region volume: V = pi*d^2/4*h
-#            value: source_bc_flux_t / (365.2425 * 24 * 3600) * (3.14*0.914*3.790) / (3.14*1.65**2*0.25*4.54)
+          time: 0
+          sources_conc: 1
           sources_sigma: !FieldFormula
             # UOS surface: S = pi * du * hu [m2]
             # container region volume: V = pi * dc^2/4 * hc [m3]
@@ -155,18 +142,10 @@ problem: !Coupling_Sequential
             # surrounding bentonite buffer layer: w = 0.368m
             # new sigma: D/w * S/V [m2.s-1 . m-1 . m2 . m-3 = s-1]
             value:  (2e-10) / <sources_buffer_thickness>  * <sources_uos_surface> / <sources_container_vol>
-          sources_conc: !FieldFormula
-            # [kg/y/m2] -> [kg/s/m2]
-#            value: 1 # source_bc_flux_t / (365.2425 * 24 * 3600)
-              # value: 0.1 * exp(-(5 * log(10) / 1000) * maximum(t / (365.2425 * 24 * 3600), 100))
-              value: 1 if (t/(24*3600*365.2425) < 60) else 0
+        - region: [ container ]
+          time: [1, 'y']
+          sources_conc: 0
 
-#          bc_flux: !FieldFormula
-#            #value: bc_flux_x * bc_flux_t / (365.2425 * 24 * 3600)  conc in mg/m3
-#            value: bc_flux_x * bc_flux_t / (365.2425 * 0.24 * 0.36)
-#            #unit: kg*m*md/y  unfortunately does not work so we scale manually from kg/y/m2 to kg/s/m2
-#            # even for nonzero diffusion getting zero mass in balance and substantial error (since fluxes are taken from field evaluation)
-#            # trying some scaling in between (could be interpreted as change in conc unit anyway)
       solver:
         a_tol: <trans_solver__a_tol>
         r_tol: <trans_solver__r_tol>

@@ -58,10 +58,15 @@ fractures: &fractures
     # main box : [100, 80, 60]
 
 bulk_field_parametric: &bulk_field_parametric
-    cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)
     cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-    por_max: 0.0025
+    cond_mult: 3.3
+    # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
+    # cond_max = cond_min*cond_mult
+
     por_min: 0.002
+    por_mult: 1.25
+    # por_max: 0.0025
+    # por_max = por_min*por_mult
 
     # values with respect to EDZ radius
     # h_axis: 2.0
@@ -83,7 +88,7 @@ transport_fullscale:
 
     bulk_field_params: *bulk_field_parametric
     fr_field_params:
-        apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
+        # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
         #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
         permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
         #sigma_bulk_conductivity: 1e-7
@@ -92,17 +97,15 @@ transport_fullscale:
 
     #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
     #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
-    diffusivity_effective: 1e-15    # should be smaller then advection
-    dispersivity_L: 0.5    # [m]
-    dispersivity_T: 0.05     # [m]
-    #dispersivity_L: 0    # [m]
-    #dispersivity_T: 0     # [m]
+    # diffusivity_effective: 1e-13    # should be smaller then advection
+    # dispersivity_L: 0.5    # [m]
+    # dispersivity_T: 0.05     # [m]
     dg_penalty: 1
 
-    backfill_cond: 1e-13
-    backfill_diff_m: 1e-15
+    # backfill_cond: 1e-13
+    # backfill_diff_m: 1e-15
     # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
-    backfill_por: 0.003
+    # backfill_por: 0.003
 
     # setup for source term
     sources_params:
@@ -242,22 +245,23 @@ machine_config:
         - exec
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 10
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: default
+        #     pbs_name: chodby_trans
+        #     walltime: "24:00:00"
         pbs:
-            n_cores: 16
-            n_nodes: 10
+            n_cores: 18
+            n_nodes: 3
+            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb
-            queue: charon
+            queue: charon_2h
             pbs_name: chodby_trans
-            walltime: "18:00:00"
-        # pbs:
-        #     n_cores: 10
-        #     n_nodes: 4
-        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
-        #     mem: 80Gb
-        #     queue: charon_2h
-        #     pbs_name: chodby_trans
-        #     walltime: "02:00:00"
+            walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d
