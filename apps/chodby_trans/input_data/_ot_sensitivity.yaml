@@ -114,10 +114,11 @@ parameters:
     args: { mean_log10: -15, std_log10: 0.3 }
     group: mat_backfill
 
-  dfn_macro_seed: 
+  dfn_seed: 
     # seed for small fractures
     distr: Seed
-    group: dfn_geometry
+    path: fractures/dfn_seed
   meshing_seed: 
     # seed for gmsh fractures
     distr: Seed
+    path: mesh/meshing_seed

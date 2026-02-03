@@ -8,6 +8,7 @@ geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
+    meshing_seed: 1
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 5
     fracture_mesh_step: 2
@@ -47,6 +48,7 @@ fractures: &fractures
     #  1 fracture per 1km of borehole
     #  crossing borehole: 3 fracture per 10 km
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
+    dfn_seed: 1
 
     clip_box_ratio: 0.9 # *100 % of the box dimension
     large_min_r: 100
@@ -69,8 +71,6 @@ bulk_field_parametric: &bulk_field_parametric
 
 # parameters substituted into the TH model template
 transport_fullscale:
-    # The mesh to use in both simulations.
-    meshing_seed: 1
 
     # templates are part of the endorse sources
     input_template: transport_fullscale_tmpl.yaml
