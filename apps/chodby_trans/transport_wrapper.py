@@ -63,6 +63,8 @@ class Wrapper:
                 ng = 20
                 slice_array = np.random.rand(len(times), ng, ng, 2)
                 rc = 42
+            elif tags[1] >= cfg.ot_sensitivity.limit_samples:
+                return exp.ReturnCode.SKIP, np.array([])
             else:
                 rc, slice_array = transport.transport_run(
                     self._config, 
