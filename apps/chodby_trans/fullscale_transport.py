@@ -370,7 +370,7 @@ def write_zarr_slice(store_path: str,
     )
 
 # @report
-def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[IndicatorFn]:
+def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int, output: bool): # -> List[IndicatorFn]:
     #extractor = Extractor.from_point_data(attr_name, z_loc)
     # extractor = Extractor.from_cell_data(attr_name, z_loc)
     
@@ -387,6 +387,14 @@ def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[
     times = np.asarray(pvd_content.time_values)
     print("pvd times: ", times)
 
+    if output:
+        slice_out_dir = Path(pvd_in.path).parent / "slice_intp"
+        slice_out_dir.mkdir(parents=True, exist_ok=True)
+        slice_vtu_files = [slice_out_dir / f"slice_intp_{ti:02d}.vtu" for ti in range(len(times))]
+        write_pvd(times, slice_vtu_files, slice_out_dir.parent / "slice_intp.pvd")
+    else:
+        slice_vtu_files = [None for ti in range(len(times))]
+
     result = np.empty((len(times), grid.n_cells), dtype=np.float64)
     for ti, t in enumerate(times):
         pvd_content.set_active_time_point(ti)
@@ -395,11 +403,11 @@ def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[
         if intp_ver == 1:
             values = interpolate_v1(dataset, z_loc, attr_name)
         elif intp_ver == 2:
-            values = interpolate_v2(dataset, grid, attr_name, ti)
+            values = interpolate_v2(dataset, grid, attr_name, slice_vtu_files[ti])
         elif intp_ver == 3:
-            values = interpolate_v3(dataset, grid, attr_name, ti)
+            values = interpolate_v3(dataset, grid, attr_name, slice_vtu_files[ti])
         elif intp_ver == 4:
-            values = interpolate_v4(dataset, grid, attr_name, ti)
+            values = interpolate_v4(dataset, grid, attr_name, slice_vtu_files[ti])
 
         # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
         # values = interpolated.cell_data[attr_name]
@@ -411,6 +419,35 @@ def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[
     return result
 
 
+def write_pvd(times, vtu_files, pvd_path):
+    """
+    times:     iterable of floats, length N
+    vtu_files: iterable of filenames (relative or absolute), length N
+    pvd_path:  output .pvd file path
+    """
+
+    # Make filenames relative to the .pvd location (best for portability)
+    rel_files = []
+    for f in vtu_files:
+        try:
+            rel_files.append(str(f.relative_to(pvd_path.parent)))
+        except ValueError:
+            rel_files.append(str(f))  # fallback to absolute if needed
+
+    lines = [
+        '<?xml version="1.0"?>',
+        '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
+        '  <Collection>',
+    ]
+    for t, f in zip(times, rel_files):
+        lines.append(f'    <DataSet timestep="{float(t)}" group="" part="0" file="{f}"/>')
+    lines += [
+        '  </Collection>',
+        '</VTKFile>',
+    ]
+    pvd_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def interpolate_v1(dataset, z_loc, attr_name):
     plane1 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, z_loc[0]])
     plane2 = dataset.slice(normal=[0, 0, 1], origin=[0, 0, z_loc[1]])
@@ -418,7 +455,7 @@ def interpolate_v1(dataset, z_loc, attr_name):
     return surface.cell_data[attr_name]
 
 
-def interpolate_v2(dataset, grid, attr_name, ti):
+def interpolate_v2(dataset, grid, attr_name, filepath):
     interpolated = grid.sample(dataset[0],
                                # tolerance=1e-5,
                                # tolerance=1e-7,
@@ -431,11 +468,12 @@ def interpolate_v2(dataset, grid, attr_name, ti):
                                snap_to_closest_point=True)
     interpolated = interpolated.point_data_to_cell_data()
     # debug grid output
-    # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    if filepath is not None:
+        grid.save(filepath, binary=False)
     return interpolated.cell_data[attr_name]
 
 
-def interpolate_v3(dataset, grid, attr_name, ti):
+def interpolate_v3(dataset, grid, attr_name, filepath):
     # refinement coefficient (n splits in each dim)
     rf = 4
 
@@ -470,7 +508,8 @@ def interpolate_v3(dataset, grid, attr_name, ti):
     coarse_values = fine_values.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
     grid.cell_data[attr_name] = coarse_values.reshape(-1)
     # debug grid output
-    # grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    if filepath is not None:
+        grid.save(filepath, binary=False)
     return grid.cell_data[attr_name]
 
 
@@ -519,7 +558,7 @@ def nearest_to_grid_xyz(points_xyz: np.ndarray,
     return out
 
 
-def interpolate_v4(dataset, grid, attr_name, ti):
+def interpolate_v4(dataset, grid, attr_name, filepath):
     # refinement coefficient (n splits in each dim)
     rf = 4
 
@@ -562,7 +601,8 @@ def interpolate_v4(dataset, grid, attr_name, ti):
     coarse_values = fvalues.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
     grid.cell_data[attr_name] = coarse_values.reshape(-1)
     # debug grid output
-    # grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    if filepath is not None:
+        grid.save(filepath, binary=False)
     return grid.cell_data[attr_name]
 
 
@@ -640,7 +680,8 @@ def get_indicator(cfg, fo, grid_step):
     cfg_fine = cfg.transport_fullscale
     z_cuts = z_cuts_fn(cfg.geometry)
     grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
-    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid, intp_ver=4)
+    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid,
+                        intp_ver=4, output=not cfg.ot_sensitivity.clean_sample_dir)
     print(np.shape(values))
     n_times = np.shape(values)[0]
     block = values.reshape(n_times, *grid_step)
