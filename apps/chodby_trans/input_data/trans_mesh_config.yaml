@@ -39,6 +39,7 @@ fractures: &fractures
 #    population:  !include _fr_Forsmark_repo.yaml
     population: {}
     population_template:  _fr_Bukov_repo.yaml
+    # population_template:  _fr_fixed.yaml
     # upper limit on the number of (small) fractures
     n_frac_limit: 100
 
@@ -118,45 +119,41 @@ transport_fullscale:
     # The total simulation time as well as the output times are ese are quite dependent on the
     output_times:
       - [0, 'y']
-      - [1, 'y']
-      - [2, 'y']
-      - [4, 'y']
-      - [10, 'y']
-      - [50, 'y']
       - [100, 'y']
       - [200, 'y']
       - [400, 'y']
-      - [600, 'y']
-      - begin: [1000, 'y']
-        step: [1000, 'y']
-      - begin: [10000, 'y']
-        step: [10000, 'y']
-      - begin: [100000, 'y']
-        step: [20000, 'y']
-    end_time: 160000
+      - [800, 'y']
+      - [2000, 'y']
+      - [4000, 'y']
+      - [8000, 'y']
+      - [20000, 'y']
+      - [40000, 'y']
+      - begin: [80000, 'y']
+        step: [40000, 'y']
+    end_time: 1000000
     dt_limits:
-        - time: [0, 'y']             # 3
-          max_dt: [1, 'y']
-        - time: [4, 'y']             # 3
-          max_dt: [2, 'y']
-        - time: [10, 'y']            # 9
-          max_dt: [10, 'y']
-        - time: [100, 'y']           # 4
-          max_dt: [20, 'y']
-        - time: [200, 'y']           # 3
+        - time: [0, 'y']             # 4
+          max_dt: [25, 'y']
+        - time: [100, 'y']           # 2
           max_dt: [50, 'y']
-        - time: [400, 'y']           # 2
+        - time: [200, 'y']           # 2
           max_dt: [100, 'y']
-        - time: [600, 'y']           # 2
+        - time: [400, 'y']           # 2
           max_dt: [200, 'y']
-        - time: [1000, 'y']          # 9
-          max_dt: [500, 'y']
-        - time: [5000, 'y']          # 5
+        - time: [800, 'y']           # 3
+          max_dt: [400, 'y']
+        - time: [2000, 'y']          # 2
           max_dt: [1000, 'y']
-        - time: [10000, 'y']         # 18
-          max_dt: [5000, 'y']
-        - time: [100000, 'y']        # 9
-          max_dt: [10000, 'y']        
+        - time: [4000, 'y']          # 2
+          max_dt: [2000, 'y']
+        - time: [8000, 'y']          # 3
+          max_dt: [4000, 'y']
+        - time: [20000, 'y']         # 2
+          max_dt: [10000, 'y']
+        - time: [40000, 'y']         # 2
+          max_dt: [20000, 'y']
+        - time: [80000, 'y']         # 23
+          max_dt: [40000, 'y']
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15

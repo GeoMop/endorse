@@ -58,7 +58,7 @@ problem: !Coupling_Sequential
 
     input_fields:
 #      - region: [.tunnel_head_y0, .tunnel_head_y1] # tunnels are sealed
-      - region: [ .side_y0, .side_y1, .fractures_box ]
+      - region: [ .box_drilled ]
         bc_type: dirichlet
         bc_piezo_head: !FieldFormula
           # Kravi hora (local model) pressure gradient estimate: 20 m / 400 m = 0.05 [m/m]
@@ -143,7 +143,7 @@ problem: !Coupling_Sequential
             # new sigma: D/w * S/V [m2.s-1 . m-1 . m2 . m-3 = s-1]
             value:  (2e-10) / <sources_buffer_thickness>  * <sources_uos_surface> / <sources_container_vol>
         - region: [ container ]
-          time: [1, 'y']
+          time: [50, 'y']
           sources_conc: 0
 
       solver:
@@ -167,7 +167,7 @@ problem: !Coupling_Sequential
 
     time:
       end_time: [<end_time_years>, 'y']
-      max_dt: [20000, 'y']
+      max_dt: [40000, 'y']
       dt_limits: <dt_limits>
       common_time_unit: y
       write_used_timesteps: time_steps.yaml
