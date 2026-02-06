@@ -157,6 +157,9 @@ def single_sample(args):
     cfg = common.config.load_config(str(conf_file))
     cfg["data_schema_key"] = data_schema_key
 
+    if tags[1] >= cfg.ot_sensitivity.limit_samples:
+        return ReturnCode.SKIP
+
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
