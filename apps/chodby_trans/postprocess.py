@@ -88,7 +88,11 @@ def sampling_data(cfg, seed):
     mask_rc, already_bad_iid = update_and_report("return_code<0", rc < 0, already_bad_iid, ds2)
 
     mask_big, already_bad_iid = update_and_report("conc_max>hi", conc_max > hi, already_bad_iid, ds2)
-    mask_small, already_bad_iid = update_and_report("conc_min<lo", conc_min < lo, already_bad_iid, ds2)
+    mask_small, already_bad_iid = update_and_report("conc_max<lo", conc_max < lo, already_bad_iid, ds2)
+
+    conc_vals = conc_min.where(mask_small, drop=True).values.ravel()
+    n_show=5
+    print(f"[conc_min<lo] conc {n_show} values:", conc_vals[:n_show])
 
     fig, ax, cat = plot_qmc_iid_mask_heatmap(mask_rc, mask_big, mask_small,
                                              output_dir=job.output.plots)
