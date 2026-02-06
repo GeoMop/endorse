@@ -34,7 +34,7 @@ mesh:
       r_inf: 30
       h_inf: *boundary_mesh_step
 
-fractures: &fractures
+fractures:
     # SKB fracture population for repository domain
 #    population:  !include _fr_Forsmark_repo.yaml
     population: {}
@@ -58,23 +58,6 @@ fractures: &fractures
     # uncertain large fractures, need support in Population
     # main box : [100, 80, 60]
 
-bulk_field_parametric: &bulk_field_parametric
-    cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-    cond_mult: 3.3
-    # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
-    # cond_max = cond_min*cond_mult
-
-    por_min: 0.002
-    por_mult: 1.25
-    # por_max: 0.0025
-    # por_max = por_min*por_mult
-
-    # values with respect to EDZ radius
-    # h_axis: 2.0
-    # v_axis: 3.35 # 6.7/2
-    # radius for c_min
-    inner_radius: 1.0
-
 # parameters substituted into the TH model template
 transport_fullscale:
 
@@ -87,7 +70,22 @@ transport_fullscale:
     conc_flux_file: "conc_flux_UOS.csv"
     conc_name: I
 
-    bulk_field_params: *bulk_field_parametric
+    bulk_field_params:
+        cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
+        cond_mult: 3.3
+        # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
+        # cond_max = cond_min*cond_mult
+
+        por_min: 0.002
+        por_mult: 1.25
+        # por_max: 0.0025
+        # por_max = por_min*por_mult
+
+        # values with respect to EDZ radius
+        # h_axis: 2.0
+        # v_axis: 3.35 # 6.7/2
+        # radius for c_min
+        inner_radius: 1.0
     fr_field_params:
         # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
         #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
