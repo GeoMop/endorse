@@ -145,6 +145,8 @@ problem: !Coupling_Sequential
         - region: [ container ]
           time: [50, 'y']
           sources_conc: 0
+          # TODO: instead of setting sources_conc zero, we should "switch of" sources_sigma
+          # sources_sigma: 0
 
       solver:
         a_tol: <trans_solver__a_tol>
