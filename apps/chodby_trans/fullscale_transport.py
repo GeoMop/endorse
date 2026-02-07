@@ -23,6 +23,7 @@ from bgem.stochastic.fracture import Fracture, Population
 import zarr_fuse as zf
 import xarray as xr
 import zarr
+from scipy.spatial import cKDTree
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 
@@ -162,8 +163,8 @@ def prepare_msh_input(workdir, cfg, param_dict):
     logging.info(f"DFN REPO:\n{cfg.fractures.population}")
 
     fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
-    dfn_seed = ot_sa.Seed.get_seedsequence(param_dict['dfn_macro_seed'])
-    meshing_seed = ot_sa.Seed.get_seedsequence(param_dict['meshing_seed'])
+    dfn_seed = ot_sa.Seed.get_seedsequence(cfg.fractures.dfn_seed)
+    meshing_seed = ot_sa.Seed.get_seedsequence(cfg.mesh.meshing_seed)
     mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, meshing_seed)
     # return None
 
@@ -369,7 +370,7 @@ def write_zarr_slice(store_path: str,
     )
 
 # @report
-def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[IndicatorFn]:
+def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int, output: bool): # -> List[IndicatorFn]:
     #extractor = Extractor.from_point_data(attr_name, z_loc)
     # extractor = Extractor.from_cell_data(attr_name, z_loc)
     
@@ -386,6 +387,14 @@ def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[
     times = np.asarray(pvd_content.time_values)
     print("pvd times: ", times)
 
+    if output:
+        slice_out_dir = Path(pvd_in.path).parent / "slice_intp"
+        slice_out_dir.mkdir(parents=True, exist_ok=True)
+        slice_vtu_files = [slice_out_dir / f"slice_intp_{ti:02d}.vtu" for ti in range(len(times))]
+        write_pvd(times, slice_vtu_files, slice_out_dir.parent / "slice_intp.pvd")
+    else:
+        slice_vtu_files = [None for ti in range(len(times))]
+
     result = np.empty((len(times), grid.n_cells), dtype=np.float64)
     for ti, t in enumerate(times):
         pvd_content.set_active_time_point(ti)
@@ -394,16 +403,49 @@ def indicators(pvd_in : File, attr_name, z_loc, grid, intp_ver: int): # -> List[
         if intp_ver == 1:
             values = interpolate_v1(dataset, z_loc, attr_name)
         elif intp_ver == 2:
-            values = interpolate_v2(dataset, grid, attr_name, ti)
+            values = interpolate_v2(dataset, grid, attr_name, slice_vtu_files[ti])
         elif intp_ver == 3:
-            values = interpolate_v3(dataset, grid, attr_name, ti)
+            values = interpolate_v3(dataset, grid, attr_name, slice_vtu_files[ti])
+        elif intp_ver == 4:
+            values = interpolate_v4(dataset, grid, attr_name, slice_vtu_files[ti])
 
         # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
         # values = interpolated.cell_data[attr_name]
 
+        logging.info(f"values[t {ti}]: max {np.max(values)}")
         result[ti, :] = values
 
+    logging.info(f"result: max {np.max(result)}")
     return result
+
+
+def write_pvd(times, vtu_files, pvd_path):
+    """
+    times:     iterable of floats, length N
+    vtu_files: iterable of filenames (relative or absolute), length N
+    pvd_path:  output .pvd file path
+    """
+
+    # Make filenames relative to the .pvd location (best for portability)
+    rel_files = []
+    for f in vtu_files:
+        try:
+            rel_files.append(str(f.relative_to(pvd_path.parent)))
+        except ValueError:
+            rel_files.append(str(f))  # fallback to absolute if needed
+
+    lines = [
+        '<?xml version="1.0"?>',
+        '<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">',
+        '  <Collection>',
+    ]
+    for t, f in zip(times, rel_files):
+        lines.append(f'    <DataSet timestep="{float(t)}" group="" part="0" file="{f}"/>')
+    lines += [
+        '  </Collection>',
+        '</VTKFile>',
+    ]
+    pvd_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def interpolate_v1(dataset, z_loc, attr_name):
@@ -413,7 +455,7 @@ def interpolate_v1(dataset, z_loc, attr_name):
     return surface.cell_data[attr_name]
 
 
-def interpolate_v2(dataset, grid, attr_name, ti):
+def interpolate_v2(dataset, grid, attr_name, filepath):
     interpolated = grid.sample(dataset[0],
                                # tolerance=1e-5,
                                # tolerance=1e-7,
@@ -426,11 +468,12 @@ def interpolate_v2(dataset, grid, attr_name, ti):
                                snap_to_closest_point=True)
     interpolated = interpolated.point_data_to_cell_data()
     # debug grid output
-    # interpolated.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    if filepath is not None:
+        grid.save(filepath, binary=False)
     return interpolated.cell_data[attr_name]
 
 
-def interpolate_v3(dataset, grid, attr_name, ti):
+def interpolate_v3(dataset, grid, attr_name, filepath):
     # refinement coefficient (n splits in each dim)
     rf = 4
 
@@ -465,8 +508,103 @@ def interpolate_v3(dataset, grid, attr_name, ti):
     coarse_values = fine_values.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
     grid.cell_data[attr_name] = coarse_values.reshape(-1)
     # debug grid output
-    # grid.save(f"slice_intp_{ti:02d}.vtu", binary=False)
+    if filepath is not None:
+        grid.save(filepath, binary=False)
     return grid.cell_data[attr_name]
+
+
+
+
+def nearest_to_grid_xyz(points_xyz: np.ndarray,
+                        values: np.ndarray,
+                        grid_xyz: np.ndarray,
+                        *,
+                        max_dist: float,
+                        fill_value: float = 0.0) -> np.ndarray:
+    """
+    Nearest-neighbor transfer from 3D points to 3D query points.
+
+    points_xyz : (n,3)
+    values     : (n,)
+    grid_xyz   : (m,3) query locations (x,y,z)
+    max_dist   : max 3D distance to accept neighbor (else fill_value)
+    returns    : (m,) interpolated values
+    """
+    pts = np.asarray(points_xyz, dtype=float)
+    vals = np.asarray(values)
+    q = np.asarray(grid_xyz, dtype=float)
+
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(f"points_xyz must be (n,3), got {pts.shape}")
+    if vals.ndim != 1 or vals.shape[0] != pts.shape[0]:
+        raise ValueError(f"values must be (n,), got {vals.shape} for n={pts.shape[0]}")
+    if q.ndim != 2 or q.shape[1] != 3:
+        raise ValueError(f"grid_xyz must be (m,3), got {q.shape}")
+    if max_dist < 0:
+        raise ValueError("max_dist must be non-negative")
+
+    m = q.shape[0]
+    if pts.shape[0] == 0 or m == 0:
+        return np.full((m,), fill_value, dtype=float)
+
+    tree = cKDTree(pts)
+    dist, idx = tree.query(q, k=1, distance_upper_bound=max_dist)
+
+    n = pts.shape[0]
+    ok = (idx < n) & np.isfinite(dist)
+
+    out = np.full((m,), fill_value, dtype=float)
+    out[ok] = vals[idx[ok]]
+    return out
+
+
+def interpolate_v4(dataset, grid, attr_name, filepath):
+    # refinement coefficient (n splits in each dim)
+    rf = 4
+
+    # grid.field_data["origins"] = origins
+    # grid.field_data["spacing_xy"] = spacing
+    # grid.field_data["dims_xy"] = dims
+    cNx = grid.field_data["dims_xy"][0] - 1 # coarse
+    cNy = grid.field_data["dims_xy"][1] - 1
+    Nx = cNx * rf + 1 # fine
+    Ny = cNy * rf + 1
+    fine_spacing = grid.field_data["spacing_xy"] / rf
+    fine_grid = make_grid(dims=[Nx, Ny, 1],
+                          origins=grid.field_data["origins"],
+                          spacing=fine_spacing)
+    # debug grid output - fine grid indexing
+    # fine_grid.save(f"slice_fine_grid.vtu", binary=False)
+
+    # conc_values = dataset[0].point_data[attr_name]
+    # fvalues = nearest_to_grid_xyz(points_xyz=dataset[0].points, values=conc_values,
+    #                               grid_xyz=fine_grid.points, max_dist=1.0)
+
+    # If the .read() returns a MultiBlock, merge blocks first
+    if isinstance(dataset, pv.MultiBlock):
+        dataset = dataset.combine()
+    conc_values = np.asarray(dataset.cell_data[attr_name])
+    source_points = np.asarray(dataset.cell_centers().points)
+    grid_points = np.asarray(fine_grid.cell_centers().points)
+    fvalues = nearest_to_grid_xyz(points_xyz=source_points, values=conc_values,
+                                  grid_xyz=grid_points, max_dist=1.0)
+
+    fine_grid.cell_data[attr_name] = fvalues
+    # fine_grid.point_data[attr_name] = fvalues
+    # fine_grid = fine_grid.point_data_to_cell_data()
+
+    # fine_grid.save(f"slice_intp_fv4_{ti:02d}.vtu", binary=False) # debug output
+    # fine_values = fine_grid.cell_data[attr_name]
+    # fine_values = fine_grid.cell_data["cell_id"]  # debug ids
+
+    # map fine grid to coarse grid - find max over coarse cell
+    coarse_values = fvalues.reshape((2,cNx, rf, cNy, rf)).max(axis=(2, 4))
+    grid.cell_data[attr_name] = coarse_values.reshape(-1)
+    # debug grid output
+    if filepath is not None:
+        grid.save(filepath, binary=False)
+    return grid.cell_data[attr_name]
+
 
 def plane_cell_ids(grid, plane_id):
     # npx = nx+1, npy = ny+1
@@ -542,7 +680,8 @@ def get_indicator(cfg, fo, grid_step):
     cfg_fine = cfg.transport_fullscale
     z_cuts = z_cuts_fn(cfg.geometry)
     grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
-    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid, intp_ver=3)
+    values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid,
+                        intp_ver=4, output=not cfg.ot_sensitivity.clean_sample_dir)
     print(np.shape(values))
     n_times = np.shape(values)[0]
     block = values.reshape(n_times, *grid_step)

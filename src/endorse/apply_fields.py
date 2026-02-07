@@ -132,8 +132,9 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
                                         1.0, 0.0)
 
     if cond is None:
-        cond_max = float(cfg_bulk_fields.cond_max)
         cond_min = float(cfg_bulk_fields.cond_min)
+        # cond_max = float(cfg_bulk_fields.cond_max)
+        cond_max = float(cfg_bulk_fields.cond_mult) * cond_min
     else:
         cond_min, cond_max = cond
 
@@ -162,8 +163,9 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
 
     cond_field = np.clip(cond_field, cond_min, cond_max)
 
-    por_max = float(cfg_bulk_fields.por_max)
     por_min = float(cfg_bulk_fields.por_min)
+    # por_max = float(cfg_bulk_fields.por_max)
+    por_max = float(cfg_bulk_fields.por_mult) * por_min
     por_field = np.exp((1-theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
     por_field = np.clip(por_field, por_min, por_max)
 

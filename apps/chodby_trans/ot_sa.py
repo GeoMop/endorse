@@ -66,6 +66,11 @@ def LogNormal(*args, **kwargs):
             q975 = 1.95996  # scipy.stats.norm.ppf(0.975)
             std = (np.log(float(kwargs['ci95_factor'])) - mean) / q975
     shift = float(kwargs.get('shift', '0.0'))
+
+    print(f"mean_log: {mean}, std_log: {std}")
+    print(f"mean_log10: {mean/np.log(10)}, std_log10: {std/np.log(10)}")
+    print(f"GM: {np.exp(mean)}, CIF: {np.exp(3*std)}")
+
     return ot.LogNormal(mean, std, shift)
 
 
@@ -778,6 +783,7 @@ class SensitivityAnalysis:
         # parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
         parameters = dict()
         for name, p_cfg in param_cfg.items():
+            print(f"------------------------ {name} -------------------------")
             if p_cfg['distr'] == 'Population':
                 # if not set, give a unique common group
                 sub_group = p_cfg['group'] if 'group' in p_cfg else name

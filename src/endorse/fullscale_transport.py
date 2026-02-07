@@ -61,7 +61,7 @@ def output_times(cfg_fine):
         start, step = time_tuple(item)
         end, _ = time_tuple(next)
         if isinstance(step, int):
-            times.extend((t for t in np.arange(start, end, step)))
+            times.extend(float(t) for t in np.arange(start, end, step))
         else:
             times.append(start)
     times.append(end_time)

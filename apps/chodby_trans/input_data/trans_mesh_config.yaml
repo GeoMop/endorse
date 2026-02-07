@@ -8,6 +8,7 @@ geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
+    meshing_seed: 1
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 5
     fracture_mesh_step: 2
@@ -38,6 +39,7 @@ fractures: &fractures
 #    population:  !include _fr_Forsmark_repo.yaml
     population: {}
     population_template:  _fr_Bukov_repo.yaml
+    # population_template:  _fr_fixed.yaml
     # upper limit on the number of (small) fractures
     n_frac_limit: 100
 
@@ -47,6 +49,7 @@ fractures: &fractures
     #  1 fracture per 1km of borehole
     #  crossing borehole: 3 fracture per 10 km
     fixed_seed: 202  # in the middle, acute angle , not reaching boundary
+    dfn_seed: 1
 
     clip_box_ratio: 0.9 # *100 % of the box dimension
     large_min_r: 100
@@ -56,10 +59,15 @@ fractures: &fractures
     # main box : [100, 80, 60]
 
 bulk_field_parametric: &bulk_field_parametric
-    cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)
     cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-    por_max: 0.0025
+    cond_mult: 3.3
+    # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
+    # cond_max = cond_min*cond_mult
+
     por_min: 0.002
+    por_mult: 1.25
+    # por_max: 0.0025
+    # por_max = por_min*por_mult
 
     # values with respect to EDZ radius
     # h_axis: 2.0
@@ -69,8 +77,6 @@ bulk_field_parametric: &bulk_field_parametric
 
 # parameters substituted into the TH model template
 transport_fullscale:
-    # The mesh to use in both simulations.
-    meshing_seed: 1
 
     # templates are part of the endorse sources
     input_template: transport_fullscale_tmpl.yaml
@@ -83,7 +89,7 @@ transport_fullscale:
 
     bulk_field_params: *bulk_field_parametric
     fr_field_params:
-        apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
+        # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
         #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
         permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
         #sigma_bulk_conductivity: 1e-7
@@ -92,17 +98,15 @@ transport_fullscale:
 
     #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
     #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
-    diffusivity_effective: 1e-15    # should be smaller then advection
-    dispersivity_L: 0.5    # [m]
-    dispersivity_T: 0.05     # [m]
-    #dispersivity_L: 0    # [m]
-    #dispersivity_T: 0     # [m]
+    # diffusivity_effective: 1e-13    # should be smaller then advection
+    # dispersivity_L: 0.5    # [m]
+    # dispersivity_T: 0.05     # [m]
     dg_penalty: 1
 
-    backfill_cond: 1e-13
-    backfill_diff_m: 1e-15
+    # backfill_cond: 1e-13
+    # backfill_diff_m: 1e-15
     # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
-    backfill_por: 0.003
+    # backfill_por: 0.003
 
     # setup for source term
     sources_params:
@@ -114,18 +118,42 @@ transport_fullscale:
 
     # The total simulation time as well as the output times are ese are quite dependent on the
     output_times:
-      - 0
-      - 30
-      - 60
-      - 120
-      - 240
-      - 500
-      - 1100
-      - 2300
-      - 5000
-      - 10000
-      - [20000, 20000]
-    end_time: 160000
+      - [0, 'y']
+      - [100, 'y']
+      - [200, 'y']
+      - [400, 'y']
+      - [800, 'y']
+      - [2000, 'y']
+      - [4000, 'y']
+      - [8000, 'y']
+      - [20000, 'y']
+      - [40000, 'y']
+      - begin: [80000, 'y']
+        step: [40000, 'y']
+    end_time: 1000000
+    dt_limits:
+        - time: [0, 'y']             # 4
+          max_dt: [25, 'y']
+        - time: [100, 'y']           # 2
+          max_dt: [50, 'y']
+        - time: [200, 'y']           # 2
+          max_dt: [100, 'y']
+        - time: [400, 'y']           # 2
+          max_dt: [200, 'y']
+        - time: [800, 'y']           # 3
+          max_dt: [400, 'y']
+        - time: [2000, 'y']          # 2
+          max_dt: [1000, 'y']
+        - time: [4000, 'y']          # 2
+          max_dt: [2000, 'y']
+        - time: [8000, 'y']          # 3
+          max_dt: [4000, 'y']
+        - time: [20000, 'y']         # 2
+          max_dt: [10000, 'y']
+        - time: [40000, 'y']         # 2
+          max_dt: [20000, 'y']
+        - time: [80000, 'y']         # 23
+          max_dt: [40000, 'y']
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15
@@ -214,22 +242,23 @@ machine_config:
         - exec
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 10
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: default
+        #     pbs_name: chodby_trans
+        #     walltime: "24:00:00"
         pbs:
-            n_cores: 16
-            n_nodes: 10
+            n_cores: 18
+            n_nodes: 3
+            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb
-            queue: charon
+            queue: charon_2h
             pbs_name: chodby_trans
-            walltime: "18:00:00"
-        # pbs:
-        #     n_cores: 10
-        #     n_nodes: 4
-        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
-        #     mem: 80Gb
-        #     queue: charon_2h
-        #     pbs_name: chodby_trans
-        #     walltime: "02:00:00"
+            walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d

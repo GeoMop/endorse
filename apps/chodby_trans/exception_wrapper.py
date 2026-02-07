@@ -10,6 +10,7 @@ class ReturnCode():
     FLOW123_ERROR = -1010
     SAMPLE_ERROR = -1020
     ZARR_ERROR = -1100
+    SKIP = -1999
     NONE = -2000
 
     @classmethod
