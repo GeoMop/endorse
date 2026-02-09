@@ -37,7 +37,7 @@ def plot_conc_timeseries_distribution1(
     Q: float = 0.05,
     n_slices: int = 7,
     hist_bins: tuple[int, int] = (220, 60),  # (time_bins, y_bins)
-    max_extreme_lines: int = 80,
+    max_extreme_lines: int = 20,
     figsize: tuple[float, float] = (16, 12),
     time_dim: str = "sim_time",
     sample_dims: tuple[str, str] = ("QMC", "IID"),
@@ -122,6 +122,13 @@ def plot_conc_timeseries_distribution1(
     # =======================
     # Bottom: 2D histogram (remaining samples) + extremes
     # =======================
+
+    # out-of-Q samples (extremes)
+    for s in bottom_samples:
+        ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="red", zorder=2)
+    for s in top_samples:
+        ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="blue", zorder=3)
+
     if rem_samples.size:
         vals = np.asarray(da_rem, dtype=float)  # (Nrem, Nt)
         x_flat = np.repeat(t, vals.shape[0])
@@ -142,17 +149,13 @@ def plot_conc_timeseries_distribution1(
             xe, ye, H.T,
             shading="auto",
             norm=LogNorm(vmin=vmin) if vmin is not None else None,
+            zorder=5
         )
-
-    # out-of-Q samples (extremes)
-    for s in bottom_samples:
-        ax_bot.plot(t, da_td[s, :], lw=0.8, alpha=0.75, color="red")
-    for s in top_samples:
-        ax_bot.plot(t, da_td[s, :], lw=0.8, alpha=0.75, color="blue")
 
     fig.suptitle("Log10(conc), 99% quantile over evaluation boundary planes")
     ax_bot.set_xscale("log")
-    ax_bot.set_xlabel("Time from 60y pulse (ky)")
+    ax_bot.tick_params(axis="x", which="both", pad=12)
+    ax_bot.set_xlabel("Time from 50y pulse (ky)")
     ax_bot.set_ylabel("Log10(conc)")
     ax_bot.grid(alpha=0.25)
 
@@ -163,12 +166,12 @@ def plot_conc_timeseries_distribution1(
     ax_top.grid(alpha=0.2)
 
     # quantile lines in TOP
-    ax_top.plot(t, q_lo, lw=0.9, alpha=0.9, label=f"q[{Q:g}]")
-    ax_top.plot(t, q_25, lw=0.9, alpha=0.9, label="q[0.25]")
-    ax_top.plot(t, q_50, lw=1.1, ls=":", label="q[0.5]")
-    ax_top.plot(t, q_75, lw=0.9, alpha=0.9, label="q[0.75]")
-    ax_top.plot(t, q_hi, lw=0.9, alpha=0.9, label=f"q[{1.0 - Q:g}]")
-    ax_top.legend(loc="lower right")
+    ax_top.plot(t, q_lo, lw=1.3, alpha=0.8, label=f"q[{Q:g}]")
+    ax_top.plot(t, q_25, lw=1.3, alpha=0.8, label="q[0.25]")
+    ax_top.plot(t, q_50, lw=1.5, ls=":", label="q[0.5]")
+    ax_top.plot(t, q_75, lw=1.3, alpha=0.8, label="q[0.75]")
+    ax_top.plot(t, q_hi, lw=1.3, alpha=0.8, label=f"q[{1.0 - Q:g}]")
+    ax_top.legend(loc="lower right", framealpha=0.5, facecolor="white")
 
     if rem_samples.size and Nt > 1 and n_slices > 0:
         slice_times = np.geomspace(float(np.min(t[t > 0])), float(np.max(t)), n_slices)
@@ -222,7 +225,7 @@ def plot_sobol_time_and_agg(
     sobol_agg: xr.Dataset,    # select_sobol(...) for conc_q99 (time-independent)
     var_name: str,
     *,
-    figsize=(12, 5),
+    figsize=(14, 5),
     si_ci_level: float = 0.90,
 ):
     """
@@ -266,7 +269,7 @@ def plot_sobol_time_and_agg(
     left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
 
     fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.25)
+    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.4)
     axL = fig.add_subplot(gs[0, 0])
     axR = fig.add_subplot(gs[0, 1])
 
@@ -328,7 +331,7 @@ def plot_sobol_time_and_agg_split(
     sobol_agg: xr.Dataset,
     var_name: str,
     *,
-    figsize=(12, 5),
+    figsize=(14, 6),
     si_ci_level: float = 0.90,
 ):
     x_label = "Simulation time (1000 y)"
@@ -368,7 +371,7 @@ def plot_sobol_time_and_agg_split(
     left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
 
     fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.25)
+    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.4)
 
     axL = fig.add_subplot(gs[0, 0])
 
@@ -381,7 +384,7 @@ def plot_sobol_time_and_agg_split(
     axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
     axL.set_xlim(t.min(), t.max())
     axL.set_ylabel(f"Sobol index of {var_name}")
-    axL.set_xlabel(x_label)
+    axL.set_xlabel(x_label, labelpad=5)
     axL.grid(axis="y", alpha=0.2)
 
     # =========================
@@ -429,7 +432,7 @@ def plot_sobol_time_and_agg_split(
     axSI.set_xticks(x)
     axSI.set_xticklabels([""] * P)
     axSI.set_xlim(-0.6, P - 0.4)
-    axSI.set_xlabel("SI (stacked by rank)")
+    axSI.set_xlabel("SI\n(stacked by rank)", labelpad=5)
     axSI.grid(axis="y", alpha=0.2)
 
     # =========================
@@ -444,7 +447,7 @@ def plot_sobol_time_and_agg_split(
     axST.set_xticks(x)
     axST.set_xticklabels([""] * P)
     axST.set_xlim(-0.6, P - 0.4)
-    axST.set_xlabel("ST")
+    axST.set_xlabel("ST", labelpad=5)
     axST.grid(axis="y", alpha=0.2)
 
     # Hide repeated y tick labels on ST panel
@@ -990,6 +993,7 @@ def conc_tail_ecdf_plot(
 def plot_qmc_iid_mask_heatmap(mask_rc: xr.DataArray,
                               mask_big: xr.DataArray,
                               mask_small: xr.DataArray,
+                              n_computed_samples: int,
                               title="QMC × IID mask heatmap (exclusive: rc → big → small)",
                               figsize=(12, 6),
                               output_dir=None) -> Tuple[plt.Figure, plt.Axes, xr.DataArray]:
@@ -1017,13 +1021,20 @@ def plot_qmc_iid_mask_heatmap(mask_rc: xr.DataArray,
     c[mask_small.data] = 3
     arr = cat.values  # shape (IID,QMC), values in {0,1,2,3}
 
+    # zeros_per_qmc = (cat == 0).sum("IID")
+    # zeros_per_iid = (cat == 0).sum("QMC")
+    # n_all_zero_iid = (zeros_per_iid == cat.sizes["QMC"]).sum().item()
+    all_zero_iid = (cat == 0).all("QMC")  # dims: (IID,) boolean
+    n_all_zero_iid = all_zero_iid.sum().item()  # Python int
+    print(f"N valid isaltelli samples: {n_all_zero_iid} of {n_computed_samples}")
+
     colors = ["white", "#d62728", "#00ff0e", "#1f77b4"]
     cmap = ListedColormap(colors)
 
     fig, ax = plt.subplots(figsize=figsize)
     ax.imshow(arr.T, aspect="auto", interpolation="nearest", cmap=cmap, vmin=0, vmax=3)
 
-    ax.set_title(title)
+    ax.set_title(f"{title}\nN valid Saltelli samples #{n_all_zero_iid}/{n_computed_samples}")
     ax.set_xlabel("QMC")
     ax.set_ylabel("IID")
 
