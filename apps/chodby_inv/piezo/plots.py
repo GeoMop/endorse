@@ -178,8 +178,6 @@ def plot_observe(idata, ax=None, bincount=200, binsize=0.01, new_time_step=0, ge
 
 def plot_trace_modified(idata, generic_name="WPT", *args, **kwargs):
     axes = az.plot_trace(idata, *args, **kwargs)
-    borehole = idata.attrs["borehole"]
-    section = idata.attrs["section"]
     #plt.suptitle(f"{generic_name} - trace plot")
 
     for ax_row in axes:
