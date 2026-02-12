@@ -420,8 +420,8 @@ def get_symlog_formatter():
 def save_plots_pdf_pages(
         filename: str,
         figs: list) -> None:
-
     if not figs:
+        logging.warning("No figures to save.")
         return
 
     try:
