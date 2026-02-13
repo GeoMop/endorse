@@ -38,10 +38,10 @@ fractures:
     # SKB fracture population for repository domain
 #    population:  !include _fr_Forsmark_repo.yaml
     population: {}
-    population_template:  _fr_Bukov_repo.yaml
-    # population_template:  _fr_fixed.yaml
+    # population_template:  _fr_Bukov_repo.yaml
+    population_template:  _fr_fixed.yaml
     # upper limit on the number of (small) fractures
-    n_frac_limit: 100
+    n_frac_limit: 0
 
     # Experiments for large fr range [50, 200] and large_box: [20,20,20]
     # most seeds have no large fracture at all
@@ -86,6 +86,7 @@ transport_fullscale:
         # v_axis: 3.35 # 6.7/2
         # radius for c_min
         inner_radius: 1.0
+    
     fr_field_params:
         # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
         #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
@@ -132,7 +133,7 @@ transport_fullscale:
         step: [80000, 'y']
       - begin: [320000, 'y']
         step: [160000, 'y']
-    end_time: 640000
+    end_time: 1000000
     dt_limits:
         - time: [0, 'y']             # 4
           max_dt: [25, 'y']
@@ -158,8 +159,8 @@ transport_fullscale:
           max_dt: [40000, 'y']
         - time: [160000, 'y']        # 2
           max_dt: [80000, 'y']
-        - time: [320000, 'y']        # 2
-          max_dt: [160000, 'y']
+        - time: [320000, 'y']        # 5
+          max_dt: [160000, 'y'] 
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15
@@ -248,23 +249,23 @@ machine_config:
         - exec
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
-        # pbs:
-        #     n_cores: 18
-        #     n_nodes: 10
-        #     scratch: 100gb
-        #     mem: 80Gb
-        #     queue: default
-        #     pbs_name: chodby_trans
-        #     walltime: "24:00:00"
         pbs:
             n_cores: 18
-            n_nodes: 3
-            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+            n_nodes: 10
             scratch: 100gb
             mem: 80Gb
-            queue: charon_2h
-            pbs_name: chodby_trans
-            walltime: "02:00:00"
+            queue: default
+            pbs_name: chodby_trans_40c
+            walltime: "12:00:00"
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 3
+        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: charon_2h
+        #     pbs_name: chodby_trans
+        #     walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d

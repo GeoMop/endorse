@@ -248,23 +248,23 @@ machine_config:
         - exec
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
-        # pbs:
-        #     n_cores: 18
-        #     n_nodes: 10
-        #     scratch: 100gb
-        #     mem: 80Gb
-        #     queue: default
-        #     pbs_name: chodby_trans
-        #     walltime: "24:00:00"
         pbs:
             n_cores: 18
-            n_nodes: 3
-            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+            n_nodes: 10
             scratch: 100gb
             mem: 80Gb
-            queue: charon_2h
-            pbs_name: chodby_trans
-            walltime: "02:00:00"
+            queue: charon
+            pbs_name: chodby_trans_43b
+            walltime: "48:00:00"
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 2
+        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: charon_2h
+        #     pbs_name: chodby_trans
+        #     walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d
