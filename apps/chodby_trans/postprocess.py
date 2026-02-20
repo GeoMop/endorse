@@ -377,9 +377,9 @@ def select_sobol(
     assert len(df_selected) == SI.shape[0] - 1
     for i, (base, i0) in enumerate(zip(df_selected.base, df_selected.idx_0)):
         if base == "S1":
-            ST[i] = ds["ST"].isel({group_dim: i0}).values
             SI_ci[i] = ds["S1_agg_ci"].isel({group_dim: i0}).values
-            ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
+        ST[i] = ds["ST"].isel({group_dim: i0}).values
+        ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
     # --- coords and DataArrays ---
     bound = ds['bound']
     coords = {"group": np.array(labels, dtype=object), "bound": bound.values}

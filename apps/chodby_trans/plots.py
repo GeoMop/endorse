@@ -376,13 +376,14 @@ def plot_sobol_time_and_agg_split(
     axL = fig.add_subplot(gs[0, 0])
 
     # right side split into two axes
-    gsR = gs[0, 1].subgridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.25)
+    gsR = gs[0, 1].subgridspec(1, 2, width_ratios=[1., 1.], wspace=0.25)
     axSI = fig.add_subplot(gsR[0, 0])
     axST = fig.add_subplot(gsR[0, 1], sharey=axSI)
 
     # ---- Left: stacked area
     axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
     axL.set_xlim(t.min(), t.max())
+    axL.set_xscale("log")
     axL.set_ylabel(f"Sobol index of {var_name}")
     axL.set_xlabel(x_label, labelpad=5)
     axL.grid(axis="y", alpha=0.2)
@@ -420,11 +421,14 @@ def plot_sobol_time_and_agg_split(
 
         # CI error: lower-only from top_i down to low bound (or use full CI if you prefer)
         low_i = float(SI_ci_s[i, 0])
-        if np.isfinite(low_i) and (0.0 < low_i < top_i):
+        high_i = float(SI_ci_s[i, 1])
+        # if np.isfinite(low_i) and (0.0 < low_i < top_i):
+        if np.isfinite(low_i) and (low_i < si < high_i):
             axSI.errorbar(
                 x[i], top_i,
-                yerr=[[top_i - low_i], [0.0]],
-                fmt="none", ecolor="k", elinewidth=1.2, capsize=3, capthick=1.2
+                yerr=[[si - low_i], [0.0]],  # lower part only CI
+                # yerr=[[si - low_i], [high_i - si]],  # asymmetric CI around estimate
+                fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
             )
 
         cum = top_i
