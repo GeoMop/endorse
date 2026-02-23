@@ -617,6 +617,8 @@ def save_conc_and_si_pdf(
     ds_stat: xr.Dataset,
     sobol_time: xr.Dataset,
     sobol_agg: xr.Dataset,
+    df_si: xr.Dataset,
+    si_conc: xr.Dataset,
     var_name: str,
     title: str,
     *,
