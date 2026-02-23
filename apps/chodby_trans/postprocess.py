@@ -14,6 +14,7 @@ from chodby_trans import ot_sa
 from chodby_trans import job
 from chodby_trans import plots
 from chodby_trans.plots import plot_qmc_iid_mask_heatmap
+from chodby_trans.exception_wrapper import ReturnCode
 
 
 def ot_samples(cfg: dict, seed: int) -> ot_sa.InputDesign: # shape: (n_all_samples, n_params)
@@ -94,7 +95,10 @@ def sampling_data(cfg, seed):
     n_show=5
     print(f"[conc_min<lo] conc {n_show} values:", conc_vals[:n_show])
 
+    computed_samples = ((rc != ReturnCode.NONE) & (rc != ReturnCode.SKIP)).all("QMC")
+    n_computed_samples = computed_samples.sum().compute().item()
     fig, ax, cat = plot_qmc_iid_mask_heatmap(mask_rc, mask_big, mask_small,
+                                             n_computed_samples=n_computed_samples,
                                              output_dir=job.output.plots)
     ds3 = ds2.assign(log10_conc=np.log10(ds2["conc"].clip(min=lo, max=hi)))
     var_name = "log10_conc"
@@ -373,9 +377,9 @@ def select_sobol(
     assert len(df_selected) == SI.shape[0] - 1
     for i, (base, i0) in enumerate(zip(df_selected.base, df_selected.idx_0)):
         if base == "S1":
-            ST[i] = ds["ST"].isel({group_dim: i0}).values
             SI_ci[i] = ds["S1_agg_ci"].isel({group_dim: i0}).values
-            ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
+        ST[i] = ds["ST"].isel({group_dim: i0}).values
+        ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
     # --- coords and DataArrays ---
     bound = ds['bound']
     coords = {"group": np.array(labels, dtype=object), "bound": bound.values}

@@ -1,5 +1,5 @@
 n_samples: 2048 # must be power of 2 due to salib
-limit_samples: 128
+limit_samples: 1024
 recompute_failed: False
 recompute_done: False
 collect_only: False

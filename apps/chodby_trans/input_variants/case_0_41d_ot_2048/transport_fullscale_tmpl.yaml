@@ -144,8 +144,7 @@ problem: !Coupling_Sequential
             value:  (2e-10) / <sources_buffer_thickness>  * <sources_uos_surface> / <sources_container_vol>
         - region: [ container ]
           time: [50, 'y']
-#          sources_conc: 0
-          sources_sigma: 0
+          sources_conc: 0
 
       solver:
         a_tol: <trans_solver__a_tol>

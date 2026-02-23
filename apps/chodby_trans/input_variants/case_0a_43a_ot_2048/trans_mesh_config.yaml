@@ -34,7 +34,7 @@ mesh:
       r_inf: 30
       h_inf: *boundary_mesh_step
 
-fractures:
+fractures: &fractures
     # SKB fracture population for repository domain
 #    population:  !include _fr_Forsmark_repo.yaml
     population: {}
@@ -86,6 +86,7 @@ transport_fullscale:
         # v_axis: 3.35 # 6.7/2
         # radius for c_min
         inner_radius: 1.0
+    
     fr_field_params:
         # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
         #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
@@ -248,23 +249,23 @@ machine_config:
         - exec
         - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
         - /opt/flow123d/bin/flow123d
-        # pbs:
-        #     n_cores: 18
-        #     n_nodes: 10
-        #     scratch: 100gb
-        #     mem: 80Gb
-        #     queue: default
-        #     pbs_name: chodby_trans
-        #     walltime: "24:00:00"
         pbs:
             n_cores: 18
-            n_nodes: 3
-            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+            n_nodes: 10
             scratch: 100gb
             mem: 80Gb
-            queue: charon_2h
-            pbs_name: chodby_trans
-            walltime: "02:00:00"
+            queue: default
+            pbs_name: chodby_trans_43a
+            walltime: "48:00:00"
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 2
+        #     #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: charon_2h
+        #     pbs_name: chodby_trans
+        #     walltime: "02:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d
