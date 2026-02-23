@@ -326,6 +326,147 @@ def plot_sobol_time_and_agg(
     return fig, (axL, axR)
 
 
+def plot_sobol_time_and_agg_boot(
+    sobol_time: xr.Dataset,
+    df_si: xr.Dataset,
+    si_conc: xr.Dataset,
+    var_name: str,
+    *,
+    figsize=(14, 6),
+    si_ci_level: float = 0.90,
+):
+    # ---- squeeze aux if present
+    sobol_time = sobol_time.squeeze("aux", drop=True) if "aux" in sobol_time.dims else sobol_time
+
+    labels_s = df_si["label"].values[df_si["selected"].values]
+
+    # ---- time-dependent SI in same order
+    t = np.asarray(sobol_time["sim_time"].values) / 1000.0
+    SI_t = np.asarray(sobol_time["SI"].sel(group=labels_s).values, dtype=float)  # (P, T)
+
+    # ---- colors (others gray)
+    cmap = plt.get_cmap("tab20")
+    colors = [(0.6, 0.6, 0.6, 1.0) if lab == "others" else cmap(i % 20)
+              for i, lab in enumerate(labels_s)]
+
+    # ---- layout: left time plot + right two axes (SI and ST)
+    right_plot_frac = 0.26   # wider now because it's 2 axes
+    legend_space_frac = 0.16
+    left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
+
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.4)
+
+    axL = fig.add_subplot(gs[0, 0])
+
+    # right side split into two axes
+    gsR = gs[0, 1].subgridspec(1, 2, width_ratios=[1., 1.], wspace=0.25)
+    axSI = fig.add_subplot(gsR[0, 0])
+    axST = fig.add_subplot(gsR[0, 1], sharey=axSI)
+
+    # ---- Left: stacked area
+    axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
+    axL.set_xlim(t.min(), t.max())
+    axL.set_xscale("log")
+    axL.set_ylabel(f"Sobol index of {var_name}")
+    axL.set_xlabel("Simulation time (1000 y)", labelpad=5)
+    axL.grid(axis="y", alpha=0.2)
+
+    # =========================
+    # Right-A: SI "separate columns, connected corners"
+    # =========================
+    P = len(labels_s)
+    x = np.arange(P)
+    width = 0.9
+
+    cum = 0.0
+    # draw stacked-but-separated look:
+    # each segment i is a bar at x=i with bottom=cum, height=SI_i
+    # plus a thin "connector" line from previous top to next bottom (step)
+    for i in range(P):
+        # si = float(df_si["si"][i])
+        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
+        indices = (pi,) if base == 'S1' else (pi, pj)
+        si = (si_conc[base].values[indices])[0]
+        si_err = (si_conc[f"{base}_boot_err"].values[indices])[0]
+        assert si_err.shape == (2,), f"Unexpected shape for {base}_boot_err: {si_err.shape}"
+
+        bottom_i = cum
+        top_i = bottom_i + si
+
+        # segment bar at its own column
+        axSI.bar(x[i], si, bottom=bottom_i, width=width, color=colors[i], edgecolor="none")
+
+        # connector: vertical at right edge of previous column to show the step,
+        # and horizontal across to the next column (draw after i>0)
+        if i > 0:
+            # previous column right edge and current column left edge
+            prev_right = x[i-1] + width/2
+            curr_left  = x[i]   - width/2
+            prev_top   = bottom_i  # because bottom_i == cumulative top after i-1
+
+            # vertical rise on prev_right from prev_top - si_prev? no, we want step corner:
+            # draw a horizontal from prev_right to curr_left at y=bottom_i
+            axSI.plot([prev_right, curr_left], [bottom_i, bottom_i], color="k", lw=0.8, alpha=0.7)
+
+        # CI error: lower-only from top_i down to low bound (or use full CI if you prefer)
+        # low_i = float(df_si["si_err_lower"][i])
+        # high_i = float(df_si["si_err_upper"][i])
+        low_i = float(si_err[0])
+        high_i = float(si_err[1])
+        # if np.isfinite(low_i) and (0.0 < low_i < top_i):
+        if np.isfinite(low_i) and (low_i < si < high_i):
+            axSI.errorbar(
+                x[i], top_i,
+                # yerr=[[si - low_i], [0.0]],  # lower part only CI
+                yerr=[[si - low_i], [high_i - si]],  # asymmetric CI around estimate
+                fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
+            )
+
+        cum = top_i
+
+    axSI.set_xticks(x)
+    axSI.set_xticklabels([""] * P)
+    axSI.set_xlim(-0.6, P - 0.4)
+    axSI.set_xlabel("SI\n(stacked by rank)", labelpad=5)
+    axSI.grid(axis="y", alpha=0.2)
+
+    # =========================
+    # Right-B: ST axis
+    # =========================
+    # Option 1: bars (simple + readable)
+    for i in range(P):
+        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
+        indices = (pi,) if base == 'S1' else (pi, pj)
+        st = (si_conc['ST'].values[indices, 0])[0]
+        if np.isfinite(st):
+            axST.bar(x[i], st, width=0.9, color=colors[i], edgecolor="none")
+
+    axST.set_xticks(x)
+    axST.set_xticklabels([""] * P)
+    axST.set_xlim(-0.6, P - 0.4)
+    axST.set_xlabel("ST", labelpad=5)
+    axST.grid(axis="y", alpha=0.2)
+
+    # Hide repeated y tick labels on ST panel
+    plt.setp(axST.get_yticklabels(), visible=False)
+    axST.tick_params(axis="y", length=0)
+
+    # ---- legend outside (as you had)
+    ci_proxy = Line2D([], [], color="k", linestyle="-", label=f"CI ({int(round(si_ci_level*100))}%)")
+    proxies = [Patch(facecolor=colors[i], edgecolor="none", label=str(labels_s[i])) for i in range(P)]
+    proxies.append(ci_proxy)
+    labels_legend = list(labels_s) + [ci_proxy.get_label()]
+    fig.legend(
+        handles=proxies, labels=labels_legend,
+        loc="center left", bbox_to_anchor=(0.98, 0.5),
+        ncol=1, frameon=False, title="Parameter / Interaction"
+    )
+
+    fig.tight_layout()
+    return fig, (axL, axSI, axST)
+
+
 def plot_sobol_time_and_agg_split(
     sobol_time: xr.Dataset,
     sobol_agg: xr.Dataset,
@@ -497,8 +638,11 @@ def save_conc_and_si_pdf(
         save_close_fig(fig1, pdf, subdir / "hist_conc_over_time.pdf")
 
         if sobol_time is not None and sobol_agg is not None:
-            fig2, _ = plot_sobol_time_and_agg_split(sobol_time, sobol_agg, var_name,
-                                            figsize=figsize, si_ci_level=si_ci_level)
+            # fig2, _ = plot_sobol_time_and_agg_split(sobol_time, sobol_agg, var_name,
+            #                                 figsize=figsize, si_ci_level=si_ci_level)
+            fig2, _ = plot_sobol_time_and_agg_boot(sobol_time, df_si, si_conc, var_name,
+                                                   figsize=figsize, si_ci_level=si_ci_level)
+
             save_close_fig(fig2, pdf, subdir / "sobol_agg_over_time.pdf")
 
         if si_table is not None:

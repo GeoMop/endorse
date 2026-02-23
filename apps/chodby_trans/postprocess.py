@@ -591,7 +591,7 @@ def make_transport_plots(cfg, seed):
     print("\n".join(si_table))
 
     print("Plot conc & SI ...")
-    plots.save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, var_name, job.output.dir_path.stem,
+    plots.save_conc_and_si_pdf(ds_stat, si_q99_XYZ, si_q99, df_si, si_conc, var_name, job.output.dir_path.stem,
                                figsize=(11, 5), si_ci_level=0.90, si_table=si_table,
                                out_pdf_path=job.output.plots / "conc_and_si.pdf")
 
