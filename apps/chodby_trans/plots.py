@@ -116,7 +116,7 @@ def plot_conc_timeseries_distribution1(
 
     # --- figure (TOP and BOTTOM same size)
     fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, figsize=figsize, sharex=True, sharey=True, height_ratios=[1, 1]
+        2, 1, figsize=figsize, sharex=True, sharey=False, height_ratios=[1, 1]
     )
 
     # =======================
@@ -157,6 +157,8 @@ def plot_conc_timeseries_distribution1(
     ax_bot.tick_params(axis="x", which="both", pad=12)
     ax_bot.set_xlabel("Time from 50y pulse (ky)")
     ax_bot.set_ylabel("Log10(conc)")
+    # ax_bot.set_ylim(y_min, y_max)
+    ax_bot.set_ylim(-10, -1)
     ax_bot.grid(alpha=0.25)
 
     # =======================
@@ -215,7 +217,6 @@ def plot_conc_timeseries_distribution1(
             ax_h.plot(dens, y_centers, lw=0.8, alpha=0.9)
             ax_h.axvline(0.0, lw=0.6, alpha=0.25)
 
-    ax_bot.set_ylim(y_min, y_max)
     fig.tight_layout()
     #plt.show()
     return fig
