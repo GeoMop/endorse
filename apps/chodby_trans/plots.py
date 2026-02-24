@@ -16,6 +16,8 @@ from matplotlib import colors as mcolors
 from matplotlib.backends.backend_pdf import PdfPages
 
 
+matplotlib.rcParams['hatch.linewidth'] = 6
+
 def save_close_fig(fig: plt.Figure, pdf: PdfPages, fname):
     """
     Helper function for saving a figure - both individually and into PdfPages.
@@ -340,6 +342,7 @@ def plot_sobol_time_and_agg_boot(
     sobol_time = sobol_time.squeeze("aux", drop=True) if "aux" in sobol_time.dims else sobol_time
 
     labels_s = df_si["label"].values[df_si["selected"].values]
+    labels_g = si_conc["group"].values
 
     # ---- time-dependent SI in same order
     t = np.asarray(sobol_time["sim_time"].values) / 1000.0
@@ -347,16 +350,17 @@ def plot_sobol_time_and_agg_boot(
 
     # ---- colors (others gray)
     cmap = plt.get_cmap("tab20")
-    colors = [(0.6, 0.6, 0.6, 1.0) if lab == "others" else cmap(i % 20)
-              for i, lab in enumerate(labels_s)]
+    # colors = [(0.6, 0.6, 0.6, 1.0) if lab == "others" else cmap(i % 20)
+    #           for i, lab in enumerate(labels_s)]
+    colors = [cmap(i % 20) for i, lab in enumerate(labels_g)]
 
     # ---- layout: left time plot + right two axes (SI and ST)
-    right_plot_frac = 0.26   # wider now because it's 2 axes
-    legend_space_frac = 0.16
+    right_plot_frac = 0.4   # wider now because it's 2 axes
+    legend_space_frac = 0.1
     left_frac = max(1e-3, 1.0 - right_plot_frac - legend_space_frac)
 
     fig = plt.figure(figsize=figsize)
-    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.4)
+    gs = fig.add_gridspec(1, 2, width_ratios=[left_frac, right_plot_frac], wspace=0.25)
 
     axL = fig.add_subplot(gs[0, 0])
 
@@ -366,7 +370,41 @@ def plot_sobol_time_and_agg_boot(
     axST = fig.add_subplot(gsR[0, 1], sharey=axSI)
 
     # ---- Left: stacked area
-    axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
+    polys = axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
+
+    for poly, lab, i in zip(polys, labels_s, range(len(labels_s))):
+        def lighten(color, amount=0.65):
+            """Blend color towards white by 'amount' (0..1)."""
+            rgb = np.array(mcolors.to_rgb(color))
+            return tuple((1 - amount) * rgb + amount * np.ones(3))
+
+        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
+
+        if lab == "others":
+            poly.set_facecolor((0.6, 0.6, 0.6, 1.0))
+            poly.set_edgecolor((0.6, 0.6, 0.6, 1.0))
+            continue
+
+        if base == "S1":
+            poly.set_facecolor(colors[pi])
+            poly.set_edgecolor("none")  # cleaner for solid fills
+            poly.set_hatch(None)
+
+        elif base == "S2":
+            # option A: light fill + striped hatch (usually best-looking)
+            # poly.set_facecolor(lighten(colors[pi], 0.75))
+            poly.set_facecolor(colors[pi])
+            poly.set_edgecolor(colors[pj])  # hatch color comes from edgecolor
+            poly.set_linewidth(0.0)  # avoids visible polygon outline
+            poly.set_hatch("|")  # stripes
+            # matplotlib.rcParams['hatch.linewidth'] = 6 # set the "width" at the top
+            # if i%2 == 0:
+            #     poly.set_hatch("\\")
+            # else:
+            #     poly.set_hatch("/")
+
+            # if you want denser stripes: "////" or "xxx" etc.
+
     axL.set_xlim(t.min(), t.max())
     axL.set_xscale("log")
     axL.set_ylabel(f"Sobol index of {var_name}")
@@ -396,7 +434,16 @@ def plot_sobol_time_and_agg_boot(
         top_i = bottom_i + si
 
         # segment bar at its own column
-        axSI.bar(x[i], si, bottom=bottom_i, width=width, color=colors[i], edgecolor="none")
+        if base == "S1":
+            axSI.bar(x[i], si, bottom=bottom_i, width=width, color=colors[pi], edgecolor="none")
+        else:
+            cont = axSI.bar(
+                x[i], si, bottom=bottom_i, width=width,
+                color=colors[pi],
+                edgecolor=colors[pj],  # hatch color
+                linewidth=0.0
+            )
+            cont.patches[0].set_hatch("/")  # or "////" etc.
 
         # connector: vertical at right edge of previous column to show the step,
         # and horizontal across to the next column (draw after i>0)
@@ -438,14 +485,25 @@ def plot_sobol_time_and_agg_boot(
     # Option 1: bars (simple + readable)
     for i in range(P):
         base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
-        indices = (pi,) if base == 'S1' else (pi, pj)
-        st = (si_conc['ST'].values[indices, 0])[0]
-        if np.isfinite(st):
-            axST.bar(x[i], st, width=0.9, color=colors[i], edgecolor="none")
+        if base == 'S1':
+            idx = (pi,)
+            st = (si_conc['ST'].values[idx, 0])[0]
+            st_err = (si_conc[f"ST_boot_err"].values[idx])[0]
+            low_i = float(st_err[0])
+            high_i = float(st_err[1])
+            if np.isfinite(st):
+                axST.bar(pi, st, width=0.9, color=colors[pi], edgecolor="none")
+            if np.isfinite(low_i) and (low_i < st < high_i):
+                axST.errorbar(
+                    pi, st,
+                    # yerr=[[si - low_i], [0.0]],  # lower part only CI
+                    yerr=[[st - low_i], [high_i - st]],  # asymmetric CI around estimate
+                    fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
+                )
 
     axST.set_xticks(x)
-    axST.set_xticklabels([""] * P)
-    axST.set_xlim(-0.6, P - 0.4)
+    axST.set_xticklabels([""] * len(labels_g))
+    axST.set_xlim(-0.6, len(labels_g) - 0.4)
     axST.set_xlabel("ST", labelpad=5)
     axST.grid(axis="y", alpha=0.2)
 
@@ -455,13 +513,13 @@ def plot_sobol_time_and_agg_boot(
 
     # ---- legend outside (as you had)
     ci_proxy = Line2D([], [], color="k", linestyle="-", label=f"CI ({int(round(si_ci_level*100))}%)")
-    proxies = [Patch(facecolor=colors[i], edgecolor="none", label=str(labels_s[i])) for i in range(P)]
+    proxies = [Patch(facecolor=colors[i], edgecolor="none", label=group) for i, group in enumerate(labels_g)]
     proxies.append(ci_proxy)
-    labels_legend = list(labels_s) + [ci_proxy.get_label()]
+    labels_legend = list(labels_g) + [ci_proxy.get_label()]
     fig.legend(
         handles=proxies, labels=labels_legend,
-        loc="center left", bbox_to_anchor=(0.98, 0.5),
-        ncol=1, frameon=False, title="Parameter / Interaction"
+        loc="center left", bbox_to_anchor=(0.9, 0.5),
+        ncol=1, frameon=False, title="Parameter group"
     )
 
     fig.tight_layout()
@@ -644,7 +702,8 @@ def save_conc_and_si_pdf(
             # fig2, _ = plot_sobol_time_and_agg_split(sobol_time, sobol_agg, var_name,
             #                                 figsize=figsize, si_ci_level=si_ci_level)
             fig2, _ = plot_sobol_time_and_agg_boot(sobol_time, df_si, si_conc, var_name,
-                                                   figsize=figsize, si_ci_level=si_ci_level)
+                                                   #figsize=figsize,
+                                                   si_ci_level=si_ci_level)
 
             save_close_fig(fig2, pdf, subdir / "sobol_agg_over_time.pdf")
 
