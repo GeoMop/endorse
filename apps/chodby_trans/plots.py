@@ -501,7 +501,7 @@ def plot_sobol_time_and_agg_boot(
                     fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
                 )
 
-    axST.set_xticks(x)
+    axST.set_xticks(range(len(labels_g)))
     axST.set_xticklabels([""] * len(labels_g))
     axST.set_xlim(-0.6, len(labels_g) - 0.4)
     axST.set_xlabel("ST", labelpad=5)
