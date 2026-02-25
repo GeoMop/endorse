@@ -343,6 +343,7 @@ def plot_sobol_time_and_agg_boot(
 
     labels_s = df_si["label"].values[df_si["selected"].values]
     labels_g = si_conc["group"].values
+    n_groups = len(labels_g)
 
     # ---- time-dependent SI in same order
     t = np.asarray(sobol_time["sim_time"].values) / 1000.0
@@ -483,27 +484,27 @@ def plot_sobol_time_and_agg_boot(
     # Right-B: ST axis
     # =========================
     # Option 1: bars (simple + readable)
-    for i in range(P):
-        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
-        if base == 'S1':
-            idx = (pi,)
-            st = (si_conc['ST'].values[idx, 0])[0]
-            st_err = (si_conc[f"ST_boot_err"].values[idx])[0]
-            low_i = float(st_err[0])
-            high_i = float(st_err[1])
-            if np.isfinite(st):
-                axST.bar(pi, st, width=0.9, color=colors[pi], edgecolor="none")
-            if np.isfinite(low_i) and (low_i < st < high_i):
-                axST.errorbar(
-                    pi, st,
-                    # yerr=[[si - low_i], [0.0]],  # lower part only CI
-                    yerr=[[st - low_i], [high_i - st]],  # asymmetric CI around estimate
-                    fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
-                )
+    for pi in range(n_groups):
+        # base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
+        # if base == 'S1':
+        idx = (pi,)
+        st = (si_conc['ST'].values[idx, 0])[0]
+        st_err = (si_conc[f"ST_boot_err"].values[idx])[0]
+        low_i = float(st_err[0])
+        high_i = float(st_err[1])
+        if np.isfinite(st):
+            axST.bar(pi, st, width=0.9, color=colors[pi], edgecolor="none")
+        if np.isfinite(low_i) and (low_i < st < high_i):
+            axST.errorbar(
+                pi, st,
+                # yerr=[[si - low_i], [0.0]],  # lower part only CI
+                yerr=[[st - low_i], [high_i - st]],  # asymmetric CI around estimate
+                fmt="none", ecolor="k", elinewidth=0.8, capsize=3, capthick=1.2
+            )
 
-    axST.set_xticks(range(len(labels_g)))
-    axST.set_xticklabels([""] * len(labels_g))
-    axST.set_xlim(-0.6, len(labels_g) - 0.4)
+    axST.set_xticks(range(n_groups))
+    axST.set_xticklabels([""] * n_groups)
+    axST.set_xlim(-0.6, n_groups - 0.4)
     axST.set_xlabel("ST", labelpad=5)
     axST.grid(axis="y", alpha=0.2)
 
