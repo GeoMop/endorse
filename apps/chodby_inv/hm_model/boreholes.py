@@ -366,25 +366,31 @@ class ObservePointData:
         plt.tight_layout()
         plt.show()
 
-    def plot_chamber_pressure_averages(self, output_file=None, print_pressures=False):
-        fig, ax = plt.subplots(3, 8, figsize=(60, 15))
-        ax = ax.transpose().flatten()
+    def plot_chamber_pressure_averages(self, output_file=None, print_pressures=False, only_chambers=False):
+        if not only_chambers:
+            only_chambers = self._chamber_names
+            n_chambers = len(only_chambers)
+            fig, ax = plt.subplots(3, n_chambers, figsize=(7.5 * n_chambers, 15))
+            ax = ax.transpose().flatten()
+        else:
+            n_chambers = len(only_chambers)
+            fig, ax = plt.subplots(1, n_chambers, figsize=(7.5 * n_chambers, 5))
+
+        axi = 0
+        xx = self._times
         for ci, cname in enumerate(self._chamber_names):
-            xx = self._times
-            pressures = np.zeros(len(xx))
-            for i,t in enumerate(self._times):
-                pressures[i] = np.mean(self.chamber_pressures(ci, t))
-            ax[ci].set_title(cname)
-            # ax[ci].set_ylim(self._pressure_bounds[ci])
-            ax[ci].set_xlim(100, 130)
-            #ax[ci].yaxis.set_major_locator(ticker.MultipleLocator(50))
-            #ax[ci].yaxis.set_minor_locator(ticker.MultipleLocator(10))
-            #ax[ci].minorticks_on()
-            ax[ci].plot(xx, pressures)
-            ax[ci].set_xlabel("time [d]")
-            ax[ci].set_ylabel("pressure head [m]")
-            if print_pressures:
-                print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
+            if cname in only_chambers:
+                pressures = np.zeros(len(xx))
+                for i,t in enumerate(self._times):
+                    pressures[i] = np.mean(self.chamber_pressures(ci, t))
+                ax[axi].set_title(cname)
+                ax[axi].set_xlim(100, 130)
+                ax[axi].plot(xx, pressures)
+                ax[axi].set_xlabel("time [d]")
+                ax[axi].set_ylabel("pressure head [m]")
+                if print_pressures:
+                    print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
+                axi += 1
 
         plt.tight_layout()
         if output_file is None:
@@ -410,11 +416,12 @@ def plot_chamber_pressures(pressure_fname,
                            pressure_init_fname=None,
                            output_init_fname=None,
                            output_compared_fname=None,
-                           plot_ref_pressure=True
+                           plot_ref_pressure=True,
+                           only_chambers=False
                           ):
     bhs = Boreholes()
     obs = ObservePointData(bhs, pressure_fname)
-    fig, ax = obs.plot_chamber_pressure_averages(output_fname)
+    fig, ax = obs.plot_chamber_pressure_averages(output_fname, only_chambers=only_chambers)
 
     # Determine time shift between measurements and simulation
     events_cfg = common.config.load_config(input_data.events_yaml)
@@ -433,7 +440,7 @@ def plot_chamber_pressures(pressure_fname,
     
     if pressure_init_fname is not None:
         obs_i = ObservePointData(bhs, pressure_init_fname)
-        fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname)
+        fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname, only_chambers=only_chambers)
 
         # plot both lines to one plot
         for axis, axis_i in zip(ax, ax_i):
@@ -444,12 +451,13 @@ def plot_chamber_pressures(pressure_fname,
     # read and plot reference pressures from measurements
     if plot_ref_pressure:
         df = piezo.excavation_epoch_df()
-        for axis,cname in zip(ax,obs.chamber_names):
+        for axis in ax:
+            cname = axis.get_title()
             bhname, _, cidx = cname.rpartition('_ch_')
             bh_index = bhs.bh_index_from_name(bhname)
             cidx = int(cidx)
             pos = bhs.sensor_position(bh_index, cidx)
-            axis.set_title(f"{bhname} chamber {cidx+1} position {pos} m")
+            axis.set_title(f"{bhname[3:]}-{cidx} (position {pos} m)")
             filtered_df = df[(df['borehole'] == bhname) & (df['section'] == cidx)]
             sim_time = filtered_df['time_days']
             pressure = filtered_df['pressure'].to_numpy() / 10 # from kPa to m
@@ -477,12 +485,15 @@ def print_initial_pressures():
 
 if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
-    # output_fname = 'chamber_pressure_averages_refined.pdf'
-    # output_compared_fname = 'chamber_pressures_refined_compared.pdf'
-    # plot_chamber_pressures(input_data.flow_obs_yaml,
-    #                        work_dir / output_fname,
-    #                        output_compared_fname= work_dir / output_compared_fname)
+    output_fname = 'chamber_pressure_averages_refined_select.pdf'
+    output_compared_fname = 'chamber_pressures_refined_compared_select.pdf'
+    plot_chamber_pressures(input_data.flow_obs_yaml,
+                           work_dir / output_fname,
+                           output_compared_fname= work_dir / output_compared_fname,
+                           only_chambers=["L5-26R_ch_2", "L5-23UR_ch_1"])
 
+    # create VTM file (multi-block) with borehole geometries
     Boreholes().make_vtk_visualization("boreholes.vtm")
 
-    #print_initial_pressures()
+    # print values of initial measured pressures in borehole cells
+    print_initial_pressures()
