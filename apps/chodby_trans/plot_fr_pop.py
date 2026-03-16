@@ -445,7 +445,7 @@ def main():
         plot_bivariate_samples(
             arr[:,0], arr[:,1],
             ax=ax,
-            kind="scatter",
+            kind="hexbin", #"scatter",
             s=14,  # point size
             alpha=0.15,  # transparency
             color="blue",

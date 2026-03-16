@@ -455,9 +455,6 @@ def read_parameters_by_rc(rc_select: list[int]):
     # print(ds['parameter'].to_numpy())
     # print("return_code:\n", ds['return_code'].to_numpy())
     print("=========== END READ ZARR ==============")
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy().ravel())
-
     logging.info(f"getting samples by RC: {rc_select}")
     v_param = ds['parameter'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
@@ -465,6 +462,8 @@ def read_parameters_by_rc(rc_select: list[int]):
     plot_failed_return_codes(v_rc, v_ieval)
 
     mask = np.isin(v_rc, rc_select)
+    logging.info("plotting eval time histogram...")
+    plot_sample_time_hist(ds['eval_time'].to_numpy()[mask].ravel())
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
     f_rc = v_rc[mask]
