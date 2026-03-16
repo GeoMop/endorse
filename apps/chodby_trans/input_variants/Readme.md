@@ -1,54 +1,50 @@
 # COMPUTATIONAL VARIANTS FOR PROJECT "CHODBY"
 
 ---------------------------------------------------------
-## CASE 1
-- workdir_40_ot_2048 - limit 512, FINISHED
-  - [mat_bulk, mat_edz, mat_backfill, meshing_seed]
-  - dopocitat 512
-  - bez puklin
-  - kolekce interpolaci => invalidni time run
-
-- workdir_40a_ot_2048 - limit 512, FINISHED
-  - stejne jako workdir_40_test_ot_2048
-  - zkracena casova rada
-  - fixed edz params
-
-- workdir_40b_ot_2048 - FINISHED
-  - stejne jako workdir_40a_ot_2048
-  - source_sigma pulse
-
-- workdir_40c_ot_2048 - FINISHED
-  - stejne jako workdir_40b_ot_2048
-  - increased cond and disp_L  
-
----------------------------------------------------------
 ## CASE 0
 
 - workdir_41d_ot_2048 - FINISHED
   - dfn_params: dfn_transport and dfn_pop
   - [mat_bulk, mat_edz, mat_backfill, meshing_seed, dfn_params, dfn_seed]
-  - zkracena casova rada
-  - fixed edz params
+  - shorter time axis
+  - fixed EDZ params
+
+---------------------------------------------------------
+## CASE 1
+
+- 40a_ot_2048 - limit 512, FINISHED
+  - [mat_bulk, mat_edz, mat_backfill, meshing_seed]
+  - without DFN
+  - shorter time axis
+  - fixed EDZ params
+
+- 40b_ot_2048 - FINISHED
+  - same as 40a_ot_2048
+  - source_sigma pulse
+
+- 40c_ot_2048 - FINISHED
+  - same as 40b_ot_2048
+  - increased cond and disp_L
 
 ---------------------------------------------------------
 ## CASE 2
-- workdir_42b_ot_2048 - FINISHED
+- 42b_ot_2048 - FINISHED
   - mat_BB: group mat_backfill and mat_bulk
   - [mat_BB, mat_edz, meshing_seed, dfn_pop, dfn_transport, dfn_seed]
 
-- workdir_42c_ot_2048 - FINISHED
-  - workdir_42b_ot_2048 s kratsi casovou osou (jako workdir_41d_ot_2048)
-  - fixed edz params
+- 42c_ot_2048 - FINISHED
+  - same as 42b_ot_2048
+  - shorter time axis
+  - fixed EDZ params
 
 ---------------------------------------------------------
 ## CASE 0a
-- workdir_43a_ot_2048 - limit 1024, FINISHED
-  - vyssi disperze o rad na bulku:
+- 43a_ot_2048 - limit 1024, FINISHED
+  - higher dispersion by an order on bulk:
     - bulk_disp_L: log10(5.0)
-  - 1024 samplu
-  - casova jako workdir_41d_ot_2048
-  - fixed edz params
+  - shorter time axis
+  - fixed EDZ params
 
-- workdir_43b_ot_2048 - limit 1024, FINISHED
-  - stejne jako workdir_41d_ot_2048
-  - source_sigma, increased cond and disp_L 
+- 43b_ot_2048 - limit 1024, FINISHED
+  - same as 41d_ot_2048
+  - source_sigma pulse, increased cond and disp_L 
