@@ -1,7 +1,13 @@
 from paraview.simple import *
 from paraview.servermanager import Fetch
 import vtk
+import pathlib
+import os
 
+script_dir = pathlib.Path(__file__).parent
+datafile_name = "boreholes.vtm"
+
+os.chdir(script_dir)
 view = GetActiveViewOrCreate('RenderView')
 
 # for proxy in GetSources().values():
@@ -9,7 +15,7 @@ view = GetActiveViewOrCreate('RenderView')
 #         Show(proxy, view)
 
 # ==== Načtení VTK souboru ====
-reader = XMLMultiBlockDataReader(FileName=["boreholes.vtm"])
+reader = XMLMultiBlockDataReader(FileName=[datafile_name])
 RenameProxy(reader, group=reader.GetXMLGroup(), newName="Boreholes")
 Show(reader, view)
 
