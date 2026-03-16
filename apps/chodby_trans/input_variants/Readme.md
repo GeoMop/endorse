@@ -38,7 +38,7 @@
   - fixed EDZ params
 
 ---------------------------------------------------------
-## CASE 0a
+## CASE 3
 - 43a_ot_2048 - limit 1024, FINISHED
   - higher dispersion by an order on bulk:
     - bulk_disp_L: log10(5.0)

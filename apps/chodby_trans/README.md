@@ -35,9 +35,12 @@ Unit testing of Open Turns library (sensitivity analysis).
 
 
 ## Install and environment
+Use auxiliary bash script to create virtual python environment.
+It installs necessary python modules and the repository module itself.
 ```
 bash setup_env.sh
 ```
+Later, use the virtual environment to run all the scripts.
 
 
 ## Running
