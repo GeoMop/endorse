@@ -74,88 +74,6 @@ def prepare_borehole_sources():
     process_gmsh_tetrahedral_mesh(input_mesh_file, output_mesh_file, points, {'sigma':sigmas, 'p_ref':pressures})
 
 
-def visualize_fractures(output_file):
-
-    bhs = boreholes.Boreholes()
-
-    # Number of points to discretize each circle boundary
-    n_circle_points = 40
-    # Radius of all fractures
-    radius = 2
-
-    all_meshes = []
-    for bi in range(bhs.n_boreholes):
-        bh_start = bhs.bh_start(bi)
-        bh_normal = bhs.bh_direction(bi)
-        for fi in range(bhs.n_fractures(bi)):
-            f = bhs.fracture(bi, fi)
-            f_center = bh_start + bh_normal * f.position
-            f_normal = bhs.fr_normal(bi,fi)
-            disc = pv.Disc(center=f_center, inner=0.0, outer=radius, normal=f_normal, c_res=n_circle_points)
-
-            # Assign scalars as per-disc (cell data)
-            n_cells = disc.n_cells
-            disc.cell_data["width"] = np.full(n_cells, f.width)
-            disc.cell_data["flag"] = np.full(n_cells, f.flag)
-
-            all_meshes.append(disc)
-
-    # Combine all discs into a single mesh
-    combined = all_meshes[0]
-    for m in all_meshes[1:]:
-        combined = combined.merge(m)
-
-    # Save to VTU file
-    combined.save(output_file)
-
-
-
-
-def prepare_excavation_csv_files():
-    # Create CSV files for Flow123d simulation with description of excavation progress.
-
-    events_cfg = common.config.load_config(input_data.events_yaml)
-    blasts = events_cfg['blasts']
-    excavation = events_cfg['excavation']
-    hm_model = events_cfg['hm_model']
-    days_shift = boreholes.excavation_days_shift(events_cfg)
-    delta = 0.001
-    final_stationing = 10
-    final_stationing_new = 10.1
-
-    file = open(work_dir / 'excavation_north.csv', mode='w', newline='')
-    writer_n = csv.writer(file, delimiter=' ')
-    file = open(work_dir / 'excavation_south.csv', mode='w', newline='')
-    writer_s = csv.writer(file, delimiter=' ')
-
-    writer_n.writerow(["time_[d]", "progress_[m]"])
-    writer_s.writerow(["time_[d]", "progress_[m]"])
-    writer_n.writerow([0, 0])
-    writer_s.writerow([0, 0])
-    last_stationing_n = 0
-    last_stationing_s = 0
-
-    for blast in blasts:
-        t = linear_time([blast['datetime']], excavation)[0] + days_shift
-        if blast.side == "N":
-            writer_n.writerow([t-delta, last_stationing_n])
-            if blast.face_stationing == final_stationing:
-                last_stationing_n = -final_stationing_new
-            else:
-                last_stationing_n = -blast.face_stationing
-            writer_n.writerow([t, last_stationing_n])
-        elif blast.side == "S":
-            writer_s.writerow([t-delta, last_stationing_s])
-            if blast.face_stationing == final_stationing:
-                last_stationing_s = final_stationing_new
-            else:
-                last_stationing_s = blast.face_stationing
-            writer_s.writerow([t, last_stationing_s])
-
-    writer_n.writerow([hm_model.days_simulation, last_stationing_n])
-    writer_s.writerow([hm_model.days_simulation, last_stationing_s])
-
-
 def prepare_excavation_functions():
     # Create strings defining the FieldTimeFunction data of excavation progress
     # in the North and South test chambers to be used in Flow123d simulation.
@@ -197,6 +115,3 @@ def prepare_excavation_functions():
 
     return values_n, values_s
 
-
-if __name__ == "__main__":
-    visualize_fractures("fractures.vtk")
