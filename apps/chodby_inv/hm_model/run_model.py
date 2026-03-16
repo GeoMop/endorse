@@ -46,7 +46,7 @@ def run_init_pressure_calibration(cfg:'dotdict'):
     with common.workdir(work_dir):
         excavation_n, excavation_s = prepare_excavation_functions()
         bhs = Boreholes()
-        observe_points_str = bhs.make_observe_points()
+        observe_points_str = bhs.make_observe_points(n_pts_per_chamber=1)
         yaml_replacements = {"observe_points": observe_points_str,
                              "excavation_north": yaml.dump(excavation_n, default_flow_style=True),
                              "excavation_south": yaml.dump(excavation_s, default_flow_style=True)}
