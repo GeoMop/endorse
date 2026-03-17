@@ -15,6 +15,16 @@ from scipy.stats import alpha
 
 from chodby_trans import job
 
+"""
+Ideas:
+- base on some better library then OT
+- support for parameter averaging (reduction of numerical or aleatory uncertainty)
+averaging over given parameters -> one more axis for parameres avariging -> generate independent samples 
+Pass just 2D matrix to the sampling process, abstract i_sample, i_saltelli etc
+=> can introduce repetitions for averaging, selected parameters + number of avg subsamples 
+=> more sophisticated "QMC" axis schema -> averaging -> design QMC schema
+"""
+
 # ===== float lattice constants derived from dtype
 _FLOAT = np.float64
 _FIN = np.finfo(_FLOAT)

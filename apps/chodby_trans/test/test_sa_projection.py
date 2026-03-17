@@ -1,4 +1,6 @@
 # test_sobol_projection.py
+# !!! Generated code, not yet tested !!
+#
 #
 # Pytest unit tests for "project each bootstrap draw, then form CIs".
 #
@@ -16,6 +18,10 @@
 #   https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html  (trust-constr + constraints)
 # xarray quantile reference:
 #   https://docs.xarray.dev/en/stable/generated/xarray.DataArray.quantile.html
+
+
+
+
 
 from __future__ import annotations
 
