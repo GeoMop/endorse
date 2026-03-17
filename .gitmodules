@@ -26,6 +26,3 @@
 	path = submodules/surrDAMH
 	url = ../../dom0015/surrDAMH.git
 	branch = PE_endorse
-[submodule "submodules/zarr_fuse"]
-	path = submodules/zarr_fuse
-	url = git@github.com:GeoMop/zarr_fuse.git

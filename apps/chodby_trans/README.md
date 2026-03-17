@@ -104,3 +104,14 @@ Use auxiliary script in several steps to run the application:
     Stops the dask workers and scheduler in a clean way.
 
 
+
+
+## Future developments and ideas
+- support for averaging over given set of parameters (given number of samples) 
+  - separete axis in the storage
+- implement Moris sampling + processing => faster, good for overview 
+implement additive Sobol indices
+implement PCE (for avarages over mere fracture samples)	
+LKJCholeskyCov; variance na diagonále + correlační matice nějaké rozdělení s jedním parameterm ovlivňující prior korelace
+
+
