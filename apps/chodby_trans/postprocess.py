@@ -67,6 +67,11 @@ def sampling_data(cfg, seed):
     input_design = ot_samples(cfg, seed)
     store_path = str(job.output.zarr_store_path)
     ds = xr.open_zarr(store_path, consolidated=True)
+
+    # for debug
+    # ds = ds.isel(i_sample=slice(0, input_design.n_samples))  # or first 100 along that dimension
+    # ds.load()  # actually read data (small subset)
+
     print(ds)
     print(ds.dims)
     ds2 = ds.rename_dims({"i_sample": "IID", "i_saltelli": "QMC"})
