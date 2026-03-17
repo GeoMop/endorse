@@ -43,8 +43,8 @@ setuptools.setup(
     ],
     # include_package_data=True, # package includes all files of the package directory
     zip_safe=False,
-    install_requires=['numpy>=1.13.4', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'bih', 'gmsh>=4.10.4', 'pyyaml',
-                      'pyyaml-include==1.4.1', 'pyvista', 'importlib-resources', 'joblib', 'bgem'],
+    install_requires=['numpy>=1.13.4', 'pandas', 'scipy', 'matplotlib', 'seaborn', 'bih', 'gmsh>=4.10.4', 'pyyaml','fsspec',
+                      'pyyaml-include', 'pyvista', 'importlib-resources', 'joblib', 'bgem'],
                      # TODO: update image python from 3.8 and use standard package importlib.resources
                      # or rather get rid of flow123d templates as part of sources
     python_requires='>=3',

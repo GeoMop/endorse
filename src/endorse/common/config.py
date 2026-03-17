@@ -29,7 +29,7 @@ class RelativeLocalFileSystem(LocalFileSystem):
             full_path = self.main_dir / path
             return super().open(str(full_path), mode, **kwargs)
 
-from yamlinclude.constructor import get_reader_class_by_name
+#from yaml_include.constructor import get_reader_class_by_name
 
 
 class YamlLimitedSafeLoader(type):

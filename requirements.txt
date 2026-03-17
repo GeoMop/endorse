@@ -8,8 +8,6 @@ pandas
 psutil
 
 pyvista
-pyyaml
-pyyaml-include==1.4.1   # version 2.x available, fundamental changes
 matplotlib
 scipy
 seaborn
