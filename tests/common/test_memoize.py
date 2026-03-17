@@ -25,8 +25,7 @@ def file_func(f:common.File, out_file:str) -> common.File:
 
 
 def test_file_memoization():
-    cache = common.EndorseCache.instance()
-    cache.clear_all()
+    common.CallCache.instance(expire_all=True)
 
     Path('sandbox').mkdir(exist_ok=True)
     input_file = "sandbox/memoize_file.txt"

@@ -63,7 +63,7 @@ fi
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ENDORSE_SRC_ROOT="$SCRIPTPATH/../../.."
 ENDORSE_SRC_BAYES="${SCRIPTPATH}"
-ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv_bayes"
+ENDORSE_VENV_BAYES="${ENDORSE_SRC_ROOT}/venv"
 
 # visualize
 command="source ${ENDORSE_VENV_BAYES}/bin/activate && python3 ${ENDORSE_SRC_BAYES}/run_all.py $output_dir $n_chains '' visualize"

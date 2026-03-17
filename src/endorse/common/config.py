@@ -29,6 +29,7 @@ class RelativeLocalFileSystem(LocalFileSystem):
             full_path = self.main_dir / path
             return super().open(str(full_path), mode, **kwargs)
 
+from yamlinclude.constructor import get_reader_class_by_name
 
 
 class YamlLimitedSafeLoader(type):
@@ -139,7 +140,6 @@ def _item_update(key:Key, val:dotdict, sub_path:Key, sub:dotdict):
 def deep_update(cfg: dotdict, iter:AddrIter, substitute:dotdict):
     if iter.is_leaf():
         return substitute
-
     if isinstance(cfg, list):
         key, sub_path = iter.idx()
         new_cfg = list(cfg)
@@ -167,7 +167,7 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
     :param variant: dictionary path -> dotdict
     :return:
     """
-    new_cfg = cfg
+    new_cfg = dotdict.create(cfg)
     for path_str, val in variant.items():
         path = tuple(path_str.split('/'))
         assert path
@@ -176,6 +176,16 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
 
 # Purpose of following was adding included files into config so that we can move it to the worksapce
 # Could be simplified as yaml_include provides a cusom_loader callback now from ver 2.0
+def is_glob_pattern(s):
+    """
+    Check if the string `s` contains glob pattern characters.
+    """
+    # Regular expression to detect glob pattern characters
+    glob_pattern_regex = re.compile(r"[\*\?\[\]]")
+
+    # Check if the string contains any of these characters
+    return glob_pattern_regex.search(s) is not None
+
 
 # class YamlInclude(yaml_include.Constructor):
 #     def __init__(self, *args, **kwargs):
@@ -192,7 +202,7 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
 #             encoding = self._encoding or self.DEFAULT_ENCODING
 #         if self._base_dir:
 #             pathname = os.path.join(self._base_dir, pathname)
-#         reader_clz = None
+#        if is_glob_pattern(pathname):
 #         if reader:
 #             reader_clz = get_reader_class_by_name(reader)
 #         if re.match(WILDCARDS_PATTERN, pathname):
@@ -243,7 +253,7 @@ def load_config(path, collect_files=False, hostname=None):
     yaml.add_constructor("!include", yaml_include.Constructor(fs=fs_hook, custom_loader=store_includes), YamlNoTimestampSafeLoader)
     #instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
     cfg_dir = os.path.dirname(path)
-    with open(path) as f:
+    with open(path, "r", encoding='utf-8') as f:
         cfg = yaml.load(f, Loader=YamlNoTimestampSafeLoader)
     cfg['_config_root_dir'] = os.path.abspath(cfg_dir)
     dd = dotdict.create(cfg)

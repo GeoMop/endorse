@@ -1,89 +1,86 @@
 import logging
 from typing import *
-import datetime
+# import redis_cache
+import pathlib
 import joblib
-
 import hashlib
 from functools import wraps
 import time
 import os
 
-
 """
-TODO: modify redis_simple_cache or our memoize decorator to hash also function code
+Caching of pure function calls currently based on the joblib.
+- File wrapper class allows safe file results with appropriate hashes.
+
+TODO: 
+- support for other storage methods
+- hashing of function implementation and subcalls 
+  (working prototype in endorse-experiment, but does not generilize to more complex programs)
  see https://stackoverflow.com/questions/18134087/how-do-i-check-if-a-python-function-changed-in-live-code
  that one should aslo hash called function .. the whole tree
  more over we should also hash over serialization of classes
+
+- program execution view in browser (? how related to Ray, Dask, ..)
+
 """
 
-class EndorseCache:
-    """
-    Specific configuration of the joblib.Memory function call cache.
-    - singleton
-    - TODO: runt reduce_size in separate thread at the job start for
-      at most 1min, in order to keep the cache functional.
-    - TODO: log function calls: time, reuse
 
-    In order to clear cached calls of a function use:
-    @memoize
-    def foo():
-        pass
-
-    # here clear all calls of foo
-    foo.clear()
+class CallCache:
     """
-    __instance__ = None
+    Global singleton for the function call cache.
+    Configuration is lazy: parameters passed to the instance method
+    are stored and updated by subsequent instance calls, but the actual
+    instance is created during first call of the memoized function.
+    """
+    __instance_args__ = {}
+    __singleton_instance__ = None
+
     @staticmethod
-    def instance(*args, **kwargs):
-        if EndorseCache.__instance__ is None:
-            EndorseCache.__instance__ = EndorseCache(*args, **kwargs)
-        return EndorseCache.__instance__
+    def __instance__():
+        if CallCache.__singleton_instance__ is None:
+            CallCache.__singleton_instance__ = CallCache(**CallCache.__instance_args__)
+        return CallCache.__singleton_instance__
 
-    def __init__(self, cachedir=None):
-        if cachedir is None:
-            # Get the home directory using os.environ and construct the path
-            home_dir = os.environ['HOME']
-            cachedir = os.path.join(home_dir, 'endorse_cache')
-        self.memory = joblib.Memory(cachedir, verbose=0)
-
-    def clear_all(self):
+    @staticmethod
+    def instance(**kwargs):
         """
-        Clear the whole cache.
+        Parameters:
+        workdir - str or Path where to place the cache
+        expire_all - if True, delete whole cache
+
+        parameters passed to joblib.Memory:
+        verbose
         """
-        self.memory.clear()
-        #self.cache.expire_all_in_set()
+        CallCache.__instance_args__.update(kwargs)
 
+    def __init__(self, workdir="", expire_all=False, **kwargs):
+        # TODO: possibly start redis server
+        self.workdir = pathlib.Path(workdir)
 
-    def reduce_size(self,
-                    bytes_limit="1000G",
-                    items_limit="1000000",
-                    age_limit=datetime.timedelta(days=365)):
-        self.memory.reduce_size(bytes_limit, items_limit, age_limit)
+        self.mem_cache = joblib.Memory(
+            location=self.workdir / "joblib_cache",
+            **kwargs)
 
+        if expire_all:
+            self.mem_cache.clear()
 
-# Workaround missing module in the function call key
-# def memoize():
-#     endorse_cache = EndorseCache.__instance__
-#     def decorator(fn):
-#         # redis-simple-cache does not include the function module into the key
-#         # we poss in a functions with additional parameter
-#         def key_fn(fn_id , *args, **kwargs):
-#             return fn(*args, **kwargs)
-#
-#         modif_fn =  redis_cache.cache_it(limit=10000, expire=redis_cache.DEFAULT_EXPIRY, cache=endorse_cache.cache)(key_fn)
-#
-#         @wraps(fn)
-#         def wrapper(*args, **kwargs):
-#             return modif_fn((fn.__name__, fn.__module__), *args, **kwargs)
-#         return wrapper
-#     return decorator
+    def expire_all(self):
+        """
+        Deprecated, call instance with 'expire_all=True' instead.
+        """
+        CallCache.instance(expire_all=True)
+
 
 def memoize(fn):
-    """
-    Decorator for memoizing endorse expensive functions.
-    """
-    endorse_cache = EndorseCache.instance()
-    return endorse_cache.memory.cache(fn)
+    decorated_fn = None
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        nonlocal decorated_fn
+        if decorated_fn is None:
+            mem: joblib.Memory = CallCache.__instance__().mem_cache
+            decorated_fn = mem.cache(fn)
+        return decorated_fn(*args, **kwargs)
+    return wrapper
 
 
 
@@ -91,6 +88,10 @@ def memoize(fn):
 class File:
     """
     An object that should represent a file as a computation result.
+    Use cases:
+    - pass File(file_path) to a memoize function that reads from a file
+    - return File(file_path) from a memoize function that writes to a file
+
     Contains the path and the file content hash.
     The system should also prevent modification of the files that are already created.
     To this end one has to use File.open instead of the standard open().
@@ -103,7 +104,8 @@ class File:
 
     Ideally, the File class could operate as the file handle and context manager.
     However that means calling system open() and then modify its __exit__ method.
-    However I was unable to do that. Seems like __exit__ is changed, but changed to the original one smowere latter as
+    However I was unable to do that. Seems like __exit__ is changed, but changed to the original
+    one smowere latter as
     it is not called. Other possibility is to wrap standard file handle and use it like:
 
     @joblib.task
@@ -112,10 +114,6 @@ class File:
             f.handle.write(content)
         # called File.__exit__ which calls close(self.handle) and performs hashing.
         return f
-
-    TODO: there is an (unsuccessful) effort to provide special handle for writting.
-    TODO: Override deserialization in order to check that the file is unchanged.
-          Seems that caching just returns the object without actuall checking.
     """
 
     # @classmethod
@@ -131,7 +129,8 @@ class File:
     #     """
     #     return cls(path, postponed=True)
     _hash_fn = hashlib.md5
-    def __init__(self, path: str, files:List['File'] = None):  # , hash:Union[bytes, str]=None) #, postponed=False):
+
+    def __init__(self, path: str, files: List['File'] = None):  # , hash:Union[bytes, str]=None) #, postponed=False):
         """
         For file 'path' create object containing both path and content hash.
         Optionaly the files referenced by the file 'path' could be passed by `files` argument
@@ -183,7 +182,6 @@ class File:
 
     def __str__(self):
         return f"File('{self.path}', hash={self.hash})"
-
 
     """
     Could be used from Python 3.11    

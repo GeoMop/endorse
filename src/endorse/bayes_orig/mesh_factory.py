@@ -84,7 +84,7 @@ class MeshFactory:
         b_box_fr = box_fr.get_boundary()
         for name, side_tool in sides.items():
             isec = b_box_fr.select_by_intersect(side_tool)
-            box_all.append(isec.modify_regions("." + name))
+            box_all.append(isec.modify_regions("." + name).mesh_step(max_elem_size))
 
         if cut_tunnel:
             b_tunnel_select = tunnel_select.get_boundary()

@@ -1,0 +1,6 @@
+outs:
+- md5: 3307184ac274b455afdbc2d3e6f8ceec.dir
+  size: 1503865129
+  nfiles: 9
+  hash: md5
+  path: scan_meshes

@@ -18,9 +18,16 @@ def setup_config(output_dir):
     common_files_dir = os.path.join(work_dir, "common_files")
 
     # test if config exists, copy from rep_dir if necessary
-    config_file = os.path.join(common_files_dir, "config.yaml")
+    config_file = os.path.join(work_dir, "config.yaml")
     if not os.path.exists(config_file):
-        raise Exception("Missing config: " + config_file)
+        # to enable processing older results
+        config_file = os.path.join(common_files_dir, "config.yaml")
+        if not os.path.exists(config_file):
+            raise Exception("Main configuration file 'config.yaml' not found in workdir.")
+        else:
+            import warnings
+            warnings.warn("Main configuration file 'config.yaml' found in 'workdir/common_files'.",
+                          category=DeprecationWarning)
 
     # read config file and setup paths
     with open(config_file, "r") as f:
@@ -28,8 +35,6 @@ def setup_config(output_dir):
 
     config_dict["work_dir"] = work_dir
     config_dict["script_dir"] = rep_dir
-    config_dict["_aux_flow_path"] = config_dict["local"]["flow_executable"].copy()
-    config_dict["_aux_gmsh_path"] = config_dict["local"]["gmsh_executable"].copy()
 
     config_dict["common_files_dir"] = common_files_dir
 
@@ -56,10 +61,10 @@ def setup_config(output_dir):
 
 
 class Wrapper:
-    def __init__(self, solver_id, output_dir):
+    def __init__(self, solver_id, output_dir, config_dict=None):
 
-        config_dict = setup_config(output_dir)
-
+        if config_dict is None:
+            config_dict = setup_config(output_dir)
         config_dict["solver_id"] = solver_id
 
         clean = config_dict["clean_sample_dir"]

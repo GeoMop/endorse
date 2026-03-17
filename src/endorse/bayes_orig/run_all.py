@@ -23,9 +23,16 @@ def setup(output_dir, can_overwrite, clean):
     os.chdir(work_dir)
 
     # test if config exists, copy from rep_dir if necessary
-    config_file = os.path.join(common_files_dir, "config.yaml")
+    config_file = os.path.join(work_dir, "config.yaml")
     if not os.path.exists(config_file):
-        shutil.copyfile(os.path.join(rep_dir, "config.yaml"), config_file)
+        # to enable processing older results
+        config_file = os.path.join(common_files_dir, "config.yaml")
+        if not os.path.exists(config_file):
+            raise Exception("Main configuration file 'config.yaml' not found in workdir.")
+        else:
+            import warnings
+            warnings.warn("Main configuration file 'config.yaml' found in 'workdir/common_files'.",
+                          category=DeprecationWarning)
 
     # read config file and setup paths
     with open(config_file, "r") as f:
@@ -61,7 +68,7 @@ if __name__ == "__main__":
     # resolve root dir of Endorse repository
     script_dir = os.path.dirname(os.path.abspath(__file__))
     endorse_root = os.path.abspath(os.path.join(script_dir, "../../.."))
-    venv_path = os.path.join(endorse_root, "venv_bayes")
+    venv_path = os.path.join(endorse_root, "venv")
 
     # default parameters
     output_dir = "flow123d_sim"
@@ -169,12 +176,10 @@ if __name__ == "__main__":
                 'echo $command', 'eval $command', '\n',
                 'command="' + ' '.join([os.path.join(script_dir,'run_visualize.sh'), '-n', str(N), '-o', output_dir, '-t', 'visualize', '-s']) + '"',
                 'echo $command', 'eval $command', '\n',
-                'cd $output_dir'
-                'zip -r samples.zip solver_*',
-                'rm -r solver_*',
-                'cd ..',
-                'command="' + ' '.join([os.path.join(script_dir,'run_set.sh'), output_dir, str(config_dict["run_best_n_accepted"]), 'sing']) + '"',
-                'echo $command', 'eval $command'
+                # 'zip -r samples.zip solver_*', # avoid 'bash: Argument list too long'
+                'find . -name "solver_*" -print0 | xargs -0 tar -zcvf samples.tar.gz',
+                'find . -name "solver_*" -print0 | xargs -0 rm -r',
+                'echo "FINISHED"'
             ]
             with open("pbs_job.sh", 'w') as f:
                 f.write('\n'.join(lines))
