@@ -67,4 +67,3 @@ def test_script_sample_2d():
     #run_script(['run', '-c', 'edz', '2'])
     #run_script(['run', '-c', 'edz_base edz_lower_tol edz_high_gamma edz_both', '2'])
     run_script(['run', '-c', '-nt=2', '-np=2', '--dim=2', 'edz', '2, 10'])
-

@@ -71,4 +71,3 @@ def test_run_single_sample():
         field_name = "conductivity"
         vals = mesh_interp.interpolate_field(field_name, points, time=selected_time)
         init_porosity, porosity = mesh_interp.compute_porosity(cfg.tsx_hm_model.hm_params, points, time=selected_time)
-
