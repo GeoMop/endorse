@@ -1,51 +1,17 @@
+# Dependencies used just for tests.
+
 attrs
-numpy
-openpyxl    # excel read
-# Necessary for development
-# TODO: cleanup
-
-pandas 
-psutil
-
-pyvista
-matplotlib
-scipy
-seaborn
-pytest
-tox
-tox-gh-actions
-importlib-resources
-git+https://github.com/flow123d/bih.git@master
-pytest
-
-gmsh
-pyOCCT
+#openpyxl    # excel read
+#psutil
+#tox
+#tox-gh-actions
+#importlib-resources
+#pytest
+#pyOCCT
 
 
 #PyQt5==5.15.6
-
-#pandas==1.3.4
-#openpyxl==3.0.9
-#pygimli==1.2.1
-#psutil==5.8.0
-
-#attrs==21.2.0
-
-
-#numpy==1.21.4
-##PyQt5==5.15.6
-#vtk==9.1.0
-#bgem # commit 4428b2286b5d1711b3c2fcd9f3651a004d91704f
-#pandas==1.3.4
-##openpyxl==3.0.9
-#attrs==21.2.0
 #obspy==1.2.2
 #pyqtgraph==0.12.3
 #pymeshlab==2021.10
-#git+https://github.com/GeoMop/bgem.git@master
-#pybind11 # for bih
-attrs # for bgem
 
-# bayes part
-ruamel.yaml
-pandas
