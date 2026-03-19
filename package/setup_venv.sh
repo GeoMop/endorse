@@ -21,7 +21,7 @@ python3 -m pip install -r requirements.txt
 # Following included into requirements.txt
 #python3 -m pip install -e ../bgem
 #python3 -m pip install -e ../bih
-python3 -m pip install -e submodules/MLMC
+#python3 -m pip install -e submodules/MLMC
 
 python3 -m pip install -e .
 

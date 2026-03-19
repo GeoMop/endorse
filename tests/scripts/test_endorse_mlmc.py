@@ -10,6 +10,11 @@ script_dir = Path(__file__).resolve().parent
 endorse_dir = script_dir.parent.parent
 
 
+requires_singularity = pytest.mark.skipif(
+    "SINGULARITY_CONTAINER" not in os.environ,
+    reason="requires SINGULARITY_CONTAINER runtime",
+)
+
 
 def run_script(args, workdir=None):
     script_args = [sys.executable, endorse_dir / 'src/endorse/scripts/endorse_mlmc.py']
@@ -56,6 +61,7 @@ def test_plot_cases_variants():
         run_script(['plot', 'mc_cases', f'edz_{i},noedz_{i}', '2,5,10'], workdir=workdir)
 
 #@pytest.mark.skip
+@requires_singularity
 def test_script_sample():
     for i in [0]: #,1,2,3,4]:
         run_script(['run', '-c', '-nt=2', '-np=1', f'edz_{i},noedz_{i}', '2'])
