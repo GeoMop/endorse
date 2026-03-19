@@ -2,10 +2,21 @@ import os
 import logging
 import yaml
 import numpy as np
+import attrs
+from typing import Any
 
 from endorse.mesh import mesh_tools
-import bgem.stochastic.fracture as frac
+from bgem.stochastic import Fracture, Population, RectangleShape
 from bgem.gmsh import gmsh
+
+
+@attrs.define
+class RegionFracture:
+    fracture: Fracture
+    region: Any
+
+    def __getattr__(self, item):
+        return getattr(self.fracture, item)
 
 
 def create_fractures_rectangles(gmsh_geom, fractures, shift, base_shape: 'ObjectSet'):
@@ -37,6 +48,10 @@ def fr_dict_repr(fr):
                 aspect=float(fr.aspect), shape_angle=float(fr.shape_angle), region=fr.region.name)
 
 
+def population_from_cfg(families, box):
+    return Population.from_cfg(families, box, RectangleShape)
+
+
 def fixed_fractures(cfg):
     """
     Fixed artificial fractures.
@@ -46,14 +61,14 @@ def fixed_fractures(cfg):
     diameter = np.linalg.norm(cfg.geometry.box_dimensions[1:])   # diagonal of y-z plane
     center = np.array([0, 0.75 * cfg.geometry.box_dimensions[1]/2, 0])
     normal = np.array([0, 1, 0])
-    shape_angle = 0
     region_id = 0
     region = gmsh.Region.get(f"fr_{region_id}")
-    fr = frac.Fracture(frac.SquareShape, diameter, center, normal[None,:], shape_angle, region_id=region_id, i_family=0, region=region)
+    fr = Fracture(RectangleShape.id, (diameter, diameter), center, normal, family=region_id)
+    fr = RegionFracture(fr, region)
     return [fr]
 
 
-def fracture_set(cfg, fr_population:frac.Population, seed:int):
+def fracture_set(cfg, fr_population:Population, seed:int):
     main_box_dimensions = cfg.geometry.box_dimensions
 
     # Fixed large fractures
