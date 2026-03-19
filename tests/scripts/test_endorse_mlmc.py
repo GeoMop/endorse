@@ -15,12 +15,12 @@ def run_script(args, workdir=None):
     script_args = [sys.executable, endorse_dir / 'src/endorse/scripts/endorse_mlmc.py']
     # TODO: run as subprocess
     if workdir is None:
-        workdir = os.path.join(script_dir, '../sandbox/mlmc_run')
+        workdir = script_dir.parent / 'sandbox/mlmc_run'
 
-    cfg = common.load_config('../test_data/config.yaml', collect_files=True)
+    cfg = common.load_config(script_dir.parent / 'test_data/config.yaml', collect_files=True)
     inputs = cfg._file_refs
     with common.workdir(workdir, inputs):
-        subprocess.run(script_args + args)
+        subprocess.run(script_args + args, check=True)
 
 
 # collect samples

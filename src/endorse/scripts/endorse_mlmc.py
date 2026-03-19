@@ -35,7 +35,7 @@ from endorse import plots
 _script_dir = os.path.dirname(os.path.realpath(__file__))
 _endorse_repository = os.path.abspath(os.path.join(_script_dir, '../../../'))
 
-common.EndorseCache.instance()  # $HOME/endorse_cache
+common.CallCache.instance()  # $HOME/endorse_cache
 
 MAIN_CONFIG_FILE = 'config.yaml'
 
@@ -733,4 +733,3 @@ def main():
 if __name__ == "__main__":
     main()
     
-

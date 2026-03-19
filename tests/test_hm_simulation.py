@@ -1,6 +1,7 @@
 import pytest
 import os
 import numpy as np
+from pathlib import Path
 
 from endorse import hm_simulation
 from endorse import common, mesh_class
@@ -60,7 +61,7 @@ def test_run_single_sample():
     conf_file = os.path.join(script_dir, "test_data/config_homo_tsx.yaml")
     cfg = common.load_config(conf_file)
 
-    files_to_copy = ["test_data/accepted_parameters.csv"]
+    files_to_copy = [Path(script_dir) / "test_data/accepted_parameters.csv"]
     with common.workdir(f"sandbox/hm_model_{seed}", inputs=files_to_copy, clean=False):
         fo = hm_simulation.run_single_sample(cfg)
         mesh_interp = hm_simulation.TunnelInterpolator(cfg.geometry, flow123d_output=fo)

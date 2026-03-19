@@ -13,8 +13,9 @@ from . import apply_fields
 from . import plots
 from . import flow123d_inputs_path
 from .indicator import indicator_set, indicators, IndicatorFn
-from bgem.stochastic.fracture import Fracture, Population
+from bgem.stochastic import Fracture
 from endorse import hm_simulation
+from endorse.mesh.fracture_tools import population_from_cfg
 
 
 
@@ -88,7 +89,7 @@ def transport_2d(cfg, seed):
 
     box = cfg.geometry.box_dimensions
     box = [box[0], box[2], 0]
-    fr_pop = Population.initialize_2d( cfg.fractures.population, box)
+    fr_pop = population_from_cfg(cfg.fractures.population, box)
 
     full_mesh_file, fractures, n_large = fullscale_transport_mesh_2d(cfg_fine, fr_pop, seed)
 
@@ -108,7 +109,7 @@ def transport_run(cfg, seed):
     cfg_fine = cfg.transport_fullscale
     large_model = File(os.path.join(cfg_basedir, cfg_fine.piezo_head_input_file))
     #plots.plot_source(conc_flux)
-    fr_pop = Population.initialize_3d( cfg_fine.fractures.population, cfg.geometry.box_dimensions)
+    fr_pop = population_from_cfg(cfg_fine.fractures.population, cfg.geometry.box_dimensions)
     full_mesh_file, fractures, n_large = fullscale_transport_mesh_3d(cfg_fine, fr_pop, seed)
 
     full_mesh = Mesh.load_mesh(full_mesh_file, heal_tol=1e-4)
