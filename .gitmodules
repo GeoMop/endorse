@@ -2,10 +2,6 @@
 	path = submodules/jsondata
 	url = ../../GeoMop/JsonData.git
 	branch = master
-[submodule "submodule.submodules/MLMC.path"]
-	path = submodules/MLMC
-	url = ../../Geomop/MLMC.git
-	branch = MS_endorse
 [submodule "submodule.submodules/swrap.path"]
 	path = submodules/swrap
 	url = ../../flow123d/swrap
