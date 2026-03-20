@@ -1,8 +1,9 @@
 import math
-import os
 import numpy as np
+from pathlib import Path
 
 from endorse import common, mesh_class
+from endorse.mesh import mesh_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
@@ -12,29 +13,6 @@ from chodby_inv import input_data
 from cfg import script_dir, workdir, input_dir
 from fractures import *
 
-
-def box_with_sides(factory, dimensions):
-    """
-    Make a box and dictionary of its sides named: 'side_[xyz][01]'
-    :return: box, sides_dict
-    """
-    box = factory.box(dimensions).set_region("box")
-    side_z = factory.rectangle([dimensions[0], dimensions[1]])
-    side_y = factory.rectangle([dimensions[0], dimensions[2]])
-    side_x = factory.rectangle([dimensions[2], dimensions[1]])
-    sides = dict(
-        box_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
-        box_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
-        box_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        box_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        box_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
-        box_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
-    )
-    # not necessary - not final objects
-    # for name, side in sides.items():
-    #     side.modify_regions(name)
-    factory.synchronize()
-    return box, sides
 
 def tunnel_center_line(factory, tunnel_dict):
     length = tunnel_dict.length
@@ -94,7 +72,7 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
 
 def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
     cfg_geom = cfg.geometry
-    box, box_sides_dict = box_with_sides(factory, cfg_geom.box_dimensions)
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original
 
     # print("tunnel_laser_scan:\n", tunnel_laser_scan.dim_tags)
@@ -251,7 +229,7 @@ def meshing(factory, objects, mesh_filename):
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3)
     print("Meshing finished.")
-    factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
+    factory.write_mesh(filename=str(mesh_filename), format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
 
@@ -270,7 +248,7 @@ def make_gmsh(cfg:'dotdict', real_geometry=True):
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = input_dir / (cfg.mesh_name + ".msh2")
+    final_mesh_filename = cfg.mesh_name + ".msh2"
     boundary_brep_filename = input_dir / cfg.boundary_brepfile
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)

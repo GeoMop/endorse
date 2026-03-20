@@ -5,6 +5,16 @@ from .mesh_class import Mesh
 from endorse import hm_simulation
 
 def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+    """
+    Produce a conductivity field mockup and write it to a file.
+    Conductivity is cond_min for points out of ellipse with axis:
+    (h_axis * edz_r, v_axis * edz_r)
+    and cond_max in the ellipse:
+    (h_axis * in_r, v_axis * in_r)
+
+    We assume in_r < edz_r.
+    Geometric mean interpolation in between.
+    """
     X, Y, Z = output_mesh.el_barycenters().T
     cond_file = "fine_conductivity.msh2"
     cond_max = float(cfg_fields.cond_max)
@@ -17,13 +27,13 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     Y_rel = Y / cfg_fields.h_axis
     Z_rel = Z / cfg_fields.v_axis
 
-    # distance from center, 1== edz_radius
-    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel)) / (edz_r)
-
-    theta = (1 - distance)/(1 - in_r)
-    cond_field = np.minimum(cond_max, np.maximum(cond_min, np.exp(theta * np.log(cond_max) + (1-theta) * np.log(cond_min))))
-    abs_dist = np.sqrt(Y * Y + Z * Z)
-    cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
+    # distance from center = edz_radius on the outer ellipse
+    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel))
+    theta = (distance - in_r) / (edz_r - in_r)
+    theta = np.clip(theta, 0.0, 1.0)
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min))
+    #abs_dist = np.sqrt(Y * Y + Z * Z)
+    #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
     #print({(i+1):cond for i,cond in enumerate(cond_field)})
     output_mesh.write_fields(cond_file,
                             dict(conductivity=cond_field))
@@ -97,6 +107,67 @@ def bulk_fields_mockup(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
     por_field = np.clip(por_field, por_min, por_max)
     #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
     #print({(i+1):cond for i,cond in enumerate(cond_field)})
+
+    return cond_field, por_field
+
+def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
+    X, Y, Z = XYZ.T
+    X = X - cfg_geom.main_tunnel.center[0]
+    Y = Y - cfg_geom.main_tunnel.center[1]
+    Z = Z - cfg_geom.main_tunnel.center[2]
+
+    edz_r = cfg_geom.edz_radius # 2.5
+    in_r = cfg_bulk_fields.inner_radius
+    # axis with respect to EDZ radius
+    # X_rel = X / cfg_bulk_fields.h_axis
+    # Z_rel = Z / cfg_bulk_fields.v_axis
+    X_rel = X / (cfg_geom.main_tunnel.width/2)
+    Z_rel = Z / (cfg_geom.main_tunnel.height/2)
+
+    # distance from center, 1== edz_radius (main tunnel boundary)
+    distance = np.sqrt((X_rel * X_rel + Z_rel * Z_rel)) - in_r
+    theta = distance / (edz_r - in_r)
+    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2 + cfg_geom.box_center[1],
+                                        Y <= cfg_geom.main_tunnel.length/2) + cfg_geom.box_center[1],
+                                        1.0, 0.0)
+
+    if cond is None:
+        cond_min = float(cfg_bulk_fields.cond_min)
+        # cond_max = float(cfg_bulk_fields.cond_max)
+        cond_max = float(cfg_bulk_fields.cond_mult) * cond_min
+    else:
+        cond_min, cond_max = cond
+
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
+
+    def cond_boreholes(bid):
+        csb = cfg_geom.storage_borehole
+        r = csb.diameter/2
+        d = cfg_geom.storage_borehole_distance
+        s = -((cfg_geom.n_storage_boreholes - 1) / 2.0) * d + bid*d # y coordinate of the storage
+
+        X_rel = X / r
+        Y_rel = (Y - s) / r
+
+        # distance from center, 1== edz_radius (main tunnel boundary)
+        distance = np.sqrt((X_rel * X_rel + Y_rel * Y_rel)) - in_r
+        theta = distance / (edz_r - in_r)
+        bore_begin = cfg_geom.main_tunnel.center[2] - cfg_geom.main_tunnel.height/2
+        bore_end = bore_begin - csb.length
+        z_scaling = np.where( np.logical_and(Z >= bore_end, Z <= bore_begin), 1.0, 0.0)
+        bore_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * z_scaling
+        return bore_field
+
+    for i in range(cfg_geom.n_storage_boreholes):
+        cond_field = np.maximum(cond_field, cond_boreholes(i))
+
+    cond_field = np.clip(cond_field, cond_min, cond_max)
+
+    por_min = float(cfg_bulk_fields.por_min)
+    # por_max = float(cfg_bulk_fields.por_max)
+    por_max = float(cfg_bulk_fields.por_mult) * por_min
+    por_field = np.exp((1-theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
+    por_field = np.clip(por_field, por_min, por_max)
 
     return cond_field, por_field
 

@@ -16,8 +16,14 @@ config_sim_tmpl_yaml = input_dir / "config_sim_tmpl.yaml"
 config_sim_calibration_tmpl_yaml = input_dir / "config_sim_calibr_init_p_tmpl.yaml"
 
 # smallest file
-piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"
+#piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"
 # last file
 #piezo_measurement_file = input_dir / "piezo_2025_04_08.xlsx"
+piezo_measurement_file = input_dir / "piezo_2025_09_24.xlsx"
 # configuration of the filtering sections
 # named sections of the data corresponding to interesting time intervals
+
+wpt_multipacker = input_dir / "wpt_2025_04_with_flux_on_multipacker.xlsx"
+
+flow_summary_csv = input_dir / "flow_summary.csv"
+pressure_summary_csv = input_dir / "pressure_summary.csv"

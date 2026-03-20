@@ -35,14 +35,17 @@ else
     echo "requirements.txt not found. Skipping dependency installation."
 fi
 
-# install endorse submodules
-pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/redis-cache
+# check git submodules
+git submodule update --init --recursive
+# install necessary submodules
 pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/bgem
-pip install --no-cache-dir -e ${ENDORSE_SRC_ROOT}/submodules/meshio
 
 # install endorse
-pip install -e ${SCRIPT_DIR}/../..
+pip install -e ${ENDORSE_SRC_ROOT}
 pip install -e ${SCRIPT_DIR}
 
 # REgister as a Jupyter kernel
 #python3 -m ipykernel install --user --name=hlavo_env --display-name "Hlavo Environment"
+
+# Install custom tinyDA
+#$SCRIPT_DIR/docker/install_custom_tinyda.sh $VENV_DIR/ tinyDA/

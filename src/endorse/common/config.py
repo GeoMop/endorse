@@ -1,14 +1,35 @@
 from dataclasses import dataclass
 from typing import *
-
+from pathlib import Path
 import os
 import yaml
 import re
 from socket import gethostname
 from glob import iglob
+import fsspec
+from fsspec.implementations.local import LocalFileSystem
+import yaml_include
 
-from yamlinclude import YamlIncludeConstructor
-from yamlinclude.constructor import get_reader_class_by_name
+class RelativeLocalFileSystem(LocalFileSystem):
+    """
+    Auxiliary filesystem to allow specify the include path
+    relative to the main config_file.
+    """
+    def __init__(self, main_dir, **kwargs):
+        super().__init__(**kwargs)
+        self.main_dir = Path(main_dir)
+
+
+    def open(self, path, mode='rb', **kwargs):
+        # Attempt to open the path directly
+        try:
+            return super().open(path, mode, **kwargs)
+        except FileNotFoundError:
+            # If direct opening fails, try with base_dir prepended
+            full_path = self.main_dir / path
+            return super().open(str(full_path), mode, **kwargs)
+
+#from yaml_include.constructor import get_reader_class_by_name
 
 
 class YamlLimitedSafeLoader(type):
@@ -74,12 +95,12 @@ class dotdict(dict):
             return cfg
 
 Key = Union[str, int]
-Path = Tuple[Key]
+Addr = Tuple[Key]
 VariantPatch = Dict[str, dotdict]
 
 @dataclass
-class PathIter:
-    path: Path
+class AddrIter:
+    path: Addr
     # full address path
     i: int = 0
     # actual level of the path; initial -1 is before first call to `idx` or `key`.
@@ -89,14 +110,14 @@ class PathIter:
 
     def idx(self):
         try:
-            return int(self.path[self.i]), PathIter(self.path, self.i + 1)
+            return int(self.path[self.i]), AddrIter(self.path, self.i + 1)
         except ValueError:
             raise IndexError(f"Variant substitution: IndexError at address: '{self.address()}'.")
 
     def key(self):
         key = self.path[self.i]
         if len(key) > 0 and not key[0].isdigit():
-            return key, PathIter(self.path, self.i + 1)
+            return key, AddrIter(self.path, self.i + 1)
         else:
             raise KeyError(f"Variant substitution: KeyError at address: '{self.address()}'.")
 
@@ -116,7 +137,7 @@ def _item_update(key:Key, val:dotdict, sub_path:Key, sub:dotdict):
     else:
         return val
 
-def deep_update(cfg: dotdict, iter:PathIter, substitute:dotdict):
+def deep_update(cfg: dotdict, iter:AddrIter, substitute:dotdict):
     if iter.is_leaf():
         return substitute
     if isinstance(cfg, list):
@@ -150,9 +171,11 @@ def apply_variant(cfg:dotdict, variant:VariantPatch) -> dotdict:
     for path_str, val in variant.items():
         path = tuple(path_str.split('/'))
         assert path
-        new_cfg = deep_update(new_cfg, PathIter(path), dotdict.create(val))
+        new_cfg = deep_update(new_cfg, AddrIter(path), val)
     return new_cfg
 
+# Purpose of following was adding included files into config so that we can move it to the worksapce
+# Could be simplified as yaml_include provides a cusom_loader callback now from ver 2.0
 def is_glob_pattern(s):
     """
     Check if the string `s` contains glob pattern characters.
@@ -163,40 +186,39 @@ def is_glob_pattern(s):
     # Check if the string contains any of these characters
     return glob_pattern_regex.search(s) is not None
 
-class YamlInclude(YamlIncludeConstructor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.included_files = []
 
-    def load(
-            self,
-            loader,
-            pathname: str,
-            recursive: bool = False,
-            encoding: str = '',
-            reader: str = ''
-    ):  # pylint:disable=too-many-arguments
-        if not encoding:
-            encoding = self._encoding or self.DEFAULT_ENCODING
-        if self._base_dir:
-            pathname = os.path.join(self._base_dir, pathname)
-        reader_clz = None
-        if reader:
-            reader_clz = get_reader_class_by_name(reader)
-        if is_glob_pattern(pathname):
-            result = []
-            iterable = iglob(pathname, recursive=recursive)
-            for path in filter(os.path.isfile, iterable):
-                self.included_files.append(path)
-                if reader_clz:
-                    result.append(reader_clz(path, encoding=encoding, loader_class=type(loader))())
-                else:
-                    result.append(self._read_file(path, loader, encoding))
-            return result
-        self.included_files.append(pathname)
-        if reader_clz:
-            return reader_clz(pathname, encoding=encoding, loader_class=type(loader))()
-        return self._read_file(pathname, loader, encoding)
+# class YamlInclude(yaml_include.Constructor):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.included_files = []
+#
+#     def load(
+#             self,
+#             loader_type,
+#             datepathname: str,
+#             recursive: bool = False,
+#     ):  # pylint:disable=too-many-arguments
+#         if not encoding:
+#             encoding = self._encoding or self.DEFAULT_ENCODING
+#         if self._base_dir:
+#             pathname = os.path.join(self._base_dir, pathname)
+#        if is_glob_pattern(pathname):
+#         if reader:
+#             reader_clz = get_reader_class_by_name(reader)
+#         if re.match(WILDCARDS_PATTERN, pathname):
+#             result = []
+#             iterable = iglob(pathname, recursive=recursive)
+#             for path in filter(os.path.isfile, iterable):
+#                 self.included_files.append(path)
+#                 if reader_clz:
+#                     result.append(reader_clz(path, encoding=encoding, loader_class=type(loader))())
+#                 else:
+#                     result.append(self._read_file(path, loader, encoding))
+#             return result
+#         self.included_files.append(pathname)
+#         if reader_clz:
+#             return reader_clz(pathname, encoding=encoding, loader_class=type(loader))()
+#         return self._read_file(pathname, loader, encoding)
 
 def resolve_machine_configuration(cfg:dotdict, hostname) -> dotdict:
     # resolve machine configuration
@@ -219,7 +241,17 @@ def load_config(path, collect_files=False, hostname=None):
     include tag:
         geometry: <% include(path="config_geometry.yaml")>
     """
-    instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
+    path = Path(path)
+    included_files = []
+    def store_includes(inc_path, file, loader):
+        inc_path = Path(inc_path)
+        if not inc_path.is_absolute():
+            inc_path = path.parent / inc_path
+        included_files.append(inc_path.resolve())
+        return yaml.load(file, loader)
+    fs_hook = RelativeLocalFileSystem(main_dir=path.parent)
+    yaml.add_constructor("!include", yaml_include.Constructor(fs=fs_hook, custom_loader=store_includes), YamlNoTimestampSafeLoader)
+    #instance = YamlInclude.add_to_loader_class(loader_class=YamlNoTimestampSafeLoader, base_dir=os.path.dirname(path))
     cfg_dir = os.path.dirname(path)
     with open(path, "r", encoding='utf-8') as f:
         cfg = yaml.load(f, Loader=YamlNoTimestampSafeLoader)
@@ -227,9 +259,10 @@ def load_config(path, collect_files=False, hostname=None):
     dd = dotdict.create(cfg)
     dd = resolve_machine_configuration(dd, hostname)
     if collect_files:
-        referenced = instance.included_files
+        referenced = included_files
         referenced.append(path)
-        referenced.extend(collect_referenced_files(dd, ['.', cfg_dir]))
+        other_files = collect_referenced_files(dd, ['.', cfg_dir])
+        referenced.extend([Path(p) for p in other_files])
         dd['_file_refs'] = referenced
     return dd
 

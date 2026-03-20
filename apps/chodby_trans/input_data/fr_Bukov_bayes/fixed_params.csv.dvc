@@ -1,0 +1,5 @@
+outs:
+- md5: bbe70d49497c4fb6c5efd9de2072fccc
+  size: 199
+  hash: md5
+  path: fixed_params.csv

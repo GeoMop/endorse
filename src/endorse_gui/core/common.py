@@ -6,7 +6,7 @@ import subprocess
 import shutil
 from pathlib import Path
 import numpy as np
-from yamlinclude import YamlIncludeConstructor
+import yaml_include
 
 from .memoize import File
 
@@ -113,11 +113,14 @@ def load_config(path):
     uses pyyaml-tags namely for:
     include tag:
         geometry: <% include(path="config_geometry.yaml")>
+    DEPRECATED use config.load_config
     """
-    YamlIncludeConstructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=os.path.dirname(path))
-    with open(path) as f:
-        cfg = yaml.load(f, Loader=yaml.FullLoader)
-    return dotdict.create(cfg)
+    assert False
+    # yaml.add_constructor("!include", yaml_include.Constructor(custom_loader), yaml.Loader)
+    # yaml_include.Constructor.add_to_loader_class(loader_class=yaml.FullLoader, base_dir=os.path.dirname(path))
+    # with open(path) as f:
+    #     cfg = yaml.load(f, Loader=yaml.FullLoader)
+    # return dotdict.create(cfg)
 
 
 def substitute_placeholders(file_in: str, file_out: str, params: Dict[str, Any]):
