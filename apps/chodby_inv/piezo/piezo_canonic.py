@@ -706,7 +706,7 @@ def excavation_epoch_df():
     Returns the excavation epoch DataFrame.
     """
     epoch = "excavation"
-    process_cfg = common.config.load_config(inputs.piezo_filter_yaml)
+    process_cfg = common.config.load_config(inputs.events_yaml)
 
     epoch_cfg = process_cfg[epoch]
     epoch_df = get_epoch(denoised_df(), epoch_cfg)
@@ -716,10 +716,9 @@ def excavation_epoch_df():
 
 def epoch_plots(df):
     epoch = "excavation"
-    process_cfg = common.config.load_config(inputs.piezo_filter_yaml)
     events_cfg = common.config.load_config(inputs.events_yaml)
 
-    epoch_cfg = process_cfg[epoch]
+    epoch_cfg = events_cfg[epoch]
     epoch_df = get_epoch(df, epoch_cfg)
 
     epoch_blasts = [blast.copy() for blast in events_cfg.blasts]

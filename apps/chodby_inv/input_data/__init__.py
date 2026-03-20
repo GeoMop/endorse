@@ -8,10 +8,12 @@ work_dir.mkdir(parents=True, exist_ok=True)
 # Following is public
 input_dir = __script_dir__.parent / "input_data"
 bh_cfg_yaml = input_dir / "boreholes.yaml"
-flow_obs_yaml = input_dir / "flow_observe_refined.yaml"
-piezo_filter_yaml = input_dir / "piezo_filtering.yaml"
+l5_mesh_cfg_yaml = input_dir / "l5_mesh_config.yaml"
+flow_obs_yaml = input_dir / "flow_observe.yaml"
 events_yaml = input_dir / "events.yaml"
 #blast_events_xlsx = input_dir / 'blast_events.xlsx'
+config_sim_tmpl_yaml = input_dir / "config_sim_tmpl.yaml"
+config_sim_calibration_tmpl_yaml = input_dir / "config_sim_calibr_init_p_tmpl.yaml"
 
 # smallest file
 #piezo_measurement_file = input_dir / "piezo_2024_06_04.xlsx"

@@ -4,6 +4,8 @@ from endorse import common
 import numpy as np
 import pandas as pd
 from math import sin, cos, pi
+import pyvista as pv
+import vtk
 #from bgem import gmsh, geometry
 import yaml
 import matplotlib.animation as animation
@@ -15,10 +17,11 @@ import chodby_inv.input_data as input_data
 work_dir = input_data.work_dir
 module_dir = pathlib.Path(__file__).parent
 from chodby_inv import piezo
+from chodby_inv.piezo.piezo_canonic import to_datetime
 
 class Boreholes:
-    def __init__(self, yaml_config_file=input_data.bh_cfg_yaml):
-        self.config = common.config.load_config(yaml_config_file)
+    def __init__(self, config=common.config.load_config(input_data.bh_cfg_yaml)):
+        self.config = config
 
 
     @property
@@ -40,8 +43,11 @@ class Boreholes:
         return self.config.boreholes[bh_index].id
 
     def bh_index_from_name(self, bh_name):
-        idx = next(i for i,bh in enumerate(self.config.boreholes) if bh.name == bh_name)
-        return idx
+        try:
+            idx = next(i for i,bh in enumerate(self.config.boreholes) if bh.name == bh_name)
+            return idx
+        except StopIteration:
+            return -1
 
     def bh_start(self, bh_index):
         bh = self.config.boreholes[bh_index]
@@ -58,6 +64,9 @@ class Boreholes:
         y = sin((self.l5_azimuth + 90 - bh.azimuth) * pi / 180)
         z = sin(bh.inclination * pi / 180)
         return np.array([x, y, z])
+
+    def bh_length(self, bh_index):
+        return self.config.boreholes[bh_index].length
 
     @property
     def n_boreholes(self):
@@ -93,6 +102,33 @@ class Boreholes:
     def sensor_position(self, bh_index, chamber_index):
         return self.config.boreholes[bh_index].sensor_positions[chamber_index]
 
+    def n_fractures(self, bh_index):
+        return len(self.config.boreholes[bh_index].fractures)
+
+    def fracture(self, bh_index, fr_index):
+        return self.config.boreholes[bh_index].fractures[fr_index]
+
+    def fr_normal(self, bh_index, fr_index):
+        fr = self.config.boreholes[bh_index].fractures[fr_index]
+        x = cos((self.l5_azimuth + 90 - fr.azimuth) * pi / 180)
+        y = sin((self.l5_azimuth + 90 - fr.azimuth) * pi / 180)
+        z = sin(fr.inclination * pi / 180)
+        return np.array([x, y, z])
+
+    def get_initial_pressures(self):
+        pressures = {}
+        df_pressure = piezo.excavation_epoch_df()
+        for bhi in range(self.n_boreholes):
+            bhname = self.bh_name(bhi)
+            df_filtered = df_pressure[(df_pressure['borehole'] == bhname) & (df_pressure['time_days'] == 0)]
+            pressure = df_filtered['pressure'].to_numpy() / 10
+            chamber = df_filtered['section'].to_numpy()
+            bh_pressures = np.zeros(self.n_chambers(bhi))
+            for ch, p in zip(chamber, pressure):
+                bh_pressures[ch] = p
+            pressures[bhname] = bh_pressures
+        return pressures
+
     def make_gmsh_lines(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         lines = []
         for i in range(self.n_boreholes):
@@ -102,6 +138,20 @@ class Boreholes:
                 p2 = factory.point(self.chamber_end(i, ch))
                 lines.append( factory.line(p1, p2) )
         return lines
+
+    def make_gmsh_fractures(self, factory: bgem.gmsh.gmsh.GeometryOCC):
+        objs = []
+        radius = 10
+        for i in range(self.n_boreholes):
+            n_fracs = self.n_fractures(i)
+            bh_start = self.bh_start(i)
+            bh_dir = self.bh_direction(i)
+            for fri in range(n_fracs):
+                fr = self.fracture(i, fri)
+                center = bh_start + bh_dir*fr.position
+                normal = self.fr_normal(i, fri)
+                objs.append( factory.disc_discrete(radius, center, 8, normal) )
+        return objs
 
     def make_gmsh_rectangles(self, factory: bgem.gmsh.gmsh.GeometryOCC):
         rects = []
@@ -119,7 +169,7 @@ class Boreholes:
         factory.write_mesh('rects.msh')
         return rects
 
-    def make_observe_points(self, output_file: str, n_pts_per_chamber=3):
+    def make_observe_points(self, output_file: str = None, n_pts_per_chamber=3):
         point_list = []
         for i in range(self.n_boreholes):
             n_chambers = self.n_chambers(i)
@@ -131,8 +181,120 @@ class Boreholes:
                 list = [{"name": ch_name + f"_pt_{ipt}", "point": pt.tolist()} for ipt,pt in enumerate(pts)]
                 point_list.extend(list)
 
-        with open(output_file, "w") as file:
-            yaml.dump(point_list, file, default_flow_style=True)
+        if output_file is None:
+            return yaml.dump(point_list, default_flow_style=True)
+        else:
+            with open(output_file, "w") as file:
+                yaml.dump(point_list, file, default_flow_style=True)
+
+    def make_vtk_visualization(self, filename):
+        root = pv.MultiBlock()
+
+        pressures = self.get_initial_pressures()
+
+        lines = []
+        #texts = []
+        cyls = []
+        labels = []
+        label_coords = []
+        line_indices = []
+        cyl_indices = []
+        for i in range(self.n_boreholes):
+            bh_block = pv.MultiBlock()
+            bh_name = self.bh_name(i)
+
+            dir = self.bh_direction(i)
+            p1 = self.bh_start(i)
+            p2 = p1 + dir*self.bh_length(i)
+
+            line = pv.Line(p1, p2)
+            line.cell_data['bh_index'] = np.full(line.n_cells, i, dtype=int)
+            line.cell_data['ch_index'] = np.full(line.n_cells, -1, dtype=int)
+
+            bh_block['axis'] = line
+
+            # lines.append( line )
+            # line_indices.extend([i] * line.n_cells)
+
+            for ch in range(self.n_chambers(i)):
+                chp1 = self.chamber_start(i, ch)
+                chp2 = self.chamber_end(i, ch)
+                cyl = pv.Cylinder(center=(chp1+chp2)/2, direction=dir, radius=0.2, height=np.linalg.norm(chp2-chp1))
+
+                cyl.cell_data['bh_index'] = np.full(cyl.n_cells, i, dtype=int)
+                cyl.cell_data['ch_index'] = np.full(cyl.n_cells, ch, dtype=int)
+                cyl.cell_data['pressure'] = np.full(cyl.n_cells, pressures[bh_name][ch], dtype=float)
+
+                bh_block[f'chamber_{ch}'] = cyl
+
+                # cyls.append( cyl )
+                # cyl_indices.extend([i] * cyl.n_cells)
+
+            # bh_block.field_data['bh_index'] = np.array([i])
+            # bh_block.field_data['bh_name'] = np.array([bh_name])
+
+            root[bh_name] = bh_block
+
+            labels.append( bh_name )
+            label_coords.append( p2 )
+            #text = pv.Text3D(self.bh_name(i), depth=0.5, center=p2, normal=dir)
+            #texts.append( text )
+
+        root.field_data['Labels'] = np.array(labels)
+        root.field_data['LabelCoords'] = np.array(label_coords)
+        # root.move_nested_field_data_to_root()
+
+        root.save(filename)
+
+        # mesh = pv.merge(lines + cyls)
+        #
+        # n_line_cells = sum(l.n_cells for l in lines)
+        # n_cyl_cells  = mesh.n_cells - n_line_cells
+        #
+        # # index jen pro vrtové čáry, válce dostanou např. -1
+        # index = np.hstack([
+        #     np.array(line_indices, dtype=int),
+        #     np.array(cyl_indices, dtype=int)
+        # ])
+        # mesh.cell_data['index'] = index
+        #
+        # mesh.add_field_data( np.array(labels), 'Labels' )
+        # mesh.add_field_data( np.array(label_coords), 'LabelCoords' )
+        #
+        # mesh.save(filename)
+
+    def visualize_fractures(self, output_file):
+
+        # Number of points to discretize each circle boundary
+        n_circle_points = 40
+        # Radius of all fractures
+        radius = 2
+
+        all_meshes = []
+        for bi in range(self.n_boreholes):
+            bh_start = self.bh_start(bi)
+            bh_normal = self.bh_direction(bi)
+            for fi in range(self.n_fractures(bi)):
+                f = self.fracture(bi, fi)
+                f_center = bh_start + bh_normal * f.position
+                f_normal = self.fr_normal(bi, fi)
+                disc = pv.Disc(center=f_center, inner=0.0, outer=radius, normal=f_normal, c_res=n_circle_points)
+
+                # Assign scalars as per-disc (cell data)
+                n_cells = disc.n_cells
+                disc.cell_data["width"] = np.full(n_cells, f.width)
+                disc.cell_data["flag"] = np.full(n_cells, f.flag)
+
+                all_meshes.append(disc)
+
+        # Combine all discs into a single mesh
+        combined = all_meshes[0]
+        for m in all_meshes[1:]:
+            combined = combined.merge(m)
+
+        # Save to VTU file
+        combined.save(output_file)
+
 
 
 
@@ -204,23 +366,31 @@ class ObservePointData:
         plt.tight_layout()
         plt.show()
 
-    def plot_chamber_pressure_averages(self, output_file=None, print_pressures=False):
-        fig, ax = plt.subplots(3, 8, figsize=(60, 15))
-        ax = ax.transpose().flatten()
+    def plot_chamber_pressure_averages(self, output_file=None, print_pressures=False, only_chambers=False):
+        if not only_chambers:
+            only_chambers = self._chamber_names
+            n_chambers = len(only_chambers)
+            fig, ax = plt.subplots(3, n_chambers, figsize=(7.5 * n_chambers, 15))
+            ax = ax.transpose().flatten()
+        else:
+            n_chambers = len(only_chambers)
+            fig, ax = plt.subplots(1, n_chambers, figsize=(7.5 * n_chambers, 5))
+
+        axi = 0
+        xx = self._times
         for ci, cname in enumerate(self._chamber_names):
-            xx = self._times
-            pressures = np.zeros(len(xx))
-            for i,t in enumerate(self._times):
-                pressures[i] = np.mean(self.chamber_pressures(ci, t))
-            ax[ci].set_title(cname)
-            # ax[ci].set_ylim(self._pressure_bounds[ci])
-            ax[ci].set_xlim(100, 130)
-            #ax[ci].yaxis.set_major_locator(ticker.MultipleLocator(50))
-            #ax[ci].yaxis.set_minor_locator(ticker.MultipleLocator(10))
-            #ax[ci].minorticks_on()
-            ax[ci].plot(xx, pressures)
-            if print_pressures:
-                print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
+            if cname in only_chambers:
+                pressures = np.zeros(len(xx))
+                for i,t in enumerate(self._times):
+                    pressures[i] = np.mean(self.chamber_pressures(ci, t))
+                ax[axi].set_title(cname)
+                ax[axi].set_xlim(100, 130)
+                ax[axi].plot(xx, pressures)
+                ax[axi].set_xlabel("time [d]")
+                ax[axi].set_ylabel("pressure head [m]")
+                if print_pressures:
+                    print(f"Chamber {cname} initial pressure at t=100: {pressures[1]}")
+                axi += 1
 
         plt.tight_layout()
         if output_file is None:
@@ -230,45 +400,64 @@ class ObservePointData:
 
         return fig, ax
 
+def excavation_days_shift(events_cfg):
+    # Determine time shift between measurements and simulation
+    excavation_epoch = events_cfg['excavation']
+    simulation_epoch = events_cfg['hm_model']
+    start_sim_timestamp = to_datetime(simulation_epoch.excavation_start) - pd.Timedelta(
+        days=simulation_epoch.days_before_excavation)
+    start_exc_timestamp = to_datetime(excavation_epoch.origin)
+    days_shift = (start_exc_timestamp - start_sim_timestamp) / pd.Timedelta(days=1)
+    return days_shift
+
 
 def plot_chamber_pressures(pressure_fname,
                            output_fname,
                            pressure_init_fname=None,
                            output_init_fname=None,
                            output_compared_fname=None,
-                           plot_ref_pressure=True
+                           plot_ref_pressure=True,
+                           only_chambers=False
                           ):
     bhs = Boreholes()
     obs = ObservePointData(bhs, pressure_fname)
-    fig, ax = obs.plot_chamber_pressure_averages(output_fname)
+    fig, ax = obs.plot_chamber_pressure_averages(output_fname, only_chambers=only_chambers)
+
+    # Determine time shift between measurements and simulation
+    events_cfg = common.config.load_config(input_data.events_yaml)
+    days_shift = excavation_days_shift(events_cfg)
 
     # shift time scale and add labels
     for axis in ax:
         for line in axis.get_lines():
-            line.set_xdata(line.get_xdata() - 100)
+            line.set_xdata(line.get_xdata() - days_shift)
             line.set_label('model pressure [m]')
             axis.set_xlim(0,60)
             axis.legend()
+            axis.minorticks_on()  # Enable minor ticks
+            axis.grid(which='major', linestyle='-', linewidth=0.75)
+            axis.grid(which='minor', linestyle=':', linewidth=0.5)
     
     if pressure_init_fname is not None:
         obs_i = ObservePointData(bhs, pressure_init_fname)
-        fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname)
+        fig_i, ax_i = obs_i.plot_chamber_pressure_averages(output_init_fname, only_chambers=only_chambers)
 
         # plot both lines to one plot
         for axis, axis_i in zip(ax, ax_i):
             for line in axis_i.get_lines():
-                axis.plot(line.get_xdata() - 100, line.get_ydata(), label='model with enforced initial pressure [m]')
+                axis.plot(line.get_xdata() - days_shift, line.get_ydata(), label='model with enforced initial pressure [m]')
                 axis.legend()
 
     # read and plot reference pressures from measurements
     if plot_ref_pressure:
         df = piezo.excavation_epoch_df()
-        for axis,cname in zip(ax,obs.chamber_names):
+        for axis in ax:
+            cname = axis.get_title()
             bhname, _, cidx = cname.rpartition('_ch_')
             bh_index = bhs.bh_index_from_name(bhname)
             cidx = int(cidx)
             pos = bhs.sensor_position(bh_index, cidx)
-            axis.set_title(f"{bhname} chamber {cidx+1} position {pos} m")
+            axis.set_title(f"{bhname[3:]}-{cidx} (position {pos} m)")
             filtered_df = df[(df['borehole'] == bhname) & (df['section'] == cidx)]
             sim_time = filtered_df['time_days']
             pressure = filtered_df['pressure'].to_numpy() / 10 # from kPa to m
@@ -281,13 +470,30 @@ def plot_chamber_pressures(pressure_fname,
     else:
         fig.savefig(output_compared_fname)
 
+
+def print_initial_pressures():
+    bhs = Boreholes()
+    df_pressure = piezo.excavation_epoch_df()
+    for bhi in range(bhs.n_boreholes):
+        bhname = bhs.bh_name(bhi)
+        df_filtered = df_pressure[(df_pressure['borehole'] == bhname) & (df_pressure['time_days'] == 0)]
+        pressure = df_filtered['pressure'].to_numpy() / 10
+        chamber = df_filtered['section'].to_numpy()
+        for ch,p in zip(chamber,pressure):
+            print(bhname, ch, p)
+
+
 if __name__ == "__main__":
     # plot comparison of model and measured pressure in chambers
-
-    output_fname = 'chamber_pressure_averages_refined.pdf'
-    pressure_init_fname = 'flow_observe_refined_init_p.yaml'
-    output_init_fname = 'chamber_pressure_averages_refined_init_p.pdf'
-    output_compared_fname = 'chamber_pressures_refined_compared.pdf'
+    output_fname = 'chamber_pressure_averages_refined_select.pdf'
+    output_compared_fname = 'chamber_pressures_refined_compared_select.pdf'
     plot_chamber_pressures(input_data.flow_obs_yaml,
                            work_dir / output_fname,
-                           output_compared_fname= work_dir / output_compared_fname)
+                           output_compared_fname= work_dir / output_compared_fname,
+                           only_chambers=["L5-26R_ch_2", "L5-23UR_ch_1"])
+
+    # create VTM file (multi-block) with borehole geometries
+    Boreholes().make_vtk_visualization("boreholes.vtm")
+
+    # print values of initial measured pressures in borehole cells
+    print_initial_pressures()
