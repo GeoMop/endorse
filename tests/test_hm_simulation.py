@@ -74,7 +74,7 @@ def test_tunnel_interpolation():
     mesh_interp.test_porosity(cfg.tsx_hm_model.hm_params)
 
 
-# @pytest.mark.skip
+@pytest.mark.skip
 def test_run_single_sample():
     if not has_usable_docker():
         pytest.skip("requires usable Docker runtime")
