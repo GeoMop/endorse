@@ -140,12 +140,11 @@ def _item_update(key:Key, val:dotdict, sub_path:Key, sub:dotdict):
 def deep_update(cfg: dotdict, iter:AddrIter, substitute:dotdict):
     if iter.is_leaf():
         return substitute
+    new_cfg = dotdict(cfg)
     if isinstance(cfg, list):
         key, sub_path = iter.idx()
-        new_cfg = list(cfg)
     elif isinstance(cfg, (dict, dotdict)):
         key, sub_path = iter.key()
-        new_cfg = dotdict(cfg)
     else:
         raise TypeError(f"Variant substitution: Unknown type {type(cfg)}")
     new_cfg[key] = deep_update(cfg[key], sub_path, substitute)
