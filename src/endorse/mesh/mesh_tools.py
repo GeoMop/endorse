@@ -3,36 +3,62 @@ import os
 import logging
 import numpy as np
 from bgem.gmsh import field, options, gmsh
-from bgem.stochastic import fracture
+from bgem.stochastic import Fracture, Population
 from endorse.common import dotdict
 
 
+def box_with_sides(factory, dimensions, center=[0,0,0]):
+    """
+    Make a box and dictionary of its sides named: 'side_[xyz][01]'
+    :return: box, sides_dict
+    """
+    box = factory.box(dimensions).translate(center).set_region("box")
+    side_z = factory.rectangle([dimensions[0], dimensions[1]])
+    side_y = factory.rectangle([dimensions[0], dimensions[2]])
+    side_x = factory.rectangle([dimensions[2], dimensions[1]])
+    sides = dict(
+        side_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
+        side_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
+        side_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
+        side_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
+    )
+    for name, side in sides.items():
+        side.translate(center).modify_regions(name)
+    return box, sides
 
-def generate_fractures(pop:fracture.Population, range: Tuple[float, float], fr_limit, box,  seed) -> List[fracture.Fracture]:
+
+def legacy_seed_from_hash(hash_value):
+    return abs(hash_value) % (2**32)
+
+def generate_fractures(pop:Population, range: Tuple[float, float], fr_limit, box,  seed,
+                       id_offset=0) -> List['RegionFracture']:
     """
     Generate set of stochastic fractures.
     """
+    from endorse.mesh.fracture_tools import RegionFracture
+    # legacy_seed = legacy_seed_from_hash(seed)
+    # print(f"seed: {seed}, legacy_seed: {legacy_seed}")
     np.random.seed(seed)
-    max_fr_size = np.max(box)
-    r_min, r_max = range
-    if r_max is None:
-        r_max = max_fr_size
-    if r_min is None:
-        # smallest size range
-        n_frac_lim = fr_limit
-    else:
-        # prescribed fracture range
-        n_frac_lim = None
-    pop.domain = [b if d > 0 else 0.0 for d, b in zip(pop.domain, box)]
-    pop.set_sample_range([r_min, r_max], sample_size=n_frac_lim)
-    logging.info(f"fr set range: {[r_min, r_max]}, fr_lim: {n_frac_lim}, mean population size: {pop.mean_size()}")
+    # rng = np.random.default_rng(seed)
+    family_ranges = np.array([f.size.sample_range for f in pop.families], dtype=float)
+    current_range = tuple(np.median(family_ranges, axis=0))
+    lower, upper = range
+    sample_range = (
+        current_range[0] if lower is None else lower,
+        current_range[1] if upper is None else upper,
+    )
+    if fr_limit is not None and (lower is None or upper is None):
+        free_bound = 0 if lower is None else 1
+        sample_range = pop.common_range_for_sample_size(fr_limit, free_bound=free_bound, initial_range=sample_range)
+    pop = pop.set_sample_range(sample_range)
+    logging.info(f"fr set range: {sample_range}, fr_lim: {fr_limit}, mean population size: {pop.mean_size()}")
 
-
-    pos_gen = fracture.UniformBoxPosition(pop.domain)
-    fractures = pop.sample(pos_distr=pos_gen, keep_nonempty=True)
+    fractures = [fr for fr in pop.sample(keep_nonempty=True)]
     for i, fr in enumerate(fractures):
-        reg = gmsh.Region.get(f"fr_{i}")
-        fr.region = reg
+        reg = gmsh.Region.get(f"fr_{id_offset+i}")
+        fractures[i] = RegionFracture(fr, reg)
 
     # fracture.fr_intersect(fractures)
 

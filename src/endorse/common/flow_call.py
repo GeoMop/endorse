@@ -85,6 +85,7 @@ class FlowOutput:
                         conv_reason = int(value)
                         if conv_reason < 0:
                             print("Failed to converge: ", conv_reason)
+                            failed_convergence_reason = conv_reason
                             return False
                 except ValueError:
                     continue

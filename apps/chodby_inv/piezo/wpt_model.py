@@ -11,7 +11,7 @@ class DataItem(TypedDict):
 
 
 class PoroElasticSolver:
-    def __init__(self, r_b, R, N, dt, T_final, p_b0):
+    def __init__(self, r_b, R, N, geom_power, dt, T_final, p_b0):
         """
         Stores geometry, time-stepping, and fixed pressures.
 
@@ -19,6 +19,7 @@ class PoroElasticSolver:
           r_b   : Borehole radius [m].
           R     : Outer radius [m].
           N     : Number of finite elements (mesh will have N+1 nodes).
+          geom_power: Power coefficient for spacing of elements (1 = even spacing, >1 = concentrated at borehole)
           dt    : Time step [s].
           T_final: Total simulation time [s].
           p_b0  : Fixed borehole pressure (node 0) [Pa].
@@ -30,7 +31,7 @@ class PoroElasticSolver:
         self.dt = dt
         self.T_final = T_final
         self.n_dofs = N + 1  # full number of nodes
-        self.r = np.linspace(r_b, R, self.n_dofs)
+        self.r = r_b + (R-r_b) * np.linspace(0,1,self.n_dofs)**geom_power
         self.Nt = int(np.ceil(T_final / dt))
         self.p_b0 = p_b0
 
@@ -182,7 +183,7 @@ class PoroElasticSolver:
         self.p_far = p_far
 
         # Build the global system.
-        A_full, M_lumped, b_dirichlet = self.build_global_system(S, k_array, C_b, self.dt)
+        A_full, M_lumped, b_dirichlet = self.build_global_system(S, self.k_array, C_b, self.dt)
 
         n = self.n_dofs
         # Initialize the pressure field: node 0 = p_b0, interior nodes = p_far.
@@ -254,7 +255,8 @@ if __name__ == '__main__':
     # Geometry and time-stepping parameters.
     r_b = 0.2  # Borehole radius [m]
     R = 2.0  # Outer domain radius [m]
-    N = 50  # Number of finite elements (=> N+1 nodes)
+    N = 10  # Number of finite elements (=> N+1 nodes)
+    geom_power = 8
     dt = 24*60*60  # Time step [s]
     T_final = dt * 90  # Total simulation time (e.g., 3 days) [s]
     p_b0 = 1000*1000  # Borehole pressure (node 0) [Pa]
@@ -262,7 +264,7 @@ if __name__ == '__main__':
     c_f = 4.5e-10
 
     # Instantiate the solver.
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
+    solver = PoroElasticSolver(r_b, R, N, geom_power, dt, T_final, p_b0)
 
     # Rock and fluid parameters.
     biot = 0.3
