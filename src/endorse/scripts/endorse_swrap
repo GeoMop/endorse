@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Auxiliary script for starting endorse images.
+# It further calls swrap/sexec python script to start endorse_mlmc.py in the docker image.
+#
+
+#
+# endorse_swrap <WORKDIR_RELATIVE>
+#
+# WORKDIR_RELATIVE - relative to $HOME/endorse_work
 
 set -x
 
@@ -53,13 +61,20 @@ fi
 
 # auxiliary hack how to detect we are running with 'charon.nti.tul.cz' configuration
 # TODO: design more general resolution pattern
-if [ ! "${SCRIPTPATH#/auto/liberec3-tul}" == "${SCRIPTPATH}" ]
-then
-    export ENDORSE_HOSTNAME="charon.nti.tul.cz"
-elif [ ! "${SCRIPTPATH#/auto/brno2}" == "${SCRIPTPATH}" ]
-then
-    export ENDORSE_HOSTNAME="skirit.ics.muni.cz"
-fi
+# if [ ! "${SCRIPTPATH#/auto/liberec3-tul}" == "${SCRIPTPATH}" ]
+# then
+#     export ENDORSE_HOSTNAME="charon.nti.tul.cz"
+# elif [ ! "${SCRIPTPATH#/auto/brno2}" == "${SCRIPTPATH}" ]
+# then
+#     export ENDORSE_HOSTNAME="skirit.ics.muni.cz"
+# fi
+#
+# ENDORSE_HOSTNAME environment variable is propagated into endore_mlmc 
+# and used there to resolve machine configuration
+# In partifular flow123 cmdline is configured.
+# child PBS processes are configured there.
+
+
 
 command=$1
 if [ "${command}" == "setup_venv" ]

@@ -10,29 +10,22 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.12"]
 
         
     steps:
     - name: Checkout Endorse repository.
-      uses: actions/checkout@v3
-      with:
-        submodules: true
-    #- name: Checkout submodules
-    #  uses: srt32/git-actions@v0.0.3
-    #  with:
-    #    args: git submodule update --init --recursive
+      uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     # GLU for GMSH, Redis for redis-cache
     - name: Install dependencies
       run: |
+        sudo apt-get update
         sudo apt-get install libglu1-mesa redis
         python -m pip install --upgrade pip
-        echo "ls -l submodules/bgem"
-        ls -l submodules/bgem
         pip install -r requirements.txt
         pip install tox tox-gh-actions
 
