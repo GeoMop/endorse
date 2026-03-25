@@ -509,7 +509,7 @@ def denoise_pressure(pressure_series):
        the Gaussian kernel.
     Current setting only removes the largest outliers.
     """
-    pressure = pressure_series.values
+    pressure = pressure_series.to_numpy(copy=True)
     pressure[pressure > 2000] = -50.0
 
     # detect single value outliers

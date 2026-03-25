@@ -89,7 +89,6 @@ small_p = [
 
 
 def plot_wpts(df: pd.DataFrame, workdir: Path):
-    process_cfg = common.config.load_config(inputs.piezo_filter_yaml)
     events_cfg = common.config.load_config(inputs.events_yaml)
 
     wpts = events_cfg["water_pressure_tests"]
