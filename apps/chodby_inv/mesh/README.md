@@ -11,7 +11,7 @@ README.md
 - simulation system, parallel with L5 (see bellow)
 
 ### Simulation Domain
-Domain Y axis lays at axis of L5, X axis is in direction of drift ZK5-1S.
+Domain Y axis lays at axis of L5 (towards east), X axis is in direction of drift ZK5-1J (towards south).
 Y axis direction: [9.72, -3.49, 0] (in the local system).
 
 Point at floor at intersection of L5 axis and ZK5-1J axis:  P1 = [-66.52, -20.96, 18] (in the local system)

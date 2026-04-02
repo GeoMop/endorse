@@ -1,0 +1,102 @@
+import os
+import logging
+import yaml
+import numpy as np
+import attrs
+from typing import Any
+
+from endorse.mesh import mesh_tools
+from bgem.stochastic import Fracture, Population, RectangleShape
+from bgem.gmsh import gmsh
+
+
+@attrs.define
+class RegionFracture:
+    fracture: Fracture
+    region: Any
+
+    def __getattr__(self, item):
+        return getattr(self.fracture, item)
+
+
+def create_fractures_rectangles(gmsh_geom, fractures, shift, base_shape: 'ObjectSet'):
+    # From given fracture date list 'fractures'.
+    # transform the base_shape to fracture objects
+    # fragment fractures by their intersections
+    # return dict: fracture.region -> GMSHobject with corresponding fracture fragments
+    if len(fractures) == 0:
+        return []
+
+
+    shapes = []
+    for i, fr in enumerate(fractures):
+        shape = base_shape.copy()
+        print("fr: ", i, "tag: ", shape.dim_tags)
+        shape = shape.scale([fr.rx, fr.ry, 1]) \
+            .rotate(axis=[0,0,1], angle=fr.shape_angle) \
+            .rotate(axis=fr.rotation_axis, angle=fr.rotation_angle) \
+            .translate(fr.center + shift).set_region(fr.region)
+
+        shapes.append(shape)
+
+    fracture_fragments = gmsh_geom.fragment(*shapes)
+    return fracture_fragments
+
+
+def fr_dict_repr(fr):
+    return dict(r=float(fr.r), normal=fr.normal.tolist(), center=fr.center.tolist(),
+                aspect=float(fr.aspect), shape_angle=float(fr.shape_angle), region=fr.region.name)
+
+
+def population_from_cfg(families, box):
+    return Population.from_cfg(families, box, RectangleShape)
+
+
+def fixed_fractures(cfg):
+    """
+    Fixed artificial fractures.
+    :param cfg: main config
+    :return: list of fracture list[Fracture]
+    """
+    diameter = np.linalg.norm(cfg.geometry.box_dimensions[1:])   # diagonal of y-z plane
+    center = np.array([0, 0.75 * cfg.geometry.box_dimensions[1]/2, 0])
+    normal = np.array([0, 1, 0])
+    region_id = 0
+    region = gmsh.Region.get(f"fr_{region_id}")
+    fr = Fracture(RectangleShape.id, (diameter, diameter), center, normal, family=region_id)
+    fr = RegionFracture(fr, region)
+    return [fr]
+
+
+def fracture_set(cfg, fr_population:Population, seed:int):
+    main_box_dimensions = cfg.geometry.box_dimensions
+
+    # Fixed large fractures
+    fractures = fixed_fractures(cfg)
+
+    fix_seed = cfg.fractures.fixed_seed
+    large_min_r = cfg.fractures.large_min_r
+    # large_box_dimensions = cfg.fractures.large_box
+    # logging.info(f"Large fracture seed: {fix_seed}")
+    # max_large_size = max([fam.size.diam_range[1] for fam in fr_population.families])
+    # random large fracture with fixed seed
+    # fractures = mesh_tools.generate_fractures(fr_population, (large_min_r, max_large_size), fr_limit, large_box_dimensions, fix_seed)
+
+    large_fr_dict=dict(seed=fix_seed, fr_set=[fr_dict_repr(fr) for fr in fractures])
+    with open(f"large_Fr_set.yaml", "w") as f:
+        yaml.dump(large_fr_dict, f, sort_keys=False)
+    n_large = len(fractures)
+
+    #if n_large == 0:
+    #    raise ValueError()
+    # random small scale fractures
+
+    fr_limit = cfg.fractures.n_frac_limit
+    if fr_limit > 0:
+        logging.info(f"Small fracture seed: {seed}")
+        small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r),
+                                                 fr_limit, main_box_dimensions, seed, id_offset=n_large)
+        fractures.extend(small_fr)
+        logging.info(f"Generated fractures: {n_large} large, {len(small_fr)} small.")
+
+    return fractures, n_large

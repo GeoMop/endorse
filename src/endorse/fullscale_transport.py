@@ -13,8 +13,9 @@ from . import apply_fields
 from . import plots
 from . import flow123d_inputs_path
 from .indicator import indicator_set, indicators, IndicatorFn
-from bgem.stochastic.fracture import Fracture, Population
+from bgem.stochastic import Fracture
 from endorse import hm_simulation
+from endorse.mesh.fracture_tools import population_from_cfg
 
 
 
@@ -43,7 +44,13 @@ def fullscale_transport(cfg_path, seed):
 
 def time_tuple(item : Union[float, Tuple[float, float]]):
     if isinstance(item, (tuple,list)):
+        # if isinstance(item[1], int):
+        #     return item
+        # else:
+        #     return item[0], 0
         return item
+    elif isinstance(item, dict):
+        return item['begin'][0],  item['step'][0]
     else:
         return (item, np.inf)
 
@@ -54,7 +61,10 @@ def output_times(cfg_fine):
     for item, next in zip(cfg_times[:-1], cfg_times[1:]):
         start, step = time_tuple(item)
         end, _ = time_tuple(next)
-        times.extend((t for t in np.arange(start, end, step)))
+        if isinstance(step, int):
+            times.extend(float(t) for t in np.arange(start, end, step))
+        else:
+            times.append(start)
     times.append(end_time)
     return times
 
@@ -79,7 +89,7 @@ def transport_2d(cfg, seed):
 
     box = cfg.geometry.box_dimensions
     box = [box[0], box[2], 0]
-    fr_pop = Population.initialize_2d( cfg.fractures.population, box)
+    fr_pop = population_from_cfg(cfg.fractures.population, box)
 
     full_mesh_file, fractures, n_large = fullscale_transport_mesh_2d(cfg_fine, fr_pop, seed)
 
@@ -88,7 +98,8 @@ def transport_2d(cfg, seed):
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
 
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, el_to_ifr, fractures, dim=2)
+    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+                                                     el_to_ifr, fractures, dim=2)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 
@@ -98,14 +109,15 @@ def transport_run(cfg, seed):
     cfg_fine = cfg.transport_fullscale
     large_model = File(os.path.join(cfg_basedir, cfg_fine.piezo_head_input_file))
     #plots.plot_source(conc_flux)
-    fr_pop = Population.initialize_3d( cfg_fine.fractures.population, cfg.geometry.box_dimensions)
+    fr_pop = population_from_cfg(cfg_fine.fractures.population, cfg.geometry.box_dimensions)
     full_mesh_file, fractures, n_large = fullscale_transport_mesh_3d(cfg_fine, fr_pop, seed)
 
     full_mesh = Mesh.load_mesh(full_mesh_file, heal_tol=1e-4)
     el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, el_to_ifr, fractures, dim=3)
+    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+                                                     el_to_ifr, fractures, dim=3)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 def parametrized_run(cfg, large_model, input_fields_file):
@@ -219,7 +231,9 @@ def set_source_limits(cfg):
     return source_params
 
 @report
-def compute_fields(cfg:dotdict, mesh:Mesh,  fr_map: Dict[int, int], fractures:List[Fracture], dim):
+@memoize
+def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
+                   fr_map: Dict[int, Fracture], fractures:List[Fracture], dim):
     """
     :param params: transport parameters dictionary
     :param mesh: GmshIO of the computational mesh (read only)
@@ -238,28 +252,41 @@ def compute_fields(cfg:dotdict, mesh:Mesh,  fr_map: Dict[int, int], fractures:Li
     # Bulk fields
     el_slice_bulk = mesh.el_dim_slice(dim)
     # Bulk fields
-    #bulk_cond, bulk_por = compute_hm_bulk_fields(cfg, cfg_basedir, mesh.el_barycenters()[el_slice_3d])
-    bulk_cond, bulk_por = apply_fields.bulk_fields_mockup(cfg_geom, cfg_bulk_fields, mesh.el_barycenters()[el_slice_bulk])
+    # bulk_cond, bulk_por = apply_fields.bulk_fields_mockup(cfg_geom, cfg_bulk_fields, mesh.el_barycenters()[el_slice_bulk])
+    bulk_cond, bulk_por = bulk_field_func(cfg_geom, cfg_bulk_fields,
+                                          mesh.el_barycenters()[el_slice_bulk])
     conductivity[el_slice_bulk] = bulk_cond
     porosity[el_slice_bulk] = bulk_por
     logging.info(f"bulk slice: {el_slice_bulk}")
     c_min, c_max = np.min(conductivity), np.max(conductivity)
     logging.info(f"cond range: {c_min}, {c_max}")
-    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_cond, file="conductivity_yz.pdf")
-    plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, file="porosity_yz.pdf")
+    # plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_cond, cut=(0,2), file="conductivity_yz.pdf")
+    # plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
-    cfg_fr = cfg_trans.fractures
-    cfg_fr_fields = cfg_trans.fr_field_params
-    el_slice_fr = mesh.el_dim_slice(dim - 1)
-    logging.info(f"fr slice: {el_slice_fr}")
-    i_default = len(fractures)
-    fr_map_slice = [fr_map.get(i, i_default) for i in range(el_slice_fr.start, el_slice_fr.stop)]
-    fr_cond, fr_cross, fr_por = apply_fields.fr_fields_repo(cfg_fr, cfg_fr_fields,
-                                                            mesh.elements[el_slice_fr], fr_map_slice, fractures)
-    conductivity[el_slice_fr] = fr_cond
-    cross_section[el_slice_fr] = fr_cross
-    porosity[el_slice_fr] = fr_por
+    if "fractures" in cfg.geometry.include and fractures is not None:
+        cfg_fr = cfg.fractures
+        cfg_fr_fields = cfg_trans.fr_field_params
+        el_slice_fr = mesh.el_dim_slice(dim - 1)
+        logging.info(f"fr slice: {el_slice_fr}")
+        i_default = len(fractures)
+        fr_map_slice = [fr_map.get(i, i_default) for i in range(el_slice_fr.start, el_slice_fr.stop)]
+        fr_cond, fr_cross, fr_por = apply_fields.fr_fields_repo(cfg_fr, cfg_fr_fields,
+                                                                mesh.elements[el_slice_fr], fr_map_slice, fractures)
+        conductivity[el_slice_fr] = fr_cond
+        cross_section[el_slice_fr] = fr_cross
+        porosity[el_slice_fr] = fr_por
+
+        # estimate velocities on bulk and fracture
+        # for cond range 1e-13 - 1e-9 and porosity about 1, we have velocity 1e-16  to 5.5e-10
+        # i.e velocity about the order of conductivity or one order less
+        # for fracture, cond range:
+        pos_fr = fr_cond > 0
+        est_velocity = (np.quantile(bulk_cond, 0.4) / 10, np.quantile(fr_cond[pos_fr], 0.4))
+    else:
+        est_velocity = (np.quantile(bulk_cond, 0.4) / 10, 0)
+
+
     fields = dict(
         conductivity=conductivity,
         cross_section=cross_section,
@@ -267,13 +294,6 @@ def compute_fields(cfg:dotdict, mesh:Mesh,  fr_map: Dict[int, int], fractures:Li
     )
     cond_file = mesh.write_fields("input_fields.msh2", fields)
 
-    # estimate velocities on bulk and fracture
-    # for cond range 1e-13 - 1e-9 and porosity about 1, we have velocity 1e-16  to 5.5e-10
-    # i.e velocity about the order of conductivity or one order less
-    # for fracture, cond range:
-
-    pos_fr = fr_cond > 0
-    est_velocity = (np.quantile(bulk_cond, 0.4)/10, np.quantile(fr_cond[pos_fr],  0.4))
     return cond_file, est_velocity
 
 def compute_hm_bulk_fields(cfg, cfg_basedir, points):
