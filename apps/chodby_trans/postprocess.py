@@ -325,6 +325,8 @@ def select_params(
 def select_sobol(
     df_si: pd.DataFrame,
     ds: xr.Dataset,
+    *,
+    selection_col: str | None = "selected",
 ) -> xr.Dataset:
     """
     Assemble a Dataset with selected parameters and an 'others' row.
@@ -336,6 +338,9 @@ def select_sobol(
         S1(group,*out), S2(group,group2,*out), ST(group,*out),
         S1_agg(group), ST_agg(group),
         S1_agg_ci(group,bound), ST_agg_ci(group,bound)
+
+    selection_col:
+        DataFrame column used as the row-selection mask. Use ``None`` to keep all rows.
 
     Outputs
     -------
@@ -362,29 +367,34 @@ def select_sobol(
 
     # --- build SI rows for selected entries ---
 
-    si_rows = [getters[base]((i, j )) for base, i, j  in zip(df_si.base, df_si.idx_0, df_si.idx_1)]
+    si_rows = [getters[base]((i, j)) for base, i, j in zip(df_si.base, df_si.idx_0, df_si.idx_1)]
     si_array = np.stack(si_rows, axis=0)
     total_si_from_rows = si_array.sum(axis=0)
-    si_sel_array = si_array[df_si.selected.to_numpy()]
+    subselect = selection_col is not None
+    selected = df_si[selection_col].to_numpy(dtype=bool) if subselect else np.ones(len(df_si), dtype=bool)
+    si_sel_array = si_array[selected]
     total_si_selected = si_sel_array.sum(axis=0)
     others = np.maximum(total_si_from_rows - total_si_selected, 0.0)
     # be resistant to possible loss of precision
 
     # Form dataframe for selected
-    df_selected = df_si[df_si.selected]
-    labels = df_selected.label.tolist() + ["others"]
-    SI = np.concatenate((si_sel_array, others[None, ...]))
+    df_selected = df_si[selected]
+    labels = df_selected.label.tolist()
+    SI = si_sel_array
+    if subselect:
+        labels.append("others")
+        SI = np.concatenate((si_sel_array, others[None, ...]))
 
     # --- ST variable (only for S1 entries, else zeros) ---
     ST = np.zeros_like(SI)
     SI_ci = np.zeros((SI.shape[0], 2))  # (N_sel, 2) for 'low', 'high'
     ST_ci = np.zeros((SI.shape[0], 2))  # (N_sel, 2) for 'low', 'high'
-    assert len(df_selected) == SI.shape[0] - 1
+    assert len(df_selected) == SI.shape[0] - int(subselect)
     for i, (base, i0) in enumerate(zip(df_selected.base, df_selected.idx_0)):
         if base == "S1":
             SI_ci[i] = ds["S1_agg_ci"].isel({group_dim: i0}).values
-        ST[i] = ds["ST"].isel({group_dim: i0}).values
-        ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
+            ST[i] = ds["ST"].isel({group_dim: i0}).values
+            ST_ci[i] = ds["ST_agg_ci"].isel({group_dim: i0}).values
     # --- coords and DataArrays ---
     bound = ds['bound']
     coords = {"group": np.array(labels, dtype=object), "bound": bound.values}
@@ -586,10 +596,11 @@ def make_transport_plots(cfg, seed):
     df_si = select_params(si_conc, var_threshold=0.99, si_threshold=0.0)
     
     sobol_sel = lambda conc_da: select_sobol(df_si, sobol(conc_da))
+    sobol_all = lambda conc_da: select_sobol(df_si, sobol(conc_da), selection_col=None)
     #plot_vtk(ds_stat, sobol_sel(ds['conc']), sobol_sel(ds_stat['conc_q99_time']))
     print(f"Computing Sobol indices for '{var_name}_q99(space)' ...")
     si_q99 = sobol_sel(ds_stat[f'{var_name}_q99'])
-    si_q99_XYZ = sobol_sel(ds_stat[f'{var_name}_q99_XYZ'])
+    si_q99_XYZ = sobol_all(ds_stat[f'{var_name}_q99_XYZ'])
 
     si_table = sobol_ds_summary(si_conc, df_si)
     print("Sorted S1, S2 values:\n")
@@ -624,4 +635,3 @@ def make_transport_plots(cfg, seed):
 
     # filtered_ds = vsp.select_sobol_terms_with_others(si_space_agg, 0.9, output_dim='sim_time', si_threshold=0.05)
     # vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=output_dir / "sobol_stacked.pdf")
-

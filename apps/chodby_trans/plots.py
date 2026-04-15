@@ -1,7 +1,9 @@
 from typing import *
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
 import matplotlib
@@ -17,6 +19,11 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 
 matplotlib.rcParams['hatch.linewidth'] = 6
+
+
+def floor_time_si_for_plot(si_t: np.ndarray, min_si: float = 0.01) -> np.ndarray:
+    si_t = np.asarray(si_t, dtype=float)
+    return np.maximum(si_t, min_si)
 
 def save_close_fig(fig: plt.Figure, pdf: PdfPages, fname):
     """
@@ -341,18 +348,22 @@ def plot_sobol_time_and_agg_boot(
     # ---- squeeze aux if present
     sobol_time = sobol_time.squeeze("aux", drop=True) if "aux" in sobol_time.dims else sobol_time
 
-    labels_s = df_si["label"].values[df_si["selected"].values]
     labels_g = si_conc["group"].values
     n_groups = len(labels_g)
+    df_lookup = {str(row.label): row for row in df_si.itertuples(index=False)}
+    time_rows = [
+        df_lookup.get(str(label), SimpleNamespace(base="others", label=str(label), idx_0=0, idx_1=pd.NA))
+        for label in sobol_time["group"].values.astype(str)
+    ]
+    time_labels = [str(row.label) for row in time_rows]
+    agg_rows = list(df_si[df_si["selected"]].itertuples(index=False))
 
     # ---- time-dependent SI in same order
     t = np.asarray(sobol_time["sim_time"].values) / 1000.0
-    SI_t = np.asarray(sobol_time["SI"].sel(group=labels_s).values, dtype=float)  # (P, T)
+    SI_t = floor_time_si_for_plot(sobol_time["SI"].sel(group=time_labels).values)  # (P, T)
 
     # ---- colors (others gray)
     cmap = plt.get_cmap("tab20")
-    # colors = [(0.6, 0.6, 0.6, 1.0) if lab == "others" else cmap(i % 20)
-    #           for i, lab in enumerate(labels_s)]
     colors = [cmap(i % 20) for i, lab in enumerate(labels_g)]
 
     # ---- layout: left time plot + right two axes (SI and ST)
@@ -371,17 +382,19 @@ def plot_sobol_time_and_agg_boot(
     axST = fig.add_subplot(gsR[0, 1], sharey=axSI)
 
     # ---- Left: stacked area
-    polys = axL.stackplot(t, SI_t, colors=colors, labels=list(labels_s), linewidth=0.5)
+    left_colors = [
+        (0.6, 0.6, 0.6, 1.0) if row.base == "others" else colors[int(row.idx_0)]
+        for row in time_rows
+    ]
+    polys = axL.stackplot(t, SI_t, colors=left_colors, labels=time_labels, linewidth=0.5)
 
-    for poly, lab, i in zip(polys, labels_s, range(len(labels_s))):
-        def lighten(color, amount=0.65):
-            """Blend color towards white by 'amount' (0..1)."""
-            rgb = np.array(mcolors.to_rgb(color))
-            return tuple((1 - amount) * rgb + amount * np.ones(3))
+    for poly, row in zip(polys, time_rows):
+        base = row.base
+        label = row.label
+        pi = int(row.idx_0)
+        pj = None if row.idx_1 is pd.NA else int(row.idx_1)
 
-        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
-
-        if lab == "others":
+        if label == "others":
             poly.set_facecolor((0.6, 0.6, 0.6, 1.0))
             poly.set_edgecolor((0.6, 0.6, 0.6, 1.0))
             continue
@@ -415,7 +428,7 @@ def plot_sobol_time_and_agg_boot(
     # =========================
     # Right-A: SI "separate columns, connected corners"
     # =========================
-    P = len(labels_s)
+    P = len(agg_rows)
     x = np.arange(P)
     width = 0.9
 
@@ -424,18 +437,19 @@ def plot_sobol_time_and_agg_boot(
     # each segment i is a bar at x=i with bottom=cum, height=SI_i
     # plus a thin "connector" line from previous top to next bottom (step)
     for i in range(P):
-        # si = float(df_si["si"][i])
-        base, label, pi, pj = df_si.iloc[i][['base', 'label', 'idx_0', 'idx_1']]
-        indices = (pi,) if base == 'S1' else (pi, pj)
-        si = (si_conc[base].values[indices])[0]
-        si_err = (si_conc[f"{base}_boot_err"].values[indices])[0]
-        assert si_err.shape == (2,), f"Unexpected shape for {base}_boot_err: {si_err.shape}"
+        row = agg_rows[i]
+        pi = int(row.idx_0)
+        pj = None if row.idx_1 is pd.NA else int(row.idx_1)
+        indices = (pi,) if row.base == "S1" else (pi, pj)
+        si = (si_conc[row.base].values[indices])[0]
+        si_err = (si_conc[f"{row.base}_boot_err"].values[indices])[0]
+        assert si_err.shape == (2,), f"Unexpected shape for {row.base}_boot_err: {si_err.shape}"
 
         bottom_i = cum
         top_i = bottom_i + si
 
         # segment bar at its own column
-        if base == "S1":
+        if row.base == "S1":
             axSI.bar(x[i], si, bottom=bottom_i, width=width, color=colors[pi], edgecolor="none")
         else:
             cont = axSI.bar(
