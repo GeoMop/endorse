@@ -12,7 +12,7 @@ from endorse.common import dotdict, File, memoize
 from endorse.mesh import mesh_tools, fracture_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
-from bgem.stochastic.fracture import Population
+from bgem.stochastic import Population
 
 import chodby_trans.exception_wrapper as exp
 
