@@ -164,6 +164,51 @@ def compute_statistics(ds: xr.Dataset, var_name: str) -> xr.Dataset:
     
     return xr.Dataset(out_vars).compute()
 
+
+def save_reduced_statistics(
+    ds_stat: xr.Dataset,
+    out_dir: Path,
+    var_name: str = "log10_conc",
+) -> xr.Dataset:
+    """
+    Create the reduced statistics dataset and persist it in analysis-friendly forms.
+
+    The zarr output preserves the reduced xarray dataset, while parquet/CSV store a
+    flat table indexed by sample coordinates and, for q99_XYZ, by sim_time.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    keep_vars = [f"{var_name}_q99", f"{var_name}_q99_XYZ"]
+    missing = [name for name in keep_vars if name not in ds_stat]
+    if missing:
+        raise KeyError(f"Missing required statistics variables: {missing}")
+    reduced = ds_stat[keep_vars].copy()
+    reduced.to_zarr(out_dir / "reduced_statistics.zarr", mode="w", consolidated=True)
+
+    # prepare Pandas dataframes (flat tables)
+    q99_name, q99_xyz_name = keep_vars
+    tables = {
+        q99_name: reduced[q99_name].to_dataframe(name=q99_name).reset_index(),
+        q99_xyz_name: reduced[q99_xyz_name].to_dataframe(name=q99_xyz_name).reset_index(),
+    }
+
+    # parquet output
+    for name, table in tables.items():
+        coord_cols = [dim for dim in reduced[name].dims if dim in table.columns]
+        extra_cols = [col for col in table.columns if col not in coord_cols + [name]]
+        table = table[coord_cols + extra_cols + [name]]
+        table.to_parquet(out_dir / f"{name}.parquet", index=False)
+        tables[name] = table
+
+    # csv output
+    csv_dir = out_dir / "reduced_statistics_csv"
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    for name, table in tables.items():
+        table.to_csv(csv_dir / f"{name}.csv", index=False)
+
+    return reduced
+
 def compute_sobol(input_design: ot_sa.InputDesign, da: xr.DataArray) -> xr.Dataset:
     """_summary_
     Compute: S1, S1_ci, ST, ST_ci, S2 for: conc (optional), conc_q99_XYZ, conc_q99_time
@@ -577,6 +622,7 @@ def make_transport_plots(cfg, seed):
 
     n = input_design.n_samples
     ds_stat = compute_statistics(ds, var_name)
+    save_reduced_statistics(ds_stat, job.output.dir_path/ "reduced_statistics", var_name)
     print(list(ds_stat.data_vars.keys()))
     sobol_boot = lambda conc_da: input_design.compute_sobol_xr(conc_da, n_boot=100)
     sobol = lambda conc_da: input_design.compute_sobol_xr(conc_da)
@@ -624,4 +670,3 @@ def make_transport_plots(cfg, seed):
 
     # filtered_ds = vsp.select_sobol_terms_with_others(si_space_agg, 0.9, output_dim='sim_time', si_threshold=0.05)
     # vsp.plot_sobol_stacked(filtered_ds, figsize=(10, 5), out_path=output_dir / "sobol_stacked.pdf")
-
