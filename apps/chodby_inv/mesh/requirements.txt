@@ -1,0 +1,10 @@
+PyYAML
+attrs
+tqdm        # progress bar
+joblib
+cloudpickle
+matplotlib
+pymeshlab
+meshio
+pyvista
+#funpy @ git+https://github.com/GeoMop/funpy@main

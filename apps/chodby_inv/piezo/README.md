@@ -10,8 +10,23 @@ The file `piezo_filtering.yaml` is meant to define different processing interval
 not fixed yet.
 
 ## Sources overview
+**pressure plots**
 `decorators.py` - decorators for the processing functions (TODO: remove or move to endorse lib)
-`piezo_canonic.py` - Processing of raw file into canonical flatten pandas table (denoised_df())
+`piezo_canonic.py` - main file, raw file processing and presure plots
+`plot_wpts.py` - details of individual WPTs
+`press_plot.py` - various pressure plots
+`wpts_summary.py` - summary table for WPTs
+`test_press_plot.py`
+
+**local model inversion**
+`idata_tools.py` - sampling data processing
+`plots.py` - plots from inversions
+`random_state.py` -  empty yet
+`summary_table.py` -  summary of inversion accross intervals
+`synthetic.py` - synthetic models for benchmarking sampling algorithms
+`test_pw_params.py` - test heterogeneous parameter
+`wpt_bayes.py`- inversion for interval WPTs
+`wpt_model.py` - 1D axisymmetric HM model of interval
 
 Running the module produces the overview plot (of both  original and denoised df)
 and plots of individual BHs for the excavation period.

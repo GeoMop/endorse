@@ -17,7 +17,7 @@ from endorse import common
 from endorse.common import dotdict, File, report, memoize
 from endorse.mesh_class import Mesh
 from endorse.indicator import Extractor
-from bgem.stochastic.fracture import Fracture, Population
+from bgem.stochastic import Fracture, Population
 # from endorse import hm_simulation
 
 import zarr_fuse as zf

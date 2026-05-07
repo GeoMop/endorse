@@ -1,6 +1,7 @@
 from typing import *
 import pandas
 import os
+from pathlib import Path
 import numpy as np
 import scipy as sp
 
@@ -164,9 +165,8 @@ def read_bayes_sample_parameteres(parameter_file:File) -> pandas.DataFrame:
 def run_single_sample(cfg, cfg_basedir=None):
     parameter_filepath = cfg.tsx_hm_model.bayes_samples_input_file
     if cfg_basedir is None:
-        parameter_file = File(parameter_filepath)
-    else:
-        parameter_file = File(os.path.join(cfg_basedir, parameter_filepath))
+        cfg_basedir = cfg._config_root_dir
+    parameter_file = File(Path(cfg_basedir) / parameter_filepath)
     df = read_bayes_sample_parameteres(parameter_file)
     i_samples = sample_from_population(1, df['N'])
     sample_param_dict = df[1: 2].to_dict('records')[0]
@@ -175,7 +175,9 @@ def run_single_sample(cfg, cfg_basedir=None):
 
 
 def run_random_samples(cfg, n_samples):
-    df = read_bayes_sample_parameteres(File(cfg.tsx_hm_model.bayes_samples_input_file))
+    cfg_basedir = cfg._config_root_dir
+    parameter_file = File(Path(cfg_basedir) / cfg.tsx_hm_model.bayes_samples_input_file)
+    df = read_bayes_sample_parameteres(parameter_file)
     i_samples = sample_from_population(n_samples, df['N'])
     for i in i_samples:
         sample_param_dict = df[i: i + 1].to_dict('records')[0]

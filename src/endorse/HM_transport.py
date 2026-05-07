@@ -15,7 +15,7 @@ from . import apply_fields
 from . import plots
 from . import flow123d_inputs_path
 from .indicator import indicators, IndicatorFn
-from bgem.stochastic.fracture import Fracture
+from bgem.stochastic import Fracture
 from endorse import hm_simulation
 
 def input_files(cfg):

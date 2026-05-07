@@ -1,0 +1,189 @@
+flow123d_version: 4.0.0
+problem: !Coupling_Sequential
+  description: Model of tunnel surroundings relaxation after boring.
+  mesh:
+    mesh_file: L5_mesh_6_healed.msh
+    regions:
+      - !Union
+        name: .box_outer
+        regions: [ .box_z0, .box_z1, .box_y0, .box_y1, .box_x0, .box_x1 ]
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: BULK
+        biot_alpha: 0.2
+        fluid_density: 1000
+    time:
+      end_time: 3650
+      # common time unit cannot be used in field formulas
+      common_time_unit: d
+      dt_limits: [[0, 100, 0], [100, 1, 1], [130, 2, 2], [140, 4, 4], [160, 8, 8], [200, 16, 3450]]
+    iteration_parameter: 1 # affects convergence of HM coupling (defaults to 1, lower value sometimes helps)
+    a_tol: 0
+    r_tol: 1e-6
+    flow_equation: !Flow_Richards_LMH
+        user_fields:
+          - name: sx
+            field: 42e6
+          - name: sy
+            field: 19e6
+          - name: sz
+            field: 14e6
+          - name: init_p
+            field: !FieldFormula
+              value: 40-z
+          - name: k0
+            field: !FieldFormula
+              value: 3e-20
+          - name: kr
+            field: !FieldFormula
+              value: 1/33*k0
+          - name: delta
+            field: 1e-16
+          - name: gamma
+            field: 6
+          - name: stress_threshold
+            field: 55e6
+          - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: c # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: nonlin_cond
+            field: !FieldFormula
+              value: 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
+          - name: excavation_north
+            field: !FieldTimeFunction
+              time_function: <excavation_north>
+          - name: excavation_south
+            field: !FieldTimeFunction
+              time_function: <excavation_south>
+        nonlinear_solver:
+          linear_solver: !Petsc
+            a_tol: 0
+            r_tol: 1e-12
+            options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+        input_fields:
+          - region: BULK
+            conductivity: !FieldFormula
+              value:
+                ( nonlin_cond if (von_mises_stress<stress_threshold)
+                  else nonlin_cond * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                ) * (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
+
+            # https://en.wikipedia.org/wiki/Specific_storage
+            storativity: !FieldFormula #2.999e-07
+                value: 9.81e3 * (3*(1-2*0.215)/72.5e9 + 0.007*5.1e-10)
+            # S = rho * g * (beta_s + nu * beta_w)
+            # 9.81e3 * (3*(1-2*0.23)/60e9 + 0.007*5.1e-10)
+            # bulk compressibility beta_s=1/K = (3(1-2pr)/E) 
+            # porosity nu=0.007
+            # water compressibility beta_w=5.1 1/Pa
+            init_pressure: !FieldFormula
+              value: init_p
+
+          - region: .box_outer
+            bc_type: dirichlet
+            bc_pressure: !FieldFormula
+              value: init_p
+
+          - region: .tunnel
+            time: 0
+            bc_type: total_flux
+            bc_pressure: 0
+            bc_robin_sigma: !FieldFormula
+              value: 0 if ((y>2.5 and y<8 and x<-2) or (y>-8 and y<-2.5 and x>2)) else 1e3
+          - region: .tunnel
+            time: 100
+            bc_type: total_flux
+            bc_pressure: 0
+            bc_robin_sigma: !FieldFormula
+              value: 0 if ((y>2.5 and y<8 and x<-2+minimum(0,excavation_north)) or (y>-8 and y<-2.5 and x>2+maximum(0,excavation_south))) else 1e3
+
+        output:
+          times: [{'begin': 100, 'step': 0.1, 'end': 130}, 100, 101.666666, 103.434, 104.6597, 107.6666666, 108.666666, 110.3785, 111.9104, 112.0104, 115.6875, 117.684, 123.4375, 125.3854, 129.3576]
+          fields:
+#            - { field: conductivity, interpolation: P1_average }
+#            - piezo_head_p0
+            - conductivity
+            - pressure_p0
+            - velocity_p0
+            - region_id
+          observe_fields: [pressure_p0]
+        output_stream:
+          file: flow.pvd
+          format: !vtk
+          observe_points: <observe_points>
+
+    mechanics_equation:
+        user_fields:
+          - name: a
+            field: !FieldFormula # uhel mezi osou rozrazky (kolmici k L5) a hlavnim napetim ... 110=azimut L5, 200=azimut kolmice, kladny uhel proti smeru hodinovych rucicek
+              value: (200-123)*pi/180
+          - name: sx # initial stress in x direction (orthogonal to tunnel axis)
+            field: !FieldFormula
+              value: 42e6*cos(a)**2 + 19e6*sin(a)**2
+          - name: sxy
+            field: !FieldFormula
+              value: cos(a)*sin(a)*(42e6-19e6)
+          - name: sy
+            field: !FieldFormula
+              value: 19e6*cos(a)**2 + 42e6*sin(a)**2
+          - name: sz
+            field: 14e6
+          - name: excavation_north
+            field: !FieldTimeFunction
+              time_function: <excavation_north>
+          - name: excavation_south
+            field: !FieldTimeFunction
+              time_function: <excavation_south>
+
+        output_stream:
+          file: mechanics.pvd
+          format: !vtk
+        output:
+          times: [{'begin': 100, 'step': 0.1, 'end': 130}, 100, 101.666666, 103.434, 104.6597, 107.6666666, 108.666666, 110.3785, 111.9104, 112.0104, 115.6875, 117.684, 123.4375, 125.3854, 129.3576]
+          fields:
+#            - { field: displacement, interpolation: P1_average }
+#            - displacement_divergence
+            - displacement
+            - stress
+            - mean_stress
+            - von_mises_stress
+            - initial_stress
+            - region_id
+        solver: !Petsc
+          a_tol: 0
+          r_tol: 1e-12
+          options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+        input_fields:
+          - region: BULK
+            young_modulus: 72.5e9
+            poisson_ratio: 0.215
+            initial_stress: !FieldFormula
+              value: "[ [-sx, -sxy, 0],
+                        [-sxy, -sy, 0],
+                        [0, 0, -sz] ]"
+
+          - region: .box_outer
+            bc_type: displacement_n
+            bc_displacement: 0
+
+          # bc_type stress prepocita tenzor napeti na normalovou silu, s normalou orientovanou dovnitr
+          # bc_stress * vnitřní normála = bc_traction = síla působící na těleso
+          - region: .tunnel
+            time: 0
+            bc_type: stress
+            bc_stress: !FieldFormula
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+                        if ((y>2.5 and y<8 and x<-2) or (y>-8 and y<-2.5 and x>2)) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+
+          - region: .tunnel
+            time: 100
+            bc_type: stress
+            bc_stress: !FieldFormula
+              value: "[[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+                        if ((y>2.5 and y<8 and x<-2+minimum(0,excavation_north)) or (y>-8 and y<-2.5 and x>2+maximum(0,excavation_south))) else
+                      [[-sx, -sxy, 0], [-sxy, -sy, 0], [0, 0, -sz]]"
+

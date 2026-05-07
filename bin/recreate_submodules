@@ -2,6 +2,7 @@
 # recreate submodules from .gitmodule
 
 set -e
+set -x
 
 git config -f .gitmodules --get-regexp '^submodule\..*\.path$' |
     while read path_key path

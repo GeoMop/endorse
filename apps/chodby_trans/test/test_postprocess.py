@@ -257,6 +257,50 @@ def test_select_sobol_multi_output_and_others_row():
     np.testing.assert_allclose(total_SI_upper_only, total_SI, rtol=0, atol=1e-12)
 
 
+def test_select_sobol_can_keep_all_terms_without_others():
+    groups = np.array(["A", "B"], dtype=object)
+    output = np.array([0, 1], dtype=int)
+    bound = np.array(["low", "high"], dtype=object)
+
+    S1 = np.array([[0.2, 0.3], [0.1, 0.2]], dtype=float)
+    ST = np.array([[0.25, 0.35], [0.15, 0.25]], dtype=float)
+    S2 = np.zeros((2, 2, 2), dtype=float)
+    S2[0, 1, :] = [0.05, 0.07]
+    S1_agg_ci = np.array([[0.01, 0.02], [0.03, 0.04]], dtype=float)
+    ST_agg_ci = np.array([[0.05, 0.06], [0.07, 0.08]], dtype=float)
+
+    ds = xr.Dataset(
+        data_vars=dict(
+            S1=(("group", "output"), S1),
+            ST=(("group", "output"), ST),
+            S2=(("group", "group2", "output"), S2),
+            S1_agg_ci=(("group", "bound"), S1_agg_ci),
+            ST_agg_ci=(("group", "bound"), ST_agg_ci),
+        ),
+        coords=dict(group=groups, group2=groups, output=output, bound=bound),
+    )
+
+    df_si = pd.DataFrame(
+        {
+            "base": ["S1", "S2", "S1"],
+            "label": ["A", "A×B", "B"],
+            "idx_0": pd.array([0, 0, 1], dtype="Int64"),
+            "idx_1": pd.array([pd.NA, 1, pd.NA], dtype="Int64"),
+            "selected": [True, False, False],
+        }
+    )
+
+    out = postprocess.select_sobol(df_si, ds, selection_col=None)
+
+    assert list(out["group"].values) == ["A", "A×B", "B"]
+    np.testing.assert_allclose(out["SI"].sel(group="A").values, S1[0], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(out["SI"].sel(group="A×B").values, S2[0, 1], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(out["SI"].sel(group="B").values, S1[1], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(out["ST"].sel(group="A").values, ST[0], rtol=0, atol=1e-12)
+    np.testing.assert_allclose(out["ST"].sel(group="A×B").values, np.zeros_like(output, dtype=float), rtol=0, atol=1e-12)
+    np.testing.assert_allclose(out["ST"].sel(group="B").values, ST[1], rtol=0, atol=1e-12)
+
+
 def _to_point_data(yx: np.ndarray) -> np.ndarray:
     """
     Convert a node-centered (Y, X) array into point-centered, flattened data.

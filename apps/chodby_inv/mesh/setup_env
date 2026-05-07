@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -x
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$SCRIPT_DIR"
+WORKDIR="$ROOT_DIR/workdir"
+VENV_NAME="pcl_venv"
+
+if [ ! -d "$WORKDIR" ];
+then
+    ln -s ~/Projekty/24_SURAO_Chodby/data/laser_scan_L5 "$WORKDIR"
+fi
+
+# Name of the virtual environment folder
+VENV_DIR="$SCRIPT_DIR/$VENV_NAME"
+
+if [ "$1" == "-d" ];
+then
+    rm -rf "$VENV_DIR"
+fi
+
+
+# Check if virtual environment directory already exists
+if [ -d "$VENV_DIR" ]; then
+    echo "Virtual environment already exists."
+else
+    # Create a virtual environment
+    python3 -m venv $VENV_DIR
+    echo "Virtual environment created."
+fi
+
+# Activate the virtual environment
+source $VENV_DIR/bin/activate
+echo "Virtual environment activated."
+
+# Install dependencies from requirements.txt if the file exists
+if [ -f "requirements.txt" ]; then
+    pip install --upgrade pip
+    # no-build-isolation needed for pcl build
+    pip install  --no-build-isolation -r requirements.txt
+    echo "Dependencies installed from requirements.txt."
+else
+    echo "requirements.txt not found. Skipping dependency installation."
+fi
+
+# REgister as a Jupyter kernel
+python -m ipykernel install --user --name=$VENV_NAME --display-name "$VENV_NAME Environment"

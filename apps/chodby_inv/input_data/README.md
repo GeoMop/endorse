@@ -36,5 +36,6 @@ on large sections of the whole boreholes
 measurement by GDS (small fluxes) or weighting the expansion vessel
 must be merged with piezo file for full picture
 
+`pressure_summary.csv` and `flow_summary.csv` are summary tables from the inversions of the WPTs
 
 `resources` - supplementary documents from where the machine readable data were extracted 

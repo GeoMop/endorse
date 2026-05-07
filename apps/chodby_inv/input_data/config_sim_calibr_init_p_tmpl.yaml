@@ -1,0 +1,86 @@
+flow123d_version: 4.0.0
+problem: !Coupling_Sequential
+  description: Model of tunnel surroundings relaxation after boring.
+  mesh:
+    mesh_file: L5_mesh_6_healed_fr_regions.msh
+    regions:
+      - !Union
+        name: .box_outer
+        regions: [ .box_z0, .box_z1, .box_y0, .box_y1, .box_x0, .box_x1 ]
+  flow_equation: !Flow_Darcy_LMH
+        user_fields:
+          - name: sx
+            field: 42e6
+          - name: sy
+            field: 19e6
+          - name: sz
+            field: 14e6
+          - name: von_mises_stress
+            field: !FieldFormula
+              value: sqrt(0.5*((sx-sy)**2 + (sx-sz)**2 + (sy-sz)**2))
+          - name: mean_stress
+            field: !FieldFormula
+              value: -(sx+sz+sz)/3
+          - name: init_p
+            field: !FieldFormula
+              value: 40-z
+          - name: k0
+            field: !FieldFormula
+              value: 3e-20
+          - name: kr
+            field: !FieldFormula
+              value: 1/33*k0
+          - name: delta
+            field: 1e-16
+          - name: gamma
+            field: 6
+          - name: stress_threshold
+            field: 55e6
+          - name: a # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: b # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: c # coefficient for nonhomogeneous conductivity (range: -1 to 1)
+            field: 0
+          - name: nonlin_cond
+            field: !FieldFormula
+              value: 1000*9.81/0.001 * (kr + delta*exp( log((k0-kr)/delta) * mean_stress/(-(sx+sy+sz)/3)))
+        nonlinear_solver:
+          linear_solver: !Petsc
+            a_tol: 0
+            r_tol: 1e-12
+            options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+        input_fields:
+          - region: [ box, fr1, fr2, fr3 ]
+            conductivity: !FieldFormula
+              value:
+                ( nonlin_cond if (von_mises_stress<stress_threshold)
+                  else nonlin_cond * exp(gamma*(von_mises_stress-stress_threshold)/stress_threshold)
+                ) * (1 + 0.1*(a*x/35 + b*y/30 + c*z/30))
+
+<fracture_input_params>
+
+          - region: [ .box_outer, .fr1, .fr2, .fr3 ]
+            bc_type: dirichlet
+            bc_pressure: !FieldFormula
+              value: init_p
+
+          - region: [ .tunnel, .fr1_tunnel, .fr2_tunnel, .fr3_tunnel ]
+            bc_type: total_flux
+            bc_pressure: 0
+            bc_robin_sigma: !FieldFormula
+              value: 0 if ((y>2.5 and y<8 and x<-2) or (y>-8 and y<-2.5 and x>2)) else 1e3
+
+        output:
+          fields:
+            - conductivity
+            - cross_section
+            - pressure_p0
+            - velocity_p0
+            - region_id
+          observe_fields: [pressure_p0]
+        output_stream:
+          file: flow.pvd
+          format: !vtk
+          observe_points: <observe_points>
+
