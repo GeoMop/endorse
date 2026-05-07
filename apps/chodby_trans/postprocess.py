@@ -167,6 +167,7 @@ def compute_statistics(ds: xr.Dataset, var_name: str) -> xr.Dataset:
 
 def save_reduced_statistics(
     ds_stat: xr.Dataset,
+    ds: xr.Dataset,
     out_dir: Path,
     var_name: str = "log10_conc",
 ) -> xr.Dataset:
@@ -183,22 +184,42 @@ def save_reduced_statistics(
     missing = [name for name in keep_vars if name not in ds_stat]
     if missing:
         raise KeyError(f"Missing required statistics variables: {missing}")
-    reduced = ds_stat[keep_vars].copy()
+    if "parameter" not in ds:
+        raise KeyError("Dataset must contain variable 'parameter'.")
+
+    reduced = xr.merge([ds_stat[keep_vars], ds["parameter"]]).copy()
     reduced.to_zarr(out_dir / "reduced_statistics.zarr", mode="w", consolidated=True)
 
     # prepare Pandas dataframes (flat tables)
     q99_name, q99_xyz_name = keep_vars
+    parameter_table = (
+        reduced["parameter"]
+        .to_dataframe(name="parameter")
+        .reset_index()
+        .pivot(index=["IID", "QMC"], columns="param_name", values="parameter")
+        .reset_index()
+    )
+    parameter_cols = ["IID", "QMC"] + [col for col in parameter_table.columns if col not in ("IID", "QMC")]
+    parameter_table = parameter_table[parameter_cols]
     tables = {
         q99_name: reduced[q99_name].to_dataframe(name=q99_name).reset_index(),
         q99_xyz_name: reduced[q99_xyz_name].to_dataframe(name=q99_xyz_name).reset_index(),
+        "parameter": parameter_table,
     }
 
     # parquet output
+    parquet_dir = out_dir / "reduced_statistics_parquet"
+    parquet_dir.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
-        coord_cols = [dim for dim in reduced[name].dims if dim in table.columns]
-        extra_cols = [col for col in table.columns if col not in coord_cols + [name]]
-        table = table[coord_cols + extra_cols + [name]]
-        table.to_parquet(out_dir / f"{name}.parquet", index=False)
+        if name == "parameter":
+            coord_cols = [col for col in ["IID", "QMC"] if col in table.columns]
+            extra_cols = [col for col in table.columns if col not in coord_cols]
+            table = table[coord_cols + extra_cols]
+        elif name in reduced:
+            coord_cols = [dim for dim in reduced[name].dims if dim in table.columns]
+            extra_cols = [col for col in table.columns if col not in coord_cols + [name]]
+            table = table[coord_cols + extra_cols + [name]]
+        table.to_parquet(parquet_dir / f"{name}.parquet", index=False)
         tables[name] = table
 
     # csv output
@@ -632,7 +653,7 @@ def make_transport_plots(cfg, seed):
 
     n = input_design.n_samples
     ds_stat = compute_statistics(ds, var_name)
-    save_reduced_statistics(ds_stat, job.output.dir_path/ "reduced_statistics", var_name)
+    save_reduced_statistics(ds_stat, ds, job.output.dir_path/ "reduced_statistics", var_name)
     print(list(ds_stat.data_vars.keys()))
     sobol_boot = lambda conc_da: input_design.compute_sobol_xr(conc_da, n_boot=100)
     sobol = lambda conc_da: input_design.compute_sobol_xr(conc_da)
