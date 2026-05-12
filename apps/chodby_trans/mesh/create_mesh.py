@@ -470,11 +470,7 @@ def make_heal_mesh(cfg, mesh_file: File):
 
 
 @memoize
-def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
-
-    # need to review endorse and bgem code to update from legacy to seed to SeedSeq
-    dfn_seed = dfn_seed_seq.generate_state(1)[0]
-    mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
+def make_mesh(cfg, fr_pop, dfn_seed, mesh_seed):
 
     if "fractures" in cfg.geometry.include:
         fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
@@ -498,29 +494,19 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
     return File(mesh_file_healed.name), fracture_set, n_large
 
 
-def main(cfg_file=None, workdir=None):
+def main(cfg, workdir, dfn_seed, mesh_seed):
 
     import chodby_trans.input_data as input_data
     # common.EndorseCache.instance().expire_all()
 
-    if cfg_file is None:
-        cfg = common.config.load_config(str(input_data.transport_config))
-        workdir = str(input_data.work_dir)
-        seed = 101
-    else:
-        cfg = common.config.load_config(cfg_file)
-        seed = cfg.transport_fullscale.dfn_macro
-
     with common.workdir(workdir, clean=False):
-        fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
-        make_mesh(cfg, fr_pop, seed)
+        fr_pop = Population.from_cfg(cfg.fractures.population, cfg.geometry.box_dimensions)
+        make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) == 1:
-        main()
-    elif len(sys.argv) == 2 and sys.argv[1] == "pickled":
+    if len(sys.argv) == 2 and sys.argv[1] == "pickled":
         cfg = pickle.load(sys.stdin.buffer)
         fr_pop = Population.initialize_3d(cfg.fractures.population, cfg.geometry.box_dimensions)
         result = make_mesh(cfg, fr_pop, cfg.transport_fullscale.dfn_macro)
@@ -531,7 +517,8 @@ if __name__ == '__main__':
 
     elif len(sys.argv) == 3:
         cfg_file = sys.argv[1]
-        workdir = cfg_file = sys.argv[2]
-        main(cfg_file, workdir)
+        workdir = Path(sys.argv[2])
+        cfg = common.config.load_config(cfg_file)
+        main(cfg, workdir, dfn_seed=1, mesh_seed=1)
     else:
       raise RuntimeError("Unknown inputs.")
