@@ -24,7 +24,7 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
     :return:
     """
     cfg = cfg_mesh
-    line_length = line.get_mass()
+    line_length = line.get_mass()[1]
     n_sampling = int(line_length / cfg.r_inner)
     dist = field.distance(line, sampling = n_sampling)
     inner = field.geometric(dist, a=(cfg.r_inner, cfg.h_inner), b=(cfg.r_outer, cfg.h_outer))
@@ -255,24 +255,24 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         # if we drill the boreholes out, we need its boundary to prescribe mesh step
         all_storage_boreholes = factory.group(*safe_list(vol_dict, ["plug", "container", "storage_boreholes_group"]))
         # all_storage_boreholes.mesh_step(cfg_mesh.boreholes_mesh_step)
-        bnd_dict["b_storage_boreholes_group"] = all_storage_boreholes.get_boundary().copy().split_by_dimension()[2]
+        bnd_dict["b_storage_boreholes_group"] = all_storage_boreholes.get_boundary().deepcopy().split_by_dimension()[2]
         bnd_dict["b_storage_boreholes_group"].mesh_step(cfg_mesh.boreholes_mesh_step)
 
         # group and fuse everything to drill,
         # make copies to keep original objects for fragmentation
-        drill_group = vol_dict["tunnel"].copy().fuse(all_storage_boreholes.copy())
+        drill_group = vol_dict["tunnel"].deepcopy().fuse(all_storage_boreholes.deepcopy())
     else:
         drill_group = vol_dict["tunnel"]
 
     # boundary of drilled volume
-    bnd_dict["drill_surface_group"] = drill_group.get_boundary().copy().split_by_dimension()[2]
+    bnd_dict["drill_surface_group"] = drill_group.get_boundary().deepcopy().split_by_dimension()[2]
 
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions, cfg_geom.box_center)
-    # bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).copy()  # keep the original sides
+    # bnd_dict["box_sides_group"] = factory.group(*list(box_sides_dict.values())).deepcopy()  # keep the original sides
     bnd_dict = {**bnd_dict, **box_sides_dict}
 
     # drill the box, so later we do not have fractures in drilled volume
-    vol_dict["box_drilled"] = box.copy().cut(drill_group)
+    vol_dict["box_drilled"] = box.deepcopy().cut(drill_group)
     vol_dict["box_drilled"].set_region("box")
 
     if "fractures" in cfg_geom.include:
@@ -282,7 +282,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         # determine fracture outer boundary
         # b_fractures_outer = vol_dict["fractures_group"].get_boundary()[1]
         # bnd_dict["b_fractures_outer"] = b_fractures_outer \
-        #     .select_by_intersect(box.get_boundary().copy()) \
+        #     .select_by_intersect(box.get_boundary().deepcopy()) \
         #     .set_region(".fractures_outer") \
         #     .mesh_step(cfg_mesh.boundary_mesh_step)
 
@@ -328,7 +328,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
                 .set_region(".storages") \
                 .mesh_step(cfg_geom.storage_borehole.mesh_step)
             geometry_set.append(b_storages_fr)
-            b_tunnel_fr = fr_bnd_dict["drill_surface_group_fr"].dt_copy() \
+            b_tunnel_fr = fr_bnd_dict["drill_surface_group_fr"].copy() \
                         .dt_drop(b_storages_fr)
         else:
             b_tunnel_fr = fr_bnd_dict["drill_surface_group_fr"]
@@ -345,7 +345,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         # fractures and its boundary
         b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
         b_fractures_out = b_fractures_fr \
-            .select_by_intersect(box.get_boundary().copy()) \
+            .select_by_intersect(box.get_boundary().deepcopy()) \
             .set_region(".fractures_out") \
             .mesh_step(cfg_mesh.boundary_mesh_step)
         b_fractures_in = b_fractures_fr \

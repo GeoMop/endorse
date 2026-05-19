@@ -32,7 +32,7 @@ def tunnel(factory, tunnel_dict):
     box = factory.box([width, length, height])
     z_shift = math.sqrt(radius * radius - 0.25 * width * width) - height / 2
     cylinder = factory.cylinder(radius, axis=[0, length, 0]).translate([0, -length / 2, -z_shift])
-    roof = cylinder.intersect(box.copy().translate([0, 0, height]))
+    roof = cylinder.intersect(box.deepcopy().translate([0, 0, height]))
     return box.fuse(roof).translate([0,0,+height / 2])
 
 
@@ -50,8 +50,8 @@ def make_access_tunnels(factory, geom_dict):
 
     borehole_distance = geom_dict.borehole.y_spacing
     for i_shift in range(geom_dict.borehole.n_explicit):
-        laterals.append(lateral_tunnel_1.copy().translate([0, borehole_distance * i_shift, 0]))
-        laterals.append(lateral_tunnel_1.copy().translate([0, -borehole_distance * i_shift, 0]))
+        laterals.append(lateral_tunnel_1.deepcopy().translate([0, borehole_distance * i_shift, 0]))
+        laterals.append(lateral_tunnel_1.deepcopy().translate([0, -borehole_distance * i_shift, 0]))
 
 
     return main_tunnel_cylinder.fuse(*laterals)
@@ -66,8 +66,8 @@ def boreholes_full(factory, geom_dict):
     b_1 = factory.cylinder(borehole_radius, axis=[borehole_length, 0, 0])
     boreholes = [b_1]
     for i_shift in range(geom_dict.borehole.n_explicit):
-        boreholes.append(b_1.copy().translate([0, borehole_distance * i_shift, 0]))
-        boreholes.append(b_1.copy().translate([0, -borehole_distance * i_shift, 0]))
+        boreholes.append(b_1.deepcopy().translate([0, borehole_distance * i_shift, 0]))
+        boreholes.append(b_1.deepcopy().translate([0, -borehole_distance * i_shift, 0]))
 
     return factory.group(*boreholes)
 
@@ -82,8 +82,8 @@ def basic_shapes(factory, geom_dict):
     box = box.translate(outer_box_shift(geom_dict))
     access_tunnels = make_access_tunnels(factory, geom_dict) #.translate([-bh_length / 2, 0, 0])
     boreholes = boreholes_full(factory, geom_dict).translate([0, 0, bh_z_pos])
-    tunnels = boreholes.copy().fuse(access_tunnels.copy())
-    box_drilled = box.copy().cut(tunnels).set_region("box")
+    tunnels = boreholes.deepcopy().fuse(access_tunnels.deepcopy())
+    box_drilled = box.deepcopy().cut(tunnels).set_region("box")
     return box_drilled, box, access_tunnels, boreholes
 
 
@@ -104,19 +104,19 @@ def make_geometry(factory, cfg_geom, fractures, cfg_mesh):
 
     # select outer boundary
     boundary_mesh_step = cfg_mesh.boundary_mesh_step
-    b_box = b_box_fr.select_by_intersect(box.get_boundary().copy()).set_region(".box_outer").mesh_step(boundary_mesh_step)
-    b_fractures = b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fr_outer").mesh_step(boundary_mesh_step)
+    b_box = b_box_fr.select_by_intersect(box.get_boundary().deepcopy()).set_region(".box_outer").mesh_step(boundary_mesh_step)
+    b_fractures = b_fractures_fr.select_by_intersect(box.get_boundary().deepcopy()).set_region(".fr_outer").mesh_step(boundary_mesh_step)
 
     # select inner boreholes boundary
     boreholes_step = cfg_mesh.boreholes_mesh_step
-    select = boreholes.get_boundary().copy()
+    select = boreholes.get_boundary().deepcopy()
     b_box_boreholes = b_box_fr.select_by_intersect(select)\
                   .set_region(".box_boreholes").mesh_step(boreholes_step)
     b_fr_boreholes = b_fractures_fr.select_by_intersect(select)\
                  .set_region(".fr_boreholes").mesh_step(boreholes_step)
 
     tunnel_mesh_step = cfg_mesh.main_tunnel_mesh_step
-    select = access_tunnels.get_boundary().copy()
+    select = access_tunnels.get_boundary().deepcopy()
     b_box_tunnel = b_box_fr.select_by_intersect(select)\
                   .set_region(".box_tunnel").mesh_step(tunnel_mesh_step)
     b_fr_tunnel = b_fractures_fr.select_by_intersect(select)\
@@ -151,11 +151,11 @@ def make_geometry_2d(factory, cfg_geom, fractures, cfg_mesh):
     fr_shapes = fracture_tools.create_fractures_rectangles(factory, fractures, [0,0,0], base_shape)
 
     fr_shapes = factory.group(*fr_shapes).rotate(*XZ_rot).translate(x_shift_vec)
-    fractures_group = fr_shapes.intersect(box.copy())
+    fractures_group = fr_shapes.intersect(box.deepcopy())
 
     #b_rec = box_drilled.get_boundary()#.set_region(".sides")
 
-    box_fr, fractures_fr = factory.fragment(box.copy(), fractures_group)
+    box_fr, fractures_fr = factory.fragment(box.deepcopy(), fractures_group)
     fractures_fr.mesh_step(cfg_mesh.fracture_mesh_step) #.set_region("fractures")
 
     b_box_fr = box_fr.get_boundary().split_by_dimension()[1]
@@ -164,9 +164,9 @@ def make_geometry_2d(factory, cfg_geom, fractures, cfg_mesh):
     # select outer boundary
     select = borehole_side
     boundary_mesh_step = cfg_mesh.boundary_mesh_step
-    outer = box.get_boundary().copy().cut(select)
+    outer = box.get_boundary().deepcopy().cut(select)
     b_box = b_box_fr.select_by_intersect(outer).set_region(".box_outer").mesh_step(boundary_mesh_step)
-    b_fractures = b_fractures_fr.select_by_intersect(box.get_boundary().copy()).set_region(".fr_outer").mesh_step(boundary_mesh_step)
+    b_fractures = b_fractures_fr.select_by_intersect(box.get_boundary().deepcopy()).set_region(".fr_outer").mesh_step(boundary_mesh_step)
 
     # select inner boreholes boundary
     boreholes_step = cfg_mesh.boreholes_mesh_step
