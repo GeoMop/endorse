@@ -30,7 +30,7 @@ def create_fractures_rectangles(gmsh_geom, fractures, shift, base_shape: 'Object
 
     shapes = []
     for i, fr in enumerate(fractures):
-        shape = base_shape.copy()
+        shape = base_shape.deepcopy()
         print("fr: ", i, "tag: ", shape.dim_tags)
         shape = shape.scale([fr.rx, fr.ry, 1]) \
             .rotate(axis=[0,0,1], angle=fr.shape_angle) \

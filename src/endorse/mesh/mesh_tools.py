@@ -17,12 +17,12 @@ def box_with_sides(factory, dimensions, center=[0,0,0]):
     side_y = factory.rectangle([dimensions[0], dimensions[2]])
     side_x = factory.rectangle([dimensions[2], dimensions[1]])
     sides = dict(
-        side_z0=side_z.copy().translate([0, 0, -dimensions[2] / 2]),
-        side_z1=side_z.copy().translate([0, 0, +dimensions[2] / 2]),
-        side_y0=side_y.copy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        side_y1=side_y.copy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
-        side_x0=side_x.copy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
-        side_x1=side_x.copy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
+        side_z0=side_z.deepcopy().translate([0, 0, -dimensions[2] / 2]),
+        side_z1=side_z.deepcopy().translate([0, 0, +dimensions[2] / 2]),
+        side_y0=side_y.deepcopy().translate([0, 0, -dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_y1=side_y.deepcopy().translate([0, 0, +dimensions[1] / 2]).rotate([-1, 0, 0], np.pi / 2),
+        side_x0=side_x.deepcopy().translate([0, 0, -dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2),
+        side_x1=side_x.deepcopy().translate([0, 0, +dimensions[0] / 2]).rotate([0, 1, 0], np.pi / 2)
     )
     for name, side in sides.items():
         side.translate(center).modify_regions(name)
