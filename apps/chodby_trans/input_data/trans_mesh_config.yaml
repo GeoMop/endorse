@@ -1,13 +1,13 @@
 
 test_random_data: False
 
-# base of the mesh file name
-mesh_name: trans_mesh
-
 geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
+    # base of the mesh file name
+    mesh_name: trans_mesh
+
     meshing_seed: 1
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 5
