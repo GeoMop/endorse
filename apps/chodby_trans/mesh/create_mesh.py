@@ -501,7 +501,7 @@ def main(cfg, workdir, dfn_seed, mesh_seed):
     # common.EndorseCache.instance().expire_all()
 
     with common.workdir(workdir, clean=False):
-        fr_pop = Population.from_cfg(cfg.fractures.population, cfg.mesh.geometry.box_dimensions)
+        fr_pop = Population.from_cfg(cfg.mesh.fractures.population, cfg.mesh.geometry.box_dimensions)
         make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
 
 
