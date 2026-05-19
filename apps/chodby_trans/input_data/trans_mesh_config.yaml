@@ -1,10 +1,10 @@
 
 test_random_data: False
 
-geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mesh:
+    geometry: !include _geometry.yaml
     # base of the mesh file name
     mesh_name: trans_mesh
 

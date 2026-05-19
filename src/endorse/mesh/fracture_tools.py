@@ -52,14 +52,14 @@ def population_from_cfg(families, box):
     return Population.from_cfg(families, box, RectangleShape)
 
 
-def fixed_fractures(cfg):
+def fixed_fractures(box_dimensions):
     """
     Fixed artificial fractures.
     :param cfg: main config
     :return: list of fracture list[Fracture]
     """
-    diameter = np.linalg.norm(cfg.geometry.box_dimensions[1:])   # diagonal of y-z plane
-    center = np.array([0, 0.75 * cfg.geometry.box_dimensions[1]/2, 0])
+    diameter = np.linalg.norm(box_dimensions[1:])   # diagonal of y-z plane
+    center = np.array([0, 0.75 * box_dimensions[1]/2, 0])
     normal = np.array([0, 1, 0])
     region_id = 0
     region = gmsh.Region.get(f"fr_{region_id}")
@@ -69,10 +69,10 @@ def fixed_fractures(cfg):
 
 
 def fracture_set(cfg, fr_population:Population, seed:int):
-    main_box_dimensions = cfg.geometry.box_dimensions
+    main_box_dimensions = cfg.mesh.geometry.box_dimensions
 
     # Fixed large fractures
-    fractures = fixed_fractures(cfg)
+    fractures = fixed_fractures(main_box_dimensions)
 
     fix_seed = cfg.fractures.fixed_seed
     large_min_r = cfg.fractures.large_min_r

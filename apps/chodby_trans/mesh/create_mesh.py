@@ -93,7 +93,7 @@ def merge_along_sequence(points: np.ndarray, tol: float, use_centroid: bool = Tr
     return np.vstack(clusters)
 
 
-def create_main_tunnel(factory, cfg:'dotdict'):
+def create_main_tunnel(factory, cfg_mesh:'dotdict'):
     """
     Creates main tunnel by extrusion from cross-section points of the L5 tunnel.
     :param factory:
@@ -101,7 +101,8 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     :return:
         tunnel (ObjectSet)
     """
-    cfg_mt = cfg.geometry.main_tunnel
+    cfg_geom = cfg_mesh.geometry
+    cfg_mt = cfg_geom.main_tunnel
     # Read points defining head of tunnel in XZ plane, Y=0
     df = pd.read_csv(job.input.dir_path / cfg_mt.csv_points)
     main_tunnel_points = df[['x', 'y', 'z']].to_numpy()
@@ -115,10 +116,10 @@ def create_main_tunnel(factory, cfg:'dotdict'):
 
     # create polygon
     tunnel_polygon = (factory.make_polygon(points=main_tunnel_points_clustered)
-                      .translate([cfg.geometry.box_center[0], cfg.geometry.box_center[1], 0]))
+                      .translate([cfg_geom.box_center[0], cfg_geom.box_center[1], 0]))
     # compute center of polygon
     cfg_mt.center = np.average(main_tunnel_points_clustered, axis=0)
-    cfg_mt.center[:1] = cfg_mt.center[:1] + cfg.geometry.box_center[:1]
+    cfg_mt.center[:1] = cfg_mt.center[:1] + cfg_geom.box_center[:1]
 
     tunnel_center = factory.point(cfg_mt.center)
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
@@ -127,7 +128,7 @@ def create_main_tunnel(factory, cfg:'dotdict'):
     # extrude polygon and its center to get the tunnel and its central line
     tunnel = tunnel_extrude[3]
     tunnel_center_line = tunnel_extrude[1]
-    tunnel.set_region("main_tunnel").mesh_step(cfg.mesh.main_tunnel_mesh_step)
+    tunnel.set_region("main_tunnel").mesh_step(cfg_mesh.main_tunnel_mesh_step)
 
     # bottom coordinate of the main tunnel (needed by storage boreholes)
     tunnel_bottom_z = np.min(main_tunnel_points_clustered[:, 2], axis=0)
@@ -226,7 +227,7 @@ def safe_list(source_dict: dict[str, ObjectSet], keys: list[str]) -> list[Object
 
 @exp.rethrow_as(exp.GeomException, "Geometry exception")
 def make_geometry(factory, cfg:'dotdict', fracture_set):
-    cfg_geom = cfg.geometry
+    cfg_geom = cfg.mesh.geometry
     cfg_mesh = cfg.mesh
 
     # Prepare objects
@@ -243,7 +244,7 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
         "b_storage_boreholes_group": None
     }
 
-    vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg)
+    vol_dict["tunnel"], tunnel_center_line, tunnel_bottom_z = create_main_tunnel(factory, cfg_mesh)
 
     if "boreholes" in cfg_geom.include:
         storage_boreholes, vol_dict["plug"], vol_dict["container"], storage_boreholes_lines \
@@ -472,7 +473,7 @@ def make_heal_mesh(cfg, mesh_file: File):
 @memoize
 def make_mesh(cfg, fr_pop, dfn_seed, mesh_seed):
 
-    if "fractures" in cfg.geometry.include:
+    if "fractures" in cfg.mesh.geometry.include:
         fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
     else:
         fracture_set, n_large = None, 0
@@ -500,7 +501,7 @@ def main(cfg, workdir, dfn_seed, mesh_seed):
     # common.EndorseCache.instance().expire_all()
 
     with common.workdir(workdir, clean=False):
-        fr_pop = Population.from_cfg(cfg.fractures.population, cfg.geometry.box_dimensions)
+        fr_pop = Population.from_cfg(cfg.fractures.population, cfg.mesh.geometry.box_dimensions)
         make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
 
 
