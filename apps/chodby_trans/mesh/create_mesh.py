@@ -389,6 +389,80 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
     return geometry_final
 
 
+@exp.rethrow_as(exp.GeomException, "Geometry exception")
+def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
+    cfg_geom = cfg_mesh.geometry
+
+    # Prepare objects
+    vol_dict = {
+        "box": None,
+        "fractures_group": None,
+    }
+    bnd_dict = {}
+
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions, cfg_geom.box_center)
+    bnd_dict = {**bnd_dict, **box_sides_dict}
+
+    # drill the box, so later we do not have fractures in drilled volume
+    vol_dict["box"] = box.deepcopy()
+    vol_dict["box"].set_region("box")
+
+    if "fractures" in cfg_geom.include:
+        fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, cfg_geom.box_center, factory.rectangle())
+        vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box"])
+        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step)
+        # determine fracture outer boundary
+        # b_fractures_outer = vol_dict["fractures_group"].get_boundary()[1]
+        # bnd_dict["b_fractures_outer"] = b_fractures_outer \
+        #     .select_by_intersect(box.get_boundary().deepcopy()) \
+        #     .set_region(".fractures_outer") \
+        #     .mesh_step(cfg_mesh.boundary_mesh_step)
+
+    [print(k, v) for k, v in vol_dict.items()]
+    factory.synchronize()
+    # factory.show()
+    # exit(0)
+
+    # Step 5: Map results back to their labels
+    fr_dict, fr_bnd_dict = fragment(factory, vol_dict, bnd_dict)
+
+    [print(k, v) for k, v in fr_dict.items()]
+    [print(k, v) for k, v in fr_bnd_dict.items()]
+
+    # include all volumetric fragments
+    geometry_set = list(fr_dict.values())
+
+    # get box surface
+    for side_name in box_sides_dict.keys():
+        fr_bnd_dict[side_name+"_fr"] \
+            .set_region('.'+side_name) \
+            .mesh_step(cfg_mesh.boundary_mesh_step)
+        geometry_set.append(fr_bnd_dict[side_name+"_fr"])
+
+    if "fractures" in cfg_geom.include:
+        # fractures and its boundary
+        b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
+        b_fractures_out = b_fractures_fr \
+            .select_by_intersect(box.get_boundary().deepcopy()) \
+            .set_region(".fractures_out") \
+            .mesh_step(cfg_mesh.boundary_mesh_step)
+        geometry_set.append(b_fractures_out)
+
+    geometry_final = factory.group(*geometry_set)
+
+    # exit(0)
+    print("Finalize geometry...")
+    factory.synchronize()
+    # need to keep tunnel lines due to refinement fields
+    factory.keep_only(geometry_final)
+    factory.synchronize()
+    factory.remove_duplicate_entities()
+    factory.synchronize()
+
+    print("Geometry finished...")
+    return geometry_final
+
+
 @exp.rethrow_as(exp.MeshException, "Meshing exception")
 def meshing(factory, objects, mesh_filename):
     """
@@ -445,7 +519,12 @@ def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg_mesh, fracture_set)
+    if cfg_mesh.geometry.resolution_type == "box_drilled":
+        geometry_set = make_geometry(factory, cfg_mesh, fracture_set)
+    elif cfg_mesh.geometry.resolution_type == "box":
+        geometry_set = make_geometry_box(factory, cfg_mesh, fracture_set)
+    else:
+        raise Exception(f"Unknown geometry type: {cfg_mesh.geometry.resolution_type}.")
     # factory.show()
     # exit(0)
 
