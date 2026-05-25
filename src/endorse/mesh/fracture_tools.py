@@ -68,17 +68,17 @@ def fixed_fractures(box_dimensions):
     return [fr]
 
 
-def fracture_set(cfg, fr_population:Population, seed:int):
-    main_box_dimensions = cfg.mesh.geometry.box_dimensions
-    cfg_fr = cfg.mesh.fractures
+def fracture_set(cfg_mesh, fr_population:Population, seed:int):
+    main_box_dimensions = cfg_mesh.geometry.box_dimensions
+    cfg_fr = cfg_mesh.fractures
 
     # Fixed large fractures
     fractures = fixed_fractures(main_box_dimensions)
 
     # Large random fractures with fixed seed
-    # fix_seed = cfg.fractures.fixed_seed
-    # large_min_r = cfg.fractures.large_min_r
-    # large_box_dimensions = cfg.fractures.large_box
+    # fix_seed = cfg_fr.fixed_seed
+    # large_min_r = cfg_fr.large_min_r
+    # large_box_dimensions = cfg_fr.large_box
     # logging.info(f"Large fracture seed: {fix_seed}")
     # max_large_size = max([fam.size.diam_range[1] for fam in fr_population.families])
     # random large fracture with fixed seed

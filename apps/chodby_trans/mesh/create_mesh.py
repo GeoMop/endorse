@@ -226,9 +226,8 @@ def safe_list(source_dict: dict[str, ObjectSet], keys: list[str]) -> list[Object
 
 
 @exp.rethrow_as(exp.GeomException, "Geometry exception")
-def make_geometry(factory, cfg:'dotdict', fracture_set):
-    cfg_geom = cfg.mesh.geometry
-    cfg_mesh = cfg.mesh
+def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
+    cfg_geom = cfg_mesh.geometry
 
     # Prepare objects
     vol_dict = {
@@ -359,12 +358,14 @@ def make_geometry(factory, cfg:'dotdict', fracture_set):
             geometry_set.append(b_fractures_in)
 
     # create refinement fields around drifts
-    line_fields = [line_distance_edz(factory, line, cfg_mesh.storage_borehole_refinement) \
-                   for line in storage_boreholes_lines]
-    line_fields.append(line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement))
-    common_field = field.minimum(*line_fields)
-    factory.set_mesh_step_field(common_field)
-    refinement_lines = [tunnel_center_line, *storage_boreholes_lines]
+    refinement_lines = []
+    if "drilled_volume" in cfg_geom.include:
+        line_fields = [line_distance_edz(factory, line, cfg_mesh.storage_borehole_refinement) \
+                       for line in storage_boreholes_lines]
+        line_fields.append(line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement))
+        common_field = field.minimum(*line_fields)
+        factory.set_mesh_step_field(common_field)
+        refinement_lines = [tunnel_center_line, *storage_boreholes_lines]
 
     # THE FOLLOWING HAS NO EFFECT - it is done through line fields
     # if "drilled_volume" in cfg_geom.include:
@@ -424,16 +425,16 @@ def meshing(factory, objects, mesh_filename):
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
-def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
+def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = cfg.mesh.mesh_name + ".msh2"
+    final_mesh_filename = cfg_mesh.mesh_name + ".msh2"
 
-    factory = gmsh.GeometryOCC(cfg.mesh.mesh_name, verbose=False)
+    factory = gmsh.GeometryOCC(cfg_mesh.mesh_name, verbose=False)
     import gmsh as gmsh_orig
     gmsh_orig.option.setNumber("General.Terminal", 1)     # headless
     gmsh_orig.option.setNumber("General.NumThreads", 1)   # avoid hidden threading
@@ -444,7 +445,7 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg, fracture_set)
+    geometry_set = make_geometry(factory, cfg_mesh, fracture_set)
     # factory.show()
     # exit(0)
 
@@ -457,42 +458,49 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
 
 
 @exp.rethrow_as(exp.HealException, "Meshing exception")
-def make_heal_mesh(cfg, mesh_file: File):
-    mesh_file_healed = Path(cfg.mesh.mesh_name + "_healed.msh2")
+def make_heal_mesh(mesh_name, mesh_file: File):
+    mesh_file_healed = Path(mesh_name + "_healed.msh2")
     if not Path(mesh_file_healed).exists():
         print("HEAL MESH")
 
         # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
         hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
         hm.heal_mesh(gamma_tol=0.002)
-        # hm.stats_to_yaml(cfg.mesh.mesh_name + "_heal_stats.yaml")
+        # hm.stats_to_yaml(cfg_mesh.mesh_name + "_heal_stats.yaml")
         hm.write(file_name=mesh_file_healed.name)
     return mesh_file_healed
 
 
 @memoize
-def make_mesh(cfg, fr_pop, dfn_seed, mesh_seed):
+def make_fractures(cfg_mesh, dfn_seed):
 
-    if "fractures" in cfg.mesh.geometry.include:
-        fracture_set, n_large = fracture_tools.fracture_set(cfg, fr_pop, dfn_seed)
+    fr_pop = Population.from_cfg(cfg_mesh.fractures.population, cfg_mesh.geometry.box_dimensions)
+
+    if "fractures" in cfg_mesh.geometry.include:
+        fracture_set, n_large = fracture_tools.fracture_set(cfg_mesh, fr_pop, dfn_seed)
     else:
         fracture_set, n_large = None, 0
 
-    mesh_file = None
-    if not Path(cfg.mesh.mesh_name + ".msh2").exists():
-        mesh_file = make_gmsh(cfg, fracture_set, mesh_seed)    # use mesh_seed for gmsh randomization
+    return fr_pop, fracture_set, n_large
+
+
+@memoize
+def make_mesh(cfg_mesh, fracture_set, mesh_seed):
+
+    if not Path(cfg_mesh.mesh_name + ".msh2").exists():
+        mesh_file = make_gmsh(cfg_mesh, fracture_set, mesh_seed)    # use mesh_seed for gmsh randomization
     else:
-        mesh_file = File(cfg.mesh.mesh_name + ".msh2")
+        mesh_file = File(cfg_mesh.mesh_name + ".msh2")
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = make_heal_mesh(cfg, mesh_file)
+    mesh_file_healed = make_heal_mesh(cfg_mesh.mesh_name, mesh_file)
 
     print("Final mesh file: ", mesh_file_healed)
-    return File(mesh_file_healed.name), fracture_set, n_large
+    return File(mesh_file_healed.name), fracture_set
 
 
 def main(cfg, workdir, dfn_seed, mesh_seed):
@@ -501,8 +509,8 @@ def main(cfg, workdir, dfn_seed, mesh_seed):
     # common.EndorseCache.instance().expire_all()
 
     with common.workdir(workdir, clean=False):
-        fr_pop = Population.from_cfg(cfg.mesh.fractures.population, cfg.mesh.geometry.box_dimensions)
-        make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
+        fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, dfn_seed)
+        return make_mesh(cfg, fracture_set, mesh_seed)
 
 
 if __name__ == '__main__':
