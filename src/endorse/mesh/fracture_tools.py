@@ -54,7 +54,10 @@ def population_from_cfg(families, box):
 
 def fracture_set_stats(fractures):
     radii = np.array([fr.r for fr in fractures], dtype=float)
-    return dict(min_radius=float(np.min(radii)), max_radius=float(np.max(radii)))
+    return dict(min_radius=float(np.min(radii)),
+                max_radius=float(np.max(radii)),
+                avg_radius=float(np.average(radii)),
+                med_radius=float(np.median(radii)))
 
 
 def fixed_fractures(box_dimensions):

@@ -9,19 +9,6 @@ from chodby_trans.mesh.create_mesh import make_fractures, make_mesh
 
 script_path = Path(__file__).absolute()
 
-# def update_mesh_cfg(cfg, level):
-#     mesh_scale = level.mesh_step_scale
-#
-#     mcfg = common.dotdict.create(cfg)
-#
-#     mcfg.mesh.boundary_mesh_step = mesh_scale * mcfg.mesh.boundary_mesh_step
-#     mcfg.mesh.fracture_mesh_step = mesh_scale * mcfg.mesh.fracture_mesh_step
-#     mcfg.mesh.main_tunnel_mesh_step = mesh_scale * mcfg.mesh.main_tunnel_mesh_step
-#     mcfg.mesh.boreholes_mesh_step = mesh_scale * mcfg.mesh.boreholes_mesh_step
-#
-#     mcfg.mesh.mesh_name = mcfg.mesh.mesh_name + f"_L{level.id}"
-#     return mcfg
-
 
 def update_mesh_cfg(cfg_mesh, level_dict):
 
@@ -36,7 +23,11 @@ def main(cfg, workdir, dfn_seed, mesh_seed):
         fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, dfn_seed)
         fr_stats = fracture_tools.fracture_set_stats(fracture_set)
         print(f"N fracture set: {len(fracture_set)}")
-        print(f"Fracture radius min: {fr_stats['min_radius']}, max: {fr_stats['max_radius']}")
+        print(f"Fracture stats:\n"
+              f"min: {fr_stats['min_radius']},\n"
+              f"max: {fr_stats['max_radius']},\n"
+              f"avg: {fr_stats['avg_radius']},\n"
+              f"med: {fr_stats['med_radius']}")
 
         # L0 fine
         level = cfg.mlmc.levels[0]
