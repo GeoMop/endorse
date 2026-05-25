@@ -1,5 +1,6 @@
 from endorse import common
 import os
+from pathlib import Path
 import numpy as np
 from scipy import stats
 import pytest
@@ -59,4 +60,4 @@ def test_load_config():
     print(cfg._file_refs)
     assert len(cfg._file_refs) == 5 #other_file1, other_file2, _cfg_a, cfg_b, cfg_main
     for f in ['other_file1.any', 'other_file2.any', '_cfg_a.yaml', '_cfg_b.yaml']:
-        assert os.path.join(script_dir, f) in cfg._file_refs
+        assert Path(script_dir) / f in cfg._file_refs

@@ -1,9 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from typing import TypedDict, List
+
+# Data type for passing results to plotting functions
+class DataItem(TypedDict):
+    p_b_results: np.ndarray
+    full_pressure_history: np.ndarray
+    label: str
+
 
 class PoroElasticSolver:
-    def __init__(self, r_b, R, N, dt, T_final, p_b0):
+    def __init__(self, r_b, R, N, geom_power, dt, T_final, p_b0):
         """
         Stores geometry, time-stepping, and fixed pressures.
 
@@ -11,6 +19,7 @@ class PoroElasticSolver:
           r_b   : Borehole radius [m].
           R     : Outer radius [m].
           N     : Number of finite elements (mesh will have N+1 nodes).
+          geom_power: Power coefficient for spacing of elements (1 = even spacing, >1 = concentrated at borehole)
           dt    : Time step [s].
           T_final: Total simulation time [s].
           p_b0  : Fixed borehole pressure (node 0) [Pa].
@@ -22,17 +31,17 @@ class PoroElasticSolver:
         self.dt = dt
         self.T_final = T_final
         self.n_dofs = N + 1  # full number of nodes
-        self.r = np.linspace(r_b, R, self.n_dofs)
+        self.r = r_b + (R-r_b) * np.linspace(0,1,self.n_dofs)**geom_power
         self.Nt = int(np.ceil(T_final / dt))
         self.p_b0 = p_b0
 
-    def interior_matrices(self, S, k_array):
+    def interior_matrices(self, S_array, k_array):
         """
         Allocate full (n_dofs×n_dofs) mass and stiffness matrices and fill only the interior
         block (indices 1:n_dofs, 1:n_dofs) using P1 finite elements in cylindrical coordinates.
 
         Parameters:
-          S      : Storage coefficient.
+          S_array: 1D array of length N with piecewise constant storage coefficient.
           k_array: 1D array of length N with piecewise constant hydraulic conductivity.
 
         Returns:
@@ -48,7 +57,8 @@ class PoroElasticSolver:
             h_elem = self.r[i + 1] - self.r[i]
             r_mid = 0.5 * (self.r[i] + self.r[i + 1])
             # Consistent element mass matrix.
-            M_local = S * r_mid * h_elem / 6.0 * np.array([[2, 1],
+            S_val = S_array[i]
+            M_local = S_val * r_mid * h_elem / 6.0 * np.array([[2, 1],
                                                            [1, 2]])
             # Element stiffness matrix.
             k_val = k_array[i]
@@ -59,7 +69,7 @@ class PoroElasticSolver:
             K[i:i + 2, i:i + 2] += K_local
         return M, K
 
-    def assembly_matrices(self, S, k_array, C_b, dt):
+    def assembly_matrices(self, S_array, k_array, C_b, dt):
         """
         Use interior_matrices to allocate full matrices and then insert borehole physics.
 
@@ -78,10 +88,10 @@ class PoroElasticSolver:
         """
         n = self.n_dofs
         # Allocate full matrices and fill interior block.
-        M_global, K_global = self.interior_matrices(S, k_array)
+        M_global, K_global = self.interior_matrices(S_array, k_array)
         # For the borehole node (node 0): override its mass row.
         M_global[0, :] = 0.0
-        M_global[0, 0] = C_b
+        M_global[0, 0] = C_b[0]
         # Compute alpha using the first element (connecting node 0 and node 1).
         h0 = self.r[1] - self.r[0]
         alpha = (2 * np.pi * self.r[0] * k_array[0]) / h0
@@ -90,7 +100,7 @@ class PoroElasticSolver:
                                                 [-1, 1]])
         return M_global, K_global
 
-    def build_global_system(self, S, k_array, C_b, dt):
+    def build_global_system(self, S_array, k_array, C_b, dt):
         """
         Build the global system.
 
@@ -108,7 +118,7 @@ class PoroElasticSolver:
           b_dirichlet : Dirichlet correction vector (length n_dofs) (with a negative sign).
         """
         n = self.n_dofs
-        M_global, K_global = self.assembly_matrices(S, k_array, C_b, dt)
+        M_global, K_global = self.assembly_matrices(S_array, k_array, C_b, dt)
         # Lump the mass matrix: sum each row divided by dt.
         M_lumped = np.sum(M_global, axis=1) / dt
         A_full = np.diag(M_lumped) + K_global
@@ -123,7 +133,7 @@ class PoroElasticSolver:
         b_dirichlet[n - 1] = self.p_far
         return A_full, M_lumped, b_dirichlet
 
-    def simulate(self, biot, phi, E, nu, p_far, k_array, C_b=None):
+    def simulate(self, biot: float, phi: float, E: np.array, nu: np.array, p_far: float, k_array: np.array, C_b: np.array = None):
         """
         Run the fully implicit simulation.
 
@@ -173,7 +183,7 @@ class PoroElasticSolver:
         self.p_far = p_far
 
         # Build the global system.
-        A_full, M_lumped, b_dirichlet = self.build_global_system(S, k_array, C_b, self.dt)
+        A_full, M_lumped, b_dirichlet = self.build_global_system(S, self.k_array, C_b, self.dt)
 
         n = self.n_dofs
         # Initialize the pressure field: node 0 = p_b0, interior nodes = p_far.
@@ -198,22 +208,30 @@ class PoroElasticSolver:
             self.full_pressure_history[t + 1, :] = p.copy()
         return self.time_vec, self.full_pressure_history, self.p_b_history
 
-    def plot_results(self):
+    def plot_results(self, data: List[DataItem] = None):
+        if data is None:
+            data = [ { 'p_b_history': self.p_b_history,
+                     'full_pressure_history': self.full_pressure_history,
+                     'label': 'Borehole Pressure' } ]
+
         """ Plot borehole pressure history and final radial pressure distribution. """
         plt.figure(figsize=(10, 6))
-        plt.plot(self.time_vec / 3600, self.p_b_history, label='Borehole Pressure p(0)')
+        for d in data:
+            plt.plot(self.time_vec / 3600, d['p_b_history'], label=d['label'])
         plt.xlabel('Time (hours)')
         plt.ylabel('Pressure (Pa)')
-        plt.title('Borehole Pressure vs Time')
+        plt.title('Borehole Pressure p(0) vs Time')
         plt.legend()
         plt.grid(True)
         plt.show()
 
         plt.figure(figsize=(10, 6))
-        plt.plot(self.r, self.full_pressure_history[-1, :], marker='o')
+        for d in data:
+            plt.plot(self.r, d['full_pressure_history'][-1, :], marker='o', label=d['label'])
         plt.xlabel('Radial Distance r (m)')
         plt.ylabel('Pressure (Pa)')
         plt.title('Pressure Distribution at Final Time')
+        plt.legend()
         plt.grid(True)
         plt.show()
 
@@ -237,7 +255,8 @@ if __name__ == '__main__':
     # Geometry and time-stepping parameters.
     r_b = 0.2  # Borehole radius [m]
     R = 2.0  # Outer domain radius [m]
-    N = 50  # Number of finite elements (=> N+1 nodes)
+    N = 10  # Number of finite elements (=> N+1 nodes)
+    geom_power = 8
     dt = 24*60*60  # Time step [s]
     T_final = dt * 90  # Total simulation time (e.g., 3 days) [s]
     p_b0 = 1000*1000  # Borehole pressure (node 0) [Pa]
@@ -245,14 +264,14 @@ if __name__ == '__main__':
     c_f = 4.5e-10
 
     # Instantiate the solver.
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
+    solver = PoroElasticSolver(r_b, R, N, geom_power, dt, T_final, p_b0)
 
     # Rock and fluid parameters.
     biot = 0.3
     phi = 0.05  # Porosity (e.g., 2%)
-    E = 30e9  # Young's modulus (e.g., 50 GPa)
+    E_array = 30e9 * np.ones(N) # Young's modulus (e.g., 50 GPa)
     nu = 0.25  # Poisson's ratio
-    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E)
+    C_b = np.pi * r_b ** 2 * (c_f + (2 * (1 - nu) * (1 - nu ** 2)) / E_array)
 
     # Hydraulic conductivity: piecewise constant (array of length N).
     conductivity_array = 1e-16 * np.ones(N)
@@ -261,7 +280,7 @@ if __name__ == '__main__':
 
     # Run simulation.
     time_vec, full_pressure_history, p_b_history \
-        = solver.simulate(biot, phi, E, nu, p_far, conductivity_array)
+        = solver.simulate(biot, phi, E_array, nu, p_far, conductivity_array)
 
     # Plot results.
     solver.plot_results()

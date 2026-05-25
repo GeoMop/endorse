@@ -1,0 +1,72 @@
+# Fracture network configuration, list of fracture families.
+# This data are collected from Bayesian inversion of Bukov dfn model (Kabele)
+
+-   name: dfn_pop_1
+    p_30: <dfn_pop_1_p30>
+    power: <dfn_pop_1_alpha>
+
+    r_min: 0.531
+    r_max: 500
+    
+    trend: 187.048
+    plunge: 4.681
+    concentration: 18.348
+
+    tr_a: <dfn_pop_1_tr_a>
+    tr_b: 3
+
+-   name: dfn_pop_2
+    p_30: <dfn_pop_2_p30>
+    power: <dfn_pop_2_alpha>
+
+    r_min: 0.614
+    r_max: 500
+
+    trend: 118.219
+    plunge: 66.144
+    concentration: 12.967
+
+    tr_a: <dfn_pop_2_tr_a>
+    tr_b: 3
+
+-   name: dfn_pop_3
+    p_30: <dfn_pop_3_p30>
+    power: <dfn_pop_3_alpha>
+
+    r_min: 0.455
+    r_max: 500
+
+    trend: 281.725
+    plunge: 53.226
+    concentration: 10.816
+
+    tr_a: <dfn_pop_3_tr_a>
+    tr_b: 3
+
+-   name: dfn_pop_4
+    p_30: <dfn_pop_4_p30>
+    power: <dfn_pop_4_alpha>
+
+    r_min: 0.565
+    r_max: 500
+
+    trend: 237.934
+    plunge: 3.769
+    concentration: 13.914
+
+    tr_a: <dfn_pop_4_tr_a>
+    tr_b: 3
+
+-   name: dfn_pop_5
+    p_30: <dfn_pop_5_p30>
+    power: <dfn_pop_5_alpha>
+
+    r_min: 0.587
+    r_max: 500
+
+    trend: 311.857
+    plunge: 0.99
+    concentration: 15.435
+
+    tr_a: <dfn_pop_5_tr_a>
+    tr_b: 3

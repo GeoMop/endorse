@@ -3,14 +3,21 @@
 
 pytest
 
+lz4
+olefile
+
+
 openpyxl        # for reading original input datasets
 pandas
 fastparquet     # searialization of pandas tables
 ray             # implicit dependency of tinyda
-tinyda          # for Bayes inversion (WTP processing
+arviz
+#tinyda          # for Bayes inversion (WTP processing
+git+https://github.com/bagr-sus/tinyDA.git@shared-archive-proposals-additional
+
 meshio          # MSH - VTK conversion, both directions
 joblib          # memoization, should be dependency of endorse
 
 seaborn
 matplotlib
-
+cmasher

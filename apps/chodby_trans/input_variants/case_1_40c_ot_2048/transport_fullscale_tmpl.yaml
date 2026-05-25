@@ -1,0 +1,175 @@
+flow123d_version: 4.0.0
+problem: !Coupling_Sequential
+  description: |
+      Transport problem with Darcy flow driven by the boundary condition from the larger model.
+      Source term is prescribed as volumetric in container region given by the index of container position.
+  mesh:
+    mesh_file: <mesh_file>
+    regions:
+      - !Union
+        name: .box_drilled
+        regions:
+          - .side_x0
+          - .side_x1
+          - .side_y0
+          - .side_y1
+          - .side_z0
+          - .side_z1
+      #          - .tunnel_heads # are considered sealed
+      - !Union
+        name: storages
+        regions: <storage_regions>
+      - !From_Label
+        name: plug
+        mesh_label: <plug_region>
+        allow_empty: False
+      - !From_Label
+        name: container
+        mesh_label: <container_region>
+        allow_empty: False
+
+      # Resolve fracture regions.
+      # Allow empty regions if no fractures are present.
+      - !From_Label
+        name: .fractures_box
+        mesh_label: .fractures_out
+        allow_empty: True
+      - !From_Label
+        name: fr_large_temp
+        mesh_label: fr_large
+        allow_empty: True
+      - !From_Label
+        name: fr_small_temp
+        mesh_label: fr_small
+        allow_empty: True
+      - !Union
+        name: fractures
+        regions:
+            - fr_large_temp
+            - fr_small_temp
+
+  flow_equation: !Flow_Darcy_LMH
+    output_specific:
+    nonlinear_solver:
+      linear_solver: !Petsc
+        a_tol: <flow_solver__a_tol>
+        r_tol: <flow_solver__r_tol>
+        options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+
+    input_fields:
+#      - region: [.tunnel_head_y0, .tunnel_head_y1] # tunnels are sealed
+      - region: [ .box_drilled ]
+        bc_type: dirichlet
+        bc_piezo_head: !FieldFormula
+          # Kravi hora (local model) pressure gradient estimate: 20 m / 400 m = 0.05 [m/m]
+          value: 0.05*(-y+0.1*z)
+#      - region: [.box_drilled, .fractures_out]
+#        bc_type: dirichlet
+#        bc_piezo_head: !FieldFormula
+#          value: (20-y)-0.1*z
+#        bc_piezo_head: !FieldFE
+#          mesh_data_file: <piezo_head_input_file>
+#          field_name: piezo_head_p0
+#          interpolation: P0_intersection
+      - region: [box, fractures]
+        conductivity:  !FieldFE
+          mesh_data_file: <input_fields_file>
+          field_name: conductivity
+          #interpolation: P0_intersection
+        cross_section:  !FieldFE
+          mesh_data_file: <input_fields_file>
+          field_name: cross_section
+          #interpolation: P0_intersection
+        sigma: 0.01
+      # TODO: bentonite
+      - region: [ main_tunnel, storages, plug, container ]
+        conductivity: <backfill_cond>
+
+    output:
+      fields:
+        - piezo_head_p0
+        - pressure_p0
+        #- pressure_p1
+        - velocity_p0
+        - region_id
+        - conductivity
+        - cross_section
+    balance:
+      cumulative: true
+    output_stream:
+      format: !vtk
+        variant: ascii
+
+  solute_equation: !Coupling_OperatorSplitting
+    substances:
+        - name: <conc_name> # uranium 235; should rather be Iodium with zero K_d.
+          molar_mass: 0.235
+    transport: !Solute_AdvectionDiffusion_DG
+      input_fields:
+        - region: [ALL]
+          # dg_penalty: 1       # mass: 80, error: 4.5, default value, solution highly oscilates
+          # dg_penalty: 10      # mass: 40, error: 4.0,  high error, hard to converge
+          # dg_penalty: 100     # mass: 27, error: 16,  high error, hard to converge
+          dg_penalty: <dg_penalty>
+
+        # ROCK and DFN
+        - region: [box, fractures]
+          porosity: !FieldFE
+            mesh_data_file: <input_fields_file>
+            field_name: porosity
+
+          diff_m: <bulk_diff_m>
+          disp_l: <bulk_disp_L>
+          disp_t: !FieldFormula
+            value: <bulk_disp_L>/10
+
+        # BACKFILL
+        - region: [ main_tunnel, storages, plug, container ]
+          porosity: <backfill_por>
+          diff_m: <backfill_diff_m>
+          disp_l: <backfill_disp_L>
+          disp_t: !FieldFormula
+            value: <backfill_disp_L>/10
+
+        # SOURCE - conc pulse
+        - region: [ container ]
+          time: 0
+          sources_conc: 1
+          sources_sigma: !FieldFormula
+            # UOS surface: S = pi * du * hu [m2]
+            # container region volume: V = pi * dc^2/4 * hc [m3]
+            # max. apparent diffusion of I in bentonite: D = 2e-10 [m2.s-1]
+            # surrounding bentonite buffer layer: w = 0.368m
+            # new sigma: D/w * S/V [m2.s-1 . m-1 . m2 . m-3 = s-1]
+            value:  (2e-10) / <sources_buffer_thickness>  * <sources_uos_surface> / <sources_container_vol>
+        - region: [ container ]
+          time: [50, 'y']
+          sources_sigma: 0
+
+      solver:
+        a_tol: <trans_solver__a_tol>
+        r_tol: <trans_solver__r_tol>
+        options: -ksp_type gmres -pc_type ilu -pc_factor_levels 2 -ksp_diagonal_scale -ksp_diagonal_scale_fix -pc_factor_fill 1.0 -ksp_monitor
+
+      output:
+        fields:
+          - field: conc
+            interpolation: [P0_value, D1_value] #[P0_value, P1_average, D1_value]
+          - field: region_id
+            interpolation: [P0_value]
+          - porosity
+    output_stream:
+      format: !vtk
+        variant: ascii
+#        variant: binary_zlib
+      times: <output_times>
+
+
+    time:
+      end_time: [<end_time_years>, 'y']
+      max_dt: [160000, 'y']
+      dt_limits: <dt_limits>
+      common_time_unit: y
+      write_used_timesteps: time_steps.yaml
+    balance:
+      cumulative: true

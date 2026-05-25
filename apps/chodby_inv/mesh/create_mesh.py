@@ -1,15 +1,17 @@
 import math
-import os
 import numpy as np
+from pathlib import Path
 
-from endorse import common
+from endorse import common, mesh_class
 from endorse.mesh import mesh_tools
 
 from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 # import gmsh as gmsh_api
-from boreholes import Boreholes
+from chodby_inv.hm_model.boreholes import Boreholes
 
-script_dir = os.path.dirname(os.path.realpath(__file__))
+from chodby_inv import input_data
+from cfg import script_dir, workdir, input_dir
+from fractures import *
 
 
 def tunnel_center_line(factory, tunnel_dict):
@@ -68,7 +70,8 @@ def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> fiel
     return field.maximum(inner, outer)
 
 
-def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_scan):
+def make_geometry(factory, cfg:'dotdict', tunnel_laser_scan):
+    cfg_geom = cfg.geometry
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions)
     box_sides_group = factory.group(*list(box_sides_dict.values())).copy() # keep the original
 
@@ -82,7 +85,7 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     print("tunnel_center_lines:\n", tunnel_center_lines)
 
     # create borehole chamber lines for meshing field
-    bhs = Boreholes(cfg_mesh.borehole_data_file)
+    bhs = Boreholes(cfg.boreholes)
     borehole_chamber_lines = bhs.make_gmsh_lines(factory)
 
     # factory.show()
@@ -90,18 +93,30 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     tunnel = tunnel_laser_scan.split_by_dimension()[3]
     tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
 
+    # create fractures
+    line_objs = create_line_objs(cfg.line_objects, bhs)
+    fracs = generate_fractures(cfg.generated_fractures, line_objs, cfg.boreholes.geometry.l5_azimuth)
+    fractures_dict = create_planes_gmsh(factory, fracs, size=50)
+    fractures = factory.group( *fractures_dict.values() )
+    fractures_cut = fractures.copy().intersect(box).cut(tunnel)
+
     # fragment
     print("Fragmenting...")
-    box_fr, box_sides_fr, tunnel_fr, tunnel_boundary_fr = factory.fragment(box, box_sides_group, tunnel, tunnel_boundary)
+    box_fr, box_sides_fr, tunnel_fr, tunnel_boundary_fr, fractures_fr \
+        = factory.fragment(box, box_sides_group, tunnel, tunnel_boundary, fractures_cut)
     print("Fragmenting finished.")
 
     # get boundary of fragmented volumes
     b_box_fr = box_fr.get_boundary().split_by_dimension()[2]
     b_tunnel_fr = tunnel_fr.get_boundary().split_by_dimension()[2]
+    b_fractures_fr = fractures_fr.get_boundary().split_by_dimension()[1]
+    print(f"fractures_fr: {fractures_fr}")
+
 
     # CHECK
     print("Checking fragments...")
     res = box_fr.dt_intersection(tunnel_fr)     # = tunnel_fr
+    print(f"res: {res} tunnel_fr: {tunnel_fr}")
     assert res.dt_equal(tunnel_fr)
     # res = box_sides_fr.dt_intersection(tunnel_boundary_fr) # is empty
     res1 = b_box_fr.dt_intersection(tunnel_boundary_fr)  # 81 dimtags
@@ -140,15 +155,31 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     geometry_set = []
     for side_name, side_obj in box_sides_dict.items():
         b_side = box_sides_no_tunnel.select_by_intersect(side_obj)
-        b_side.set_region('.'+side_name).mesh_step(cfg_mesh.boundary_mesh_step)
+        b_side.set_region('.'+side_name).mesh_step(cfg.mesh.boundary_mesh_step)
         geometry_set.append(b_side)
+
+    # GET fracture-tunnel boundaries and set regions
+    print("Set regions to fractures and their boundaries.")
+    b_fractures_fr = b_fractures_fr.select_by_intersect(tunnel_walls)
+    for fr_name,fr_obj in fractures_dict.items():
+        fr = fractures_fr.select_by_intersect(fr_obj)
+        fr.set_region(fr_name)
+        geometry_set.append(fr)
+        b_fr_tunnel = fr.get_boundary().split_by_dimension()[1].select_by_intersect(tunnel_walls)
+        b_fr_tunnel.set_region(f".{fr_name}_tunnel")
+        geometry_set.append(b_fr_tunnel)
+        b_fr = fr.get_boundary().split_by_dimension()[1].dt_drop(b_fr_tunnel).select_by_intersect(box_sides_no_tunnel)
+        b_fr.set_region(f".{fr_name}")
+        geometry_set.append(b_fr)
+        print(f"fracture {fr_name} objects: {fr} boundary: {b_fr} boundary_tunnel: {b_fr_tunnel}")
+
     geometry_set.append(tunnel_walls)
     geometry_set.append(box_fr)
 
     # create refinement fields around drifts
-    line_fields = [line_distance_edz(factory, line, cfg_mesh.line_refinement)
+    line_fields = [line_distance_edz(factory, line, cfg.mesh.line_refinement)
                    for line in tunnel_center_lines]
-    line_fields.extend( [line_distance_edz(factory, line, cfg_mesh.borehole_refinement)
+    line_fields.extend( [line_distance_edz(factory, line, cfg.mesh.borehole_refinement)
                    for line in borehole_chamber_lines] )
     common_field = field.minimum(*line_fields)
     factory.set_mesh_step_field(common_field)
@@ -162,9 +193,10 @@ def make_geometry(factory, cfg_geom:'dotdict', cfg_mesh:'dotdict', tunnel_laser_
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()
+    # factory.show()
 
     print("Geometry finished...")
-    return geometry_final
+    return geometry_final, fracs
 
 
 def meshing(factory, objects, mesh_filename):
@@ -197,27 +229,27 @@ def meshing(factory, objects, mesh_filename):
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3)
     print("Meshing finished.")
-    factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
+    factory.write_mesh(filename=str(mesh_filename), format=gmsh.MeshFormat.msh2)
     print("Mesh written.")
 
 
 def load_boundary_mesh(filename):
     # gmsh.initialize()
-    if not os.path.isfile(filename):
+    if not Path(filename).is_file():
         raise FileNotFoundError(filename)
     # gmsh.open(filename)
     gmsh.merge(filename)
 
-def make_gmsh(cfg:'dotdict'):
+
+def make_gmsh(cfg:'dotdict', real_geometry=True):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = os.path.join(cfg.output_dir, cfg.mesh_name + ".msh2")
-    boundary_brep_filename = os.path.join(cfg.output_dir, cfg.boundary_brepfile)
-    cfg.mesh.borehole_data_file = os.path.join(cfg.output_dir, cfg.mesh.borehole_data_file)
+    final_mesh_filename = cfg.mesh_name + ".msh2"
+    boundary_brep_filename = input_dir / cfg.boundary_brepfile
 
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
@@ -225,66 +257,188 @@ def make_gmsh(cfg:'dotdict'):
     # gopt.Tolerance = 0.0001
     # gopt.ToleranceBoolean = 0.001
 
-    tunnel_laser_scan = factory.import_shapes(boundary_brep_filename, highestDimOnly=False)
+    if real_geometry is True:
+        tunnel_laser_scan = factory.import_shapes(str(boundary_brep_filename), highestDimOnly=False)
 
-    # print(tunnel_laser_scan.dim_tags)
-    # print(tunnel_laser_scan.regions)
+        # print(tunnel_laser_scan.dim_tags)
+        # print(tunnel_laser_scan.regions)
 
-    tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
-    tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
-    tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
+        tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
+        tunnel_boundary = tunnel_laser_scan.split_by_dimension()[2]
+        tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
 
-    # transform tunnel coordinate system
-    # move to center to origin
-    tunnel_group.translate(-np.array(cfg.geometry.center))
-    # rotate
-    oax = cfg.geometry.orig_x_axis
-    # add 180 degrees to reorient Y-axis to follow L5
-    angle = math.pi + math.atan(oax[0]/oax[1])
-    tunnel_group.rotate(axis=[0,0,1], angle=angle)
+        # transform tunnel coordinate system
+        # move to center to origin
+        tunnel_group.translate(-np.array(cfg.geometry.center))
+        # rotate
+        oax = cfg.geometry.orig_x_axis
+        # add 180 degrees to reorient Y-axis to follow L5
+        angle = math.pi + math.atan(oax[0]/oax[1])
+        tunnel_group.rotate(axis=[0,0,1], angle=angle)
+    else:
+        # simplified tunnel shape (cylinders):
+        cfg_geom = cfg.geometry
+        box_dim = cfg_geom.box_dimensions
+        r_l5 = cfg_geom.main_tunnel.height / 2
+        r_zk = cfg_geom.lateral_tunnel.height / 2
+        offset_zk = cfg_geom.laterals_distance / 2
+        l_zk = cfg_geom.lateral_tunnel.length
+        offset_z = r_l5/2 # elevation of tunnel axis
+        l5 = factory.cylinder(r=r_l5, center=[0, -box_dim[1]/2, offset_z], axis=[0, box_dim[1], 0])
+        zk51j = factory.cylinder(r=r_zk, center=[0, -offset_zk, offset_z], axis=[l_zk, 0, 0])
+        zk51s = factory.cylinder(r=r_zk, center=[0, offset_zk, offset_z], axis=[-l_zk, 0, 0])
+        tunnel_laser_scan = l5.fuse(l5, zk51s, zk51j)
+        tunnel_bulk = tunnel_laser_scan.split_by_dimension()[3]
+        tunnel_boundary = tunnel_laser_scan.get_boundary().split_by_dimension()[2]
+        tunnel_group = factory.group(tunnel_bulk, tunnel_boundary)
+
     factory.synchronize()
 
     # factory.show()
-    geometry_set = make_geometry(factory, cfg.geometry, cfg.mesh, tunnel_group)
+    geometry_set, fracs = make_geometry(factory, cfg, tunnel_group)
     # factory.show()
     # exit(0)
 
-    meshing(factory, [geometry_set], final_mesh_filename)
+    meshing(factory, [geometry_set], str(final_mesh_filename))
     # factory.show()
     del factory
-    return common.File(final_mesh_filename)
+    return common.File(final_mesh_filename), fracs
+
+def set_fracture_regions(cfg:'dotdict', fracs, filename):
+
+    # creates rotation matrix that maps a to b
+    def rotation_matrix_from_vectors(a, b):
+        a = a / np.linalg.norm(a)
+        b = b / np.linalg.norm(b)
+        v = np.cross(a, b)
+        c = np.dot(a, b)
+        s = np.linalg.norm(v)
+        kmat = np.array([[0, -v[2], v[1]],
+                         [v[2], 0, -v[0]],
+                         [-v[1], v[0], 0]])
+        if s == 0:
+            return np.eye(3)
+        R = np.eye(3) + kmat + kmat @ kmat * ((1 - c) / (s ** 2))
+        return R
+
+    # create fractures
+    bhs = Boreholes(cfg.boreholes)
+    line_objs = create_line_objs(cfg.line_objects, bhs)
+
+    # read mesh and fracture region ids
+    mesh = mesh_class.Mesh.load_mesh(common.File(filename))
+    reg_ids = mesh.gmsh_io.get_reg_ids_by_physical_names(fracs.keys())
+    b_reg_ids = mesh.gmsh_io.get_reg_ids_by_physical_names([f".{s}" for s in fracs.keys()])
+    bt_reg_ids = mesh.gmsh_io.get_reg_ids_by_physical_names([f".{s}_tunnel" for s in fracs.keys()])
+    print(f"reg_ids: {reg_ids}")
+
+    # process each fracture
+    for idx,(fr_name,fr_data) in enumerate(fracs.items()):
+        # get bulk fracture elements and boundary elements intersecting tunnel
+        el_ids = mesh.gmsh_io.get_elements_of_regions([reg_ids[idx]])
+        b_el_ids = mesh.gmsh_io.get_elements_of_regions([b_reg_ids[idx]])
+        bt_el_ids = mesh.gmsh_io.get_elements_of_regions([bt_reg_ids[idx]])
+        print(f"{fr_name}")
+        # print(f"  el_ids: {el_ids} b_el_ids: {b_el_ids}")
+
+        # get points on boundary elements intersecting tunnel
+        bt_points = []
+        for el in bt_el_ids:
+            el_idx = mesh.el_indices[el]
+            bt_points.append( mesh.elements[el_idx].barycenter() )
+            # print(f" el {el} nodes: {mesh.elements[el_idx].node_indices}")
+        # print(f" bt_points: {bt_points}")
+
+        # get points on external boundary elements
+        b_points = []
+        for el in b_el_ids:
+            el_idx = mesh.el_indices[el]
+            b_points.append( mesh.elements[el_idx].barycenter() )
+            # print(f" el {el} nodes: {mesh.elements[el_idx].node_indices}")
+        # print(f" b_points: {b_points}")
+
+        # find control points on fracture
+        control_points = []
+        fr_normal = fr_data[0]
+        fr_offset = fr_data[1]
+        for pt in cfg.generated_fractures[fr_name].points:
+            l_start = np.array(line_objs[pt.line_object].start_pt)
+            l_dir = np.array(line_objs[pt.line_object].direction)
+            position = (fr_offset - np.dot(fr_normal,l_start)) / np.dot(fr_normal,l_dir)
+            point = l_start + position*l_dir
+            control_points.append(point)
+            # print(f"  point: {point}")
+
+        # transform points onto 2D plane
+        all_points = np.asarray( b_points + bt_points + control_points )
+        rot_matrix = rotation_matrix_from_vectors(fr_normal, np.array([0,0,1]) )
+        all_points = all_points @ rot_matrix.T
+        all_points = all_points[:,:2]
+        # print(f"  all points: {all_points}")
+
+        # create new fracture regions
+        last_reg_id = max(mesh.gmsh_io.get_reg_ids_by_physical_names(mesh.gmsh_io.physical.keys()))
+        mesh.gmsh_io.physical[f"{fr_name}"] = (last_reg_id + 1, 2)
+        pt_to_reg_id = [last_reg_id + 1] * len(b_points)
+        mesh.gmsh_io.physical[f"{fr_name}_tunnel"] = (last_reg_id + 2, 2)
+        pt_to_reg_id.extend( [last_reg_id + 2] * len(bt_points) )
+        for i, _ in enumerate(control_points):
+            pt = cfg.generated_fractures[fr_name].points[i]
+            mesh.gmsh_io.physical[f"{fr_name}_{pt.line_object}"] = (last_reg_id + 3 + i, 2)
+            pt_to_reg_id.append(last_reg_id + 3 + i)
+
+        # create KDTree for computing distance to control points
+        from scipy.spatial import KDTree
+        tree = KDTree(all_points)
+
+        # assign new regions to fracture elements
+        el_points = []
+        for el in el_ids:
+            el_idx = mesh.el_indices[el]
+            el_points.append( (rot_matrix @ mesh.elements[el_idx].barycenter())[:2] )
+        _, reg_indices = tree.query(el_points)
+        for el,reg_idx in zip(el_ids,reg_indices):
+            type, tags, nodes = mesh.gmsh_io.elements[el]
+            # tags = list(tags)
+            tags = [ pt_to_reg_id[reg_idx], pt_to_reg_id[reg_idx] ]
+            mesh.gmsh_io.elements[el] = (type, tags, nodes)
+    mesh.gmsh_io.write(filename + "_fr_regions.msh2", format="msh2", binary=False)
 
 
-def make_mesh(workdir, output_dir, cfg_file):
-    conf_file = os.path.join(workdir, cfg_file)
-    cfg = common.config.load_config(conf_file)
-    cfg.output_dir = output_dir
 
-    mesh_file = make_gmsh(cfg)
+
+def make_mesh(cfg):
+    mesh_file, fracs = make_gmsh(cfg, real_geometry=False)
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)
     # print("N Elements: ", len(reader.elements))
 
     # heal mesh
-    mesh_file_healed = os.path.join(cfg.output_dir, cfg.mesh_name + "_healed.msh2")
+    mesh_file_healed = cfg.mesh_name + "_healed.msh2"
     # if not os.path.exists(mesh_file_healed):
     print("HEAL MESH")
     hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
     hm.heal_mesh(gamma_tol=0.02)
-    # hm.stats_to_yaml(os.path.join(output_dir, cfg.mesh_name + "_heal_stats.yaml"))
+    # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
     hm.write(file_name=mesh_file_healed)
+
+    set_fracture_regions(cfg, fracs, mesh_file_healed)
 
     # print("Mesh file: ", mesh_file_healed)
     return common.File(mesh_file_healed)
 
+
+def main():
+
+    # common.EndorseCache.instance().expire_all()
+
+    conf_file = input_data.l5_mesh_cfg_yaml
+    cfg = common.config.load_config(conf_file)
+
+    with common.workdir(str(workdir), clean=False):
+        make_mesh(cfg)
+
+
 if __name__ == '__main__':
-    # output_dir = None
-    # len_argv = len(sys.argv)
-    # assert len_argv > 1, "Specify input yaml file and output dir!"
-    # if len_argv == 2:
-    #     output_dir = os.path.abspath(sys.argv[1])
-    output_dir = script_dir
-
-    make_mesh(script_dir, output_dir, "./l5_mesh_config.yaml")
-
+    main()

@@ -1,24 +1,24 @@
+import logging
+import os
+from operator import inv
+import pickle
+
 import numpy as np
-import yaml
-import matplotlib.pyplot as plt
 from scipy.stats import multivariate_normal
 from scipy.linalg import block_diag
 import pandas as pd
-"""
-
-"""
-
+from sys import argv, exit
 
 # Import the borehole pressure model module.
 from . import PoroElasticSolver
 from chodby_inv import input_data, piezo
 from endorse import common
+from . import plot_idata, get_generic_name, save_idata_to_file, read_idata_from_file, to_datetime
 
 # Import TinyDA (assumes TinyDA is installed; adjust the import if needed)
-import xarray as xr
 import tinyDA as tda
 
-
+FORCE_UNKNOWN_FLOW = True
 
 
 def exponential_covariance(n, dx, correlation_length, variance):
@@ -51,45 +51,87 @@ def borehole_section_inversion(inv_cfg, ):
     #epoch_df.set_index('time_days', inplace=True)
     return _run_inversion(inv_cfg, epoch_df)
 
+def interpolate_pressure_series(epoch_df, dt):
+    # create new time series
+    # minimum and maximum is set from epoch_df
+    time_series = epoch_df.time_days.values
+    target_points = pd.DataFrame({
+        "time_days": np.arange(time_series.min(), time_series.max(), dt)
+    })
+
+    print(target_points)
+
+    # extend the pressure series to include target points and remove duplicates
+    # new values have pressure NaN, which will be interpolated later
+    merged = pd.concat([epoch_df, target_points]) \
+        .drop_duplicates(subset="time_days", keep="first") \
+        .sort_values("time_days")
+
+    # interpolate missing pressure values
+    merged["pressure"] = merged["pressure"].interpolate(method="linear")
+    # df contains both old and new time values - extract only the target points
+    target_subset = merged[merged["time_days"].isin(target_points["time_days"])]
+
+    # return the pressure series and the time series
+    return target_subset["pressure"].values * 1000, target_subset["time_days"].values
+
+
 @common.memoize
 def _run_inversion(inv_cfg, epoch_df):
 
-    dt = 6*60 * 60  # dt = 6 hours
-    #time_delta = pd.Timedelta(dt, unit='s')
+    #dt = 6*60 * 60  # dt = 6 hours
+    dt = inv_cfg.get("dt", 6 * 60 * 60)  # Default to 6 hours if not specified
     dt_days = dt / (24 * 3600)  # Convert to days
-    time_days = epoch_df.time_days.values
-    p_b_measured = epoch_df.pressure.values
-    def smooth_fn(x):
-        t_diff = time_days - x.time_days
-        mask = (t_diff >  - dt_days/2) & (t_diff <=  dt_days/2)
-        return p_b_measured[mask].mean() * 1000
+    regular_pb_measured_extended, time_series = interpolate_pressure_series(epoch_df, dt_days)
+    regular_pb_measured_extended = regular_pb_measured_extended / 1e3  # Convert from Pa to kPa for numerical stability
 
-    df_reg = pd.DataFrame({
-        "time_days": np.arange(time_days.min(), time_days.max(), dt_days)
-    })
-    regular_pb_measured = df_reg.apply(smooth_fn, axis=1).values
+    print(regular_pb_measured_extended)
+    #print(time_series)
+    regular_pb_measured = regular_pb_measured_extended[time_series >= 0]
+    print(regular_pb_measured)
+    tests = load_pressure_tests()
+    #selected_test = tests[inv_cfg["section"]]
+    selected_test = next((t for t in tests if t["vrt"] == inv_cfg["borehole"] and t["sekce"] == inv_cfg["section"]), None)
+    if selected_test is None:
+        return None
 
     # Geometry and time-stepping parameters.
     r_b = 0.076  # Borehole radius [m]
     R = 2  # Outer domain radius [m]
-    N = 10  # Number of finite elements (⇒ N+1 nodes)
+    N = 5  # Number of finite elements (⇒ N+1 nodes)
+    geom_power = 2 # 1 = even spacing of elements, >1 = concentrated at borehole
     T_final = dt * (len(regular_pb_measured) - 1)  # Total simulation time: 1 day [s]
-    p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
-    p_far_prior = 300* 1000  # Far-field Dirichlet pressure (last node) [Pa]
-    p_far_sd = 5000 # 5kPa
-    k_prior = 1e-13
+    #p_b0 = 1000* 1000  # Elevated borehole pressure (node 0) [Pa]
+    #p_b0 = selected_test["tlak"]
+    p_b0 = regular_pb_measured[0] * 1e3  # solver needs Pa - convert from kPa
+    # load p_far_prior from config, if available
+    # or default to the last measured pressure
+    # same for deviation, default to 10kPa if not specified
+    # converting to kPa for numerical stability
+    p_far_prior = inv_cfg.get("p_far_prior", regular_pb_measured[-1] * 1e3) / 1e3  # convert from Pa to kPa
+    p_far_std = inv_cfg.get("p_far_std", 1e4) / 1e3  # convert from Pa to kPa
+    k_prior = 1e-9
 
     # Rock and fluid parameters.
     biot = 0.2
     phi = 0.02  # Porosity (dimensionless)
-    E = 30e9  # Young's modulus [Pa]
+    E_prior = 5e9  # Young's modulus [Pa]
     nu = 0.25  # Poisson's ratio
-    solver = PoroElasticSolver(r_b, R, N, dt, T_final, p_b0)
+    solver = PoroElasticSolver(r_b, R, N, geom_power, dt, T_final, p_b0)
     def forward_model(param_vec):
-        k_field = np.exp(param_vec[:-1])  # Convert log(k) to k
-        p_far = param_vec[-1]
-        t,p,p_b = solver.simulate(biot, phi, E, nu, p_far, k_field)
-        return p_b
+        k_field = np.power(10, param_vec[:N])  # Convert log(k) to k
+        E_field = np.power(10, param_vec[N:2*N])
+        p_far = param_vec[-1] * 1e3  # Convert kPa back to Pa
+        try:
+            t,p,p_b = solver.simulate(biot, phi, E_field, nu, p_far, k_field)
+            flux = -solver.C_b[0] * (p_b[1] - p_b[0]) / dt
+            p_b = p_b / 1e3  # Convert Pa to kPa for numerical stability
+            output = np.concatenate((np.log10([flux]), p_b))
+            return output
+        except Exception as e:
+            print(f"Simulation failed for parameters: {param_vec}, error: {e}")
+            # Return a large penalty value to indicate failure
+            return np.full(len(regular_pb_measured) + 1, 1e10)
 
 
     # L = 2     # [m] Length of the borehole section
@@ -115,29 +157,60 @@ def _run_inversion(inv_cfg, epoch_df):
     param_dim = N
     # Estimate element spacing in the radial direction.
     dx = (R - r_b) / N
-    correlation_length = 0.01  # [m] (adjust as needed)
-    prior_std_log10 = 0.5   # Variance of the log(k) field (adjust based on your prior belief)
+    k_correlation_length = 0.1  # [m] (adjust as needed)
+    k_prior_std_log10 = 2   # Variance of the log(k) field (adjust based on your prior belief)
+    E_correlation_length = 0.1  # [m] (adjust as needed)
+    E_prior_std_log10 = 1.2  # Variance of the log(k) field (adjust based on your prior belief)
     mean_prior = np.concatenate([
-        np.full(param_dim, np.log(k_prior)),
+        np.full(param_dim, np.log10(k_prior)),
+        np.full(param_dim, np.log10(E_prior)),
         np.array([p_far_prior])
     ])
-    prior_variance = (prior_std_log10 * np.log(10)) ** 2
+
+    #mean_prior[12]
+
+    k_prior_variance = (k_prior_std_log10) ** 2
+    E_prior_variance = (E_prior_std_log10) ** 2
     cov_prior = block_diag(
-        exponential_covariance(param_dim, dx, correlation_length,
-                               prior_variance),
-        np.array([[p_far_sd**2]])
+        exponential_covariance(param_dim, dx, k_correlation_length,
+                               k_prior_variance),
+        exponential_covariance(param_dim, dx, E_correlation_length,
+                               E_prior_variance),
+        np.array([[p_far_std**2]])
     )
+
     prior = multivariate_normal(mean_prior, cov_prior)
 
 
-    # [ln k, p_far]
-    # mean_prior = np.array([np.log(k_prior), p_far])
-    # cov_prior = np.diag([0.5**2, 5000**2])
-    # prior = multivariate_normal(mean_prior, cov_prior)
+    if to_datetime(inv_cfg["origin"]).year > 2024 and not FORCE_UNKNOWN_FLOW:
+        flow_rate_observed = np.array([selected_test["spotreba"]])
+        #flow_rate_sigma = np.array([1e-6])
+        #flow_rate_sigma = np.array([selected_test["spotreba_sigma"]])
+        flow_rate_sigma = np.log10(100 / 94) / 3
+        plot_observed_flow = True
+    else:
+        flow_rate_sigma = 10000
+        flow_rate_observed = np.array([1e6])
+        plot_observed_flow = False
 
-    sigma = 10000 # 2 kPa
-    cov_likelihood = sigma ** 2 * np.eye(len(regular_pb_measured))
-    loglike = tda.GaussianLogLike(regular_pb_measured, cov_likelihood)
+    pressure_output_sigma = 3 # kPa
+    pressure_output_sigma = np.full(len(regular_pb_measured), pressure_output_sigma)
+
+    observed = np.concatenate([
+        np.log10(flow_rate_observed),
+        regular_pb_measured
+    ])
+
+    sigma = np.concatenate([
+        #np.log10(flow_rate_sigma),
+        np.array([flow_rate_sigma]),
+        pressure_output_sigma
+    ])
+
+    cov_likelihood = sigma ** 2 * np.eye(len(observed))
+    print(cov_likelihood)
+
+    loglike = tda.GaussianLogLike(observed, cov_likelihood)
     posterior = tda.Posterior(prior, loglike, forward_model)
 
     # ==============================================================================
@@ -148,12 +221,81 @@ def _run_inversion(inv_cfg, epoch_df):
     # where you can pass the forward model, measured data, prior mean/covariance, 
     # and noise covariance. The exact API may differ; adjust according to your TinyDA version.
 
-    rwmh_cov = np.eye(len(mean_prior)) * 0.2
-    rmwh_scaling = 0.1
-    rwmh_adaptive = True
-    my_proposal = tda.AdaptiveMetropolis(C0=rwmh_cov,
-                                         period=50,
-                                         adaptive=rwmh_adaptive)
+    iterations = 30000
+    burnin = 10000
+    chains = 20
+
+
+    # rwmh_cov = np.eye(len(mean_prior)) * 0.2
+    # rwmh_cov = np.diag(np.power(mean_prior * 0.1, 2), 0)
+    # rmwh_scaling = 0.1
+    # rwmh_adaptive = True
+    # my_proposal = tda.AdaptiveMetropolis(C0=rwmh_cov,
+    #                                      period=50,
+    #                                      adaptive=rwmh_adaptive)
+
+    # m0 = 10000 # initial archive size
+    # delta = 5 # number of pairs to compute jump vector
+    # adaptive = True
+    # adaptivity_period = 50  # Period for adaptation
+    # nCR = 15 # up to how many parameters can change in a proposal
+    # my_proposal = tda.DREAMZ(
+    #     m0,
+    #     delta,
+    #     nCR=nCR,
+    #     adaptive=adaptive,
+    #     period=adaptivity_period
+    # )
+
+    # old params
+    # m0 = 10000 # initial archive size
+    # delta = 5 # number of pairs to compute jump vector
+    # adaptive = True
+    # adaptivity_period = 50  # Period for adaptation
+    # nCR = 15 # up to how many parameters can change in a proposal
+    # Z_method = "random"
+    # b = 0.05
+    # b_star = 1e-6
+
+
+    # new params
+    m0 = 1000             # should be sufficient in combination with 'lhs'
+    delta = 1              
+    # number of jump pairs added to consturuct proposal jump
+    # at most 2 to have meaning proposal jumps.
+    Z_method = 'lhs'      # better prior coverage for initial archive
+    nCR = 3              
+    # Unintuitive parameter. Too large values leads to very sparse jump vectors
+    # nCR=1 means select all parameters, nCR=3 chood parameter probability from discrete set {1/3, 1/2, 1}
+    adaptive = True
+    # Less aggressive adaptivity, could avoid potential problems with ergodicity. 
+    # More diagnostics needed for reasonable choice.
+    adaptivity_period = 100   # keep same
+    gamma = 1.01             # more aggresive adaptivity
+    b = 0.1
+    # maximal relative prolongation / contraction of the jump
+    # 0.1 still needs about 10-40 steps to explore space between two isoolated parameter sets 
+    b_star = 1e-5         
+    # a bit more aggresive, but mainly have no impact
+
+    sync_rate = 1000
+    stuck_checking_start = 3000
+    stuck_checking_period = 1000
+
+
+    my_proposal = tda.DREAM(
+        m0,
+        delta,
+        nCR=nCR,
+        adaptive=adaptive,
+        period=adaptivity_period,
+        sync_rate=sync_rate,
+        stuck_checking_start=stuck_checking_start,
+        stuck_checking_period=stuck_checking_period,
+        Z_method=Z_method,
+        b=b,
+        b_star=b_star
+    )
 
     # pcn_scaling = 0.1
     # pcn_adaptive = False
@@ -166,96 +308,120 @@ def _run_inversion(inv_cfg, epoch_df):
     # my_kernel = tda.AdaptiveMetropolis(C0=am_cov, t0=am_t0, sd=am_sd, epsilon=am_epsilon)
 
     #my_proposal = tda.MultipleTry(my_kernel, 3)
-    iterations = 2000
-    burnin = 50
-    my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=4)
-    idata = tda.to_inference_data(my_chains, burnin=burnin)
+    my_chains = tda.sample(posterior, my_proposal, iterations=iterations, n_chains=chains)
+      # define input variable names for inferencedata
+    #parameter_names = [f"k_{n}" for n in range(param_dim)] +  ["P_far"]
+    parameter_names = \
+        [f"log_k_{n}" for n in range(param_dim)] + \
+        [f"log_E_{n}" for n in range(param_dim)] + \
+        ["p_far"]
 
-    return idata, regular_pb_measured
+    # construct idata object from the chains and include info about burn in
+    idata = tda.to_inference_data(my_chains, parameter_names=parameter_names)
+    idata.attrs["burnin"] = burnin
 
-def plot_idata(idata, pressure_obs):
-    import arviz as az
-    az.style.use("arviz-doc")
+    # add the observed data to the InferenceData object
+    idata["sample_stats"].attrs["observed_timeseries"] = time_series
+    idata["sample_stats"].attrs["observed_pressure"] = regular_pb_measured
+    idata["sample_stats"].attrs["observed_pressure_sigma"] = pressure_output_sigma
+    idata["sample_stats"].attrs["observed_flow"] = np.log10(flow_rate_observed)
+    idata["sample_stats"].attrs["observed_flow_sigma"] = flow_rate_sigma
+    idata["sample_stats"].attrs["observed_extended"] = regular_pb_measured_extended
 
+    # add prior information to the InferenceData object
+    idata["posterior"].attrs["prior_mean"] = mean_prior
+    idata["posterior"].attrs["prior_cov"] = cov_prior
 
-    # 1) pick off all your per‑time PPC variables
-    ppc_ds = idata.posterior_predictive
-    obs_vars = sorted([v for v in ppc_ds.data_vars if v.startswith("obs_")],
-                      key=lambda s: int(s.split("_", 1)[1]))
+    # add metadata to the InferenceData object
+    idata.attrs["borehole"] = inv_cfg["borehole"]
+    idata.attrs["section"] = inv_cfg["section"]
+    idata.attrs["year"] = to_datetime(inv_cfg["origin"]).year
+    idata.attrs["month"] = to_datetime(inv_cfg["origin"]).month
+    idata.attrs["plot_observed_flow"] = plot_observed_flow
+    idata.attrs["solver_radii"] = solver.r
 
-    # 2) concat them into one DataArray of shape (chain, draw, time)
-    ppc_list = [ppc_ds[v] for v in obs_vars]
-    ppc_arr = xr.concat(ppc_list, dim="time")
-    # give it a name and meaningful coords
-    times = np.arange(len(pressure_obs))
-    ppc_arr = ppc_arr.assign_coords(
-        time=("time", times)  # or whatever your timestamps are
-    )
+    return idata
 
-    ppc_arr.name = "pressure"  # new var name
+def load_pressure_tests(path=input_data.wpt_multipacker):
+    try:
+        df = pd.read_excel(path, sheet_name="data (2)")
+    except Exception as e:
+        print(f"Error loading data from {path}: {e}")
+        return None
 
-    # 1) Stack chain & draw into one "sample" dimension
-    ppc_stacked = ppc_arr.stack(sample=("chain", "draw"))  # now dims = ("time","sample")
+    col_keys = df.columns.tolist()
+    
+    zkouska_starts = df[df["čas"] == 0].index.tolist()
 
-    # 2) Define integer time steps 0,1,2,...,T-1
-    time = np.arange(ppc_arr.sizes["time"])
+    vodivost_true_idx = int(df.columns.get_loc("hydraulická vodivost") + 1)
 
-    # 3) Plot each posterior draw
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for vals in ppc_stacked.values.T:  # iterate over samples
-        ax.plot(time, vals, color="C0", alpha=0.05, linewidth=0.5)
+    zkousky = []
+    minule_datum = None
 
-    # 4) Overlay your observed (smoothed) series
-    ax.plot(time, pressure_obs, color="k", linewidth=2, label="Observed")
+    for i, start in enumerate(zkouska_starts):
+        if i < len(zkouska_starts) - 1:
+            end = zkouska_starts[i + 1] - 1
+        else:
+            end = len(df) - 1
+        
+        while np.any([
+            pd.isna(df.iloc[end]["čas"]),
+            pd.isna(df.iloc[end]["spotřeba"]),
+            pd.isna(df.iloc[end]["hydraulická vodivost"])
+        ]):
+            # If the end row has NaN values, adjust the end index
+            end -= 1
+            if end < start or end <= 0:
+                print(f"Skipping invalid section from {start} to {end}.")
+                continue
 
-    # 5) Label axes
-    ax.set_xlabel("Time (integer steps)")
-    ax.set_ylabel("Pressure")
-    ax.legend()
+        spotreba = df.iloc[end]["spotřeba.1"]
+        spotreba_sigma = df.iloc[end]["spotřeba sigma"]
+        vodivost = df.iloc[end]["hydraulická vodivost"]
+        vodivost_true = df.iloc[end][vodivost_true_idx]
+        etaz = df.iloc[start]["etáž"]
+        vrt = df.iloc[start]["vrt"]
+        sekce = df.iloc[start]["sekce"]
+        tlak = df.iloc[end]["tlak v intervalu"] * 1e3 # convert from kPa to Pa
 
-    plt.show()
-
-    az.summary(idata)
-
-    az.plot_trace(idata)
-    plt.show()
-
-    # # ==============================================================================
-    # # 5. Postprocessing and Comparison of Results
-    # # ==============================================================================
-    #
-    # # Convert the MAP estimate from log space to the physical conductivity field.
-    # estimated_k_field = np.exp(posterior_mean)
-    #
-    # # Plot the true versus estimated conductivity field.
-    # plt.figure(figsize=(10, 6))
-    # element_indices = np.arange(1, N+1)  # element numbering (or use radial midpoints if desired)
-    # plt.plot(element_indices, conductivity_true, label='True Conductivity')
-    # plt.plot(element_indices, estimated_k_field, label='Estimated Conductivity', linestyle='--')
-    # plt.xlabel('Element Index')
-    # plt.ylabel('Hydraulic Conductivity [m²/s]')
-    # plt.legend()
-    # plt.title('True vs Estimated Hydraulic Conductivity Field')
-    # plt.grid(True)
-    # plt.show()
-    #
-    # # Compare the measured borehole pressure history with the model prediction using the MAP estimate.
-    # p_b_estimated = forward_model(posterior_mean)
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(time_vec / 3600, p_b_measured, 'o', label='Measured Borehole Pressure')
-    # plt.plot(time_vec / 3600, p_b_estimated, '-', label='Model Prediction (MAP)')
-    # plt.xlabel('Time (hours)')
-    # plt.ylabel('Borehole Pressure (Pa)')
-    # plt.legend()
-    # plt.title('Borehole Pressure Relaxation: Measured vs Predicted')
-    # plt.grid(True)
-    # plt.show()
+        datum = df.iloc[start]["datum a čas"]
+        if not pd.isna(datum):
+            datum = pd.to_datetime(datum, format="%m.%d.%Y %H:%M:%S")
+        else:
+            datum = minule_datum
 
 
+        zkousky.append({
+            "date": datum,
+            "vrt": vrt,
+            "sekce": sekce,
+            "etaz": etaz,
+            "spotreba": spotreba,
+            "spotreba_sigma": spotreba_sigma,
+            "tlak": tlak,
+            "vodivost": vodivost,
+            "vodivost_true": vodivost_true
+        })
 
+        minule_datum = datum
+
+    return zkousky
 
 if __name__ == '__main__':
-    wpt_cfg = common.load_config(input_data.events_yaml)['water_pressure_tests'][0]
-    #bh_inv_cfg = yaml.load(bh_inv_cfg_yaml)
-    idata, p_obs = borehole_section_inversion(wpt_cfg)
-    plot_idata(idata, p_obs)
+    try:
+        selected_test = int(argv[1])
+    except:
+        print("No test index provided, exiting...")
+        exit(1)
+
+    events = common.load_config(input_data.events_yaml)['water_pressure_tests']
+    if selected_test >= len(events):
+        print(f"Test index {selected_test} out of range, exiting...")
+        exit(1)
+    
+    wpt_cfg = events[selected_test]
+    idata = borehole_section_inversion(wpt_cfg)
+    save_idata_to_file(idata, f"{get_generic_name(idata)}.idata")
+    
+    idata_loaded = read_idata_from_file(f"{get_generic_name(idata)}.idata")
+    plot_idata(idata_loaded)

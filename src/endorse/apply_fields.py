@@ -4,38 +4,35 @@ from .common import File
 from .mesh_class import Mesh
 #from endorse import hm_simulation
 
-def conductivity_mockup_eval(cfg_geom, cfg_fields, XYZ):
-    X, Y, Z = XYZ
+def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+    """
+    Produce a conductivity field mockup and write it to a file.
+    Conductivity is cond_min for points out of ellipse with axis:
+    (h_axis * edz_r, v_axis * edz_r)
+    and cond_max in the ellipse:
+    (h_axis * in_r, v_axis * in_r)
+
+    We assume in_r < edz_r.
+    Geometric mean interpolation in between.
+    """
     cond_max = float(cfg_fields.cond_max)
     cond_min = float(cfg_fields.cond_min)
 
     #edz_r = cfg_geom.edz_radius # 2.5
     in_r = cfg_fields.inner_radius
-    #Z = Z - cfg_geom.borehole.z_pos
+    Z = Z - cfg_geom.borehole.z_pos
     # axis wit respect to EDZ radius
+    Y_rel = Y / cfg_fields.h_axis
+    Z_rel = Z / cfg_fields.v_axis
 
-    # distance from center, 1== edz_radius
-    distance = np.sqrt((Y * Y + Z * Z))
-
-    # edz outer boundry in direction of (Y, Z) vector
-    edz_dist = np.sqrt((cfg_fields.v_axis * Z)**2
-                + (cfg_fields.h_axis * Y)**2) / distance
-
-    # <0 below boreholeradius
-    # 0 at borehole radius
-    # 1 at edz outer boundary,
-    # >1 in outer domain
-    theta = (distance - in_r) / (edz_dist - in_r)
-    cond_field = np.minimum(cond_max,
-                     np.maximum(cond_min,
-                         np.exp(theta * np.log(cond_min) + (1-theta) * np.log(cond_max))
-                                ))
-    cond_field[distance < in_r] = cfg_fields.cond_borehole
-    return cond_field
-
-def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
-    cond_field = conductivity_mockup_eval(cfg_geom, cfg_fields, output_mesh.el_barycenters().T)
-    cond_file = "fine_conductivity.msh2"
+    # distance from center = edz_radius on the outer ellipse
+    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel))
+    theta = (distance - in_r) / (edz_r - in_r)
+    theta = np.clip(theta, 0.0, 1.0)
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min))
+    #abs_dist = np.sqrt(Y * Y + Z * Z)
+    #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
+    #print({(i+1):cond for i,cond in enumerate(cond_field)})
     output_mesh.write_fields(cond_file,
                             dict(conductivity=cond_field))
     return File(cond_file)
@@ -128,11 +125,14 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
     # distance from center, 1== edz_radius (main tunnel boundary)
     distance = np.sqrt((X_rel * X_rel + Z_rel * Z_rel)) - in_r
     theta = distance / (edz_r - in_r)
-    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2, Y <= cfg_geom.main_tunnel.length/2), 1.0, 0.0)
+    y_scaling = np.where(np.logical_and(Y >= -cfg_geom.main_tunnel.length/2 + cfg_geom.box_center[1],
+                                        Y <= cfg_geom.main_tunnel.length/2) + cfg_geom.box_center[1],
+                                        1.0, 0.0)
 
     if cond is None:
-        cond_max = float(cfg_bulk_fields.cond_max)
         cond_min = float(cfg_bulk_fields.cond_min)
+        # cond_max = float(cfg_bulk_fields.cond_max)
+        cond_max = float(cfg_bulk_fields.cond_mult) * cond_min
     else:
         cond_min, cond_max = cond
 
@@ -161,8 +161,9 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
 
     cond_field = np.clip(cond_field, cond_min, cond_max)
 
-    por_max = float(cfg_bulk_fields.por_max)
     por_min = float(cfg_bulk_fields.por_min)
+    # por_max = float(cfg_bulk_fields.por_max)
+    por_max = float(cfg_bulk_fields.por_mult) * por_min
     por_field = np.exp((1-theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
     por_field = np.clip(por_field, por_min, por_max)
 

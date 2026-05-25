@@ -1,0 +1,5 @@
+outs:
+- md5: 66837c3babb414e4a381a9a38240a762
+  size: 440010
+  hash: md5
+  path: P30_alpha_minus_pop1.csv

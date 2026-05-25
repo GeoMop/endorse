@@ -1,0 +1,14 @@
+# Fracture network configuration, list of fracture families.
+
+-   name: dfn_pop_fixed
+    p_32: 1.5
+    power: 3.1
+    r_min: 10
+    r_max: 40
+    
+    trend: 180
+    plunge: 45
+    concentration: 1
+
+    tr_a: 6e-9
+    tr_b: 3

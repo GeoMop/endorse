@@ -1,5 +1,4 @@
-# Necessary for development
-# TODO: cleanup
+# Dependencies used just for tests.
 
 pyvista
 pyyaml
@@ -13,8 +12,4 @@ tox-gh-actions
 importlib-resources
 
 
-attrs # for bgem
 
-# bayes part
-ruamel.yaml
-pandas

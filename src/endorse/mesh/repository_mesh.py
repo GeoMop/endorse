@@ -7,8 +7,6 @@ import yaml
 
 import bgem
 from bgem.gmsh import gmsh, options
-from bgem.stochastic.fracture import Population
-from bgem.stochastic.fracture import FisherOrientation
 import numpy as np
 from endorse.common import dotdict, File, report, memoize
 from endorse.mesh import mesh_tools, fracture_tools
@@ -216,7 +214,6 @@ def one_borehole(cfg_geom:dotdict, fractures:List['Fracture'], cfg_mesh:dotdict,
     # factory.show()
     del factory
     return File(mesh_file)
-
 
 @report
 @memoize

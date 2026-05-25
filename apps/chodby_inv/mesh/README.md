@@ -11,7 +11,7 @@ README.md
 - simulation system, parallel with L5 (see bellow)
 
 ### Simulation Domain
-Domain Y axis lays at axis of L5, X axis is in direction of drift ZK5-1S.
+Domain Y axis lays at axis of L5 (towards east), X axis is in direction of drift ZK5-1J (towards south).
 Y axis direction: [9.72, -3.49, 0] (in the local system).
 
 Point at floor at intersection of L5 axis and ZK5-1J axis:  P1 = [-66.52, -20.96, 18] (in the local system)
@@ -41,7 +41,11 @@ Triangular meshes provided in VTX and GMSH 2.2 mesh formats. Conversion to other
                  probably due to stitching the scans done from different positions
 
 
-
+### Meshing scripts
+- `create_mesh.py`: Create 3D mesh of box around the gallery L5 and the test chambers ZK5-1{J,S} in GMSH 2.2 format.
+                    Surface of the gallery and test chambers is read from a BREP mesh file.
+                    The volume mesh is refined in the vicinity of the gallery, test chambers and borehole measuring chambers.
+                    Configuration is in l5_mesh_config.yaml.
 
 
 ## Near-field transport model

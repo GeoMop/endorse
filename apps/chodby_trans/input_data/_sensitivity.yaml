@@ -1,0 +1,80 @@
+
+n_samples: 64 # must be power of 2 due to salib
+recompute_failed: True
+
+#collect_only: False
+mesh_only: False
+make_plots: False
+# if True, it removes sample dir right after the sample is collected
+# failed samples are currently saved
+clean_sample_dir: True
+
+second_order_sa: False
+parameters:
+  - name: dfn_geom  # seed for `p_32` and `power`
+    type: seed
+#    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+    parameters:
+      - name: p_32
+        type: norm
+        bounds: [ 0, 0.1 ]
+      - name: power
+        type: norm
+        bounds: [ 0, 0.1 ]
+  - name: dfn_cond # seed for `tr_a` and `tr_b`
+    type: seed
+    bounds: [ 0.1 ] # std = 0.1*<par_mean>
+    parameters:
+      - name: tr_a
+        type: lognorm
+        bounds: [ 0, 0.5 ]
+      - name: tr_b
+        type: norm
+        bounds: [ 0, 0.1 ]
+  - name: dfn_macro # seed for large fractures
+    type: seed
+  - name: meshing_seed # seed for large fractures
+    type: seed
+
+#  - name: storativity
+#    type: lognorm
+#    bounds: [-14.5662279378421, 2.0]
+#  - name: young_modulus
+#    type: lognorm
+#    bounds: [24.8176103991685, 0.5]
+#  - name: init_stress_x
+#    type: lognorm
+#    bounds: [ 17.5531801762476, 0.3]
+#  - name: init_stress_y
+#    type: lognorm
+#    bounds: [ 16.7599495371307, 0.3]
+#  - name: init_stress_z
+#    type: lognorm
+#    bounds: [ 16.4545678875795, 0.3]
+##  - name: init_pressure
+##    type: norm
+##    bounds: [ 100, 10 ]
+#  - name: perm_k0
+#    type: lognorm
+#    bounds: [ -44.9530895712128, 2.0]
+##  - name: perm_kr
+##    type: lognorm
+##    bounds: [ -43.7491167668869, 0.5]
+#  - name: perm_eps
+#    type: truncnorm
+#    bounds : [1.1, 1000, 33, 9]
+#  - name: perm_delta
+#    type: lognorm
+#    bounds: [ -36.8413614879047, 0.1]
+#  - name: perm_gamma
+#    type: lognorm
+#    bounds: [ 1.79175946922806, 0.1]
+#  - name: conductivity_a
+#    type: unif
+#    bounds: [ -1, 1 ]
+#  - name: conductivity_b
+#    type: unif
+#    bounds: [ -1, 1 ]
+#  - name: conductivity_c
+#    type: unif
+#    bounds: [ -1, 1 ]

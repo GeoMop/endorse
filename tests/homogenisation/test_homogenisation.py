@@ -6,6 +6,7 @@ logging.basicConfig(level=logging.INFO,
                     format='[%(levelname)s] %(name)s: %(message)s')
 
 import os
+from pathlib import Path
 
 from endorse import macro_flow_model
 from endorse import common
@@ -15,6 +16,8 @@ import pathlib
 common.CallCache.instance(verbose=10)
 
 script_dir = pathlib.Path(__file__).parent
+test_data_dir = Path(script_dir) / "test_data"
+large_model = test_data_dir / "large_model_local.msh2"
 @pytest.mark.skip
 def test_homogenisation():
     with common.workdir():
@@ -30,6 +33,7 @@ def test_homogenisation():
 
 
 #@pytest.mark.skip
+@pytest.mark.skipif(not large_model.exists(), reason="requires large_model_local.msh2 fixture")
 def test_macro_transport():
    # with common.workdir("sandbox"):
     #common.EndorseCache.instance().expire_all()

@@ -56,6 +56,7 @@ class FlowOutput:
         self.process = process
         self.stdout = stdout
         self.stderr = stderr
+        self.failed_convergence_reason = 0
         with workdir(output_dir):
             self.log = File("flow123.0.log")
             # TODO: flow ver 4.0 unify output file names
@@ -82,6 +83,7 @@ class FlowOutput:
                         conv_reason = int(value)
                         if conv_reason < 0:
                             print("Failed to converge: ", conv_reason)
+                            failed_convergence_reason = conv_reason
                             return False
                 except ValueError:
                     continue
@@ -91,7 +93,7 @@ class FlowOutput:
 def _prepare_inputs(file_in, params):
     in_dir, template = os.path.split(file_in)
     suffix = "_tmpl.yaml"
-    assert template[-len(suffix):] == suffix
+    assert template[-len(suffix):] == suffix, f"Template file name must end by '{suffix}'!"
     filebase = template[:-len(suffix)]
     main_input = filebase + ".yaml"
     main_input, used_params =  substitute_placeholders(file_in, main_input, params)

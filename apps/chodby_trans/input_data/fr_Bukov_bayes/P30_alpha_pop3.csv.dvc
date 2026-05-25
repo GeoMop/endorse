@@ -1,0 +1,5 @@
+outs:
+- md5: 6c277109ef1690c0456dd98d00ce2855
+  size: 500010
+  hash: md5
+  path: P30_alpha_pop3.csv

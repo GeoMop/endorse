@@ -11,11 +11,6 @@ import pyvista as pv
 
 from .common import File
 from endorse.indicator import IndicatorFn, Indicator
-from mlmc.moments import Legendre
-from mlmc.estimator import Estimate
-from mlmc.quantity.quantity import make_root_quantity
-from mlmc.sample_storage_hdf import SampleStorageHDF
-from mlmc.quantity.quantity_estimate import estimate_mean
 
 
 def plot_field(points, values, cut=(1,2), file=None):
@@ -111,6 +106,9 @@ def plot_indicators(ind_functions: List[IndicatorFn], file=None):
 
 
 def _get_samples(quantity, sample_storage):
+    from mlmc.moments import Legendre
+    from mlmc.estimator import Estimate
+
     n_moments = 5
     estimated_domain = Estimate.estimate_domain(quantity, sample_storage, quantile=0.001)
     moments_fn = Legendre(n_moments, estimated_domain)
@@ -120,6 +118,10 @@ def _get_samples(quantity, sample_storage):
 
 
 def _get_values(hdf5_path):
+    from mlmc.quantity.quantity import make_root_quantity
+    from mlmc.sample_storage_hdf import SampleStorageHDF
+    from mlmc.quantity.quantity_estimate import estimate_mean
+
     sample_storage = SampleStorageHDF(file_path=hdf5_path)
     sample_storage.chunk_size = 1024
     result_format = sample_storage.load_result_format()
@@ -303,8 +305,6 @@ def plot_log_errorbar_groups(group_data, value_label):
     [case, source, samples]
     """
 
-    mean = [np.mean()]
-
 
     matplotlib.rcParams.update({'font.size': 22})
     fig, ax = plt.subplots(figsize=(12, 10))
@@ -329,7 +329,7 @@ def plot_log_errorbar_groups(group_data, value_label):
         Y = np.exp(samples)
         X = np.full_like(Y, x)
         #ax.scatter(X, Y, color=colors[ig2], marker="v")
-        ax.violinplot(Y, x, vert=bool, showmedians=True, quantiles=[0.25, 0.75])
+        ax.violinplot([Y], [x], showmedians=True, quantiles=[[0.25, 0.75]])
         ax.set_yscale('log')
 
         # add errorbar, not able to pass array of colors for every quantile case
