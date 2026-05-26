@@ -33,7 +33,7 @@ def test_homogenisation():
 
 
 #@pytest.mark.skip
-@pytest.mark.skipif(not large_model.exists(), reason="requires large_model_local.msh2 fixture")
+#@pytest.mark.skipif(not large_model.exists(), reason="requires large_model_local.msh2 fixture")
 def test_macro_transport():
    # with common.workdir("sandbox"):
     #common.EndorseCache.instance().expire_all()
