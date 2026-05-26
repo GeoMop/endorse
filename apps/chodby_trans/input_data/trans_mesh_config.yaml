@@ -33,9 +33,9 @@ mesh:
     geometry: !include _geometry.yaml
     fractures:
       # SKB fracture population for repository domain
-      population: !include _fr_Forsmark_repo.yaml
+#      population: !include _fr_Forsmark_repo.yaml
       #    population: {}
-      #    population_template:  _fr_Bukov_repo.yaml
+      population_template:  _fr_Bukov_repo.yaml
       # population_template:  _fr_fixed.yaml
 
       # upper limit on the number of (small) fractures

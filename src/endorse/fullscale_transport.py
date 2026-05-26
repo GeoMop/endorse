@@ -232,7 +232,7 @@ def set_source_limits(cfg):
 
 @report
 @memoize
-def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
+def compute_fields(cfg_mesh:dotdict, cfg_trans:dotdict, mesh:Mesh, bulk_field_func:Callable,
                    fr_map: Dict[int, Fracture], fractures:List[Fracture], dim):
     """
     :param params: transport parameters dictionary
@@ -240,9 +240,8 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     :param fr_map: map ele id to the fracture (only for fracture 2d elements
     :return: el_ids:List[int], cond:List[float], cross:List[float]
     """
-    cfg_geom = cfg.geometry
-    cfg_trans = cfg.transport_fullscale
-
+    cfg_geom = cfg_mesh.geometry
+    cfg_fr = cfg_mesh.fractures
 
     cfg_bulk_fields = cfg_trans.bulk_field_params
 
@@ -264,8 +263,7 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     # plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
-    if "fractures" in cfg.geometry.include and fractures is not None:
-        cfg_fr = cfg.fractures
+    if "fractures" in cfg_geom.include and fractures is not None:
         cfg_fr_fields = cfg_trans.fr_field_params
         el_slice_fr = mesh.el_dim_slice(dim - 1)
         logging.info(f"fr slice: {el_slice_fr}")

@@ -15,6 +15,7 @@ import pyvista as pv
 from endorse import common
 
 from endorse.common import dotdict, File, report, memoize
+from endorse.mesh import fracture_tools
 from endorse.mesh_class import Mesh
 from endorse.indicator import Extractor
 from bgem.stochastic import Fracture, Population
@@ -29,29 +30,11 @@ from endorse.fullscale_transport import compute_fields, fracture_map, apply_fiel
 
 import chodby_trans.job as job
 import chodby_trans.input_data as input_data
-from chodby_trans.mesh.create_mesh import make_mesh
+from chodby_trans.mesh.create_mesh import make_fractures, make_mesh
 from chodby_trans import ot_sa
 
 import chodby_trans.exception_wrapper as exp
 
-from functools import wraps
-from multiprocessing import get_context
-
-# def run_in_subprocess(func):
-#     """
-#     Decorator: execute the wrapped function in a fresh spawned subprocess.
-
-#     Usage:
-#         @run_in_subprocess
-#         def my_cpp_func(x, y):
-#             ...
-#     """
-#     @wraps(func)
-#     def wrapper(*args, **kwargs):
-#         ctx = get_context("spawn")
-#         with ctx.Pool(1) as pool:
-#             return pool.apply(func, args, kwargs)
-#     return wrapper
 
 from functools import wraps
 from loky import ProcessPoolExecutor  # NOT the stdlib one
@@ -86,40 +69,6 @@ def run_in_subprocess(func):
 #     return results
 
 
-def fullscale_transport(cfg_path, seed):
-    cfg = common.load_config(cfg_path)
-    return transport_run(cfg, seed)
-
-
-def run_gmsh_helper_pickle(payload):
-    cwd = os.getcwd()
-    pyexec = sys.executable
-
-    # Serialize dict directly to bytes
-    payload_bytes = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
-
-    helper_path = Path(__file__).absolute().parents[0] / "mesh" / "create_mesh.py"
-    pickled_output_path = Path(cwd) / "create_mesh.pkl"
-    cmd = [pyexec, helper_path, "pickled"]
-    logging.info(cmd)
-    # Run helper, feed payload on stdin, read result from stdout
-    p = subprocess.run(
-        [pyexec, helper_path, "pickled"],
-        input=payload_bytes,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=cwd,
-    )
-
-    if p.returncode != 0:
-        raise RuntimeError(f"gmsh helper failed rc={p.returncode}\n{p.stderr.decode()}")
-
-    # Deserialize result
-    with open(pickled_output_path, "rb") as f:
-        result = pickle.load(f)
-        return result
-
-
 def population_parametrized(fr_families, parameters):
     new_fr_families = fr_families.copy()
     for fr_fam in new_fr_families:
@@ -130,61 +79,65 @@ def population_parametrized(fr_families, parameters):
     return new_fr_families
 
 
-def update_dfn_params(cfg, param_dict):
-    if "population_template" in cfg.fractures:
+def update_dfn_params(cfg_fr, param_dict):
+    if "population_template" in cfg_fr:
         # replace random parameters in fracture population config
         fr_population_fname = "fr_population"
-        common.substitute_placeholders(file_in=job.input.dir_path / cfg.fractures.population_template,
+        common.substitute_placeholders(file_in=job.input.dir_path / cfg_fr.population_template,
                                        file_out=fr_population_fname,
                                        params=param_dict)
         with Path(fr_population_fname).open("r", encoding="utf-8") as file:
             content = file.read()
             fr_dict = yaml.safe_load(content)
-            cfg.fractures.population = dotdict.create(fr_dict)
+            cfg_fr.population = dotdict.create(fr_dict)
             logging.info(f"param_dict:\n{param_dict}")
-            logging.info(f"DFN REPO:\n{cfg.fractures.population}")
+            logging.info(f"DFN REPO:\n{cfg_fr.population}")
 
-    elif len(cfg.fractures.population) > 0:
+    elif len(cfg_fr.population) > 0:
         # randomize fracture populations parameters with Forsmark data
-        dfn_cfg = population_parametrized(cfg.fractures.population, param_dict)
+        dfn_cfg = population_parametrized(cfg_fr.population, param_dict)
     else:
         raise Exception("Fracture population not set, neither template file given.")
 
 
+def update_mesh_cfg(cfg_mesh, level_dict):
+
+    mcfg = common.apply_variant(cfg_mesh, level_dict.params)
+    # assert mcfg == cfg_mesh
+    mcfg.mesh_name = mcfg.mesh_name + f"_L{level_dict.id}"
+    return mcfg
+
+
+#@memoize
+def create_mesh(cfg_mesh, fr_set):
+
+    mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
+    mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
+
+    return make_mesh(cfg_mesh, fr_set, mesh_seed)
+
+
 #@memoize
 @run_in_subprocess
-def prepare_msh_input(workdir, cfg, param_dict):
+def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
     job.set_workdir(workdir)
-    fracture_box = cfg.fractures.clip_box_ratio * np.array(cfg.geometry.box_dimensions)
-    logging.info(f"box: {cfg.geometry.box_dimensions}")
-    logging.info(f"fracture_box: {fracture_box}")
-    logging.info(f"DFN REPO:\n{cfg.fractures.population}")
 
-    fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
-
-    dfn_seed_seq = ot_sa.Seed.get_seedsequence(cfg.fractures.dfn_seed)
-    mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg.mesh.meshing_seed)
-    dfn_seed = dfn_seed_seq.generate_state(1)[0]
-    mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
-
-    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
+    mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
     # return None
-
-    # mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)
 
     # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
     full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
 
     el_to_ifr = None
-    if "fractures" in cfg.geometry.include and fractures is not None:
+    if "fractures" in cfg_mesh.geometry.include and fractures is not None:
         # modifies the regions: fr_large, fr_small
         el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
         mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
         mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
+    input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
 
     # input_fields_file = File("input_fields.msh2")
@@ -194,30 +147,140 @@ def prepare_msh_input(workdir, cfg, param_dict):
     return input_msh
 
 
+#@memoize
+@run_in_subprocess
+def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
+    # when running in subprocess, global variables are lost
+    # therefore we set the workdir again
+    job.set_workdir(workdir)
+
+    mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
+    # return None
+
+    # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
+    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
+
+    # TODO: pass homogenization fields
+    el_to_ifr = None
+    if "fractures" in cfg_mesh.geometry.include and fractures is not None:
+        # modifies the regions: fr_large, fr_small
+        el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
+        mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
+        mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
+        return mesh_modified_filepath
+    # mesh_modified = Mesh.load_mesh(mesh_modified_file)
+    # input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
+    #                                                  el_to_ifr, fractures, dim=3)
+    #
+    # # input_fields_file = File("input_fields.msh2")
+    # input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
+    # shutil.move(input_fields_file.path, input_msh_filepath)
+    # input_msh = File(input_msh_filepath)
+    # return input_msh
+    return mesh_file
+
+
 # @memoize
-def transport_run(cfg, tags, param_dict):
-    # large_model = input_dir / cfg_fine.piezo_head_input_file
-    large_model = None
+def transport_prepare_run(cfg_mesh):
+    fracture_box = cfg_mesh.fractures.clip_box_ratio * np.array(cfg_mesh.geometry.box_dimensions)
+    logging.info(f"box: {cfg_mesh.geometry.box_dimensions}")
+    logging.info(f"fracture_box: {fracture_box}")
+    logging.info(f"DFN REPO:\n{cfg_mesh.fractures.population}")
 
-    update_dfn_params(cfg, param_dict)
+    dfn_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.fractures.dfn_seed)
+    dfn_seed = dfn_seed_seq.generate_state(1)[0]
 
-    input_msh_filepath = Path("input_fields.msh")
+    fr_pop, fracture_set, n_large = make_fractures(cfg_mesh, dfn_seed)
+
+    fr_stats = fracture_tools.fracture_set_stats(fracture_set)
+    logging.info(f"N fracture set: {len(fracture_set)}")
+    logging.info(f"Fracture stats:\n"
+                 f"min: {fr_stats['min_radius']},\n"
+                 f"max: {fr_stats['max_radius']},\n"
+                 f"avg: {fr_stats['avg_radius']},\n"
+                 f"med: {fr_stats['med_radius']}")
+
+    return fr_pop, fracture_set, n_large
+
+
+def transport_run(cfg, level_id, tags, param_dict):
+    update_dfn_params(cfg.mesh.fractures, param_dict)
+    fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
+
+    transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+    transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+    if level_id < len(cfg.mlmc.levels)-1:
+        transport_coarse_run(cfg, fr_set, level_id+1, n_large, tags, param_dict)
+
+
+# @memoize
+def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+    """ Fine full-scale transport model"""
+    variant = "fine"
+    level = cfg.mlmc.levels[level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    cfg_mesh.mesh_name += f"_{variant}"
+
+    input_msh_filepath = Path(f"input_fields_{variant}.msh")
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
     else:
-        input_msh = prepare_msh_input(job.output.dir_path, cfg, param_dict)
+        input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
-    # META SCOOP PROBLEM: cannot access home input_dir
-    # input_msh_filepath = input_dir / "input_fields.msh"
-    # accessing scratchdir only works
-    # workdir = Path(os.getcwd()).parents[2]
-    # # input_msh_filepath = workdir / input_dir.name / "input_fields.msh"
-    # input_msh_filepath = workdir / "input_data" / "input_fields.msh"
-    # shutil.copy2(str(input_msh_filepath), "input_fields.msh")
-    # input_msh = File(input_msh_filepath)
+    # DEBUG mesh
+    return 0, []
 
-    # return 0, []
-    res, fo = parametrized_run(cfg, large_model, input_msh, tags, param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    values = process_results(cfg, fo)
+    return res, values
+
+
+def transport_homo_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+    """ Fine full-scale flow model (including homogenization buffer)"""
+    variant = "fine_buffer"
+    level = cfg.mlmc.levels[level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
+    cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
+    cfg_mesh.mesh_name += f"_{variant}"
+
+    input_msh_filepath = Path(f"input_fields_{variant}.msh")
+    if input_msh_filepath.exists():
+        input_msh = File(str(input_msh_filepath))
+    else:
+        input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
+
+    # DEBUG mesh
+    return 0, []
+
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    values = process_results(cfg, fo)
+    return res, values
+
+
+def transport_coarse_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+    """ Fine full-scale flow model (including homogenization buffer)"""
+    variant = "coarse"
+    level = cfg.mlmc.levels[level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
+    print(f"N coarse fracture set: {len(coarse_fracture_set)}")
+    cfg_mesh.mesh_name += f"_{variant}"
+
+    input_msh_filepath = Path(f"input_fields_{variant}.msh")
+    if input_msh_filepath.exists():
+        input_msh = File(str(input_msh_filepath))
+    else:
+        input_msh = prepare_coarse_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, coarse_fracture_set, n_large)
+
+    # DEBUG mesh
+    return 0, []
+
+    # large_model = input_dir / cfg_fine.piezo_head_input_file
+    large_model = None
+    res, fo = parametrized_run(cfg, large_model, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values

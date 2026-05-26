@@ -115,7 +115,7 @@ parameters:
     distr: TruncatedNormal
     args: [2, 0.15, 1.5, 3]
     group: mat_edz
-    path: geometry/edz_radius
+    path: mesh/geometry/edz_radius
 
   por_min:
     distr: TruncatedNormal
@@ -157,7 +157,7 @@ parameters:
   dfn_seed: 
     # seed for small fractures
     distr: Seed
-    path: fractures/dfn_seed
+    path: mesh/fractures/dfn_seed
   meshing_seed: 
     # seed for gmsh fractures
     distr: Seed
