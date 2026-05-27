@@ -208,8 +208,16 @@ def one_borehole(cfg_geom:dotdict, fractures:List['Fracture'], cfg_mesh:dotdict,
 
     bulk, refined = geom_fn(factory, cfg_geom, fractures, cfg_mesh)
 
+    b_cfg = cfg_geom.borehole
+    center_line = factory.line([0, 0, 0], [b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+    by = cfg_geom.box_dimensions[1]
+    edz_field = mesh_tools.edz_refinement_field(factory, line = center_line,
+                    r = [b_cfg.radius, cfg_geom.edz_radius, by / 2],
+                    step = [cfg_mesh.edz_mesh_step * 0.9, cfg_mesh.edz_mesh_step, cfg_mesh.boundary_mesh_step],
+                    q = 1.7, n_sampling=int(b_cfg.length/2))
 
-    factory.set_mesh_step_field(mesh_tools.edz_refinement_field(factory, cfg_geom, cfg_mesh))
+
+    factory.set_mesh_step_field(edz_field)
     mesh_tools.edz_meshing(factory, [bulk], mesh_file)
     # factory.show()
     del factory

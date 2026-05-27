@@ -152,6 +152,6 @@ fi
 if [[ $autopull == "1" ]]; then
     update_images
 fi
-docker run --rm ${docker_terminal} $envarg $mountargs $priv_true $base_image "flow123d" "$rest"
+docker run --rm ${docker_terminal} $envarg $mountargs $priv_true $full_image "flow123d" $rest
 
 exit $?

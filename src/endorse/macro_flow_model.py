@@ -5,7 +5,7 @@ import logging
 import numpy as np
 
 from . import common
-from .apply_fields import conductivity_mockup, conductivity_mockup_eval
+from .apply_fields import conductivity_mockup_eval
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
 from .homogenisation import MacroSphere, Subproblems, MacroTetra
@@ -13,6 +13,45 @@ from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
 
+def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+    """
+    TODO: used just in macro_flow_model -> move there.
+    Produce a conductivity field mockup and write it to a file.
+    Conductivity is cond_min for points out of ellipse with axis:
+    (h_axis * edz_r, v_axis * edz_r)
+    and cond_max in the ellipse:
+    (h_axis * in_r, v_axis * in_r)
+
+    We assume in_r < edz_r.
+    Geometric mean interpolation in between.
+    """
+    cond_field = conductivity_mockup_eval(cfg_geom, cfg_fields, output_mesh.el_barycenters().T)
+    cond_file = "fine_conductivity.msh2"
+    output_mesh.write_fields(cond_file,
+                             dict(conductivity=cond_field))
+    return File(cond_file)
+
+    cond_max = float(cfg_fields.cond_max)
+    cond_min = float(cfg_fields.cond_min)
+
+    #edz_r = cfg_geom.edz_radius # 2.5
+    in_r = cfg_fields.inner_radius
+    Z = Z - cfg_geom.borehole.z_pos
+    # axis wit respect to EDZ radius
+    Y_rel = Y / cfg_fields.h_axis
+    Z_rel = Z / cfg_fields.v_axis
+
+    # distance from center = edz_radius on the outer ellipse
+    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel))
+    theta = (distance - in_r) / (edz_r - in_r)
+    theta = np.clip(theta, 0.0, 1.0)
+    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min))
+    #abs_dist = np.sqrt(Y * Y + Z * Z)
+    #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
+    #print({(i+1):cond for i,cond in enumerate(cond_field)})
+    output_mesh.write_fields(cond_file,
+                            dict(conductivity=cond_field))
+    return File(cond_file)
 
 def macro_transport(cfg:dotdict):
     work_dir = f"sandbox/run_macro_transport"

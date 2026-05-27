@@ -26,7 +26,7 @@ machine_config:
     makovnik:  #JB
         flow_executable:
         # release
-        - /home/jb/workspace/endorse/bin/run123d    # installed with endorse
+        - /home/jb/workspace/endorse/bin/mini_fterm.sh    # installed with endorse
         - -x
         - -i
         - ci-gnu:4.0.3dev_11c2ea       # master 28.5.2025

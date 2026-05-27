@@ -73,25 +73,29 @@ def generate_fractures(pop:Population, range: Tuple[float, float], fr_limit, box
 
 
 
-def edz_refinement_field(factory: "GeometryOCC", cfg_geom: "dotdict", cfg_mesh: "dotdict") -> field.Field:
+def edz_refinement_field(factory: "GeometryOCC", line,
+                         r: List[float],
+                         step: List[float],
+                         q: float, n_sampling = 10) -> field.Field:
     """
     Refinement mesh step field for resolution of the EDZ.
-    :param cfg_geom:
+    :param line: gmsh factory.line instance
+    :param r: (r_tunnel, r_edz, r_outer_boundary)
+    :param step: (step_tunnel, step_edz, step_outer_boundary)
+    :param q: quotient of polynomial field progression
+    n_sampling : number of sample points for construction of the distance field
     """
-    b_cfg = cfg_geom.borehole
-    bx, by, bz = cfg_geom.box_dimensions
-    edz_radius = cfg_geom.edz_radius
-    center_line = factory.line([0,0,0], [b_cfg.length, 0, 0]).translate([-b_cfg.length/2, 0, 0])
+    r_tunnel, r_edz, r_outer_boundary = r
+    step_tunnel, step_edz, step_outer_boundary = step
 
-
-    n_sampling = int(b_cfg.length / 2)
-    dist = field.distance(center_line, sampling = n_sampling)
+    dist = field.distance(line, sampling = n_sampling)
     inner = field.geometric(dist,
-                            a=(b_cfg.radius, cfg_mesh.edz_mesh_step * 0.9),
-                            b=(edz_radius, cfg_mesh.edz_mesh_step))
+                            a=(r_tunnel, step_tunnel),
+                            b=(r_edz, step_edz))
     outer = field.polynomial(dist,
-                             a=(edz_radius, cfg_mesh.edz_mesh_step),
-                             b=(by / 2, cfg_mesh.boundary_mesh_step), q=1.7)
+                             a=(r_edz, step_edz),
+                             b=(r_outer_boundary, step_outer_boundary),
+                             q=q)
     return field.maximum(inner, outer)
 
 
