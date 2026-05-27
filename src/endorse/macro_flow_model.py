@@ -29,7 +29,6 @@ def macro_transport(cfg:dotdict):
         conductivity_file = macro_conductivity(cfg, macro_mesh, macro_model_el_indices)
         #conductivity_file = macro_conductivity_avg(cfg, macro_mesh, macro_model_el_indices)
 
-        # TODO:  run macro model
 
         template = Path(cfg._config_root_dir) / macro_cfg.input_template
         print("template_path: ", template)
@@ -54,6 +53,7 @@ def fine_macro_transport(cfg):
             #piezo_head_input_file=os.path.basename(large_model.path),
             input_fields_file = conductivity_file.path
         )
+        print(f"FLOW CALL: {template}")
         common.call_flow(cfg.machine_config, template, params)
 
 @memoize
@@ -115,15 +115,15 @@ def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
     #subdomains = [Subdomain.for_element(micro_mesh, macro_mesh.elements[ie]) for ie in homogenized_els]
-    homo = Subproblems.create(macro_mesh, homogenized_els, micro_mesh, macro_shape, subdivision)
+    subproblems = Subproblems.create(macro_mesh, homogenized_els, micro_mesh, macro_shape, subdivision)
     # debugging output of the subdomains
     #subdomains_mesh(subdomains)
 
     cfg_micro = cfg.transport_microscale
-    gen_load_responses = (micro_load_response(cfg, homo, il, load)
+    gen_load_responses = (micro_load_response(cfg, subproblems, il, load)
                           for il, load in enumerate(cfg_micro.pressure_loads))
     loads, responses = zip(*gen_load_responses)
-    conductivity_tensors = homo.equivalent_tensor_field(loads, responses)
+    conductivity_tensors = subproblems.equivalent_tensor_field(loads, responses)
 
     # Heterogeneous conductiity tensor stored in Voigt notation.
     dflt_cond = cfg.transport_macroscale.default_conductivity
