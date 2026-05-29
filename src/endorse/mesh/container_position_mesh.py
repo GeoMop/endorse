@@ -62,8 +62,8 @@ def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0], center=[-b_cfg.length / 2, 0, 0])\
           #.translate([0, 0, b_cfg.z_pos]))
 
-    box_cut = box.copy().cut(bh.copy())
-    domain = box.copy().fragment(bh.copy())
+    box_cut = box.deepcopy().cut(bh.deepcopy())
+    domain = box.deepcopy().fragment(bh.deepcopy())
     outer = domain.select_by_intersect(box_cut).set_region("outer")
     borehole = domain.select_by_intersect(bh).set_region("borehole")
 
@@ -106,8 +106,8 @@ def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
 #     yz_size = 3 * (cfg.edz_radius + macro_mesh_step)
 #     box = factory.box([x_size, yz_size, yz_size]).translate([box_shift, 0, b_cfg.z_pos])
 #     bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
-#     box_cut = box.copy().cut(bh.copy())
-#     domain = box.copy().fragment(bh.copy())
+#     box_cut = box.deepcopy().cut(bh.deepcopy())
+#     domain = box.deepcopy().fragment(bh.deepcopy())
 #     outer = domain.select_by_intersect(box_cut).set_region("outer")
 #     borehole = domain.select_by_intersect(bh).set_region("borehole")
 #

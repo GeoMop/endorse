@@ -113,14 +113,14 @@ def make_tunnel_cross_section_mesh(cfg_geom:dotdict):
     box = factory.rectangle(dimensions).set_region("box")
     side = factory.line([-dimensions[0] / 2, 0, 0], [dimensions[0] / 2, 0, 0])
     sides = dict(
-        bottom=side.copy().translate([0, -dimensions[1] / 2, 0]),
-        top=side.copy().translate([0, +dimensions[1] / 2, 0]),
-        left=side.copy().translate([0, +dimensions[0] / 2, 0]).rotate([0, 0, 1], np.pi / 2),
-        right=side.copy().translate([0, -dimensions[0] / 2, 0]).rotate([0, 0, 1], np.pi / 2)
+        bottom=side.deepcopy().translate([0, -dimensions[1] / 2, 0]),
+        top=side.deepcopy().translate([0, +dimensions[1] / 2, 0]),
+        left=side.deepcopy().translate([0, +dimensions[0] / 2, 0]).rotate([0, 0, 1], np.pi / 2),
+        right=side.deepcopy().translate([0, -dimensions[0] / 2, 0]).rotate([0, 0, 1], np.pi / 2)
     )
 
     tunnel_disc = factory.disc(tunnel_center, *tunnel_dims)
-    tunnel_select = tunnel_disc.copy()
+    tunnel_select = tunnel_disc.deepcopy()
     tunnel_ngh = factory.disc(tunnel_center, *(5 * tunnel_dims))
 
     print("cutting and fragmenting...")

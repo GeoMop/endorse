@@ -163,9 +163,13 @@ def prepare_msh_input(workdir, cfg, param_dict):
     logging.info(f"DFN REPO:\n{cfg.fractures.population}")
 
     fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
-    dfn_seed = ot_sa.Seed.get_seedsequence(cfg.fractures.dfn_seed)
-    meshing_seed = ot_sa.Seed.get_seedsequence(cfg.mesh.meshing_seed)
-    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, meshing_seed)
+
+    dfn_seed_seq = ot_sa.Seed.get_seedsequence(cfg.fractures.dfn_seed)
+    mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg.mesh.meshing_seed)
+    dfn_seed = dfn_seed_seq.generate_state(1)[0]
+    mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
+
+    mesh_file, fractures, n_large = make_mesh(cfg, fr_pop, dfn_seed, mesh_seed)
     # return None
 
     # mesh_file, fractures, n_large = run_gmsh_helper_pickle(cfg)

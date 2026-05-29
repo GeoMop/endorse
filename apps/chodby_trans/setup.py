@@ -9,7 +9,7 @@ setup(
     install_requires = [
         "PyYAML",
         "attrs",
-        "numpy",
+        "numpy<2",
         "dask",
         "distributed",
         "salib",
