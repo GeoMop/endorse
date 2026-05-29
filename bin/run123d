@@ -1,0 +1,7 @@
+#!/bin/bash
+# 
+# Run Flow123d in a production docker container.
+#     mini_fterm.sh <image_name:tag> [...] -- <flow_arguments>
+
+echo "This script was replaced by bin/mini_fterm.sh"
+exit 1
