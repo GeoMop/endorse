@@ -1,11 +1,15 @@
 from typing import *
 import os
 from bgem.gmsh import gmsh
-from endorse.common import File, dotdict
+from endorse.common import File, dotdict, memoize
 from endorse.mesh import mesh_tools
 
 
 """
+TODO: This file is specific for the 'tests/homogenization/test_homogenization.py' 
+proof of concept.
+
+
 macro mesh - given part of borehole + larger neighbourhood , about 20m, no borhole representation
 fine mesh - same outer geometry, but with cut borehole, fine around EDZ
 homogenization mesh - subset of fine mesh, same geometry, but cut by given cylinder
@@ -15,12 +19,14 @@ homogenization mesh - subset of fine mesh, same geometry, but cut by given cylin
 """
 
 
-def macro_outer_box(cfg_geom, factory):
-    b_cfg = cfg_geom.borehole
-    x_size = 0.9 * b_cfg.length
-    x_shift = x_size / 2
-    yz_size = 5 * cfg_geom.edz_radius
-    return factory.box([x_size, yz_size, yz_size]).translate([x_shift, 0, b_cfg.z_pos])
+# def macro_outer_box(cfg_geom, factory):
+#     """ Problem specific, and currently seems not in use. """
+#     b_cfg = cfg_geom.borehole
+#     x_size = b_cfg.length
+#     x_shift = x_size / 2
+#     yz_size = 5 * cfg_geom.edz_radius
+#     return factory.box([x_size, yz_size, yz_size]).translate([x_shift, 0, 0])
+#
 
 def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
     """
@@ -34,13 +40,15 @@ def macro_mesh(cfg_geom:dotdict, macro_mesh_step:float):
     """
     base = "macro_borehole"
     factory = gmsh.GeometryOCC(base, verbose=True)
-    box = macro_outer_box(cfg_geom, factory)
+    #box = macro_outer_box(cfg_geom, factory)
+    box = factory.box(cfg_geom.box_dimensions)
     box.mesh_step(macro_mesh_step)
     mesh_file = base + ".msh"
     mesh_tools.edz_meshing(factory, [box], mesh_file)
     del factory
     return File(mesh_file)
 
+@memoize
 def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     """
     macro mesh with cut borehole and refined around
@@ -50,8 +58,9 @@ def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     base = "fine_borehole"
     mesh_file = base + ".msh"
     factory = gmsh.GeometryOCC(base, verbose=True)
-    box = macro_outer_box(cfg_geom, factory)
-    bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+    box = factory.box(cfg_geom.box_dimensions)
+    bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0], center=[-b_cfg.length / 2, 0, 0])\
+          #.translate([0, 0, b_cfg.z_pos]))
 
     box_cut = box.deepcopy().cut(bh.deepcopy())
     domain = box.deepcopy().fragment(bh.deepcopy())
@@ -68,44 +77,52 @@ def fine_mesh(cfg_geom:dotdict, cfg_mesh:dotdict):
     #gopt = options.Geometry()
     #gopt.Tolerance = 0.0001
     #gopt.ToleranceBoolean = 0.001
-    factory.set_mesh_step_field(mesh_tools.edz_refinement_field(factory, cfg_geom, cfg_mesh))
+    b_cfg = cfg_geom.borehole
+    center_line = factory.line([0, 0, 0], [b_cfg.length, 0, 0]).translate([-b_cfg.length/2, 0, 0])
+    by = cfg_geom.box_dimensions[1]
+    edz_field = mesh_tools.edz_refinement_field(factory, line = center_line,
+                    r = [b_cfg.radius, cfg_geom.edz_radius, by / 2],
+                    step = [cfg_mesh.edz_mesh_step * 0.9, cfg_mesh.edz_mesh_step, cfg_mesh.boundary_mesh_step],
+                    q = 1.7, n_sampling=int(b_cfg.length/2))
+
+    factory.set_mesh_step_field(edz_field)
     #factory.get_logger().stop()
     mesh_tools.edz_meshing(factory, [outer, borehole], mesh_file)
     # factory.show()
     del factory
     return File(mesh_file)
 
-#def micro_mesh()
-#Interval = Tuple[float, float]
-def borehole_single_mesh(cfg:dotdict, x_size:float, yz_size_float, h_min:float, mesh_file: str = "borehole_mesh.msh2"):
-    # Radius of the homogenization kernel, approximately macro mesh step
-    base, ext = os.path.splitext(os.path.basename(mesh_file))
-    factory = gmsh.GeometryOCC(base, verbose=True)
-    container_period = mesh_tools.container_period(cfg)
-    box_shift = x_size / 2  #+ mesh_tools.container_x_pos(cfg, i_pos)
-
-    # TODO: homogenization x_size could be unrelated to the container size
-    x_size = container_period + 2 * macro_mesh_step
-    yz_size = 3 * (cfg.edz_radius + macro_mesh_step)
-    box = factory.box([x_size, yz_size, yz_size]).translate([box_shift, 0, b_cfg.z_pos])
-    bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
-    box_cut = box.deepcopy().cut(bh.deepcopy())
-    domain = box.deepcopy().fragment(bh.deepcopy())
-    outer = domain.select_by_intersect(box_cut).set_region("outer")
-    borehole = domain.select_by_intersect(bh).set_region("borehole")
-
-    # TODO: mesh EDZ cylinder as well and implement region selection after meshing
-    # that would allow creating various homogenisation submeshes from a single fine problem mesh
-
-    #edz = factory.cylinder(cfg.borehole_radius, axis=[cfg.borehole_length, 0, 0])
-
-    factory.get_logger().start()
-    factory.set_mesh_step_field(mesh_tools.edz_refinement_field(factory, None, cfg))
-    factory.get_logger().stop()
-    mesh_tools.edz_meshing(cfg, factory, [outer, borehole], mesh_file)
-    # factory.show()
-    del factory
-    return mesh_file
+# #def micro_mesh()
+# #Interval = Tuple[float, float]
+# def borehole_single_mesh(cfg:dotdict, x_size:float, yz_size_float, h_min:float, mesh_file: str = "borehole_mesh.msh2"):
+#     # Radius of the homogenization kernel, approximately macro mesh step
+#     base, ext = os.path.splitext(os.path.basename(mesh_file))
+#     factory = gmsh.GeometryOCC(base, verbose=True)
+#     container_period = mesh_tools.container_period(cfg)
+#     box_shift = x_size / 2  #+ mesh_tools.container_x_pos(cfg, i_pos)
+#
+#     # TODO: homogenization x_size could be unrelated to the container size
+#     x_size = container_period + 2 * macro_mesh_step
+#     yz_size = 3 * (cfg.edz_radius + macro_mesh_step)
+#     box = factory.box([x_size, yz_size, yz_size]).translate([box_shift, 0, b_cfg.z_pos])
+#     bh = factory.cylinder(b_cfg.radius, axis=[b_cfg.length, 0, 0]).translate([0, 0, b_cfg.z_pos])
+#     box_cut = box.deepcopy().cut(bh.deepcopy())
+#     domain = box.deepcopy().fragment(bh.deepcopy())
+#     outer = domain.select_by_intersect(box_cut).set_region("outer")
+#     borehole = domain.select_by_intersect(bh).set_region("borehole")
+#
+#     # TODO: mesh EDZ cylinder as well and implement region selection after meshing
+#     # that would allow creating various homogenisation submeshes from a single fine problem mesh
+#
+#     #edz = factory.cylinder(cfg.borehole_radius, axis=[cfg.borehole_length, 0, 0])
+#
+#     factory.get_logger().start()
+#     factory.set_mesh_step_field(mesh_tools.edz_refinement_field(factory, None, cfg))
+#     factory.get_logger().stop()
+#     mesh_tools.edz_meshing(cfg, factory, [outer, borehole], mesh_file)
+#     # factory.show()
+#     del factory
+#     return mesh_file
 
 
 

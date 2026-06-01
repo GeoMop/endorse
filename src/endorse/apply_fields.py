@@ -2,9 +2,10 @@ import numpy as np
 
 from .common import File
 from .mesh_class import Mesh
-from endorse import hm_simulation
+#from endorse import hm_simulation
 
-def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
+
+def conductivity_mockup_eval(cfg_geom, cfg_fields, XYZ):
     """
     Produce a conductivity field mockup and write it to a file.
     Conductivity is cond_min for points out of ellipse with axis:
@@ -15,10 +16,9 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     We assume in_r < edz_r.
     Geometric mean interpolation in between.
     """
-    X, Y, Z = output_mesh.el_barycenters().T
-    cond_file = "fine_conductivity.msh2"
     cond_max = float(cfg_fields.cond_max)
     cond_min = float(cfg_fields.cond_min)
+    X, Y, Z = XYZ
 
     edz_r = cfg_geom.edz_radius # 2.5
     in_r = cfg_fields.inner_radius
@@ -35,12 +35,11 @@ def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
     #abs_dist = np.sqrt(Y * Y + Z * Z)
     #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
     #print({(i+1):cond for i,cond in enumerate(cond_field)})
-    output_mesh.write_fields(cond_file,
-                            dict(conductivity=cond_field))
-    return File(cond_file)
+    return cond_field
 
 
-def bulk_fields_mockup_from_hm(cfg, interp: hm_simulation.TunnelInterpolator, XYZ):
+
+def bulk_fields_mockup_from_hm(cfg, interp: 'hm_simulation.TunnelInterpolator', XYZ):
     # use Tunnel Interpolator
     # in X axis it is constant
     # X, Y, Z = XYZ.T
