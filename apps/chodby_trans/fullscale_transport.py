@@ -110,66 +110,61 @@ def update_mesh_cfg(cfg_mesh, level_dict):
     return mcfg
 
 
-#@memoize
-def create_mesh(cfg_mesh, fr_set):
+# @memoize
+# @run_in_subprocess
+def create_mesh(cfg_mesh, fr_set, n_large):
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
     mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
 
-    return make_mesh(cfg_mesh, fr_set, mesh_seed)
-
-
-#@memoize
-@run_in_subprocess
-def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
-    # when running in subprocess, global variables are lost
-    # therefore we set the workdir again
-    job.set_workdir(workdir)
-
-    mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
-    # return None
+    mesh_file = make_mesh(cfg_mesh, fr_set, mesh_seed)
 
     # full_mesh = load_mesh(mesh_file, heal_tol=1e-4)
     full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
 
     el_to_ifr = None
-    if "fractures" in cfg_mesh.geometry.include and fractures is not None:
+    if "fractures" in cfg_mesh.geometry.include and fr_set is not None:
         # modifies the regions: fr_large, fr_small
-        el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
+        el_to_ifr = fracture_map(full_mesh, fr_set, n_large, dim=3)
         mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
         mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
-    # mesh_modified = load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
-                                                     el_to_ifr, fractures, dim=3)
+        full_mesh.file = mesh_modified_file
 
-    # input_fields_file = File("input_fields.msh2")
-    input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
+    return full_mesh, el_to_ifr
+
+#@memoize
+# @run_in_subprocess
+def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
+    # when running in subprocess, global variables are lost
+    # therefore we set the workdir again
+    #job.set_workdir(workdir)
+
+    input_msh_filepath = Path(f"input_fields.msh")
+    if input_msh_filepath.exists():
+        return File(str(input_msh_filepath))
+
+    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
+
+    input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
+                                                     apply_fields.bulk_fields_mockup_tunnel,
+                                                     el_to_ifr, fr_set, dim=3)
+
+    # msh2 -> msh
     shutil.move(input_fields_file.path, input_msh_filepath)
-    input_msh = File(input_msh_filepath)
+    input_msh = File(str(input_msh_filepath))
     return input_msh
 
 
 #@memoize
-@run_in_subprocess
+# @run_in_subprocess
 def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
     job.set_workdir(workdir)
 
-    mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
-    # return None
-
-    # full_mesh = load_mesh(mesh_file, heal_tol=1e-4)
-    full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
-
+    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
+    return full_mesh.file
     # TODO: pass homogenization fields
-    el_to_ifr = None
-    if "fractures" in cfg_mesh.geometry.include and fractures is not None:
-        # modifies the regions: fr_large, fr_small
-        el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
-        mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
-        mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
-        return mesh_modified_filepath
     # mesh_modified = load_mesh(mesh_modified_file)
     # input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
     #                                                  el_to_ifr, fractures, dim=3)
@@ -179,7 +174,6 @@ def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # shutil.move(input_fields_file.path, input_msh_filepath)
     # input_msh = File(input_msh_filepath)
     # return input_msh
-    return mesh_file
 
 
 # @memoize
@@ -209,11 +203,42 @@ def transport_run(cfg, level_id, tags, param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
-    rc, slice = transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
-    transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
-    if level_id < len(cfg.mlmc.levels)-1:
-        transport_coarse_run(cfg, fr_set, level_id+1, n_large, tags, param_dict)
+    with common.workdir("fine_trans", clean=False):
+        logging.info(f"fine dir: {os.getcwd()}")
+        rc, slice = transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+
+    logging.info(f"sample dir: {os.getcwd()}")
+    if level_id < len(cfg.mlmc.levels) - 1:
+        with common.workdir("macro_trans", clean=False):
+            logging.info(f"macro dir: {os.getcwd()}")
+            # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
+            # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+            transport_macro(cfg, fr_set, n_large, level_id, tags, param_dict)
+
+
     return rc, slice
+
+def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
+    # micro: fine mesh of buffer domain
+    variant = "micro"
+    level = cfg.mlmc.levels[level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
+    cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
+    cfg_mesh.mesh_name += f"_{variant}"
+    micro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
+
+    # macro: target coarse mesh
+    variant = "macro"
+    macro_level = cfg.mlmc.levels[level_id+1]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
+    coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
+    logging.info(f"N macro fracture set: {len(coarse_fracture_set)}")
+    cfg_mesh.mesh_name += f"_{variant}"
+    macro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
+
+    # TODO homogenization
+    # conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh)
 
 
 # @memoize
@@ -224,7 +249,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
     cfg_mesh.mesh_name += f"_{variant}"
 
-    input_msh_filepath = Path(f"input_fields_{variant}.msh")
+    input_msh_filepath = Path(f"input_fields.msh")
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
     else:
@@ -239,54 +264,54 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
     return res, values
 
 
-def transport_homo_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
-    """ Fine full-scale flow model (including homogenization buffer)"""
-    variant = "fine_buffer"
-    level = cfg.mlmc.levels[level_id]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
-    cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
-    cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
-    cfg_mesh.mesh_name += f"_{variant}"
-
-    input_msh_filepath = Path(f"input_fields_{variant}.msh")
-    if input_msh_filepath.exists():
-        input_msh = File(str(input_msh_filepath))
-    else:
-        input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
-
-    # DEBUG mesh
-    return NULL_RESULT
-
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
-    time.sleep(0.5)  # give the FS a moment (tune as needed)
-    values = process_results(cfg, fo)
-    return res, values
-
-
-def transport_coarse_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
-    """ Fine full-scale flow model (including homogenization buffer)"""
-    variant = "coarse"
-    level = cfg.mlmc.levels[level_id]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
-    coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
-    logging.info(f"N coarse fracture set: {len(coarse_fracture_set)}")
-    cfg_mesh.mesh_name += f"_{variant}"
-
-    input_msh_filepath = Path(f"input_fields_{variant}.msh")
-    if input_msh_filepath.exists():
-        input_msh = File(str(input_msh_filepath))
-    else:
-        input_msh = prepare_coarse_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, coarse_fracture_set, n_large)
-
-    # DEBUG mesh
-    return NULL_RESULT
-
-    # large_model = input_dir / cfg_fine.piezo_head_input_file
-    large_model = None
-    res, fo = parametrized_run(cfg, large_model, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
-    time.sleep(0.5)  # give the FS a moment (tune as needed)
-    values = process_results(cfg, fo)
-    return res, values
+# def transport_homo_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+#     """ Fine full-scale flow model (including homogenization buffer)"""
+#     variant = "fine_buffer"
+#     level = cfg.mlmc.levels[level_id]
+#     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+#     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
+#     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
+#     cfg_mesh.mesh_name += f"_{variant}"
+#
+#     input_msh_filepath = Path(f"input_fields_{variant}.msh")
+#     if input_msh_filepath.exists():
+#         input_msh = File(str(input_msh_filepath))
+#     else:
+#         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
+#
+#     # DEBUG mesh
+#     return NULL_RESULT
+#
+#     res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+#     time.sleep(0.5)  # give the FS a moment (tune as needed)
+#     values = process_results(cfg, fo)
+#     return res, values
+#
+#
+# def transport_coarse_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+#     """ Fine full-scale flow model (including homogenization buffer)"""
+#     variant = "coarse"
+#     level = cfg.mlmc.levels[level_id]
+#     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+#     coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
+#     logging.info(f"N coarse fracture set: {len(coarse_fracture_set)}")
+#     cfg_mesh.mesh_name += f"_{variant}"
+#
+#     input_msh_filepath = Path(f"input_fields_{variant}.msh")
+#     if input_msh_filepath.exists():
+#         input_msh = File(str(input_msh_filepath))
+#     else:
+#         input_msh = prepare_coarse_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, coarse_fracture_set, n_large)
+#
+#     # DEBUG mesh
+#     return NULL_RESULT
+#
+#     # large_model = input_dir / cfg_fine.piezo_head_input_file
+#     large_model = None
+#     res, fo = parametrized_run(cfg, large_model, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+#     time.sleep(0.5)  # give the FS a moment (tune as needed)
+#     values = process_results(cfg, fo)
+#     return res, values
 
 
 @exp.rethrow_as(exp.Flow123dException, "Flow123d exception")

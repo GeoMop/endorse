@@ -579,8 +579,7 @@ def make_mesh(cfg_mesh, fracture_set, mesh_seed):
     mesh_file_healed = make_heal_mesh(cfg_mesh.mesh_name, mesh_file)
 
     print("Final mesh file: ", mesh_file_healed)
-    return File(mesh_file_healed.name), fracture_set
-
+    return File(mesh_file_healed.name)
 
 def main(cfg, workdir, dfn_seed, mesh_seed):
 
