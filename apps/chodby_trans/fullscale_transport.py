@@ -39,6 +39,8 @@ import chodby_trans.exception_wrapper as exp
 from functools import wraps
 from loky import ProcessPoolExecutor  # NOT the stdlib one
 
+NULL_RESULT = 0, np.array([])
+
 def run_in_subprocess(func):
     """Execute the function in a separate process (loky) with picklable args/return."""
     @wraps(func)
@@ -207,10 +209,11 @@ def transport_run(cfg, level_id, tags, param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
-    transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+    rc, slice = transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
     transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
     if level_id < len(cfg.mlmc.levels)-1:
         transport_coarse_run(cfg, fr_set, level_id+1, n_large, tags, param_dict)
+    return rc, slice
 
 
 # @memoize
@@ -228,7 +231,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
     # DEBUG mesh
-    return 0, []
+    return NULL_RESULT
 
     res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
@@ -252,7 +255,7 @@ def transport_homo_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
     # DEBUG mesh
-    return 0, []
+    return NULL_RESULT
 
     res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
@@ -266,7 +269,7 @@ def transport_coarse_run(cfg, fracture_set, level_id, n_large, tags, param_dict)
     level = cfg.mlmc.levels[level_id]
     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
-    print(f"N coarse fracture set: {len(coarse_fracture_set)}")
+    logging.info(f"N coarse fracture set: {len(coarse_fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
 
     input_msh_filepath = Path(f"input_fields_{variant}.msh")
@@ -276,7 +279,7 @@ def transport_coarse_run(cfg, fracture_set, level_id, n_large, tags, param_dict)
         input_msh = prepare_coarse_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, coarse_fracture_set, n_large)
 
     # DEBUG mesh
-    return 0, []
+    return NULL_RESULT
 
     # large_model = input_dir / cfg_fine.piezo_head_input_file
     large_model = None
