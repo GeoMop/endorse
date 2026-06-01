@@ -16,7 +16,7 @@ from endorse import common
 
 from endorse.common import dotdict, File, report, memoize
 from endorse.mesh import fracture_tools
-from endorse.mesh_class import Mesh
+from endorse.mesh_class import load_mesh
 from endorse.indicator import Extractor
 from bgem.stochastic import Fracture, Population
 # from endorse import hm_simulation
@@ -129,8 +129,8 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
     # return None
 
-    # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
-    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
+    # full_mesh = load_mesh(mesh_file, heal_tol=1e-4)
+    full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
 
     el_to_ifr = None
     if "fractures" in cfg_mesh.geometry.include and fractures is not None:
@@ -138,7 +138,7 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
         el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
         mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
         mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
-    # mesh_modified = Mesh.load_mesh(mesh_modified_file)
+    # mesh_modified = load_mesh(mesh_modified_file)
     input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fractures, dim=3)
 
@@ -159,8 +159,8 @@ def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     mesh_file, fractures = create_mesh(cfg_mesh, fr_set)
     # return None
 
-    # full_mesh = Mesh.load_mesh(mesh_file, heal_tol=1e-4)
-    full_mesh = Mesh.load_mesh(mesh_file, heal_tol=None)  # already healed
+    # full_mesh = load_mesh(mesh_file, heal_tol=1e-4)
+    full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
 
     # TODO: pass homogenization fields
     el_to_ifr = None
@@ -170,7 +170,7 @@ def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
         mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
         mesh_modified_file = full_mesh.write_fields(mesh_modified_filepath)
         return mesh_modified_filepath
-    # mesh_modified = Mesh.load_mesh(mesh_modified_file)
+    # mesh_modified = load_mesh(mesh_modified_file)
     # input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
     #                                                  el_to_ifr, fractures, dim=3)
     #
