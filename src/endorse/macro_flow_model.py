@@ -62,10 +62,11 @@ def macro_transport(cfg:dotdict):
     #inputs=[large_model.path]
     with common.workdir(work_dir, inputs=[]):
         macro_mesh: Mesh = make_macro_mesh(cfg)
+        micro_mesh: Mesh = make_micro_mesh(cfg)
         # select elements with homogenized properties
         #macro_model_el_indices = homogenized_elements(cfg.geometry, macro_mesh)
         macro_model_el_indices = list(range(len(macro_mesh.elements)))
-        conductivity_file = macro_conductivity(cfg, macro_mesh, macro_model_el_indices)
+        conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh, macro_model_el_indices)
         #conductivity_file = macro_conductivity_avg(cfg, macro_mesh, macro_model_el_indices)
 
 
@@ -134,23 +135,22 @@ def make_micro_mesh(cfg):
 
 
 #@memoize
-def macro_conductivity(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[int]) -> File:
+def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int]) -> File:
     """
     - merge default conductvity and homogenized conductivity tensors
     - convert from voigt to full 3x3 tensor
     - write to file
-    TOSO: introduce Field class and split these three steps to general functions
+    TODO: introduce Field class and split these three steps to general functions
     :type macro_mesh: object
     :param cfg:
+    :param micro_mesh:
     :param macro_mesh:
-    :param micro_model_els:
-    :param conductivity_tensors:
+    :param homogenized_els:
     :return:
     """
 
-    micro_mesh: Mesh = make_micro_mesh(cfg)
     macro_shape = MacroTetra(rel_radius=1.0)
-    subdivision = np.array([1, 1, 1])
+    subdivision = np.array([1, 1, 1]) # N subdomains in each axis
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
     #subdomains = [Subdomain.for_element(micro_mesh, macro_mesh.elements[ie]) for ie in homogenized_els]
@@ -351,6 +351,7 @@ def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
 def conductivity_micro_problem(cfg, tag, subproblem, fine_conductivity_params, load):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):
+        # TODO lambda function for conductivity_mockup() - pass only point array
         fine_conductivity_file = subproblem_input(subproblem, cfg.geometry, cfg_micro.bulk_field_params)
         params = dict(
             mesh_file=fine_conductivity_file.path,
