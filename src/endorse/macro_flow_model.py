@@ -13,44 +13,12 @@ from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
 
-def conductivity_mockup(cfg_geom, cfg_fields, output_mesh:Mesh):
-    """
-    TODO: used just in macro_flow_model -> move there.
-    Produce a conductivity field mockup and write it to a file.
-    Conductivity is cond_min for points out of ellipse with axis:
-    (h_axis * edz_r, v_axis * edz_r)
-    and cond_max in the ellipse:
-    (h_axis * in_r, v_axis * in_r)
 
-    We assume in_r < edz_r.
-    Geometric mean interpolation in between.
-    """
-    cond_field = conductivity_mockup_eval(cfg_geom, cfg_fields, output_mesh.el_barycenters().T)
+def conductivity_file_from_eval(conductivity_eval, output_mesh: Mesh):
+    cond_field = conductivity_eval(output_mesh.el_barycenters().T)
     cond_file = "fine_conductivity.msh2"
     output_mesh.write_fields(cond_file,
                              dict(conductivity=cond_field))
-    return File(cond_file)
-
-    cond_max = float(cfg_fields.cond_max)
-    cond_min = float(cfg_fields.cond_min)
-
-    #edz_r = cfg_geom.edz_radius # 2.5
-    in_r = cfg_fields.inner_radius
-    Z = Z - cfg_geom.borehole.z_pos
-    # axis wit respect to EDZ radius
-    Y_rel = Y / cfg_fields.h_axis
-    Z_rel = Z / cfg_fields.v_axis
-
-    # distance from center = edz_radius on the outer ellipse
-    distance = np.sqrt((Y_rel * Y_rel + Z_rel * Z_rel))
-    theta = (distance - in_r) / (edz_r - in_r)
-    theta = np.clip(theta, 0.0, 1.0)
-    cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min))
-    #abs_dist = np.sqrt(Y * Y + Z * Z)
-    #cond_field[abs_dist < cfg_geom.borehole.radius] = 1e-18
-    #print({(i+1):cond for i,cond in enumerate(cond_field)})
-    output_mesh.write_fields(cond_file,
-                            dict(conductivity=cond_field))
     return File(cond_file)
 
 def macro_transport(cfg:dotdict):
@@ -66,7 +34,12 @@ def macro_transport(cfg:dotdict):
         # select elements with homogenized properties
         #macro_model_el_indices = homogenized_elements(cfg.geometry, macro_mesh)
         macro_model_el_indices = list(range(len(macro_mesh.elements)))
-        conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh, macro_model_el_indices)
+        conductivity_eval = lambda XYZ: conductivity_mockup_eval(
+            cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
+        )
+        conductivity_file = macro_conductivity(
+            cfg, micro_mesh, macro_mesh, macro_model_el_indices, conductivity_eval
+        )
         #conductivity_file = macro_conductivity_avg(cfg, macro_mesh, macro_model_el_indices)
 
 
@@ -87,7 +60,8 @@ def fine_macro_transport(cfg):
         cfg_fine = cfg.transport_fine
         micro_mesh = make_micro_mesh(cfg)
         template = Path(cfg._config_root_dir) / cfg_fine.input_template
-        conductivity_file = conductivity_mockup(cfg.geometry, cfg_fine.bulk_field_params, micro_mesh)
+        conductivity_eval = lambda XYZ: conductivity_mockup_eval(cfg.geometry, cfg_fine.bulk_field_params, XYZ)
+        conductivity_file = conductivity_file_from_eval(conductivity_eval, micro_mesh)
         params = dict(
             mesh_file=micro_mesh.file.path,
             #piezo_head_input_file=os.path.basename(large_model.path),
@@ -135,7 +109,8 @@ def make_micro_mesh(cfg):
 
 
 #@memoize
-def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int]) -> File:
+def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int],
+                       conductivity_eval) -> File:
     """
     - merge default conductvity and homogenized conductivity tensors
     - convert from voigt to full 3x3 tensor
@@ -146,6 +121,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     :param micro_mesh:
     :param macro_mesh:
     :param homogenized_els:
+    :param conductivity_eval:
     :return:
     """
 
@@ -159,7 +135,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     #subdomains_mesh(subdomains)
 
     cfg_micro = cfg.transport_microscale
-    gen_load_responses = (micro_load_response(cfg, subproblems, il, load)
+    gen_load_responses = (micro_load_response(cfg, subproblems, il, load, conductivity_eval)
                           for il, load in enumerate(cfg_micro.pressure_loads))
     loads, responses = zip(*gen_load_responses)
     conductivity_tensors = subproblems.equivalent_tensor_field(loads, responses)
@@ -300,9 +276,8 @@ def macro_conductivity_avg(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[
                             dict(conductivity_tn=conductivity))
     return File(input_fields_file)
 
-
-@memoize
-def micro_load_response(cfg, subprobs:Subproblems, i_load, load):
+# @memoize # disabled due to lambda function
+def micro_load_response(cfg, subprobs:Subproblems, i_load, load, conductivity_eval):
     """
     1. run micro model(s) with averaging to their macro elemnts
     2. average over subdomains
@@ -311,11 +286,9 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load):
     """
     cfg_micro = cfg.transport_microscale
     cfg_flow = cfg.machine_config
-    fine_conductivity_params=cfg
-
     def micro(iprob, subprob):
         tag = f"load_{i_load}_{iprob}"
-        avg_l, avg_r = conductivity_micro_problem(cfg, tag, subprob, fine_conductivity_params, load)
+        avg_l, avg_r = conductivity_micro_problem(cfg, tag, subprob, load, conductivity_eval)
         logging.info(f"    problem {iprob} @ load {i_load}, load: {avg_l}, response: {avg_r}")
         return (avg_l, avg_r)
 
@@ -326,10 +299,10 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load):
     return subprobs.subdomains_average(subdomain_load), subprobs.subdomains_average(subdomain_response)
 
 @report
-@memoize
-def subproblem_input(subproblem, cfg_geom, conductivity_params):
+# @memoize # disabled due to lambda function is not pickable
+def subproblem_input(subproblem, conductivity_eval):
     mesh = subproblem.submesh
-    return conductivity_mockup(cfg_geom, conductivity_params, mesh)
+    return conductivity_file_from_eval(conductivity_eval, mesh)
 
 @report
 def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
@@ -348,11 +321,10 @@ def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
     return (avg_matrix @ load_el_values,
             avg_matrix @ response_el_values)
 
-def conductivity_micro_problem(cfg, tag, subproblem, fine_conductivity_params, load):
+def conductivity_micro_problem(cfg, tag, subproblem, load, conductivity_eval):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):
-        # TODO lambda function for conductivity_mockup() - pass only point array
-        fine_conductivity_file = subproblem_input(subproblem, cfg.geometry, cfg_micro.bulk_field_params)
+        fine_conductivity_file = subproblem_input(subproblem, conductivity_eval)
         params = dict(
             mesh_file=fine_conductivity_file.path,
             pressure_grad=str(load),
@@ -395,5 +367,3 @@ def get_load_data(cfg_micro:dotdict, output_mesh: Mesh, response_el_values:np.ar
     if load_field:
         conductivity = output_mesh.get_static_p0_values(load_field)
         return response_el_values / conductivity
-
-
