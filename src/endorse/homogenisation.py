@@ -119,6 +119,7 @@ class SubMeshSubproblem:
         return self._submesh
 
 
+    @memoize
     def subdomains(self, output_mesh):
         """Create subproblem mesh."""
         if self._subdomains is None:
@@ -402,10 +403,15 @@ class Subdomain:
         #aabb = bih.AABB([center - r, center + r])
         aabb = shape.aabb(macro_el)
         candidates = micro_mesh.candidate_indices(aabb)
+
+        # keep volumetric elements only
+        bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
+        candidates = [ie for ie in candidates if bulk_micro_slice.start <= ie < bulk_micro_slice.stop]
+
         assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
         subdomain_indices = [(ie, w) for ie in candidates
                          if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
-        logging.info(f"Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
+        logging.info(f"[{i_el}] Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
         assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
         micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.

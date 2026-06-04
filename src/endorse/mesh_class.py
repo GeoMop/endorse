@@ -176,9 +176,10 @@ class Mesh:
     def el_volumes(self):
         if self._el_volumes is None:
             logging.info("    element volumes reinit ...")
-            node_indices = np.array([e.node_indices for e in self.elements], dtype=int)
-            #print(f"Compute el volumes: {self.nodes.shape}, {node_indices.shape}")
-            self._el_volumes = mesh_compute_el_volumes(self.nodes, node_indices)
+            self._el_volumes = np.array(
+                [e.volume() if len(e.node_indices) == 4 else 0.0 for e in self.elements],
+                dtype=float,
+            )
         return self._el_volumes
 
 

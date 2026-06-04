@@ -124,6 +124,8 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     :param conductivity_eval:
     :return:
     """
+    if isinstance(homogenized_els, slice):
+        homogenized_els = range(homogenized_els.start, homogenized_els.stop, homogenized_els.step or 1)
 
     macro_shape = MacroTetra(rel_radius=1.0)
     subdivision = np.array([1, 1, 1]) # N subdomains in each axis
