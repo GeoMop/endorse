@@ -74,10 +74,39 @@ mesh:
       r_inf: 30
       h_inf: *boundary_mesh_step
 
+
+transport_microscale:
+    input_template: transport_microscale_tmpl.yaml
+
+    pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ] #, [0,1,1], [1,0,1], [1,1,0]]
+    load_field_indirect_conductivity: "conductivity"
+    response_field_p0: "velocity_p0"
+
+    bulk_field_params:
+      cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
+      cond_mult: 3.3
+      # porosity only due to function apply_fields.bulk_fields_mockup_tunnel()
+      por_min: 0.002
+      por_mult: 1.25
+
+      # values with respect to EDZ radius
+      # h_axis: 2.0
+      # v_axis: 3.35 # 6.7/2
+      # radius for c_min
+      inner_radius: 1.0
+
+    flow_solver__a_tol: 1e-15
+    flow_solver__r_tol: 1e-15
+
+
+transport_macroscale:
+    input_template: transport_macroscale_tmpl.yaml
+    default_conductivity: 1e-16
+    input_fields_file: "input_fields.msh2"
+
+
 # parameters substituted into the TH model template
 transport_fullscale:
-
-    # templates are part of the endorse sources
     input_template: transport_fullscale_tmpl.yaml
 
     # relative to main config

@@ -27,6 +27,7 @@ import zarr
 from scipy.spatial import cKDTree
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
+from endorse.macro_flow_model import macro_conductivity
 
 import chodby_trans.job as job
 import chodby_trans.input_data as input_data
@@ -110,7 +111,7 @@ def update_mesh_cfg(cfg_mesh, level_dict):
     return mcfg
 
 
-# @memoize
+@memoize
 # @run_in_subprocess
 def create_mesh(cfg_mesh, fr_set, n_large):
 
@@ -215,8 +216,8 @@ def transport_run(cfg, level_id, tags, param_dict):
             # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
             transport_macro(cfg, fr_set, n_large, level_id, tags, param_dict)
 
-
     return rc, slice
+
 
 def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     # micro: fine mesh of buffer domain
@@ -238,7 +239,34 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     macro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
 
     # TODO homogenization
-    # conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh)
+    macro_el_bulk = macro_mesh.el_dim_slice(dim=3)
+    # conductivity_eval = lambda XYZ: conductivity_mockup_eval(
+    #     cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
+    # )
+    # apply_fields.bulk_fields_mockup_tunnel()
+    def conductivity_eval(XYZ):
+        cond_field, _ = apply_fields.bulk_fields_mockup_tunnel(
+            cfg.mesh.geometry,
+            cfg.transport_microscale.bulk_field_params,
+            XYZ.T,
+            cond=None,
+        )
+        return cond_field
+    conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh, macro_el_bulk, conductivity_eval)
+
+    # TODO run Flow123d on macro mesh
+    # template = Path(cfg._config_root_dir) / macro_cfg.input_template
+    # print("template_path: ", template)
+    # params = dict(
+    #     mesh_file=macro_mesh.file.path,
+    #     input_fields_file=conductivity_file.path,
+    #     # piezo_head_input_file = os.path.basename(large_model.path)
+    #
+    # )
+    # macro_model = common.call_flow(cfg.machine_config, template, params)
+    # if not macro_model.check_conv_reasons():
+    #     raise ValueError("Macro simulation failed.")
+    pass
 
 
 # @memoize
