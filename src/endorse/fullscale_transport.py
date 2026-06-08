@@ -56,7 +56,7 @@ def time_tuple(item : Union[float, Tuple[float, float]]):
 
 def output_times(cfg_fine):
     cfg_times, end_time = cfg_fine.output_times, cfg_fine.end_time
-    cfg_times.append(end_time)
+    cfg_times = [*cfg_times, end_time]
     times = []
     for item, next in zip(cfg_times[:-1], cfg_times[1:]):
         start, step = time_tuple(item)

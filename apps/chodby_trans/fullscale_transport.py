@@ -199,14 +199,18 @@ def transport_prepare_run(cfg_mesh):
 
     return fr_pop, fracture_set, n_large
 
-
-def transport_run(cfg, level_id, tags, param_dict):
+# AGENT: this is actual evaluation of the sample pair
+# so remove the transport_pair_run
+# cfg is the root config dict, with parameters applied (therearenot fineand coarse id, justlevel_idand
+# then there are fine and coarse models
+# remove tags param. param_dict has param names and their particular values.
+def transport_run(cfg, level_id,  param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
     with common.workdir("fine_trans", clean=False):
         logging.info(f"fine dir: {os.getcwd()}")
-        rc, slice = transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+        f_rc, f_values = transport_fine_run(cfg, fr_set, level_id, n_large,  param_dict)
 
     logging.info(f"sample dir: {os.getcwd()}")
     if level_id < len(cfg.mlmc.levels) - 1:
@@ -214,9 +218,9 @@ def transport_run(cfg, level_id, tags, param_dict):
             logging.info(f"macro dir: {os.getcwd()}")
             # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
             # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
-            transport_macro(cfg, fr_set, n_large, level_id, tags, param_dict)
+            c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
 
-    return rc, slice
+    return f_values, c_values
 
 
 def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
@@ -266,11 +270,16 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     # macro_model = common.call_flow(cfg.machine_config, template, params)
     # if not macro_model.check_conv_reasons():
     #     raise ValueError("Macro simulation failed.")
-    pass
+
+    # TODO: Fixed homogenization mesh and interpolate to the macro mesh.
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=conductivity_file, param_dict=param_dict)
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    values = process_results(cfg, fo)
+    return res, values
 
 
 # @memoize
-def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
+def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     """ Fine full-scale transport model"""
     variant = "fine"
     level = cfg.mlmc.levels[level_id]
@@ -286,7 +295,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
     # DEBUG mesh
     return NULL_RESULT
 
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values

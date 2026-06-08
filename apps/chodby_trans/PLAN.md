@@ -67,14 +67,28 @@ AGENT:  write a particular steps for each goal following your understanding. But
 make detailed goal plan very compact.
 Resolved:
 - Goal 1:
-  1. Introduce a `TransportSimulation` adapter that matches the MLMC
-     forward-simulation contract and builds per-level simulation instances from
-     current config and `job` paths.
-  2. Refactor current `single_sample` logic into a pair-evaluation path that
-     accepts MLMC-provided sample input and workdir, runs fine/coarse
-     evaluations, and returns results without Zarr writes.
-  3. Add a focused test config with shortened transport horizon and a test that
-    exercises one pair evaluation end to end.
+  1. Introduce a new MLMC-facing `TransportSimulation` module instead of
+     patching MLMC concerns into `transport_wrapper.Wrapper`.
+  2. Route the real transport branch through `fullscale_transport.transport_run`
+     and keep transport-side pair assembly inside that module rather than in a
+     new adapter-specific helper.
+  3. Treat MLMC `level_parameters` as transport level selectors. Current
+     implementation supports explicit level selectors and mesh-step-like values.
+  3. Move sampled-parameter application into a reusable helper so both the
+     future MLMC entry point and any local single-pair debug call use the same
+     config patching path.
+  4. Replace worker-side Zarr persistence with direct fine/coarse return values.
+     The worker output for Goal 1 is a compact time series:
+     `q99_XYZ(log10(concentration))`.
+  5. Keep `calculate()` independent of config-file reads in the worker. The
+     adapter passes level/root config through `config_dict` and only uses
+     `job.set_workdir(...)` to restore input/output path conventions.
+  6. For the current state of `transport_run`, the fine result is real and the
+     coarse result remains an adapter placeholder until transport-side pair
+     outputs are exposed directly.
+  6. Add a focused MLMC test config and a unit/integration-style test that runs
+     one pair through the new adapter using `test_random_data`.
+  DONE.
 - Goal 2:
   1. Replace Zarr-oriented sampling entry points with MLMC sampler/bootstrap
      setup while keeping existing CLI/workdir conventions where possible.
@@ -83,8 +97,8 @@ Resolved:
   3. Keep logging explicit around scheduled inputs, sample ids, worker
      workdirs, and persisted HDF records for postmortem analysis.
 - Goal 3:
-  1. Define the two-level sample input so reproducibility data and Saltelli rows
-     are both explicit in the MLMC sample payload.
+  1. Pass the number of avaliable fine samples to the coarser level as the 
+     first value in input_vec.
   2. Implement staged planning: schedule enough finest-level samples first,
      then allow coarse-level scheduling once coarse-field dependencies are
      available.
@@ -92,12 +106,33 @@ Resolved:
      make level `l-1` read only the fields produced by the intended level-`l`
      planning state.
 
+-  Goal 4 (PE work):
+   transport_macro: homogenization fo fixed mesh and interpolation to macro mesh
 
 
 ## AGENT Log
 - 2026-06-08: Reviewed planning and integration context for MLMC Sobol work;
   summarized current OpenTURNS/Zarr pipeline, MLMC expectations, and missing
   design details.
+- 2026-06-08: Preserved the simplified `transport_simulation.py` structure and
+  tuned the blocking bits only: removed the obsolete local output-times helper,
+  fixed the MLMC sample-input contract handling, kept per-sample config
+  isolation, enforced explicit `task_size` in the Goal 1 test config, and
+  aligned the focused test to the current leading sample-size input convention.
+  Verification passed with `apps/chodby_trans/venv/bin/python -m py_compile
+  apps/chodby_trans/transport_simulation.py
+  apps/chodby_trans/test/test_transport_simulation.py` and
+  `apps/chodby_trans/venv/bin/python -m pytest
+  apps/chodby_trans/test/test_transport_simulation.py -vv`.
+- 2026-06-08: Implemented Goal 1 transport-side MLMC adapter in
+  `transport_simulation.py` and a focused synthetic MLMC test config with
+  `test/test_transport_simulation.py`. After review of in-code instructions,
+  the adapter was aligned to call `fullscale_transport.transport_run`
+  directly and to keep worker execution driven by `config_dict` plus the MLMC
+  sample workspace. Verification passed with
+  `apps/chodby_trans/venv/bin/python -m py_compile ...` and
+  `apps/chodby_trans/venv/bin/python -m pytest
+  apps/chodby_trans/test/test_transport_simulation.py -vv`.
 
 ## AGENT Questions And Remarks
 
@@ -107,6 +142,9 @@ Resolved:
   unspecified. The implementation plan assumes such a pool already exists or
   will be provided by the installed MLMC branch.
   AGENT: Full MLMC sources provided for reference SamplingPool Dask ready to use.
+- Goal 1 implementation assumption: MLMC `level_parameters` may come either as
+  explicit positive level selectors or as mesh-step-like values. The adapter
+  currently accepts both and maps them onto `cfg.mlmc.levels`.
 - The exact MLMC output quantity to store is still not stated. The current
   transport path yields one concentration slice plus return metadata; MLMC
   Sobol estimation will need a stable fine/coarse result shape and
