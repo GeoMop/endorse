@@ -3,6 +3,7 @@ from typing import List
 from pathlib import Path
 import logging
 import numpy as np
+import pyvista as pv
 
 from . import common
 from .apply_fields import conductivity_mockup_eval
@@ -12,6 +13,31 @@ from .homogenisation import MacroSphere, Subproblems, MacroTetra
 from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
+
+
+_VTK_CELL_TYPES = {
+    1: pv.CellType.LINE,
+    2: pv.CellType.TRIANGLE,
+    4: pv.CellType.TETRA,
+}
+
+
+def write_tensor_vtu(mesh: Mesh, conductivity: np.ndarray, output_file) -> File:
+    cells = []
+    celltypes = np.empty(len(mesh.elements), dtype=np.uint8)
+    for iel, el in enumerate(mesh.elements):
+        try:
+            celltypes[iel] = _VTK_CELL_TYPES[el.type]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported element type for VTU export: {el.type}") from exc
+        node_indices = np.asarray(el.node_indices, dtype=np.int64)
+        cells.append(np.concatenate(([len(node_indices)], node_indices)))
+
+    grid = pv.UnstructuredGrid(np.concatenate(cells), celltypes, mesh.nodes)
+    grid.cell_data["conductivity_tn"] = conductivity
+    output_file = Path(output_file)
+    grid.save(output_file)
+    return File(str(output_file))
 
 
 def conductivity_file_from_eval(conductivity_eval, output_mesh: Mesh):
@@ -156,6 +182,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     input_fields_file = cfg.transport_macroscale.input_fields_file
     macro_mesh.write_fields(input_fields_file,
                             dict(conductivity_tn=conductivity))
+    write_tensor_vtu(macro_mesh, conductivity, Path(input_fields_file).with_suffix(".vtu"))
     return File(input_fields_file)
 
 
