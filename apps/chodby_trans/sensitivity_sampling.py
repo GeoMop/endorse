@@ -148,6 +148,10 @@ def prepare_sampling(cfg: dotdict, seed):
 
 def single_sample(args):
     # sample_dir, data_schema_key, tags, parameters = args
+    """
+    - tags: i_sample, i_saltelli
+    - group_parameters
+    """
     workdir, data_schema_key, tags, parameters = args
     job.set_workdir(workdir)
     setup_logging(name=f"T{tags[0]}")
@@ -160,6 +164,7 @@ def single_sample(args):
     if tags[1] >= cfg.ot_sensitivity.limit_samples:
         return ReturnCode.SKIP
 
+    # AGENT: remove creation of own sample dir use what is passed by local simulation
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
