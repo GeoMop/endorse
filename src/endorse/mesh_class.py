@@ -269,7 +269,7 @@ class Mesh:
                 raise ValueError(f"Unsupported element type for VTU export: {el.type}") from exc
         return celltypes
 
-    def write_vtu_field(self, file_name: str, field_name: str, field: np.ndarray) -> File:
+    def write_vtu_field(self, file_name: Path | str, field_name: str, field: np.ndarray) -> File:
         field = np.asarray(field)
         if field.shape[0] != len(self.elements):
             raise ValueError(f"Field length {field.shape[0]} does not match number of elements {len(self.elements)}")
@@ -284,11 +284,12 @@ class Mesh:
         grid.save(output_file)
         return File(str(output_file))
 
-    def write_fields(self, file_name:str, fields: Dict[str, np.array]=None) -> File:
-        self.gmsh_io.write(file_name, format="msh2")
+    def write_fields(self, file_name: Path | str, fields: Dict[str, np.array]=None) -> File:
+        file_path = Path(file_name)
+        self.gmsh_io.write(file_path, format="msh2")
         if fields is not None:
-            self.gmsh_io.write_fields(file_name, self.el_ids, fields)
-        return File(file_name)
+            self.gmsh_io.write_fields(file_path, self.el_ids, fields)
+        return File(str(file_path))
 
 
     def map_regions(self, new_reg_map):

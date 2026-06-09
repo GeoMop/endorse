@@ -153,11 +153,12 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     conductivity[homogenized_els[:], :] = conductivity_tensors[:, voigt_indices[:]]
 
 
-    input_fields_file = cfg.transport_macroscale.input_fields_file
+    input_fields_file = Path(cfg.transport_macroscale.input_fields_file)
     macro_mesh.write_fields(input_fields_file,
                             dict(conductivity_tn=conductivity))
-    macro_mesh.write_vtu_field(Path(input_fields_file).with_suffix(".vtu"), "conductivity_tn", conductivity)
-    return File(input_fields_file)
+    # test output to VTK
+    macro_mesh.write_vtu_field(input_fields_file.with_suffix(".vtu"), "conductivity_tn", conductivity)
+    return File(str(input_fields_file))
 
 
 # Define transformation matrices and index mappings for 2D and 3D refinements
