@@ -1,9 +1,11 @@
 from typing import Dict, Tuple, List
 import logging
+from pathlib import Path
 
 import attrs
 import bih
 import numpy as np
+import pyvista as pv
 # from numba import njit
 import bisect
 
@@ -253,6 +255,34 @@ class Mesh:
         values_mesh[value_to_node_idx[:]] = values
         return values_mesh
 
+    def _pv_celltypes(self):
+        vtk_cell_types = {
+            1: pv.CellType.LINE,
+            2: pv.CellType.TRIANGLE,
+            4: pv.CellType.TETRA,
+        }
+        celltypes = np.empty(len(self.elements), dtype=np.uint8)
+        for iel, el in enumerate(self.elements):
+            try:
+                celltypes[iel] = vtk_cell_types[el.type]
+            except KeyError as exc:
+                raise ValueError(f"Unsupported element type for VTU export: {el.type}") from exc
+        return celltypes
+
+    def write_vtu_field(self, file_name: str, field_name: str, field: np.ndarray) -> File:
+        field = np.asarray(field)
+        if field.shape[0] != len(self.elements):
+            raise ValueError(f"Field length {field.shape[0]} does not match number of elements {len(self.elements)}")
+
+        cells = [
+            np.concatenate(([len(el.node_indices)], np.asarray(el.node_indices, dtype=np.int64)))
+            for el in self.elements
+        ]
+        grid = pv.UnstructuredGrid(np.concatenate(cells), self._pv_celltypes(), self.nodes)
+        grid.cell_data[field_name] = field
+        output_file = Path(file_name)
+        grid.save(output_file)
+        return File(str(output_file))
 
     def write_fields(self, file_name:str, fields: Dict[str, np.array]=None) -> File:
         self.gmsh_io.write(file_name, format="msh2")
