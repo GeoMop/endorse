@@ -41,7 +41,7 @@ from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
-
+from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
 import logging
 def setup_logging(name="driver"):
@@ -819,6 +819,7 @@ def main():
         logging.info(f"Connected to: {client}")
         
         with common.workdir(str(work_dir), clean=False):
+            prepare_common_homogenization_mesh(cfg)
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'plots':
