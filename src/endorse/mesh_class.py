@@ -269,26 +269,26 @@ class Mesh:
                 raise ValueError(f"Unsupported element type for VTU export: {el.type}") from exc
         return celltypes
 
-    def write_vtu_field(self, file_name: Path | str, field_name: str, field: np.ndarray) -> File:
-        field = np.asarray(field)
-        if field.shape[0] != len(self.elements):
-            raise ValueError(f"Field length {field.shape[0]} does not match number of elements {len(self.elements)}")
-
+    def write_fields_vtu(self, file_name: Path | str, fields: Dict[str, np.array]) -> File:
         cells = [
             np.concatenate(([len(el.node_indices)], np.asarray(el.node_indices, dtype=np.int64)))
             for el in self.elements
         ]
         grid = pv.UnstructuredGrid(np.concatenate(cells), self._pv_celltypes(), self.nodes)
-        grid.cell_data[field_name] = field
+        for field_name, field in fields.items():
+            field = np.asarray(field)
+            if field.shape[0] != len(self.elements):
+                raise ValueError(f"Field length {field.shape[0]} does not match number of elements {len(self.elements)}")
+            grid.cell_data[field_name] = field
         output_file = Path(file_name)
         grid.save(output_file)
         return File(str(output_file))
 
     def write_fields(self, file_name: Path | str, fields: Dict[str, np.array]=None) -> File:
         file_path = Path(file_name)
-        self.gmsh_io.write(file_path, format="msh2")
+        self.gmsh_io.write(file_name, format="msh2")
         if fields is not None:
-            self.gmsh_io.write_fields(file_path, self.el_ids, fields)
+            self.gmsh_io.write_fields(file_name, self.el_ids, fields)
         return File(str(file_path))
 
 

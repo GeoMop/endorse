@@ -157,7 +157,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     macro_mesh.write_fields(input_fields_file,
                             dict(conductivity_tn=conductivity))
     # test output to VTK
-    macro_mesh.write_vtu_field(input_fields_file.with_suffix(".vtu"), "conductivity_tn", conductivity)
+    macro_mesh.write_fields_vtu(input_fields_file.with_suffix(".vtu"), dict(conductivity_tn=conductivity))
     return File(str(input_fields_file))
 
 
