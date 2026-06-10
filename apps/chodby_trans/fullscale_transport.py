@@ -308,7 +308,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     conductivity_file = macro_mesh.write_fields(input_fields_file,
                                                 dict(conductivity_tn=conductivity_macro))
     # test output to VTK
-    macro_mesh.write_vtu_field(input_fields_file.with_suffix(".vtu"), "conductivity_tn", conductivity_macro)
+    macro_mesh.write_fields_vtu(input_fields_file.with_suffix(".vtu"), dict(conductivity_tn=conductivity_macro))
 
     # TODO run Flow123d on macro mesh
     # template = Path(cfg._config_root_dir) / macro_cfg.input_template
