@@ -232,13 +232,11 @@ def prepare_common_homogenization_mesh(cfg):
 
     homo_mesh, _ = create_mesh(cfg_mesh, [], 0)
 
-    input_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
+    homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
 
     # msh2 -> msh
-    shutil.move(homo_mesh.file.path, input_msh_filepath)
-    input_msh = File(str(input_msh_filepath))
-
-    return homo_mesh
+    shutil.move(homo_mesh.file.path, homo_msh_filepath)
+    return File(str(homo_msh_filepath))
 
 
 def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_mesh):

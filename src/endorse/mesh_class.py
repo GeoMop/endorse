@@ -286,9 +286,9 @@ class Mesh:
 
     def write_fields(self, file_name: Path | str, fields: Dict[str, np.array]=None) -> File:
         file_path = Path(file_name)
-        self.gmsh_io.write(file_name, format="msh2")
+        self.gmsh_io.write(str(file_path), format="msh2")
         if fields is not None:
-            self.gmsh_io.write_fields(file_name, self.el_ids, fields)
+            self.gmsh_io.write_fields(str(file_path), self.el_ids, fields)
         return File(str(file_path))
 
 
