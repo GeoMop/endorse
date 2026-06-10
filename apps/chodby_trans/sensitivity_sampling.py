@@ -738,6 +738,12 @@ def set_threadsafe_environ():
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
+
+def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
+    """
+    Map transport levels ordered finest->coarsest in config to MLMC levels ordered coarsest->finest.
+    """
+    return [[float(10 ** level.id)] for level in cfg.mlmc.levels]
 def main():
     # common.EndorseCache.instance().expire_all()
 
@@ -749,7 +755,7 @@ def main():
         cmd = sys.argv[2]
         scheduler = sys.argv[3]
     else:
-      sys.exit("Provide <workdir> <command: (submit|local|meta|plots|read)> <command_args>.")
+      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|plots|read)> <command_args>.")
 
 
     # resolve job dirs
@@ -789,7 +795,7 @@ def main():
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "plots"]
+            assert app_cmd in ["read", "continue", "meta", "mlmc", "plots"]
             submit_pbs(cfg, cmd=app_cmd) # given app command
         else:   # default app command
             submit_pbs(cfg)
@@ -826,6 +832,13 @@ def main():
         with common.workdir(str(work_dir), clean=False):
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
+    elif cmd == 'mlmc':
+        set_threadsafe_environ()
+        client = Client(scheduler)
+        logging.info(f"Connected to: {client}")
+
+        with common.workdir(str(work_dir), clean=False):
+            run_mlmc_sampling(cfg, client, seed)
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)

@@ -148,14 +148,13 @@ class Parameter:
             # resolve in custom distributions
             this_module = sys.modules[__name__]
             distr_class = getattr(this_module, distr_name)
-            if isinstance(args, dict):
-                return distr_class(**args)
-            else:
-                return distr_class(*args)
-        except AttributeError:       
+        except AttributeError:
             distr_class = getattr(ot, distr_name)
+        if isinstance(args, dict):
+            return distr_class(**args)
+        else:
             return distr_class(*args)
-        
+
     @staticmethod
     def from_cfg(name, cfg, mixing_name=None):
 

@@ -90,21 +90,34 @@ Resolved:
      one pair through the new adapter using `test_random_data`.
   DONE.
 - Goal 2:
-  1. Replace Zarr-oriented sampling entry points with MLMC sampler/bootstrap
-     setup while keeping existing CLI/workdir conventions where possible.
-  2. Create HDF5 storage initialization, Saltelli schema simulation wiring, and
-     Dask sampling-pool setup in `sensitivity_sampling.py`.
-  3. Keep logging explicit around scheduled inputs, sample ids, worker
-     workdirs, and persisted HDF records for postmortem analysis.
+  1. Keep the current OpenTURNS/Zarr path intact for now and add a parallel
+     MLMC entry path in `sensitivity_sampling.py` instead of replacing the old
+     commands in one step.
+  2. Add explicit workdir paths for MLMC HDF storage and an MLMC output
+     directory in `job.py`.
+  3. Build the MLMC forward simulation as:
+     `TransportSimulation -> SaltelliSchemaSimulation -> Sampler`.
+  4. Use `SamplingPoolDask` with the caller-owned Dask `Client` and
+     `SampleStorageHDF` persisted inside the app workdir.
+  5. Keep logging explicit around planned level counts, scheduled inputs, HDF
+     file path, and pool/workdir selection.
+  6. Preserve grouped Sobol sampling by generating Saltelli matrices in group
+     space and expanding group uniforms to full parameter vectors only inside
+     `TransportSimulation`.
 - Goal 3:
   1. Pass the number of avaliable fine samples to the coarser level as the 
      first value in input_vec.
-  2. Implement staged planning: schedule enough finest-level samples first,
-     then allow coarse-level scheduling once coarse-field dependencies are
-     available.
-  3. Store transferred coarse fields in a deterministic per-level location and
-     make level `l-1` read only the fields produced by the intended level-`l`
-     planning state.
+  2. Use a custom `LevelSimulation.prepare_samples()` wrapper on the transport
+     simulation so the master can prepend the current finer-level collected
+     sample count to each scheduled parameter vector.
+  3. Implement staged planning in the entry point: first schedule the finest
+     level only, wait until a minimum number of completed samples is available,
+     then schedule the coarser level.
+  4. Leave the cross-level `coarse_fields` file handoff as a later transport
+     concern; the current Goal 3 implementation only establishes the planning
+     contract and propagated leading input value.
+  5. Persist scheduled work items in HDF and re-submit unfinished samples on
+     restart because `SamplingPoolDask` itself does not hold permanent tasks.
 
 -  Goal 4 (PE work):
    transport_macro: homogenization fo fixed mesh and interpolation to macro mesh
@@ -133,6 +146,13 @@ Resolved:
   `apps/chodby_trans/venv/bin/python -m py_compile ...` and
   `apps/chodby_trans/venv/bin/python -m pytest
   apps/chodby_trans/test/test_transport_simulation.py -vv`.
+- 2026-06-08: Implemented Goal 2 and the planning part of Goal 3 in
+  `sensitivity_sampling.py`: added the MLMC/HDF/Dask driver, grouped-Saltelli
+  matrix generation, staged fine-then-coarse scheduling, and restart
+  re-submission of unfinished HDF-planned samples. Extended
+  `transport_simulation.py` so MLMC grouped inputs expand to the full
+  transport parameter vector inside the worker. Added focused tests in
+  `test/test_mlmc_sampling.py`.
 
 ## AGENT Questions And Remarks
 
@@ -158,6 +178,12 @@ Resolved:
   layout, and invalidation rules for those files should be fixed early to avoid
   non-reproducible reuse.
   AGENT: I agree, so provide your suggestions adn quastions to the steps for goal 3 I will give you a feedback.
+- Suggestion for Goal 3 `coarse_fields` handoff:
+  use `<sample_dir>/coarse_fields/L{fine_level_id:02d}/fields.npz` plus a
+  sibling `meta.json` storing the fine sample id, transport level id, mesh
+  name, and a hash of the parameter vector. Then level `l-1` can read only
+  files whose metadata matches the current sample and invalidate stale
+  homogenized fields deterministically.
 - The current repository contains unrelated user changes, including an existing
   modification in `apps/chodby_trans/sensitivity_sampling.py`. Any later
   implementation must be rebased carefully onto that local state rather than

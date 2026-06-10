@@ -204,6 +204,8 @@ def transport_prepare_run(cfg_mesh):
 # cfg is the root config dict, with parameters applied (therearenot fineand coarse id, justlevel_idand
 # then there are fine and coarse models
 # remove tags param. param_dict has param names and their particular values.
+# Resolved: `transport_run` remains the single pair-evaluation entry point and now calls the simplified
+# fine/macro branches directly without a separate pair helper or `tags` argument.
 def transport_run(cfg, level_id,  param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
@@ -223,7 +225,7 @@ def transport_run(cfg, level_id,  param_dict):
     return f_values, c_values
 
 
-def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
+def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
@@ -280,7 +282,12 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
 
 # @memoize
 def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
-    """ Fine full-scale transport model"""
+    """
+    Fine full-scale transport model
+    return:
+    res: return code of flow123d call
+    values: shape (n_times, X,Y, Z)
+    """
     variant = "fine"
     level = cfg.mlmc.levels[level_id]
     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
@@ -293,7 +300,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
     # DEBUG mesh
-    return NULL_RESULT
+    #return NULL_RESULT
 
     res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
@@ -358,7 +365,7 @@ def call_flow_wrap(cfg_machine:'dotdict', file_in:File, params: Dict[str,str]) -
     return fo
 
 
-def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
+def parametrized_run(cfg, large_model, input_fields_file, param_dict):
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
     if stdout_path.exists():

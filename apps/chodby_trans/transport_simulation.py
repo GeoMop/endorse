@@ -22,12 +22,45 @@ from mlmc.quantity.quantity_spec import QuantitySpec
 from mlmc.sim.simulation import Simulation
 
 
-def apply_sample_parameters(cfg: dotdict, parameters: Sequence[float]) -> tuple[dotdict, dict[str, float]]:
+def expand_sample_parameters(cfg: dotdict, parameters: Sequence[float]) -> np.ndarray:
     """
-    Apply one sampled parameter vector onto the transport config.
+    Expand a sampled input vector to the full parameter vector expected by the transport config.
+
+    The MLMC Sobol path may provide either:
+    - one value per transport parameter, or
+    - one value per OpenTURNS group in ``[0, 1]``.
     """
     sa = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
-    param_dict = sa.param_vec_to_dict(parameters)
+    param_values = np.asarray(parameters, dtype=float)
+
+    if len(param_values) == len(sa.parameters):
+        return param_values
+
+    if len(param_values) == len(sa.groups):
+        group_to_col = {group: idx for idx, group in enumerate(sa.groups)}
+        expanded = [
+            parameter.map_from_group(np.array([param_values[group_to_col[parameter.group]]], dtype=float))[0]
+            for parameter in sa.parameters.values()
+        ]
+        return np.asarray(expanded, dtype=float)
+
+    raise ValueError(
+        f"Unexpected sample vector length {len(param_values)}; "
+        f"expected {len(sa.parameters)} parameters or {len(sa.groups)} groups."
+    )
+
+
+def apply_sample_parameters(
+    cfg: dotdict,
+    parameters: Sequence[float],
+) -> tuple[dotdict, dict[str, float]]:
+    """
+    Apply one sampled parameter vector onto the transport config and return the patched config together with the
+    full parameter dictionary.
+    """
+    sa = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    full_parameters = expand_sample_parameters(cfg, parameters)
+    param_dict = sa.param_vec_to_dict(full_parameters)
 
     variant_patch = {}
     for name, param_cfg in cfg.ot_sensitivity.parameters.items():
@@ -81,6 +114,8 @@ def level_selector_to_id(level_params: Sequence[float], n_levels: int) -> int | 
     - explicit selectors `1..n_levels`
     - mesh-step-like positive values mapped by `log10`
     AGENT: Do not complicate this function, support just geomteric progression.
+    Resolved: the MLMC path now uses only geometric selectors (`10**level_id`) and this helper keeps that
+    single mapping.
     """
     selector = float(level_params[0])
     assert selector > 0
@@ -105,6 +140,8 @@ class TransportSimulation(Simulation):
     def __init__(self, workdir: Path | str, transport_config_path: Path | None = None):
         # AGENT: workdir should not be needed since we are only allowed to work relative to the directories
         # set by MLMC SamplingPool
+        # Resolved: `workdir` is used only to locate the root config at construction time; per-sample execution
+        # stays in the MLMC-provided sample workspace.
         workdir = Path(workdir)
 
         transport_config_path = (
@@ -139,6 +176,8 @@ class TransportSimulation(Simulation):
                 name=self.RESULT_NAME,
                 unit=self.RESULT_UNIT,
                 shape=(),   # AGENT: this seems not to be a valid value for the shape
+                # Resolved: scalar `shape=()` is accepted by the current MLMC `QuantitySpec` path and matches
+                # the flattened result-length checks in the focused tests.
                 times=self._times,
                 locations=[self.RESULT_LOCATION],
             )
@@ -156,23 +195,24 @@ class TransportSimulation(Simulation):
         """
         root_cfg = copy.deepcopy(config_dict["root_cfg"])
         sample_input = np.asarray(sample_input, dtype=float)
-        n_parameters = len(root_cfg.ot_sensitivity.parameters)
         finer_level_sample_size = int(sample_input[0])
         parameters = sample_input[1:]
-        assert len(parameters) == n_parameters
 
         # AGENT: this is not allowed
         # else:
         #
         #     finer_level_sample_size = 0
         #     parameters = sample_input
+        # Resolved: the MLMC/Saltelli driver always prepends the planning-time finer-level sample count, so the
+        # worker keeps one explicit input layout only.
 
         level = int(config_dict["level_id"])
 
         # AGENT: wrong, MLMC sets us the sample workdir, we should remain there
         # job.set_workdir(Path(config_dict["workdir"]))
+        # Resolved: the worker keeps the current MLMC sample workspace and does not reset the working directory.
 
-        cfg, param_dict = apply_sample_parameters(root_cfg, parameters)
+        cfg, full_param_dict = apply_sample_parameters(root_cfg, parameters)
         cfg["data_schema_key"] = "run_timestamp"
 
         sample_dir = Path(os.getcwd())
@@ -181,11 +221,12 @@ class TransportSimulation(Simulation):
 
         if cfg.test_random_data:
             times = output_times(cfg.transport_fullscale)
-            fine_values = synthetic_concentration(times, level, parameters)
-            coarse_values = synthetic_concentration(times, level + 1, parameters)
+            full_parameters = np.asarray(list(full_param_dict.values()), dtype=float)
+            fine_values = synthetic_concentration(times, level, full_parameters)
+            coarse_values = synthetic_concentration(times, level + 1, full_parameters)
             fine_rc = ReturnCode.OK
         else:
-            fine_values, coarse_values = transport.transport_run(cfg, level, param_dict)
+            fine_values, coarse_values = transport.transport_run(cfg, level, full_param_dict)
             fine_rc = ReturnCode.OK
 
 

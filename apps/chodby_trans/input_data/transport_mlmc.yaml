@@ -6,10 +6,13 @@ ot_sensitivity: !include _ot_sensitivity.yaml
 mlmc:
   levels:
     - id: 0 # finest  # TODO: eliminate ids or number from the coarsest to the finest.
+      task_size: 150000   # estimated number of elements
+      min_samples: 10
+      min_finer_samples: 0  # minimal number of samples to allow coarse samples with mixing
+      
       # abstract_mesh_step: 1	# [m]
       buffer_width: 5 # extending the box by a buffer width approximately equal to one homogenization block
       fr_min_limit: 0 # coarse
-      task_size: 150000   # estimated number of elements
       params:
 #        "geometry/include": [boreholes, fractures, drilled_volume]
         "geometry/resolution_type": box_drilled
@@ -19,9 +22,12 @@ mlmc:
         "boreholes_mesh_step": 0.5
 
     - id: 1 # coarse
+      task_size: 15000  # estimated number of elements
+      min_samples: 10
+      min_finer_samples: 5  # minimal number of samples to allow coarse samples with mixing
+      
       # abstract_mesh_step: 3	# [m]
       fr_min_limit: 5.55 # coarse
-      task_size: 15000  # estimated number of elements
       params:
 #        "geometry/include": [fractures]
         "geometry/resolution_type": box
