@@ -4,10 +4,12 @@ import shutil
 from pathlib import Path
 
 import numpy as np
+import pytest
+from dask.distributed import Client
 
 from endorse import common
 
-from chodby_trans import ot_sa, job
+from chodby_trans import ot_sa, job, sensitivity_sampling
 from chodby_trans.sensitivity_sampling import (
     TransportSaltelliSimulation,
     make_group_matrix_generator,
@@ -109,24 +111,24 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     assert np.all(np.isfinite(coarse))
 
 
-def test_transport_mlmc_fixture_runs_synchronously(smart_tmp_path: Path):
+def test_transport_mlmc_random(smart_tmp_path: Path):
     """
     Document the synchronous forward-simulation path against the real MLMC transport config.
 
     This does not exercise the heavy transport solve.  It uses
     ``input_data/transport_mlmc.yaml`` as the source fixture, forces
-    ``test_random_data=True``, and runs the MLMC sample directly through
-    ``SamplingPool.calculate_sample``.
+    ``test_random_data=True``, and runs the MLMC driver through
+    ``run_mlmc_sampling``.
     """
-    workdir = smart_tmp_path
+    workdir = smart_tmp_path / "transport_mlmc"
+    workdir.mkdir(parents=True, exist_ok=True)
     input_dir = Path(__file__).parent.parent / "input_data"
     job.set_workdir(workdir, input_dir)
 
     # Patch config to use random data
     cfg = common.load_config(job.input.transport_cfg_path)
     cfg_random = common.apply_variant(cfg, {"test_random_data": True})
-    cfg_random_path = job.input / "__transport_mlmc_random.yaml"
+    cfg_random_path = job.input.dir_path / "__transport_mlmc_random.yaml"
     common.dump_config(cfg_random, cfg_random_path)
 
-    # AGNET: here just call sensitivity a sampling with "mlmc" subcommand
-    # pass workdir and cfg_random_path as arguments
+    sensitivity_sampling.resolve_subcmd("mlmc", workdir, None)

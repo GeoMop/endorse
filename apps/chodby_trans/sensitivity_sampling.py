@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 import yaml
+import openturns as ot
 # from scoop import futures
 # from mpi4py.futures import MPIPoolExecutor
 
@@ -41,6 +42,12 @@ from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
+from chodby_trans.transport_simulation import TransportSimulation
+
+from mlmc.sample_storage_hdf import SampleStorageHDF
+from mlmc.sampler import Sampler
+from mlmc.sampling_pool_dask import SamplingPoolDask
+from mlmc.sim.saltelli_simulation import SaltelliSchemaSimulation
 
 
 import logging
@@ -742,11 +749,211 @@ def set_threadsafe_environ():
 def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
     """
     Map transport levels ordered finest->coarsest in config to MLMC levels ordered coarsest->finest.
+    REVIEWED.
     """
     return [[float(10 ** level.id)] for level in cfg.mlmc.levels]
+
+
+def mlmc_goal_targets(cfg: dotdict) -> tuple[int, int, int]:
+    """
+    Return Goal 3 targets: (fine_samples, coarse_samples, min_fine_before_coarse).
+    AGENT: read the keys directly in run_mlmc_sampling, no goal3 key,
+    see input_data/transport_mlmc.yaml, for valid keys:
+    'min_samples', 'min_finer_samples'
+    """
+    goal3_cfg = cfg.mlmc.get("goal3", {})
+    fine_samples = int(goal3_cfg.get("fine_samples", cfg.ot_sensitivity.limit_samples))
+    coarse_samples = int(goal3_cfg.get("coarse_samples", cfg.ot_sensitivity.limit_samples))
+    min_fine_before_coarse = int(goal3_cfg.get("min_fine_before_coarse", min(10, fine_samples)))
+    return fine_samples, coarse_samples, min_fine_before_coarse
+
+
+def make_group_matrix_generator(sa_obj: ot_sa.SensitivityAnalysis) -> Callable[[int, int], np.ndarray]:
+    """
+    Build a generator of unit-cube matrices consistent with the configured OpenTURNS experiment design.
+    """
+    def generate(n_rows: int, n_parameters: int) -> np.ndarray:
+        if n_parameters != len(sa_obj.groups):
+            raise ValueError(
+                f"Saltelli requested {n_parameters} group dimensions, expected {len(sa_obj.groups)}."
+            )
+
+        group_distr = ot.JointDistribution([ot.Uniform(0.0, 1.0)] * n_parameters)
+        experiment = sa_obj._experiment_design(group_distr, int(n_rows))
+        return np.asarray(experiment.generate(), dtype=float)
+
+    return generate
+
+
+def parse_sample_level_id(sample_id: str) -> int:
+    """
+    Extract MLMC level id from sample ids like ``L00_S0000001``.
+    """
+    level_tag = sample_id.split("_", 1)[0]
+    if len(level_tag) < 3 or not level_tag.startswith("L"):
+        raise ValueError(f"Unexpected MLMC sample id format: {sample_id}")
+    return int(level_tag[1:])
+
+
+class TransportSaltelliSimulation(SaltelliSchemaSimulation):
+    """
+    Saltelli MLMC wrapper that prepends the current finer-level sample count to each scheduled row.
+    """
+
+    def __init__(
+        self,
+        cfg_levels,
+        forward_simulation: TransportSimulation,
+        matrix_generator: Callable[[int, int], np.ndarray],
+        n_parameters: int,
+        finer_samples_collected: Callable[[list[str]], int]
+    ):
+        super().__init__(forward_simulation, matrix_generator, n_parameters)
+        self._finner_samples_collected = finer_samples_collected
+
+    def prepare_samples(self, sample_ids: list[str]):
+        n_finner_collected =  self._finner_samples_collected(sample_ids)
+        orig_samples = super().prepare_samples(sample_ids)
+
+        return [
+            (sample_id, n_finner_collected, *tail)
+            for sample_id, *tail in orig_samples
+        ]
+
+
+def resubmit_unfinished_samples(sampler: Sampler) -> int:
+    """
+    Re-submit unfinished scheduled samples from HDF storage into a fresh Dask pool.
+    """
+    unfinished_samples = sampler.sample_storage.unfinished_ids()
+    for sample in unfinished_samples:
+        sample_id, _sample_input = sample
+        level_id = parse_sample_level_id(sample_id)
+        sampler._sampling_pool.schedule_sample(sample, sampler._level_sim_objects[level_id])
+
+    if unfinished_samples:
+        logging.info("Re-submitted %s unfinished MLMC samples from HDF storage.", len(unfinished_samples))
+    return len(unfinished_samples)
+
+
+def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int], poll_timeout: float = 5.0) -> None:
+    """
+    Wait until selected levels reach the requested number of finished samples.
+    """
+    while True:
+        sampler.ask_sampling_pool_for_samples(timeout=poll_timeout)
+        finished = np.asarray(sampler.n_finished_samples, dtype=int)
+        if all(finished[level_id] >= target for level_id, target in target_counts.items()):
+            return
+        logging.info(
+            "Waiting for MLMC samples, finished=%s, targets=%s",
+            finished.tolist(),
+            target_counts,
+        )
+
+
+def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
+    """
+    Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
+    """
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    level_parameters = mlmc_level_parameters(cfg)
+    fine_target, coarse_target, min_fine_before_coarse = mlmc_goal_targets(cfg)
+    fine_level_id = len(level_parameters) - 1
+    coarse_level_id = 0
+
+    storage_path = job.output.mlmc_hdf_path
+    storage = SampleStorageHDF(str(storage_path))
+    pool = SamplingPoolDask(
+        client,
+        work_dir=str(job.output.dir_path),
+        debug=not cfg.ot_sensitivity.clean_sample_dir,
+        clean=bool(cfg.ot_sensitivity.clean_sample_dir),
+    )
+
+
+    n_finner_samples = 0
+    _min_finer_samples = 5
+    def finner_samples(sample_ids):
+        level, id = sample_ids[0].split('_')
+        if level != 'L01' and  n_finner_samples < _min_finer_samples:
+            raise ValueError(f"Can not plan samples {sample_ids[:5]} ... before number of samples on finer level"
+                         f"reaches >= self")
+        else:
+            return n_finner_samples
+
+    sampler_holder: dict[str, Sampler] = {}
+    simulation = TransportSaltelliSimulation(
+        cfg.mlmc.levels,
+        forward_simulation=TransportSimulation(cfg, job.output.dir_path),
+        matrix_generator=make_group_matrix_generator(sa_obj),
+        n_parameters=len(sa_obj.groups),
+        finer_samples_collected=finner_samples
+    )
+
+    sampler = Sampler(
+        sample_storage=storage,
+        sampling_pool=pool,
+        sim_factory=simulation,
+        level_parameters=level_parameters,
+        seed=seed,
+    )
+    sampler_holder["sampler"] = sampler
+
+    logging.info("MLMC HDF storage: %s", storage_path)
+    logging.info("MLMC level parameters: %s", level_parameters)
+    logging.info(
+        "Goal 3 targets: fine=%s coarse=%s min_fine_before_coarse=%s",
+        fine_target,
+        coarse_target,
+        min_fine_before_coarse,
+    )
+
+    if cfg.ot_sensitivity.recompute_failed:
+        sampler.renew_failed_samples()
+    resubmit_unfinished_samples(sampler)
+
+    scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
+    finished = np.asarray(sampler.n_finished_samples, dtype=int)
+    logging.info("MLMC counts at start, scheduled=%s finished=%s", scheduled.tolist(), finished.tolist())
+
+    # Initial fine level
+    fine_to_schedule = max(0, fine_target - int(scheduled[fine_level_id]))
+    if fine_to_schedule > 0:
+        logging.info("Scheduling %s new finest-level MLMC samples.", fine_to_schedule)
+        sampler.schedule_samples(level_id=fine_level_id, n_samples=fine_to_schedule)
+
+    # AGENT:
+    # The parameter 'min_finer_samples' is currently fixed by the config, but
+    # later we want to do the full MLMC loop iterating to the target esstimation error.
+    # Then we want to update the TransportSaltelliSimulation istance by new value of the parameter.
+    # So initialize TransportSaltelliSimulation level simulation cfg with value 0,
+    # implement here update of that config by accessing the level simulation instance through sampler
+    # and test in prepare_samples that the value from cfg >= min_number_of_samples, so the update works.
+    # Raise error if trying to plan without cfg
+    wait_for_finished_samples(
+        sampler,
+        {fine_level_id: min_fine_before_coarse},
+    )
+
+    scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
+    coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
+    if coarse_to_schedule > 0:
+        logging.info("Scheduling %s new coarse-level MLMC samples.", coarse_to_schedule)
+        sampler.schedule_samples(level_id=coarse_level_id, n_samples=coarse_to_schedule)
+
+    wait_for_finished_samples(
+        sampler,
+        {
+            fine_level_id: fine_target,
+            coarse_level_id: coarse_target,
+        },
+    )
+    logging.info("Finished MLMC sampling, counts=%s", np.asarray(sampler.n_finished_samples, dtype=int).tolist())
+
 def main():
     # common.EndorseCache.instance().expire_all()
-
+    scheduler = None
     if len(sys.argv) == 3:
         work_dir = Path(sys.argv[1]).absolute()
         cmd = sys.argv[2]
@@ -760,6 +967,9 @@ def main():
 
     # resolve job dirs
     job.set_workdir(work_dir)
+    resolve_subcmd(cmd, work_dir, scheduler)
+
+def resolve_subcmd(cmd, work_dir, scheduler):
     if cmd == 'submit' or cmd == 'local':
         copy_flag = False
         if job.input.dir_path.exists():

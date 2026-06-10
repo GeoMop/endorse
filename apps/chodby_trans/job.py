@@ -61,7 +61,7 @@ class Output(DotDir):
     _plots = "plots"
     _pbs_script = "sensitivity_sampling.pbs"
     _zarr_store_path = "transport_sampling"
-
+    _mlmc_hdf_path = "transport_mlmc.hdf"
 
 def set_workdir(workdir: Path, input_dir:Path = None):
     """

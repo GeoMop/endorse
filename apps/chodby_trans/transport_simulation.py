@@ -137,19 +137,13 @@ class TransportSimulation(Simulation):
     RESULT_UNIT = "log10(g/m^3)"
     RESULT_LOCATION = "0"
 
-    def __init__(self, workdir: Path | str, transport_config_path: Path | None = None):
+    def __init__(self, cfg, workdir: Path):
         # AGENT: workdir should not be needed since we are only allowed to work relative to the directories
         # set by MLMC SamplingPool
         # Resolved: `workdir` is used only to locate the root config at construction time; per-sample execution
         # stays in the MLMC-provided sample workspace.
         workdir = Path(workdir)
-
-        transport_config_path = (
-            Path(transport_config_path)
-            if transport_config_path is not None
-            else workdir / "input_data" / "trans_mesh_config.yaml"
-        )
-        self.cfg = common.config.load_config(str(transport_config_path))
+        self.cfg = cfg
         self._times = output_times(self.cfg.transport_fullscale)
 
     def level_instance(self, fine_level_params: list[float], coarse_level_params: list[float]) -> LevelSimulation:
