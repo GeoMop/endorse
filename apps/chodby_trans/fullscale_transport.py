@@ -242,6 +242,7 @@ def prepare_common_homogenization_mesh(cfg):
 def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_mesh):
     conductivity_source_mesh = load_mesh(conductivity_file, heal_tol=None)
     conductivity_source = conductivity_source_mesh.get_static_p0_values("conductivity_tn")
+    # conductivity_source.shape: N elemenets X 9
     source_bulk = source_mesh.el_dim_slice(dim=3)
     target_bulk = target_mesh.el_dim_slice(dim=3)
     source_points = source_mesh.el_barycenters()[source_bulk]
@@ -254,9 +255,10 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
     interpolated_bulk = np.empty((len(target_points), conductivity_source.shape[1]))
     for i_comp in range(conductivity_source.shape[1]):
         values = conductivity_source[source_bulk, i_comp]
-        linear = griddata(source_points, values, target_points, method="linear")
-        nearest = griddata(source_points, values, target_points, method="nearest")
-        interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
+        # linear = griddata(source_points, values, target_points, method="linear")
+        # nearest = griddata(source_points, values, target_points, method="nearest")
+        # interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
+        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="nearest")
 
     conductivity_target[target_bulk, :] = interpolated_bulk
     return conductivity_target
@@ -275,12 +277,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     # load common homogenization mesh
     homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
 
-    # TODO homogenization
+    # homogenization onto common coarse mesh
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
-    # conductivity_eval = lambda XYZ: conductivity_mockup_eval(
-    #     cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
-    # )
-    # apply_fields.bulk_fields_mockup_tunnel()
     def conductivity_eval(XYZ):
         cond_field, _ = apply_fields.bulk_fields_mockup_tunnel(
             cfg.mesh.geometry,
@@ -300,6 +298,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     cfg_mesh.mesh_name += f"_{variant}"
     macro_mesh, el_to_ifr = create_mesh(cfg_mesh, coarse_fracture_set, n_large)
 
+    # macro bulk conductivity
     conductivity_macro = interpolate_conductivity_tensor(
         cfg, homogenization_mesh, conductivity_file, macro_mesh
     )
