@@ -150,14 +150,11 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
 
     full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
 
-    input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
+    fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fr_set, dim=3)
-
-    # msh2 -> msh
-    shutil.move(input_fields_file.path, input_msh_filepath)
-    input_msh = File(str(input_msh_filepath))
-    return input_msh
+    input_fields_file = full_mesh.write_fields(input_msh_filepath, fields)
+    return input_fields_file
 
 
 #@memoize
@@ -298,16 +295,25 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     cfg_mesh.mesh_name += f"_{variant}"
     macro_mesh, el_to_ifr = create_mesh(cfg_mesh, coarse_fracture_set, n_large)
 
-    # macro bulk conductivity
+    # macro: bulk conductivity tensor
     conductivity_macro = interpolate_conductivity_tensor(
         cfg, homogenization_mesh, conductivity_file, macro_mesh
     )
 
-    input_fields_file = Path(cfg.transport_macroscale.input_fields_file)
-    conductivity_file = macro_mesh.write_fields(input_fields_file,
-                                                dict(conductivity_tn=conductivity_macro))
+    # macro: other fields (fr conductivity, porosity)
+    macro_cfg_trans = cfg.transport_macroscale
+    macro_fields, est_velocity = compute_fields(cfg_mesh, macro_cfg_trans, macro_mesh,
+                                                apply_fields.bulk_fields_mockup_tunnel,
+                                                el_to_ifr, coarse_fracture_set, dim=3)
+    # macro: add bulk conductivity tensor
+    macro_fields["conductivity_tn"] = conductivity_macro
+
+    input_msh_filepath = Path(f"input_fields.msh")
+    input_fields_file = macro_mesh.write_fields(input_msh_filepath, macro_fields)
+
     # test output to VTK
-    macro_mesh.write_fields_vtu(input_fields_file.with_suffix(".vtu"), dict(conductivity_tn=conductivity_macro))
+    macro_mesh.write_fields_vtu(input_msh_filepath.with_suffix(".vtu"), macro_fields)
+
 
     # TODO run Flow123d on macro mesh
     # template = Path(cfg._config_root_dir) / macro_cfg.input_template
