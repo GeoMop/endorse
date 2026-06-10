@@ -886,9 +886,10 @@ def set_source_term(cfg):
     # borehole radius
     cfg_fine = cfg.transport_fullscale
     cfg_src = cfg_fine.sources_params
-    cfg_bh = cfg.geometry.storage_borehole
+    cfg_geom = cfg.mesh.geometry
+    cfg_bh = cfg_geom.storage_borehole
 
-    dsb_idx = cfg.geometry.damaged_storage_borehole
+    dsb_idx = cfg_geom.damaged_storage_borehole
 
     source_params = dict(
         # UOS surface: S = pi * du * hu [m2]
@@ -898,7 +899,7 @@ def set_source_term(cfg):
         sources_buffer_thickness=cfg_src.buffer_thickness,
         conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
-        storage_regions = [f"storage_{i}" for i in range(cfg.geometry.n_storage_boreholes) if i != dsb_idx],
+        storage_regions = [f"storage_{i}" for i in range(cfg_geom.n_storage_boreholes) if i != dsb_idx],
         plug_region = f"plug_{dsb_idx}",
         container_region = f"container_{dsb_idx}",
     )
