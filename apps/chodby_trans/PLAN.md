@@ -124,6 +124,15 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-11: Fixed the first MLMC sampling blockers in the local app path:
+  reversed `mlmc_level_parameters()` into MLMC order, read Goal 3 sample
+  targets from `mlmc.levels[*].min_samples` and `min_finer_samples`, made the
+  finer-sample planning count read live sampler state, and changed
+  `TransportSaltelliSimulation` to persist one scheduled Saltelli matrix per
+  sample so HDF restarts do not corrupt `scheduled_inputs`. Updated
+  `test/test_mlmc_sampling.py` to use a fresh copied workdir config and to
+  overwrite the actual runtime `transport_mlmc.yaml` with
+  `test_random_data=True`.
 - 2026-06-08: Reviewed planning and integration context for MLMC Sobol work;
   summarized current OpenTURNS/Zarr pipeline, MLMC expectations, and missing
   design details.
