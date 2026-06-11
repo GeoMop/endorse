@@ -133,3 +133,50 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     common.dump_config(cfg_random, cfg_random_path)
 
     sensitivity_sampling.resolve_subcmd("mlmc", workdir, None)
+
+
+def test_transport_simulation_fine_level_random(smart_tmp_path: Path):
+    """
+    Exercise `TransportSimulation` directly for the fine-level setup from `transport_mlmc.yaml`.
+
+    The test keeps the runtime lightweight by forcing `test_random_data=True`, but it bypasses the
+    MLMC driver and runs the fine-level `LevelSimulation` through `SamplingPool.calculate_sample`.
+    """
+    workdir = smart_tmp_path / "transport_simulation_fine"
+    shutil.rmtree(workdir, ignore_errors=True)
+    workdir.mkdir(parents=True, exist_ok=True)
+    input_dir = Path(__file__).parent.parent / "input_data"
+    job.set_workdir(workdir, input_dir)
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    cfg_random = common.apply_variant(cfg, {"test_random_data": True})
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg_random.ot_sensitivity)
+
+    simulation = TransportSimulation(cfg_random, job.output.dir_path)
+    fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
+
+    sample_input = np.concatenate(
+        (
+            np.full(len(sa_obj.groups), 0.5, dtype=float),
+            np.array([0.0], dtype=float),
+        )
+    )
+    pool_dir = workdir / "pool"
+    pool_dir.mkdir()
+
+    sample_id, result, err_msg, _running_time = SamplingPool.calculate_sample(
+        ("L01_S0000000", *sample_input.tolist()),
+        fine_level_sim,
+        work_dir=str(pool_dir),
+    )
+
+    fine_result, coarse_result = result
+    expected_len = len(simulation.result_format()[0].times)
+
+    assert sample_id == "L01_S0000000"
+    assert err_msg == ""
+    assert fine_level_sim.config_dict["level_id"] == 0
+    assert fine_result.shape == (expected_len,)
+    assert coarse_result.shape == (expected_len,)
+    assert np.all(np.isfinite(fine_result))
+    assert np.all(np.isfinite(coarse_result))
