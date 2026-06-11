@@ -278,6 +278,9 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
+    # test VTK output
+    micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
+    
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
     conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
 

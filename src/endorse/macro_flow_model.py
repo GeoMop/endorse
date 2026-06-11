@@ -16,6 +16,8 @@ from . import flow123d_inputs_path
 
 def fields_file(output_mesh: Mesh, fields: Dict[str, np.array], file_name="fine_conductivity.msh2"):
     output_mesh.write_fields(file_name, fields)
+    # test VTK output
+    output_mesh.write_fields_vtu(Path(file_name).with_suffix(".vtu"), fields)
     return File(str(file_name))
 
 def macro_transport(cfg:dotdict):
