@@ -275,16 +275,11 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
 
     # homogenization onto common coarse mesh
+    micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
+                                                apply_fields.bulk_fields_mockup_tunnel,
+                                                el_to_ifr, fracture_set, dim=3)
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
-    def conductivity_eval(XYZ):
-        cond_field, _ = apply_fields.bulk_fields_mockup_tunnel(
-            cfg.mesh.geometry,
-            cfg.transport_microscale.bulk_field_params,
-            XYZ.T,
-            cond=None,
-        )
-        return cond_field
-    conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, conductivity_eval)
+    conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
 
     # macro: target coarse mesh
     variant = "macro"
@@ -308,26 +303,18 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
 
-    input_msh_filepath = Path(f"input_fields.msh")
-    input_fields_file = macro_mesh.write_fields(input_msh_filepath, macro_fields)
+    input_fields_path = Path(f"input_fields.msh")
+    input_fields_file = macro_mesh.write_fields(input_fields_path, macro_fields)
 
     # test output to VTK
-    macro_mesh.write_fields_vtu(input_msh_filepath.with_suffix(".vtu"), macro_fields)
+    macro_mesh.write_fields_vtu(input_fields_path.with_suffix(".vtu"), macro_fields)
 
 
     # TODO run Flow123d on macro mesh
-    # template = Path(cfg._config_root_dir) / macro_cfg.input_template
-    # print("template_path: ", template)
-    # params = dict(
-    #     mesh_file=macro_mesh.file.path,
-    #     input_fields_file=conductivity_file.path,
-    #     # piezo_head_input_file = os.path.basename(large_model.path)
-    #
-    # )
-    # macro_model = common.call_flow(cfg.machine_config, template, params)
-    # if not macro_model.check_conv_reasons():
-    #     raise ValueError("Macro simulation failed.")
-    pass
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, tags=tags, param_dict=param_dict)
+    time.sleep(0.5)  # give the FS a moment (tune as needed)
+    values = process_results(cfg, fo)
+    return res, values
 
 
 # @memoize

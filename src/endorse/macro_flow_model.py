@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import Dict, List
 from pathlib import Path
 import logging
 import numpy as np
@@ -14,12 +14,9 @@ from . import large_mesh_shift
 from . import flow123d_inputs_path
 
 
-def conductivity_file_from_eval(conductivity_eval, output_mesh: Mesh):
-    cond_field = conductivity_eval(output_mesh.el_barycenters().T)
-    cond_file = "fine_conductivity.msh2"
-    output_mesh.write_fields(cond_file,
-                             dict(conductivity=cond_field))
-    return File(cond_file)
+def fields_file(output_mesh: Mesh, fields: Dict[str, np.array], file_name="fine_conductivity.msh2"):
+    output_mesh.write_fields(file_name, fields)
+    return File(str(file_name))
 
 def macro_transport(cfg:dotdict):
     work_dir = f"sandbox/run_macro_transport"
@@ -37,8 +34,9 @@ def macro_transport(cfg:dotdict):
         conductivity_eval = lambda XYZ: conductivity_mockup_eval(
             cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
         )
+        fields = dict(conductivity=conductivity_eval(micro_mesh.el_barycenters().T))
         conductivity_file = macro_conductivity(
-            cfg, micro_mesh, macro_mesh, macro_model_el_indices, conductivity_eval
+            cfg, micro_mesh, macro_mesh, macro_model_el_indices, fields
         )
         #conductivity_file = macro_conductivity_avg(cfg, macro_mesh, macro_model_el_indices)
 
@@ -61,7 +59,8 @@ def fine_macro_transport(cfg):
         micro_mesh = make_micro_mesh(cfg)
         template = Path(cfg._config_root_dir) / cfg_fine.input_template
         conductivity_eval = lambda XYZ: conductivity_mockup_eval(cfg.geometry, cfg_fine.bulk_field_params, XYZ)
-        conductivity_file = conductivity_file_from_eval(conductivity_eval, micro_mesh)
+        fields = dict(conductivity=conductivity_eval(micro_mesh.el_barycenters().T))
+        conductivity_file = fields_file(micro_mesh, fields)
         params = dict(
             mesh_file=micro_mesh.file.path,
             #piezo_head_input_file=os.path.basename(large_model.path),
@@ -110,7 +109,7 @@ def make_micro_mesh(cfg):
 
 #@memoize
 def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int],
-                       conductivity_eval) -> File:
+                       fields: Dict[str, np.array]) -> File:
     """
     - merge default conductvity and homogenized conductivity tensors
     - convert from voigt to full 3x3 tensor
@@ -121,7 +120,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     :param micro_mesh:
     :param macro_mesh:
     :param homogenized_els:
-    :param conductivity_eval:
+    :param fields:
     :return:
     """
     if isinstance(homogenized_els, slice):
@@ -137,7 +136,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     #subdomains_mesh(subdomains)
 
     cfg_micro = cfg.transport_microscale
-    gen_load_responses = (micro_load_response(cfg, subproblems, il, load, conductivity_eval)
+    gen_load_responses = (micro_load_response(cfg, subproblems, il, load, fields)
                           for il, load in enumerate(cfg_micro.pressure_loads))
     loads, responses = zip(*gen_load_responses)
     conductivity_tensors = subproblems.equivalent_tensor_field(loads, responses)
@@ -280,8 +279,8 @@ def macro_conductivity_avg(cfg:dotdict, macro_mesh: Mesh, homogenized_els: List[
                             dict(conductivity_tn=conductivity))
     return File(input_fields_file)
 
-# @memoize # disabled due to lambda function
-def micro_load_response(cfg, subprobs:Subproblems, i_load, load, conductivity_eval):
+@memoize
+def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
     """
     1. run micro model(s) with averaging to their macro elemnts
     2. average over subdomains
@@ -292,7 +291,7 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, conductivity_ev
     cfg_flow = cfg.machine_config
     def micro(iprob, subprob):
         tag = f"load_{i_load}_{iprob}"
-        avg_l, avg_r = conductivity_micro_problem(cfg, tag, subprob, load, conductivity_eval)
+        avg_l, avg_r = micro_problem(cfg, tag, subprob, load, fields)
         logging.info(f"    problem {iprob} @ load {i_load}, load: {avg_l}, response: {avg_r}")
         return (avg_l, avg_r)
 
@@ -303,10 +302,16 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, conductivity_ev
     return subprobs.subdomains_average(subdomain_load), subprobs.subdomains_average(subdomain_response)
 
 @report
-# @memoize # disabled due to lambda function is not pickable
-def subproblem_input(subproblem, conductivity_eval):
+# @memoize
+def subproblem_input(subproblem, fields):
     mesh = subproblem.submesh
-    return conductivity_file_from_eval(conductivity_eval, mesh)
+    micro_elements = np.asarray(subproblem.micro_elements, dtype=int)
+    assert len(micro_elements) == len(mesh.elements)
+    sub_fields = {
+        field_name: np.asarray(field)[micro_elements]
+        for field_name, field in fields.items()
+    }
+    return fields_file(mesh, sub_fields)
 
 @report
 def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
@@ -325,12 +330,12 @@ def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
     return (avg_matrix @ load_el_values,
             avg_matrix @ response_el_values)
 
-def conductivity_micro_problem(cfg, tag, subproblem, load, conductivity_eval):
+def micro_problem(cfg, tag, subproblem, load, fields):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):
-        fine_conductivity_file = subproblem_input(subproblem, conductivity_eval)
+        fine_file = subproblem_input(subproblem, fields)
         params = dict(
-            mesh_file=fine_conductivity_file.path,
+            mesh_file=fine_file.path,
             pressure_grad=str(load),
         )
         template = Path(cfg._config_root_dir) / cfg_micro.input_template
