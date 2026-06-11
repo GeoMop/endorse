@@ -43,12 +43,12 @@ from chodby_trans import ot_sa
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
 from chodby_trans.transport_simulation import TransportSimulation
+from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
 from mlmc.sample_storage_hdf import SampleStorageHDF
 from mlmc.sampler import Sampler
 from mlmc.sampling_pool_dask import SamplingPoolDask
 from mlmc.sim.saltelli_simulation import SaltelliSchemaSimulation
-
 
 import logging
 def setup_logging(name="driver"):
@@ -217,7 +217,8 @@ def single_sample(args):
         variant_patch = dict()
         for k, v in cfg.ot_sensitivity.parameters.items():
             if "path" in v:
-                variant_patch[v.path] = param_dict[k]
+                for p in v.path:
+                    variant_patch[p] = param_dict[k]
         new_cfg = common.apply_variant(cfg, variant_patch)
 
         wrap = transport_wrapper.Wrapper(cfg=new_cfg)
@@ -856,6 +857,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         str(job.output.dir_path),
         str(job.input.dir_path),
     )
+
+    prepare_common_homogenization_mesh(cfg)
     for worker_addr, state in worker_job_state.items():
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
 
@@ -1055,6 +1058,7 @@ def resolve_subcmd(cmd, work_dir, scheduler):
         logging.info(f"Connected to: {client}")
         
         with common.workdir(str(work_dir), clean=False):
+            prepare_common_homogenization_mesh(cfg)
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'mlmc':

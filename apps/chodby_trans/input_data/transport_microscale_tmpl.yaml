@@ -1,0 +1,36 @@
+flow123d_version: 4.0.0
+problem: !Coupling_Sequential
+  description: |
+      Homogenisation micro Darcy-Dispersion 3D model of the part of the tunnel.
+      Driven by given pressure and concentration gradient.
+  mesh:
+    # Input mesh with 'outer' and 'borehole' regions.
+    mesh_file: <mesh_file>
+  flow_equation: !Flow_Darcy_LMH
+    output_specific:
+    nonlinear_solver:
+      linear_solver: !Petsc
+        a_tol: 1e-6
+        r_tol: 1e-3
+        # options: <flow_solver__options>
+    input_fields:
+      - region: .BOUNDARY
+        bc_type: dirichlet
+        bc_piezo_head: !FieldFormula
+          value: "<pressure_grad> @ [x,y,z]"
+      - region: BULK
+        conductivity: !FieldFE
+          mesh_data_file: <mesh_file>
+          field_name: conductivity
+
+    output:
+      fields:
+        - piezo_head_p0
+        #- pressure_p0
+        #- pressure_p1
+        - velocity_p0
+        - region_id
+        - conductivity
+    balance: { }
+    output_stream:
+      format: !gmsh

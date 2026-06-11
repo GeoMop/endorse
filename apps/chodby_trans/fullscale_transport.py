@@ -12,6 +12,7 @@ import yaml
 import numpy as np
 import pyvista as pv
 
+from bgem.upscale import homogenization
 from endorse import common
 
 from endorse.common import dotdict, File, report, memoize
@@ -25,6 +26,7 @@ import zarr_fuse as zf
 import xarray as xr
 import zarr
 from scipy.spatial import cKDTree
+from scipy.interpolate import griddata
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 from endorse.macro_flow_model import macro_conductivity
@@ -41,6 +43,8 @@ from functools import wraps
 from loky import ProcessPoolExecutor  # NOT the stdlib one
 
 NULL_RESULT = 0, np.array([])
+
+homogenization_mesh_name = "trans_mesh_homogenization"
 
 def run_in_subprocess(func):
     """Execute the function in a separate process (loky) with picklable args/return."""
@@ -124,7 +128,7 @@ def create_mesh(cfg_mesh, fr_set, n_large):
     full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
 
     el_to_ifr = None
-    if "fractures" in cfg_mesh.geometry.include and fr_set is not None:
+    if "fractures" in cfg_mesh.geometry.include and fr_set is not None and len(fr_set)>0:
         # modifies the regions: fr_large, fr_small
         el_to_ifr = fracture_map(full_mesh, fr_set, n_large, dim=3)
         mesh_modified_filepath = Path(mesh_file.path).stem + "_modified.msh2"
@@ -146,14 +150,11 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
 
     full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
 
-    input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
+    fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fr_set, dim=3)
-
-    # msh2 -> msh
-    shutil.move(input_fields_file.path, input_msh_filepath)
-    input_msh = File(str(input_msh_filepath))
-    return input_msh
+    input_fields_file = full_mesh.write_fields(input_msh_filepath, fields)
+    return input_fields_file
 
 
 #@memoize
@@ -199,14 +200,8 @@ def transport_prepare_run(cfg_mesh):
 
     return fr_pop, fracture_set, n_large
 
-# AGENT: this is actual evaluation of the sample pair
-# so remove the transport_pair_run
-# cfg is the root config dict, with parameters applied (therearenot fineand coarse id, justlevel_idand
-# then there are fine and coarse models
-# remove tags param. param_dict has param names and their particular values.
-# Resolved: `transport_run` remains the single pair-evaluation entry point and now calls the simplified
-# fine/macro branches directly without a separate pair helper or `tags` argument.
-def transport_run(cfg, level_id,  param_dict):
+
+def transport_run(cfg, level_id, param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
@@ -225,6 +220,47 @@ def transport_run(cfg, level_id,  param_dict):
     return f_values, c_values
 
 
+def prepare_common_homogenization_mesh(cfg):
+    # macro homogenization: homogenization mesh
+    variant = "homo"
+    macro_level = cfg.mlmc.levels[-1]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
+    cfg_mesh.mesh_name = homogenization_mesh_name
+
+    homo_mesh, _ = create_mesh(cfg_mesh, [], 0)
+
+    homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
+
+    # msh2 -> msh
+    shutil.move(homo_mesh.file.path, homo_msh_filepath)
+    return File(str(homo_msh_filepath))
+
+
+def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_mesh):
+    conductivity_source_mesh = load_mesh(conductivity_file, heal_tol=None)
+    conductivity_source = conductivity_source_mesh.get_static_p0_values("conductivity_tn")
+    # conductivity_source.shape: N elemenets X 9
+    source_bulk = source_mesh.el_dim_slice(dim=3)
+    target_bulk = target_mesh.el_dim_slice(dim=3)
+    source_points = source_mesh.el_barycenters()[source_bulk]
+    target_points = target_mesh.el_barycenters()[target_bulk]
+
+    default_cond = float(cfg.transport_macroscale.default_conductivity)
+    conductivity_target = np.empty((len(target_mesh.elements), 9))
+    conductivity_target[:] = np.array([default_cond, 0, 0, 0, default_cond, 0, 0, 0, default_cond])
+
+    interpolated_bulk = np.empty((len(target_points), conductivity_source.shape[1]))
+    for i_comp in range(conductivity_source.shape[1]):
+        values = conductivity_source[source_bulk, i_comp]
+        # linear = griddata(source_points, values, target_points, method="linear")
+        # nearest = griddata(source_points, values, target_points, method="nearest")
+        # interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
+        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="nearest")
+
+    conductivity_target[target_bulk, :] = interpolated_bulk
+    return conductivity_target
+
+
 def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     # micro: fine mesh of buffer domain
     variant = "micro"
@@ -235,46 +271,50 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     cfg_mesh.mesh_name += f"_{variant}"
     micro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
 
+    # load common homogenization mesh
+    homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
+
+    # homogenization onto common coarse mesh
+    micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
+                                                apply_fields.bulk_fields_mockup_tunnel,
+                                                el_to_ifr, fracture_set, dim=3)
+    # test VTK output
+    micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
+    
+    macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
+    conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
+
     # macro: target coarse mesh
     variant = "macro"
-    macro_level = cfg.mlmc.levels[level_id+1]
+    macro_level = cfg.mlmc.levels[level_id + 1]
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
-    logging.info(f"N macro fracture set: {len(coarse_fracture_set)}")
+    logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
-    macro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
+    macro_mesh, el_to_ifr = create_mesh(cfg_mesh, coarse_fracture_set, n_large)
 
-    # TODO homogenization
-    macro_el_bulk = macro_mesh.el_dim_slice(dim=3)
-    # conductivity_eval = lambda XYZ: conductivity_mockup_eval(
-    #     cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
-    # )
-    # apply_fields.bulk_fields_mockup_tunnel()
-    def conductivity_eval(XYZ):
-        cond_field, _ = apply_fields.bulk_fields_mockup_tunnel(
-            cfg.mesh.geometry,
-            cfg.transport_microscale.bulk_field_params,
-            XYZ.T,
-            cond=None,
-        )
-        return cond_field
-    conductivity_file = macro_conductivity(cfg, micro_mesh, macro_mesh, macro_el_bulk, conductivity_eval)
+    # macro: bulk conductivity tensor
+    conductivity_macro = interpolate_conductivity_tensor(
+        cfg, homogenization_mesh, conductivity_file, macro_mesh
+    )
+
+    # macro: other fields (fr conductivity, porosity)
+    macro_cfg_trans = cfg.transport_macroscale
+    macro_fields, est_velocity = compute_fields(cfg_mesh, macro_cfg_trans, macro_mesh,
+                                                apply_fields.bulk_fields_mockup_tunnel,
+                                                el_to_ifr, coarse_fracture_set, dim=3)
+    # macro: add bulk conductivity tensor
+    macro_fields["conductivity_tn"] = conductivity_macro
+
+    input_fields_path = Path(f"input_fields.msh")
+    input_fields_file = macro_mesh.write_fields(input_fields_path, macro_fields)
+
+    # test output to VTK
+    macro_mesh.write_fields_vtu(input_fields_path.with_suffix(".vtu"), macro_fields)
+
 
     # TODO run Flow123d on macro mesh
-    # template = Path(cfg._config_root_dir) / macro_cfg.input_template
-    # print("template_path: ", template)
-    # params = dict(
-    #     mesh_file=macro_mesh.file.path,
-    #     input_fields_file=conductivity_file.path,
-    #     # piezo_head_input_file = os.path.basename(large_model.path)
-    #
-    # )
-    # macro_model = common.call_flow(cfg.machine_config, template, params)
-    # if not macro_model.check_conv_reasons():
-    #     raise ValueError("Macro simulation failed.")
-
-    # TODO: Fixed homogenization mesh and interpolate to the macro mesh.
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=conductivity_file, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, tags=tags, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values
@@ -282,7 +322,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
 # @memoize
 def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
-    """
+        """
     Fine full-scale transport model
     return:
     res: return code of flow123d call
@@ -299,8 +339,6 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     else:
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
-    # DEBUG mesh
-    #return NULL_RESULT
 
     res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
@@ -841,9 +879,10 @@ def set_source_term(cfg):
     # borehole radius
     cfg_fine = cfg.transport_fullscale
     cfg_src = cfg_fine.sources_params
-    cfg_bh = cfg.geometry.storage_borehole
+    cfg_geom = cfg.mesh.geometry
+    cfg_bh = cfg_geom.storage_borehole
 
-    dsb_idx = cfg.geometry.damaged_storage_borehole
+    dsb_idx = cfg_geom.damaged_storage_borehole
 
     source_params = dict(
         # UOS surface: S = pi * du * hu [m2]
@@ -853,7 +892,7 @@ def set_source_term(cfg):
         sources_buffer_thickness=cfg_src.buffer_thickness,
         conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
-        storage_regions = [f"storage_{i}" for i in range(cfg.geometry.n_storage_boreholes) if i != dsb_idx],
+        storage_regions = [f"storage_{i}" for i in range(cfg_geom.n_storage_boreholes) if i != dsb_idx],
         plug_region = f"plug_{dsb_idx}",
         container_region = f"container_{dsb_idx}",
     )

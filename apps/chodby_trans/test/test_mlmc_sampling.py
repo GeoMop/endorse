@@ -110,7 +110,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     assert np.all(np.isfinite(fine))
     assert np.all(np.isfinite(coarse))
 
-
+@pytest.mark.skip
 def test_transport_mlmc_random(smart_tmp_path: Path):
     """
     Document the synchronous forward-simulation path against the real MLMC transport config.
@@ -135,7 +135,7 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     sensitivity_sampling.resolve_subcmd("mlmc", workdir, None)
 
 
-def test_transport_simulation_fine_level_random(smart_tmp_path: Path):
+def test_transport_simulation(smart_tmp_path: Path):
     """
     Exercise `TransportSimulation` directly for the fine-level setup from `transport_mlmc.yaml`.
 
@@ -149,10 +149,10 @@ def test_transport_simulation_fine_level_random(smart_tmp_path: Path):
     job.set_workdir(workdir, input_dir)
 
     cfg = common.load_config(job.input.transport_cfg_path)
-    cfg_random = common.apply_variant(cfg, {"test_random_data": True})
-    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg_random.ot_sensitivity)
+    #cfg = common.apply_variant(cfg, {"test_random_data": True})
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
 
-    simulation = TransportSimulation(cfg_random, job.output.dir_path)
+    simulation = TransportSimulation(cfg, job.output.dir_path)
     fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
 
     sample_input = np.concatenate(

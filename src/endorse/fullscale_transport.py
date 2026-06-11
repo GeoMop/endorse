@@ -98,8 +98,10 @@ def transport_2d(cfg, seed):
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
 
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+    fields, est_velocity = compute_fields(cfg.mesh, cfg_fine, full_mesh, apply_fields.bulk_fields_mockup,
                                                      el_to_ifr, fractures, dim=2)
+    input_fields_file = full_mesh.write_fields("input_fields.msh2", fields)
+
     return parametrized_run(cfg, large_model, input_fields_file)
 
 
@@ -116,8 +118,9 @@ def transport_run(cfg, seed):
     el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
-                                                     el_to_ifr, fractures, dim=3)
+    fields, est_velocity = compute_fields(cfg.mesh, cfg_fine, full_mesh, apply_fields.bulk_fields_mockup,
+                                          el_to_ifr, fractures, dim=3)
+    input_fields_file = full_mesh.write_fields("input_fields.msh2", fields)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 def parametrized_run(cfg, large_model, input_fields_file):
@@ -290,9 +293,8 @@ def compute_fields(cfg_mesh:dotdict, cfg_trans:dotdict, mesh:Mesh, bulk_field_fu
         cross_section=cross_section,
         porosity=porosity
     )
-    cond_file = mesh.write_fields("input_fields.msh2", fields)
 
-    return cond_file, est_velocity
+    return fields, est_velocity
 
 def compute_hm_bulk_fields(cfg, cfg_basedir, points):
     cfg_geom = cfg.geometry
