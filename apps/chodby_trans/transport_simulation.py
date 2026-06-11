@@ -62,10 +62,12 @@ def apply_sample_parameters(
     full_parameters = expand_sample_parameters(cfg, parameters)
     param_dict = sa.param_vec_to_dict(full_parameters)
 
+    # TODO: use or extent the cfg patching mechanism
     variant_patch = {}
     for name, param_cfg in cfg.ot_sensitivity.parameters.items():
         if "path" in param_cfg:
-            variant_patch[param_cfg.path] = param_dict[name]
+            for p in param_cfg.path:
+                variant_patch[p] = param_dict[name]
 
     return common.apply_variant(cfg, variant_patch), param_dict
 

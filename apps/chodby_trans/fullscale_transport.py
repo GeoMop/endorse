@@ -314,7 +314,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
 
     # TODO run Flow123d on macro mesh
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, tags=tags, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values
@@ -322,7 +322,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
 # @memoize
 def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
-        """
+    """
     Fine full-scale transport model
     return:
     res: return code of flow123d call
