@@ -751,21 +751,7 @@ def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
     Map transport levels ordered finest->coarsest in config to MLMC levels ordered coarsest->finest.
     REVIEWED.
     """
-    return [[float(10 ** level.id)] for level in cfg.mlmc.levels]
-
-
-def mlmc_goal_targets(cfg: dotdict) -> tuple[int, int, int]:
-    """
-    Return Goal 3 targets: (fine_samples, coarse_samples, min_fine_before_coarse).
-    AGENT: read the keys directly in run_mlmc_sampling, no goal3 key,
-    see input_data/transport_mlmc.yaml, for valid keys:
-    'min_samples', 'min_finer_samples'
-    """
-    goal3_cfg = cfg.mlmc.get("goal3", {})
-    fine_samples = int(goal3_cfg.get("fine_samples", cfg.ot_sensitivity.limit_samples))
-    coarse_samples = int(goal3_cfg.get("coarse_samples", cfg.ot_sensitivity.limit_samples))
-    min_fine_before_coarse = int(goal3_cfg.get("min_fine_before_coarse", min(10, fine_samples)))
-    return fine_samples, coarse_samples, min_fine_before_coarse
+    return [[float(10 ** level.id)] for level in reversed(cfg.mlmc.levels)]
 
 
 def make_group_matrix_generator(sa_obj: ot_sa.SensitivityAnalysis) -> Callable[[int, int], np.ndarray]:
@@ -816,7 +802,7 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
         orig_samples = super().prepare_samples(sample_ids)
 
         return [
-            (sample_id, n_finner_collected, *tail)
+            (sample_id, *tail, n_finner_collected)
             for sample_id, *tail in orig_samples
         ]
 
@@ -836,7 +822,8 @@ def resubmit_unfinished_samples(sampler: Sampler) -> int:
     return len(unfinished_samples)
 
 
-def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int], poll_timeout: float = 5.0) -> None:
+def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int],
+                              poll_timeout: float = 5.0) -> None:
     """
     Wait until selected levels reach the requested number of finished samples.
     """
@@ -858,7 +845,11 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
     level_parameters = mlmc_level_parameters(cfg)
-    fine_target, coarse_target, min_fine_before_coarse = mlmc_goal_targets(cfg)
+
+    # fine_samples = int(cfg.get("fine_samples", cfg.ot_sensitivity.limit_samples))
+    # coarse_samples = int(gcfg.get("coarse_samples", cfg.ot_sensitivity.limit_samples))
+    # min_fine_before_coarse = int(cfg.get("min_fine_before_coarse", min(10, fine_samples)))
+
     fine_level_id = len(level_parameters) - 1
     coarse_level_id = 0
 
@@ -899,6 +890,10 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         seed=seed,
     )
     sampler_holder["sampler"] = sampler
+
+    fine_target = cfg.mlmc.levels[0].min_samples
+    coarse_target = cfg.mlmc.levels[1].min_samples
+    min_fine_before_coarse = cfg.mlmc.levels[1].min_finer_samples
 
     logging.info("MLMC HDF storage: %s", storage_path)
     logging.info("MLMC level parameters: %s", level_parameters)

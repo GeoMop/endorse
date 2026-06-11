@@ -188,9 +188,10 @@ class TransportSimulation(Simulation):
         transport-side pair result is exposed directly.
         """
         root_cfg = copy.deepcopy(config_dict["root_cfg"])
+
         sample_input = np.asarray(sample_input, dtype=float)
-        finer_level_sample_size = int(sample_input[0])
-        parameters = sample_input[1:]
+        finer_level_sample_size = int(sample_input[-1])
+        parameters = sample_input[:-1]
 
         # AGENT: this is not allowed
         # else:

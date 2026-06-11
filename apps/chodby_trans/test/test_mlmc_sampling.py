@@ -121,6 +121,7 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     ``run_mlmc_sampling``.
     """
     workdir = smart_tmp_path / "transport_mlmc"
+    shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
     input_dir = Path(__file__).parent.parent / "input_data"
     job.set_workdir(workdir, input_dir)

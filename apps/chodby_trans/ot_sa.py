@@ -776,6 +776,7 @@ class InputDesign:
 class SensitivityAnalysis:
    
     parameters: Dict[str, Parameter]
+    cfg: Dict[str, Any] = attrs.field(repr=False)
     sampler: Literal["QMC", "MonteCarlo", "LHS"] = "QMC"
     compute_s2: bool = False
     n_samples: int = 0
@@ -807,10 +808,11 @@ class SensitivityAnalysis:
 
         return SensitivityAnalysis(
             parameters,
-            sa_cfg.get('sampler', "QMC"),
-            sa_cfg.get('second_order', False),
-            sa_cfg['n_samples'],
-            sa_cfg.get('err_est_confidence_level', 0.95))
+            cfg=sa_cfg,
+            sampler=sa_cfg.get('sampler', "QMC"),
+            compute_s2=sa_cfg.get('second_order', False),
+            n_samples=sa_cfg['n_samples'],
+            confidence_level=sa_cfg.get('err_est_confidence_level', 0.95))
 
     @property
     def groups(self) -> List[str]:
@@ -842,6 +844,20 @@ class SensitivityAnalysis:
             self._experiment_design = exp_design_functions[self.sampler]
         except KeyError:
             raise KeyError(f"Unknown sampler '{self.sampler}'. Valid: {list(exp_design_functions.keys())}")
+
+    def __getstate__(self):
+        """
+        Serialize through the source config and reconstruct derived objects on load.
+        """
+        return {"cfg": self.cfg}
+
+    def __setstate__(self, state):
+        """
+        Rebuild the analysis from the saved config snapshot.
+        """
+        rebuilt = type(self).from_cfg(state["cfg"])
+        for field in attrs.fields(type(self)):
+            setattr(self, field.name, getattr(rebuilt, field.name))
 
         # groups via comprehension (order preserved with dict.fromkeys)
         #self._groups: List[str] = list(dict.fromkeys([p.group for p in self.parameters.values()]))
