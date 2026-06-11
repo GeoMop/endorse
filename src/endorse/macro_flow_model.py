@@ -307,10 +307,13 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
 # @memoize
 def subproblem_input(subproblem, fields):
     mesh = subproblem.submesh
-    micro_elements = np.asarray(subproblem.micro_elements, dtype=int)
-    assert len(micro_elements) == len(mesh.elements)
+    # micro_elements = np.asarray(subproblem.micro_elements, dtype=int)
+    parent_elements = mesh.parent_element_indices
+    assert len(subproblem.micro_elements) == len(mesh.elements)
+    assert parent_elements is not None
+    assert len(parent_elements) == len(mesh.elements)
     sub_fields = {
-        field_name: np.asarray(field)[micro_elements]
+        field_name: np.asarray(field)[parent_elements]
         for field_name, field in fields.items()
     }
     return fields_file(mesh, sub_fields)

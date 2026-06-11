@@ -92,7 +92,7 @@ class Mesh:
     def empty(mesh_path) -> 'Mesh':
         return Mesh(GmshIO(), mesh_path)
 
-    def __init__(self, gmsh_io: GmshIO, file):
+    def __init__(self, gmsh_io: GmshIO, file, parent_element_indices=None):
 
         self.gmsh_io : GmshIO = gmsh_io
         # TODO: remove relation to file
@@ -100,6 +100,8 @@ class Mesh:
         # in order to relay on the underlaing files for the caching
         self.file : File = file
         self.reinit()
+        # if the mesh is submesh of another mesh
+        self.parent_element_indices = parent_element_indices
 
 
     def reinit(self):
@@ -138,10 +140,14 @@ class Mesh:
             self.elements.append(element)
 
     def __getstate__(self):
-        return (self.gmsh_io, self.file)
+        return (self.gmsh_io, self.file, self.parent_element_indices)
 
     def __setstate__(self, args):
-        self.gmsh_io, self.file = args
+        if len(args) == 2:
+            self.gmsh_io, self.file = args
+            self.parent_element_indices = None
+        else:
+            self.gmsh_io, self.file, self.parent_element_indices = args
         self.reinit()
 
     @property
@@ -202,6 +208,11 @@ class Mesh:
     #     return self.elements[self.el_indices[id]].vertices()
 
     def submesh(self, elements, file_path):
+        def element_key(el):
+            vertices = el.vertices()
+            order = np.lexsort(vertices.T[::-1])
+            return el.type, tuple(np.round(vertices[order].ravel(), 12))
+
         gmesh = GmshIO()
         active_nodes = np.full( (len(self.nodes),), False)
         for iel in elements:
@@ -216,7 +227,17 @@ class Mesh:
         gmesh.physical = self.gmsh_io.physical
         #gmesh.write(file_path)
         gmesh.normalize()
-        return Mesh(gmesh, "")
+        submesh = Mesh(gmesh, "")
+        # HACK to keep element indices of the parent mesh due to renumbering in gmesh.normalize()
+        parent_by_key = {
+            element_key(self.elements[iel]): iel
+            for iel in elements
+        }
+        submesh.parent_element_indices = np.array([
+            parent_by_key[element_key(el)]
+            for el in submesh.elements
+        ], dtype=int)
+        return submesh
 
     # Returns field P0 values of field.
     # Selects the closest time step lower than 'time'.
