@@ -839,16 +839,37 @@ def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int],
         )
 
 
+def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
+    """
+    Initialize `job` globals on one Dask worker to match the master process.
+    """
+    job.set_workdir(Path(output_dir), Path(input_dir))
+    return job.to_str()
+
+
 def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
     """
+    worker_job_state = client.run(
+        init_mlmc_worker_job,
+        str(job.output.dir_path),
+        str(job.input.dir_path),
+    )
+    for worker_addr, state in worker_job_state.items():
+        logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
+
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
     level_parameters = mlmc_level_parameters(cfg)
 
     # fine_samples = int(cfg.get("fine_samples", cfg.ot_sensitivity.limit_samples))
     # coarse_samples = int(gcfg.get("coarse_samples", cfg.ot_sensitivity.limit_samples))
     # min_fine_before_coarse = int(cfg.get("min_fine_before_coarse", min(10, fine_samples)))
+
+
+    fine_target = cfg.mlmc.levels[0].min_samples
+    coarse_target = cfg.mlmc.levels[1].min_samples
+    min_fine_before_coarse = cfg.mlmc.levels[1].min_finer_samples
 
     fine_level_id = len(level_parameters) - 1
     coarse_level_id = 0
@@ -864,12 +885,12 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
 
 
     n_finner_samples = 0
-    _min_finer_samples = 5
     def finner_samples(sample_ids):
         level, id = sample_ids[0].split('_')
-        if level != 'L01' and  n_finner_samples < _min_finer_samples:
-            raise ValueError(f"Can not plan samples {sample_ids[:5]} ... before number of samples on finer level"
-                         f"reaches >= self")
+        if level != 'L01' and  n_finner_samples < min_fine_before_coarse:
+            raise ValueError(f"Can not plan samples {sample_ids[:5]} ... "
+                             f"until number of samples on finer level"
+                         f"{n_finner_samples} >= {min_fine_before_coarse}")
         else:
             return n_finner_samples
 
@@ -891,9 +912,6 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     )
     sampler_holder["sampler"] = sampler
 
-    fine_target = cfg.mlmc.levels[0].min_samples
-    coarse_target = cfg.mlmc.levels[1].min_samples
-    min_fine_before_coarse = cfg.mlmc.levels[1].min_finer_samples
 
     logging.info("MLMC HDF storage: %s", storage_path)
     logging.info("MLMC level parameters: %s", level_parameters)
@@ -930,6 +948,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         sampler,
         {fine_level_id: min_fine_before_coarse},
     )
+    n_finner_samples = sampler.n_finished_samples[fine_level_id]
+
 
     scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
     coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
