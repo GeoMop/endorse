@@ -76,6 +76,75 @@ mesh:
       h_inf: *boundary_mesh_step
 
 
+transport_common:
+  bulk_field_params: &bulk_field_params
+    cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
+    cond_mult: 3.3
+    # porosity only due to function apply_fields.bulk_fields_mockup_tunnel()
+    por_min: 0.002
+    por_mult: 1.25
+
+    # values with respect to EDZ radius
+    # h_axis: 2.0
+    # v_axis: 3.35 # 6.7/2
+    # radius for c_min
+    inner_radius: 1.0
+
+  fr_field_params: &fr_field_params
+    # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
+    #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
+    permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
+    #sigma_bulk_conductivity: 1e-7
+    #min_fr_cross_section: 5e-5
+    #max_fr_cross_section: 5e-3
+
+  # The total simulation time as well as the output times are ese are quite dependent on the
+  output_times: &output_times
+    - [ 0, 'y' ]
+    - [ 100, 'y' ]
+    - [ 200, 'y' ]
+    - [ 400, 'y' ]
+    - [ 800, 'y' ]
+    - [ 2000, 'y' ]
+    - [ 4000, 'y' ]
+    - [ 8000, 'y' ]
+    - [ 20000, 'y' ]
+    - [ 40000, 'y' ]
+    - begin: [ 80000, 'y' ]
+      step: [ 40000, 'y' ]
+    - begin: [ 160000, 'y' ]
+      step: [ 80000, 'y' ]
+    - begin: [ 320000, 'y' ]
+      step: [ 160000, 'y' ]
+  end_time: &end_time 640000
+  dt_limits: &dt_limits
+    - time: [ 0, 'y' ]             # 4
+      max_dt: [ 25, 'y' ]
+    - time: [ 100, 'y' ]           # 2
+      max_dt: [ 50, 'y' ]
+    - time: [ 200, 'y' ]           # 2
+      max_dt: [ 100, 'y' ]
+    - time: [ 400, 'y' ]           # 2
+      max_dt: [ 200, 'y' ]
+    - time: [ 800, 'y' ]           # 3
+      max_dt: [ 400, 'y' ]
+    - time: [ 2000, 'y' ]          # 2
+      max_dt: [ 1000, 'y' ]
+    - time: [ 4000, 'y' ]          # 2
+      max_dt: [ 2000, 'y' ]
+    - time: [ 8000, 'y' ]          # 3
+      max_dt: [ 4000, 'y' ]
+    - time: [ 20000, 'y' ]         # 2
+      max_dt: [ 10000, 'y' ]
+    - time: [ 40000, 'y' ]         # 2
+      max_dt: [ 20000, 'y' ]
+    - time: [ 80000, 'y' ]         # 2
+      max_dt: [ 40000, 'y' ]
+    - time: [ 160000, 'y' ]        # 2
+      max_dt: [ 80000, 'y' ]
+    - time: [ 320000, 'y' ]        # 2
+      max_dt: [ 160000, 'y' ]
+
 transport_microscale:
     input_template: transport_microscale_tmpl.yaml
 
@@ -83,18 +152,11 @@ transport_microscale:
     load_field_indirect_conductivity: "conductivity"
     response_field_p0: "velocity_p0"
 
-    bulk_field_params:
-      cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-      cond_mult: 3.3
-      # porosity only due to function apply_fields.bulk_fields_mockup_tunnel()
-      por_min: 0.002
-      por_mult: 1.25
-
-      # values with respect to EDZ radius
-      # h_axis: 2.0
-      # v_axis: 3.35 # 6.7/2
-      # radius for c_min
-      inner_radius: 1.0
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15
@@ -104,6 +166,12 @@ transport_macroscale:
     input_template: transport_macroscale_tmpl.yaml
     default_conductivity: 1e-16
     input_fields_file: "input_fields.msh2"
+
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
 
 
 # parameters substituted into the TH model template
@@ -116,29 +184,11 @@ transport_fullscale:
     conc_flux_file: "conc_flux_UOS.csv"
     conc_name: I
 
-    bulk_field_params:
-        cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-        cond_mult: 3.3
-        # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
-        # cond_max = cond_min*cond_mult
-
-        por_min: 0.002
-        por_mult: 1.25
-        # por_max: 0.0025
-        # por_max = por_min*por_mult
-
-        # values with respect to EDZ radius
-        # h_axis: 2.0
-        # v_axis: 3.35 # 6.7/2
-        # radius for c_min
-        inner_radius: 1.0
-    fr_field_params:
-        # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
-        #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
-        permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
-        #sigma_bulk_conductivity: 1e-7
-        #min_fr_cross_section: 5e-5
-        #max_fr_cross_section: 5e-3
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
 
     #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
     #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
@@ -158,54 +208,6 @@ transport_fullscale:
         diameter: 0.914
         length: 3.790
         buffer_thickness: 0.368
-
-
-    # The total simulation time as well as the output times are ese are quite dependent on the
-    output_times:
-      - [0, 'y']
-      - [100, 'y']
-      - [200, 'y']
-      - [400, 'y']
-      - [800, 'y']
-      - [2000, 'y']
-      - [4000, 'y']
-      - [8000, 'y']
-      - [20000, 'y']
-      - [40000, 'y']
-      - begin: [80000, 'y']
-        step: [40000, 'y']
-      - begin: [160000, 'y']
-        step: [80000, 'y']
-      - begin: [320000, 'y']
-        step: [160000, 'y']
-    end_time: 640000
-    dt_limits:
-        - time: [0, 'y']             # 4
-          max_dt: [25, 'y']
-        - time: [100, 'y']           # 2
-          max_dt: [50, 'y']
-        - time: [200, 'y']           # 2
-          max_dt: [100, 'y']
-        - time: [400, 'y']           # 2
-          max_dt: [200, 'y']
-        - time: [800, 'y']           # 3
-          max_dt: [400, 'y']
-        - time: [2000, 'y']          # 2
-          max_dt: [1000, 'y']
-        - time: [4000, 'y']          # 2
-          max_dt: [2000, 'y']
-        - time: [8000, 'y']          # 3
-          max_dt: [4000, 'y']
-        - time: [20000, 'y']         # 2
-          max_dt: [10000, 'y']
-        - time: [40000, 'y']         # 2
-          max_dt: [20000, 'y']
-        - time: [80000, 'y']         # 2
-          max_dt: [40000, 'y']
-        - time: [160000, 'y']        # 2
-          max_dt: [80000, 'y']
-        - time: [320000, 'y']        # 2
-          max_dt: [160000, 'y']
 
     flow_solver__a_tol: 1e-15
     flow_solver__r_tol: 1e-15

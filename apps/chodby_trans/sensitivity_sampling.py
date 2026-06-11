@@ -205,7 +205,8 @@ def single_sample(args):
         variant_patch = dict()
         for k, v in cfg.ot_sensitivity.parameters.items():
             if "path" in v:
-                variant_patch[v.path] = param_dict[k]
+                for p in v.path:
+                    variant_patch[p] = param_dict[k]
         new_cfg = common.apply_variant(cfg, variant_patch)
 
         wrap = transport_wrapper.Wrapper(cfg=new_cfg)
