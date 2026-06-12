@@ -858,10 +858,12 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         str(job.input.dir_path),
     )
 
-    data_schema_key, data_schema = initialize_data_schema()
-    prepare_common_homogenization_mesh(cfg)
     for worker_addr, state in worker_job_state.items():
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
+
+    data_schema_key, data_schema = initialize_data_schema()
+    with common.workdir(str(job.output.dir_path), clean=False):
+      prepare_common_homogenization_mesh(cfg)
 
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
     level_parameters = mlmc_level_parameters(cfg)
@@ -1037,6 +1039,8 @@ def resolve_subcmd(cmd, work_dir, scheduler):
     elif cmd == 'select':
         # zarr_path = sys.argv[2]
         # read_failed_parameters()
+        with common.workdir(str(work_dir), clean=False):
+            prepare_common_homogenization_mesh(cfg)
         assert len(sys.argv) == 4
         i_eval = int(sys.argv[3])
         tags, params = select_single(i_eval)

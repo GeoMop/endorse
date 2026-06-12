@@ -155,7 +155,8 @@ def test_transport_simulation(smart_tmp_path: Path):
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
 
     data_schema_key, data_schema = sensitivity_sampling.initialize_data_schema()
-    sensitivity_sampling.prepare_common_homogenization_mesh(cfg)
+    with common.workdir(str(workdir), clean=False):
+      sensitivity_sampling.prepare_common_homogenization_mesh(cfg)
 
     simulation = TransportSimulation(cfg, job.output.dir_path)
     fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
