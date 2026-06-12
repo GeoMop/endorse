@@ -143,17 +143,19 @@ def test_transport_simulation(smart_tmp_path: Path):
     MLMC driver and runs the fine-level `LevelSimulation` through `SamplingPool.calculate_sample`.
     """
     workdir = smart_tmp_path / "transport_simulation_fine"
-    shutil.rmtree(workdir, ignore_errors=True)
+    #shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
     source_input_dir = Path(__file__).parent.parent / "input_data"
     input_dir = workdir / "input_data"
     shutil.copytree(source_input_dir, input_dir)
     job.set_workdir(workdir, input_dir)
-    sensitivity_sampling.initialize_data_schema()
 
     cfg = common.load_config(job.input.transport_cfg_path)
     #cfg = common.apply_variant(cfg, {"test_random_data": True})
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+
+    data_schema_key, data_schema = sensitivity_sampling.initialize_data_schema()
+    sensitivity_sampling.prepare_common_homogenization_mesh(cfg)
 
     simulation = TransportSimulation(cfg, job.output.dir_path)
     fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
@@ -165,7 +167,7 @@ def test_transport_simulation(smart_tmp_path: Path):
         )
     )
     pool_dir = workdir / "pool"
-    pool_dir.mkdir()
+    pool_dir.mkdir(exist_ok=True)
 
     sample_id, result, err_msg, _running_time = SamplingPool.calculate_sample(
         ("L01_S0000000", *sample_input.tolist()),
