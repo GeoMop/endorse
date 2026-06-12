@@ -145,8 +145,11 @@ def test_transport_simulation(smart_tmp_path: Path):
     workdir = smart_tmp_path / "transport_simulation_fine"
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
-    input_dir = Path(__file__).parent.parent / "input_data"
+    source_input_dir = Path(__file__).parent.parent / "input_data"
+    input_dir = workdir / "input_data"
+    shutil.copytree(source_input_dir, input_dir)
     job.set_workdir(workdir, input_dir)
+    sensitivity_sampling.initialize_data_schema()
 
     cfg = common.load_config(job.input.transport_cfg_path)
     #cfg = common.apply_variant(cfg, {"test_random_data": True})
