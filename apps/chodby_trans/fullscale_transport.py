@@ -144,7 +144,7 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # therefore we set the workdir again
     #job.set_workdir(workdir)
 
-    input_msh_filepath = Path(f"input_fields.msh")
+    input_msh_filepath = Path(f"input_fields.msh2")
     if input_msh_filepath.exists():
         return File(str(input_msh_filepath))
 
@@ -306,7 +306,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
 
-    input_fields_path = Path(f"input_fields.msh")
+    input_fields_path = Path(f"input_fields.msh2")
     input_fields_file = macro_mesh.write_fields(input_fields_path, macro_fields)
 
     # test output to VTK
