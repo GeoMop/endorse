@@ -10,9 +10,9 @@ problem: !Coupling_Sequential
     output_specific:
     nonlinear_solver:
       linear_solver: !Petsc
-        a_tol: 1e-6
-        r_tol: 1e-3
-        # options: <flow_solver__options>
+        a_tol: <flow_solver__a_tol>
+        r_tol: <flow_solver__r_tol>
+        options: <flow_solver__options>
     input_fields:
       - region: .BOUNDARY
         bc_type: dirichlet

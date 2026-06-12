@@ -32,7 +32,7 @@ problem: !Coupling_Sequential
       linear_solver: !Petsc
         a_tol: <flow_solver__a_tol>
         r_tol: <flow_solver__r_tol>
-        options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+        options: <flow_solver__options>
 
     input_fields:
       - region: BULK

@@ -145,6 +145,10 @@ transport_common:
     - time: [ 320000, 'y' ]        # 2
       max_dt: [ 160000, 'y' ]
 
+  flow_solver__a_tol: &flow_solver__a_tol 1e-15
+  flow_solver__r_tol: &flow_solver__r_tol 1e-15
+  flow_solver__options: &flow_solver__options -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+
 transport_microscale:
     input_template: transport_microscale_tmpl.yaml
 
@@ -158,8 +162,9 @@ transport_microscale:
     end_time: *end_time
     dt_limits: *dt_limits
 
-    flow_solver__a_tol: 1e-15
-    flow_solver__r_tol: 1e-15
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
 
 
 transport_macroscale:
@@ -172,6 +177,10 @@ transport_macroscale:
     output_times: *output_times
     end_time: *end_time
     dt_limits: *dt_limits
+
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
 
 
 # parameters substituted into the TH model template
@@ -209,8 +218,9 @@ transport_fullscale:
         length: 3.790
         buffer_thickness: 0.368
 
-    flow_solver__a_tol: 1e-15
-    flow_solver__r_tol: 1e-15
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
 
     trans_solver__a_tol: 1e-15
     trans_solver__r_tol: 1e-8
