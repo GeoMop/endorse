@@ -45,12 +45,14 @@ def macro_transport(cfg:dotdict):
 
         template = Path(cfg._config_root_dir) / macro_cfg.input_template
         print("template_path: ", template)
-        params = dict(
+        params = macro_cfg.copy()
+        add_params = dict(
             mesh_file = macro_mesh.file.path,
             input_fields_file = conductivity_file.path,
             #piezo_head_input_file = os.path.basename(large_model.path)
-
         )
+        params.update(add_params)
+
         macro_model = common.call_flow(cfg.machine_config, template, params)
         if not macro_model.check_conv_reasons():
             raise ValueError("Macro simulation failed.")
@@ -63,11 +65,15 @@ def fine_macro_transport(cfg):
         conductivity_eval = lambda XYZ: conductivity_mockup_eval(cfg.geometry, cfg_fine.bulk_field_params, XYZ)
         fields = dict(conductivity=conductivity_eval(micro_mesh.el_barycenters().T))
         conductivity_file = fields_file(micro_mesh, fields)
-        params = dict(
+
+        params = cfg_fine.copy()
+        add_params = dict(
             mesh_file=micro_mesh.file.path,
             #piezo_head_input_file=os.path.basename(large_model.path),
             input_fields_file = conductivity_file.path
         )
+        params.update(add_params)
+        
         print(f"FLOW CALL: {template}")
         common.call_flow(cfg.machine_config, template, params)
 
@@ -339,10 +345,12 @@ def micro_problem(cfg, tag, subproblem, load, fields):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):
         fine_file = subproblem_input(subproblem, fields)
-        params = dict(
+        params = cfg_micro.copy()
+        add_params = dict(
             mesh_file=fine_file.path,
             pressure_grad=str(load),
         )
+        params.update(add_params)
         template = Path(cfg._config_root_dir) / cfg_micro.input_template
         micro_output = call_flow(cfg.machine_config, template, params)
         if not micro_output.check_conv_reasons():
