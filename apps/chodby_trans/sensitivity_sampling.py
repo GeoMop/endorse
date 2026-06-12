@@ -858,6 +858,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         str(job.input.dir_path),
     )
 
+    data_schema_key, data_schema = initialize_data_schema()
     prepare_common_homogenization_mesh(cfg)
     for worker_addr, state in worker_job_state.items():
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)

@@ -855,8 +855,9 @@ def z_cuts_fn(cfg_geom: dotdict):
 # @report
 def get_indicator(cfg, fo, grid_step):
     cfg_fine = cfg.transport_fullscale
-    z_cuts = z_cuts_fn(cfg.geometry)
-    grid = create_structured_grid(cfg.geometry, z_cuts, grid_step)
+    cfg_geom = cfg.mesh.geometry
+    z_cuts = z_cuts_fn(cfg_geom)
+    grid = create_structured_grid(cfg_geom, z_cuts, grid_step)
     values = indicators(fo.solute.spatial_file, f"{cfg_fine.conc_name}_conc", z_cuts, grid,
                         intp_ver=4, output=not cfg.ot_sensitivity.clean_sample_dir)
     print(np.shape(values))
