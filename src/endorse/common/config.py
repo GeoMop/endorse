@@ -266,8 +266,10 @@ def load_config(path, collect_files=False, hostname=None):
         dd['_file_refs'] = referenced
     return dd
 
-def dump_config(config):
-    with open("__config_resolved.yaml", "w") as f:
+def dump_config(config, path:Path=None):
+    if path is None:
+        path = Path("__config_resolved.yaml")
+    with open(path, "w") as f:
         yaml.dump(config, f)
 
 def path_search(filename, path):

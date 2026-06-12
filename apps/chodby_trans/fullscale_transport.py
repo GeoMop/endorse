@@ -201,13 +201,13 @@ def transport_prepare_run(cfg_mesh):
     return fr_pop, fracture_set, n_large
 
 
-def transport_run(cfg, level_id, tags, param_dict):
+def transport_run(cfg, level_id, param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
     with common.workdir("fine_trans", clean=False):
         logging.info(f"fine dir: {os.getcwd()}")
-        rc, slice = transport_fine_run(cfg, fr_set, level_id, n_large, tags, param_dict)
+        f_rc, f_values = transport_fine_run(cfg, fr_set, level_id, n_large,  param_dict)
 
     logging.info(f"sample dir: {os.getcwd()}")
     if level_id < len(cfg.mlmc.levels) - 1:
@@ -215,9 +215,9 @@ def transport_run(cfg, level_id, tags, param_dict):
             logging.info(f"macro dir: {os.getcwd()}")
             # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
             # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
-            transport_macro(cfg, fr_set, n_large, level_id, tags, param_dict)
+            c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
 
-    return rc, slice
+    return f_values, c_values
 
 
 def prepare_common_homogenization_mesh(cfg):
@@ -261,7 +261,7 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
     return conductivity_target
 
 
-def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
+def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
@@ -314,15 +314,20 @@ def transport_macro(cfg, fracture_set, n_large, level_id, tags, param_dict):
 
 
     # TODO run Flow123d on macro mesh
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, tags=tags, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values
 
 
 # @memoize
-def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
-    """ Fine full-scale transport model"""
+def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
+    """
+    Fine full-scale transport model
+    return:
+    res: return code of flow123d call
+    values: shape (n_times, X,Y, Z)
+    """
     variant = "fine"
     level = cfg.mlmc.levels[level_id]
     cfg_mesh = update_mesh_cfg(cfg.mesh, level)
@@ -334,10 +339,8 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, tags, param_dict):
     else:
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
-    # DEBUG mesh
-    return NULL_RESULT
 
-    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, tags=tags, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, large_model=None, input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values
@@ -400,7 +403,7 @@ def call_flow_wrap(cfg_machine:'dotdict', file_in:File, params: Dict[str,str]) -
     return fo
 
 
-def parametrized_run(cfg, large_model, input_fields_file, tags, param_dict):
+def parametrized_run(cfg, large_model, input_fields_file, param_dict):
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
     if stdout_path.exists():

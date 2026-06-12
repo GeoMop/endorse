@@ -47,7 +47,7 @@ setuptools.setup(
                       'bih', 'gmsh>=4.10.4', 'pyyaml','fsspec',
                       'pyyaml-include==2.2', 'pyvista', 'importlib-resources', 'joblib', 
                       'bgem @ git+https://github.com/GeoMop/bgem.git@JB_homo',
-                      'mlmc @ git+https://github.com/GeoMop/MLMC.git@MS_endorse'],
+                      'mlmc @ git+https://github.com/GeoMop/MLMC.git@JB_sa_goal'],
                      # TODO: update image python from 3.8 and use standard package importlib.resources
                      # or rather get rid of flow123d templates as part of sources
     python_requires='>=3',

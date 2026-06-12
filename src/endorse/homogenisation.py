@@ -170,12 +170,19 @@ def bin_intervals(intervals, n_bins):
     bins = np.linspace(np.min(intervals[:, 0]), np.max(intervals[:, 1]), n_bins + 1)
     return np.digitize(centers, bins[1:-1])
 
-def assign_to_subproblems(boxes, subdivision):
+def assign_to_subproblems(boxes: np.ndarray, subdivision: List[float]) -> List[int]:
     """
     Split the AABB of the macro_mesh macro elements to the subdomains according to the subdivision
     vector providing number of subdomains [n_x, n_y, n_z] in every direction. The n_x * n_y * n_z subdomains will be used.
     Assign every macro element aabb to single subproblem according to the AABB center.
-    Return array of subproblem index for every macro element.
+
+    boxes: shape: (n_macro_elements, 2, 3)
+        2 ... minimal and maximal AABB corner
+        3 ... XYZ coords.
+
+    Return:
+         List[int] .. length = n_macro_elements,
+         array of subproblem index for every macro element.
     TODO: improve covering for irregular shapes and/or refined meshes, could possibly use a Metis or so.
     """
     i_bin_axis = [ bin_intervals(boxes[:, :, axis], subdivision[axis]) for axis in range(3)]
@@ -184,6 +191,9 @@ def assign_to_subproblems(boxes, subdivision):
 
 
 def subproblem_boxes(macro_boxes, subdivision):
+    """
+
+    """
     i_subproblems = assign_to_subproblems(macro_boxes, subdivision)
     perm = np.argsort(i_subproblems)
     i_subp_sorted = i_subproblems[perm]
@@ -202,12 +212,15 @@ def subproblem_boxes(macro_boxes, subdivision):
 
     return sub_boxes, i_subproblems
 
-def make_subproblems(macro_mesh, macro_els, micro_mesh:Mesh, macro_shape:MacroShapeBase, subdivision:np.array) -> List[SubMeshSubproblem]:
+def make_subproblems(
+        macro_mesh, macro_els, micro_mesh:Mesh, macro_shape:MacroShapeBase,
+        subdivision:np.array) -> List[SubMeshSubproblem]:
     """
     Could be modified
     :param micro_mesh:
     :param macro_mesh:
     :return:
+    List[SubMeshSubproblem]
     """
     macro_boxes = np.array([macro_shape.aabb(macro_mesh.elements[iel]) for iel in macro_els])
 
