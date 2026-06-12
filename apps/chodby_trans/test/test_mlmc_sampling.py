@@ -12,10 +12,11 @@ from endorse import common
 from chodby_trans import ot_sa, job, sensitivity_sampling
 from chodby_trans.sensitivity_sampling import (
     TransportSaltelliSimulation,
+    make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
 )
-from chodby_trans.transport_simulation import TransportSimulation
+from chodby_trans.transport_simulation import RandomTransportSimulation
 from mlmc.sampling_pool import SamplingPool
 
 
@@ -28,9 +29,9 @@ def make_mlmc_workdir(
     """
     Build a minimal MLMC workdir for synchronous sample execution tests.
 
-    The default fixture keeps the synthetic Goal 1 path fast.  Some tests use
-    ``transport_mlmc.yaml`` as the source fixture, but flip ``test_random_data``
-    on so the forward simulation remains synchronous and lightweight.
+    The default fixture keeps the synthetic Goal 1 path fast. Some tests use
+    ``transport_mlmc.yaml`` as the source fixture, but switch ``mlmc.sim_class``
+    to ``RandomTransportSimulation`` so execution remains lightweight.
     """
     workdir = tmp_path / "mlmc_goal23"
     input_dir = workdir / "input_data"
@@ -47,6 +48,10 @@ def make_mlmc_workdir(
             content = content.replace("test_random_data: False", "test_random_data: True", 1)
         else:
             content = "test_random_data: True\n" + content
+        if "sim_class:" in content:
+            content = content.replace("sim_class: TransportSimulation", "sim_class: RandomTransportSimulation", 1)
+        else:
+            content = content.replace("mlmc:\n", "mlmc:\n  sim_class: RandomTransportSimulation\n", 1)
         target_path.write_text(content, encoding="utf-8")
     return workdir
 
@@ -57,7 +62,7 @@ def test_goal3_prepare_samples_prefixes_finer_count(tmp_path: Path):
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
     simulation = TransportSaltelliSimulation(
         cfg_levels=cfg.mlmc.levels,
-        forward_simulation=TransportSimulation(workdir),
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
         finer_finished_count=lambda _level_id: 7,
@@ -82,7 +87,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
     simulation = TransportSaltelliSimulation(
         cfg_levels=cfg.mlmc.levels,
-        forward_simulation=TransportSimulation(workdir),
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
         finer_finished_count=lambda _level_id: 3,
@@ -101,7 +106,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     )
 
     fine, coarse = result
-    expected_len = simulation.schema.n_terms * len(TransportSimulation(workdir).result_format()[0].times)
+    expected_len = simulation.schema.n_terms * len(RandomTransportSimulation(cfg, workdir).result_format()[0].times)
 
     assert sample_id == "L01_S0000000"
     assert err_msg == ""
@@ -115,10 +120,10 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     """
     Document the synchronous forward-simulation path against the real MLMC transport config.
 
-    This does not exercise the heavy transport solve.  It uses
-    ``input_data/transport_mlmc.yaml`` as the source fixture, forces
-    ``test_random_data=True``, and runs the MLMC driver through
-    ``run_mlmc_sampling``.
+    This does not exercise the heavy transport solve. It uses
+    ``input_data/transport_mlmc.yaml`` as the source fixture, switches
+    ``mlmc.sim_class`` to ``RandomTransportSimulation``, and runs the MLMC
+    driver through ``run_mlmc_sampling``.
     """
     workdir = smart_tmp_path / "transport_mlmc"
     shutil.rmtree(workdir, ignore_errors=True)
@@ -126,9 +131,9 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     input_dir = Path(__file__).parent.parent / "input_data"
     job.set_workdir(workdir, input_dir)
 
-    # Patch config to use random data
+    # Patch config to use the random simulation class.
     cfg = common.load_config(job.input.transport_cfg_path)
-    cfg_random = common.apply_variant(cfg, {"test_random_data": True})
+    cfg_random = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
     cfg_random_path = job.input.dir_path / "__transport_mlmc_random.yaml"
     common.dump_config(cfg_random, cfg_random_path)
 
@@ -139,7 +144,7 @@ def test_transport_simulation(smart_tmp_path: Path):
     """
     Exercise `TransportSimulation` directly for the fine-level setup from `transport_mlmc.yaml`.
 
-    The test keeps the runtime lightweight by forcing `test_random_data=True`, but it bypasses the
+    The test keeps the runtime lightweight with `RandomTransportSimulation`, but it bypasses the
     MLMC driver and runs the fine-level `LevelSimulation` through `SamplingPool.calculate_sample`.
     """
     workdir = smart_tmp_path / "transport_simulation_fine"
@@ -149,10 +154,11 @@ def test_transport_simulation(smart_tmp_path: Path):
     job.set_workdir(workdir, input_dir)
 
     cfg = common.load_config(job.input.transport_cfg_path)
-    #cfg = common.apply_variant(cfg, {"test_random_data": True})
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
 
-    simulation = TransportSimulation(cfg, job.output.dir_path)
+
+    #cfg = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
+    simulation = make_transport_simulation(cfg)
     fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
 
     sample_input = np.concatenate(

@@ -124,6 +124,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-12: Made the MLMC driver instantiate the forward simulation class
+  named by `cfg.mlmc.sim_class` from `transport_simulation.py`. Added
+  `RandomTransportSimulation` for lightweight synthetic concentration runs and
+  removed the random-data branch from `TransportSimulation.calculate`.
 - 2026-06-11: Fixed the first MLMC sampling blockers in the local app path:
   reversed `mlmc_level_parameters()` into MLMC order, read Goal 3 sample
   targets from `mlmc.levels[*].min_samples` and `min_finer_samples`, made the

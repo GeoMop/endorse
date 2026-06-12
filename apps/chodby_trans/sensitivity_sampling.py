@@ -42,7 +42,7 @@ from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
-from chodby_trans.transport_simulation import TransportSimulation
+import chodby_trans.transport_simulation as transport_simulation
 from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
 from mlmc.sample_storage_hdf import SampleStorageHDF
@@ -790,7 +790,7 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
     def __init__(
         self,
         cfg_levels,
-        forward_simulation: TransportSimulation,
+        forward_simulation: transport_simulation.TransportSimulation,
         matrix_generator: Callable[[int, int], np.ndarray],
         n_parameters: int,
         finer_samples_collected: Callable[[list[str]], int]
@@ -806,6 +806,20 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
             (sample_id, *tail, n_finner_collected)
             for sample_id, *tail in orig_samples
         ]
+
+
+def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSimulation:
+    """
+    Construct the MLMC forward simulation class named by ``cfg.mlmc.sim_class``.
+    """
+    sim_class_name = cfg.mlmc.sim_class
+    sim_class = getattr(transport_simulation, sim_class_name)
+    if not isinstance(sim_class, type) or not issubclass(sim_class, transport_simulation.TransportSimulation):
+        raise TypeError(
+            f"cfg.mlmc.sim_class={sim_class_name!r} is not a TransportSimulation class "
+            "from chodby_trans.transport_simulation."
+        )
+    return sim_class(cfg, job.output.dir_path)
 
 
 def resubmit_unfinished_samples(sampler: Sampler) -> int:
@@ -900,7 +914,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     sampler_holder: dict[str, Sampler] = {}
     simulation = TransportSaltelliSimulation(
         cfg.mlmc.levels,
-        forward_simulation=TransportSimulation(cfg, job.output.dir_path),
+        forward_simulation=make_transport_simulation(cfg),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
         finer_samples_collected=finner_samples

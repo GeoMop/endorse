@@ -216,7 +216,8 @@ def transport_run(cfg, level_id, param_dict):
             # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
             # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
             c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
-
+    else:
+        c_values = None
     return f_values, c_values
 
 

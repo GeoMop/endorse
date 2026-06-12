@@ -4,6 +4,7 @@ test_random_data: False
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mlmc:
+  sim_class: TransportSimulation
   levels:
     - id: 0 # finest  # TODO: eliminate ids or number from the coarsest to the finest.
       task_size: 150000   # estimated number of elements
@@ -314,8 +315,8 @@ machine_config:
         #     pbs_name: chodby_trans
         #     walltime: "24:00:00"
         pbs:
-            n_cores: 18
-            n_nodes: 3
+            n_cores: 2
+            n_nodes: 1
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb
