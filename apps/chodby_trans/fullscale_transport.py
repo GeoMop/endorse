@@ -30,6 +30,7 @@ from scipy.interpolate import griddata
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
 from endorse.macro_flow_model import macro_conductivity
+from endorse.homogenisation import MacroTetra, Subdomain
 
 import chodby_trans.job as job
 import chodby_trans.input_data as input_data
@@ -261,6 +262,34 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
     return conductivity_target
 
 
+def source_level_field(mesh, cfg_geometry):
+    source_level = np.zeros(len(mesh.elements), dtype=float)
+    dsb_idx = int(cfg_geometry.damaged_storage_borehole)
+    if dsb_idx < 0:
+        return source_level
+
+    region_name = f"container_{dsb_idx}"
+    region = mesh.gmsh_io.physical.get(region_name)
+    if region is None:
+        return source_level
+
+    region_id, region_dim = region
+    for iel, el in enumerate(mesh.elements):
+        if el.tags[0] == region_id and len(el.node_indices) - 1 == region_dim:
+            source_level[iel] = 1.0
+    return source_level
+
+
+def average_micro_field_to_macro(micro_mesh, macro_mesh, micro_field):
+    macro_field = np.zeros(len(macro_mesh.elements), dtype=float)
+    macro_bulk = macro_mesh.el_dim_slice(dim=3)
+    shape = MacroTetra(rel_radius=1.0)
+    for iel in range(macro_bulk.start, macro_bulk.stop):
+        subdomain = Subdomain.create(shape, micro_mesh, macro_mesh, iel)
+        macro_field[iel] = float(subdomain.average(micro_field)[0])
+    return macro_field
+
+
 def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     # micro: fine mesh of buffer domain
     variant = "micro"
@@ -278,6 +307,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
+    micro_fields["source_level"] = source_level_field(micro_mesh, cfg.mesh.geometry)
     # test VTK output
     micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
     
@@ -305,6 +335,9 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
+    macro_fields["source_level"] = average_micro_field_to_macro(
+        micro_mesh, macro_mesh, micro_fields["source_level"]
+    )
 
     input_fields_path = Path(f"input_fields.msh")
     input_fields_file = macro_mesh.write_fields(input_fields_path, macro_fields)
