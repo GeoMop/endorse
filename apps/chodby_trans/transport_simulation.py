@@ -231,6 +231,7 @@ class RandomTransportSimulation(TransportSimulation):
         """
         Calculate one synthetic MLMC sample in the current sample workspace.
         """
+        logging.info("start sim calculate")
         root_cfg = copy.deepcopy(config_dict["root_cfg"])
         parameters, finer_level_sample_size = TransportSimulation._parse_sample_input(sample_input)
         level = int(config_dict["level_id"])

@@ -844,7 +844,7 @@ def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int],
     Wait until selected levels reach the requested number of finished samples.
     """
     while True:
-        sampler.ask_sampling_pool_for_samples(timeout=poll_timeout)
+        sampler.ask_sampling_pool_for_samples(sleep=1.0, timeout=poll_timeout)
         finished = np.asarray(sampler.n_finished_samples, dtype=int)
         if all(finished[level_id] >= target for level_id, target in target_counts.items()):
             return
