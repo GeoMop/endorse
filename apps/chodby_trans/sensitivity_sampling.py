@@ -968,7 +968,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     )
     n_finner_samples = sampler.n_finished_samples[fine_level_id]
 
-
+    logging.info("Initial fine only sampling completed.")
     scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
     coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
     if coarse_to_schedule > 0:
