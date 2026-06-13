@@ -41,6 +41,7 @@ import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
+from chodby_trans.mlmc_analysis import run_mlmc_analysis
 from chodby_trans.exception_wrapper import ReturnCode
 import chodby_trans.transport_simulation as transport_simulation
 from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
@@ -994,7 +995,7 @@ def main():
         cmd = sys.argv[2]
         scheduler = sys.argv[3]
     else:
-      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|plots|read)> <command_args>.")
+      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|mlmc_analysis|plots|read)> <command_args>.")
 
 
     # resolve job dirs
@@ -1006,7 +1007,7 @@ def resolve_subcmd(cmd, work_dir, scheduler):
         copy_flag = False
         if job.input.dir_path.exists():
             while True:
-                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
+                user_input = input(f"Do you want to overwrite {job.input.dir_path}? (yes/no): ")
                 if user_input.lower() in ["yes", "y"]:
                     print("Continuing...")
                     copy_flag = True
@@ -1037,7 +1038,7 @@ def resolve_subcmd(cmd, work_dir, scheduler):
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "mlmc", "plots"]
+            assert app_cmd in ["read", "continue", "meta", "mlmc", "mlmc_analysis", "plots"]
             submit_pbs(cfg, cmd=app_cmd) # given app command
         else:   # default app command
             submit_pbs(cfg)
@@ -1082,6 +1083,9 @@ def resolve_subcmd(cmd, work_dir, scheduler):
 
         with common.workdir(str(work_dir), clean=False):
             run_mlmc_sampling(cfg, client, seed)
+    elif cmd == 'mlmc_analysis':
+        with common.workdir(str(work_dir), clean=False):
+            run_mlmc_analysis(cfg)
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)

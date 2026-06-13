@@ -285,6 +285,19 @@ machine_config:
     # automatic resolution according to the socket.gethostname()
     # content of the 'machine_config' dict is filled by the particular
     # machine configuration dict
+    makovnik:
+        flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
     paulie-MSI:  #JB
         flow_executable:
         # release

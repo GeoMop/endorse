@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-12: Added an independent `mlmc_analysis` subcommand that reads the
+  existing MLMC HDF storage, computes fine/coarse/difference variance
+  diagnostics for Sobol averaging quantities, and writes CSV plus PDF plots.
 - 2026-06-12: Made the MLMC driver instantiate the forward simulation class
   named by `cfg.mlmc.sim_class` from `transport_simulation.py`. Added
   `RandomTransportSimulation` for lightweight synthetic concentration runs and

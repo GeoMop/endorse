@@ -400,6 +400,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
 @exp.rethrow_as(exp.Flow123dException, "Flow123d exception")
 def call_flow_wrap(cfg_machine:'dotdict', file_in:File, params: Dict[str,str]) -> common.FlowOutput:
     """Wrapper to catch Exception and set return code"""
+    logging.info(f"Call Flow with cfg: {cfg_machine}")
     fo = common.call_flow(cfg_machine, file_in, params)
     return fo
 
