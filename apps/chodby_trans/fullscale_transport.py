@@ -348,7 +348,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
 
     # TODO run Flow123d on macro mesh
-    res, fo = parametrized_run(cfg.transport_macroscale, large_model=None,
+    res, fo = parametrized_run(cfg, "transport_macroscale",
                                input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
@@ -375,7 +375,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
         input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
 
-    res, fo = parametrized_run(cfg.transport_fullscale, large_model=None, input_fields_file=input_msh, param_dict=param_dict)
+    res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
     return res, values
@@ -439,8 +439,8 @@ def call_flow_wrap(cfg_machine:'dotdict', file_in:File, params: Dict[str,str]) -
     return fo
 
 
-def parametrized_run(cfg_transport, large_model, input_fields_file, param_dict):
-    cfg = cfg_transport
+def parametrized_run(cfg: dotdict, transport_key: str, input_fields_file:File, param_dict:dict):
+    cfg_transport =  cfg[transport_key]
     stdout_path = Path('.') / 'transport_fullscale_stdout'
     stderr_path = Path('.') / 'transport_fullscale_stderr'
     if stdout_path.exists():
@@ -448,17 +448,17 @@ def parametrized_run(cfg_transport, large_model, input_fields_file, param_dict):
         completed = subprocess.CompletedProcess([], 0, None, None)
         fo = common.FlowOutput(completed, stdout_path, stderr_path)
     else:
-        params = cfg.copy()
-        times = output_times(cfg)
+        params = cfg_transport.copy()
+        times = output_times(cfg_transport)
 
         new_params = dict(
             mesh_file=input_fields_file,
             # piezo_head_input_file=large_model,
             input_fields_file=input_fields_file,
-            dg_penalty=cfg.dg_penalty,
-            end_time_years=cfg.end_time,
-            trans_solver__a_tol=cfg.trans_solver__a_tol,
-            trans_solver__r_tol=cfg.trans_solver__r_tol,
+            dg_penalty=cfg_transport.dg_penalty,
+            end_time_years=cfg_transport.end_time,
+            trans_solver__a_tol=cfg_transport.trans_solver__a_tol,
+            trans_solver__r_tol=cfg_transport.trans_solver__r_tol,
             output_times=[[t, 'y'] for t in times]
             # max_time_step = dt,
             # output_step = 10 * dt
@@ -466,7 +466,7 @@ def parametrized_run(cfg_transport, large_model, input_fields_file, param_dict):
         params.update(new_params)
         params.update(set_source_term(cfg))
         params.update(param_dict)
-        template = job.input.dir_path / cfg.input_template
+        template = job.input.dir_path / cfg_transport.input_template
         fo = call_flow_wrap(cfg.machine_config, template, params)
 
     if fo.process.returncode == 0:

@@ -116,7 +116,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     assert np.all(np.isfinite(fine))
     assert np.all(np.isfinite(coarse))
 
-#@pytest.mark.skip
+@pytest.mark.skip
 def test_transport_mlmc_random(smart_tmp_path: Path):
     """
     Document the synchronous forward-simulation path against the real MLMC transport config.
@@ -143,7 +143,7 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
 
     sensitivity_sampling.resolve_subcmd("mlmc", workdir, None, copy_flag=False)
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_transport_simulation(smart_tmp_path: Path):
     """
     Exercise `TransportSimulation` directly for the fine-level setup from `transport_mlmc.yaml`.
@@ -152,7 +152,7 @@ def test_transport_simulation(smart_tmp_path: Path):
     MLMC driver and runs the fine-level `LevelSimulation` through `SamplingPool.calculate_sample`.
     """
     workdir = smart_tmp_path / "transport_simulation_fine"
-    #shutil.rmtree(workdir, ignore_errors=True)
+    shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
     source_input_dir = Path(__file__).parent.parent / "input_data"
     input_dir = workdir / "input_data"
