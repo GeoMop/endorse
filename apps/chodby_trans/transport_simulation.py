@@ -15,7 +15,6 @@ from endorse.fullscale_transport import output_times
 import chodby_trans.fullscale_transport as transport
 import chodby_trans.job as job
 from chodby_trans import ot_sa
-from chodby_trans.exception_wrapper import ReturnCode, WrapperException
 
 from mlmc.level_simulation import LevelSimulation
 from mlmc.quantity.quantity_spec import QuantitySpec
@@ -180,28 +179,25 @@ class TransportSimulation(Simulation):
         ]
 
     @staticmethod
+    def _parse_sample_input(sample_input: Sequence[float]) -> tuple[np.ndarray, int]:
+        """
+        Split the planned sample vector into transport parameters and the finer-level sample count.
+        """
+        sample_array = np.asarray(sample_input, dtype=float)
+        finer_level_sample_size = int(sample_array[-1])
+        return sample_array[:-1], finer_level_sample_size
+
+    @staticmethod
     def calculate(config_dict, sample_input):
         """
         Calculate one MLMC sample in the current sample workspace.
 
         Level-specific configuration is passed through ``config_dict``.
         The real transport branch calls ``transport_run`` as requested by the
-        in-code instructions. The coarse output remains a placeholder until the
-        transport-side pair result is exposed directly.
+        in-code instructions.
         """
         root_cfg = copy.deepcopy(config_dict["root_cfg"])
-
-        sample_input = np.asarray(sample_input, dtype=float)
-        finer_level_sample_size = int(sample_input[-1])
-        parameters = sample_input[:-1]
-
-        # AGENT: this is not allowed
-        # else:
-        #
-        #     finer_level_sample_size = 0
-        #     parameters = sample_input
-        # Resolved: the MLMC/Saltelli driver always prepends the planning-time finer-level sample count, so the
-        # worker keeps one explicit input layout only.
+        parameters, finer_level_sample_size = TransportSimulation._parse_sample_input(sample_input)
 
         level = int(config_dict["level_id"])
 
@@ -216,25 +212,37 @@ class TransportSimulation(Simulation):
         logging.info("Running MLMC transport sample in %s, level %s.", sample_dir, level)
         logging.info("Finer-level sample count at planning time: %s", finer_level_sample_size)
 
-        if cfg.test_random_data:
-            times = output_times(cfg.transport_fullscale)
-            full_parameters = np.asarray(list(full_param_dict.values()), dtype=float)
-            fine_values = synthetic_concentration(times, level, full_parameters)
-            coarse_values = synthetic_concentration(times, level + 1, full_parameters)
-            fine_rc = ReturnCode.OK
-        else:
-            fine_values, coarse_values = transport.transport_run(cfg, level, full_param_dict)
-            fine_rc = ReturnCode.OK
-
-
-        if fine_rc != ReturnCode.OK:
-            raise WrapperException(
-                f"Transport evaluation failed with return code {fine_rc}",
-                code=fine_rc,
-            )
+        fine_values, coarse_values = transport.transport_run(cfg, level, full_param_dict)
 
         fine_result = compact_concentration_series(fine_values)
         coarse_result = np.zeros_like(fine_result)
         if coarse_values is not None:
             coarse_result = compact_concentration_series(coarse_values)
         return fine_result, coarse_result
+
+
+class RandomTransportSimulation(TransportSimulation):
+    """
+    MLMC forward simulation with deterministic synthetic concentration data for lightweight tests.
+    """
+
+    @staticmethod
+    def calculate(config_dict, sample_input):
+        """
+        Calculate one synthetic MLMC sample in the current sample workspace.
+        """
+        root_cfg = copy.deepcopy(config_dict["root_cfg"])
+        parameters, finer_level_sample_size = TransportSimulation._parse_sample_input(sample_input)
+        level = int(config_dict["level_id"])
+
+        cfg, full_param_dict = apply_sample_parameters(root_cfg, parameters)
+        times = output_times(cfg.transport_fullscale)
+        full_parameters = np.asarray(list(full_param_dict.values()), dtype=float)
+
+        sample_dir = Path(os.getcwd())
+        logging.info("Running random MLMC transport sample in %s, level %s.", sample_dir, level)
+        logging.info("Finer-level sample count at planning time: %s", finer_level_sample_size)
+
+        fine_values = synthetic_concentration(times, level, full_parameters)
+        coarse_values = synthetic_concentration(times, level + 1, full_parameters)
+        return compact_concentration_series(fine_values), compact_concentration_series(coarse_values)

@@ -4,6 +4,7 @@ test_random_data: False
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mlmc:
+  sim_class: TransportSimulation
   levels:
     - id: 0 # finest  # TODO: eliminate ids or number from the coarsest to the finest.
       task_size: 150000   # estimated number of elements
@@ -294,6 +295,19 @@ machine_config:
     # automatic resolution according to the socket.gethostname()
     # content of the 'machine_config' dict is filled by the particular
     # machine configuration dict
+    makovnik:
+        flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
     paulie-MSI:  #JB
         flow_executable:
         # release
@@ -324,8 +338,8 @@ machine_config:
         #     pbs_name: chodby_trans
         #     walltime: "24:00:00"
         pbs:
-            n_cores: 18
-            n_nodes: 3
+            n_cores: 2
+            n_nodes: 1
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb

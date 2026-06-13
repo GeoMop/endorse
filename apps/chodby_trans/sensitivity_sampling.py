@@ -41,8 +41,9 @@ import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
+from chodby_trans.mlmc_analysis import run_mlmc_analysis
 from chodby_trans.exception_wrapper import ReturnCode
-from chodby_trans.transport_simulation import TransportSimulation
+import chodby_trans.transport_simulation as transport_simulation
 from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
 from mlmc.sample_storage_hdf import SampleStorageHDF
@@ -790,7 +791,7 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
     def __init__(
         self,
         cfg_levels,
-        forward_simulation: TransportSimulation,
+        forward_simulation: transport_simulation.TransportSimulation,
         matrix_generator: Callable[[int, int], np.ndarray],
         n_parameters: int,
         finer_samples_collected: Callable[[list[str]], int]
@@ -806,6 +807,20 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
             (sample_id, *tail, n_finner_collected)
             for sample_id, *tail in orig_samples
         ]
+
+
+def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSimulation:
+    """
+    Construct the MLMC forward simulation class named by ``cfg.mlmc.sim_class``.
+    """
+    sim_class_name = cfg.mlmc.sim_class
+    sim_class = getattr(transport_simulation, sim_class_name)
+    if not isinstance(sim_class, type) or not issubclass(sim_class, transport_simulation.TransportSimulation):
+        raise TypeError(
+            f"cfg.mlmc.sim_class={sim_class_name!r} is not a TransportSimulation class "
+            "from chodby_trans.transport_simulation."
+        )
+    return sim_class(cfg, job.output.dir_path)
 
 
 def resubmit_unfinished_samples(sampler: Sampler) -> int:
@@ -903,7 +918,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     sampler_holder: dict[str, Sampler] = {}
     simulation = TransportSaltelliSimulation(
         cfg.mlmc.levels,
-        forward_simulation=TransportSimulation(cfg, job.output.dir_path),
+        forward_simulation=make_transport_simulation(cfg),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
         finer_samples_collected=finner_samples
@@ -956,7 +971,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     )
     n_finner_samples = sampler.n_finished_samples[fine_level_id]
 
-
+    logging.info("Initial fine only sampling completed.")
     scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
     coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
     if coarse_to_schedule > 0:
@@ -983,33 +998,33 @@ def main():
         cmd = sys.argv[2]
         scheduler = sys.argv[3]
     else:
-      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|plots|read)> <command_args>.")
+      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|mlmc_analysis|plots|read)> <command_args>.")
 
 
     # resolve job dirs
     job.set_workdir(work_dir)
     resolve_subcmd(cmd, work_dir, scheduler)
 
-def resolve_subcmd(cmd, work_dir, scheduler):
-    if cmd == 'submit' or cmd == 'local':
-        copy_flag = False
-        if job.input.dir_path.exists():
-            while True:
-                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
-                if user_input.lower() in ["yes", "y"]:
-                    print("Continuing...")
-                    copy_flag = True
-                    break
-                elif user_input.lower() in ["no", "n"]:
-                    print("Exiting...")
-                    break
-                else:
-                    print("Invalid input. Please enter yes/no.")
-        else:
-            copy_flag = True
-        
-        if copy_flag:
-            shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
+def resolve_subcmd(cmd, work_dir, scheduler, copy_flag=True):
+    # if cmd == 'submit' or cmd == 'local':
+    #     copy_flag = False
+    #     if job.input.dir_path.exists():
+    #         while True:
+    #             user_input = input(f"Do you want to overwrite {job.input.dir_path}? (yes/no): ")
+    #             if user_input.lower() in ["yes", "y"]:
+    #                 print("Continuing...")
+    #                 copy_flag = True
+    #                 break
+    #             elif user_input.lower() in ["no", "n"]:
+    #                 print("Exiting...")
+    #                 break
+    #             else:
+    #                 print("Invalid input. Please enter yes/no.")
+    #     else:
+    #         copy_flag = True
+    #
+    if copy_flag:
+        shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
     if not job.input.dir_path.exists():
@@ -1026,7 +1041,7 @@ def resolve_subcmd(cmd, work_dir, scheduler):
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "mlmc", "plots"]
+            assert app_cmd in ["read", "continue", "meta", "mlmc", "mlmc_analysis", "plots"]
             submit_pbs(cfg, cmd=app_cmd) # given app command
         else:   # default app command
             submit_pbs(cfg)
@@ -1073,6 +1088,9 @@ def resolve_subcmd(cmd, work_dir, scheduler):
 
         with common.workdir(str(work_dir), clean=False):
             run_mlmc_sampling(cfg, client, seed)
+    elif cmd == 'mlmc_analysis':
+        with common.workdir(str(work_dir), clean=False):
+            run_mlmc_analysis(cfg)
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)

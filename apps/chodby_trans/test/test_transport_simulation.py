@@ -7,9 +7,10 @@ from pathlib import Path
 import numpy as np
 
 from mlmc.sampling_pool import SamplingPool
+from endorse import common
 
 from chodby_trans.transport_simulation import (
-    TransportSimulation,
+    RandomTransportSimulation,
     compact_concentration_series,
 )
 
@@ -34,7 +35,8 @@ def test_compact_concentration_series():
 
 def test_transport_simulation_result_format_uses_time_axis(tmp_path: Path):
     workdir = make_goal1_workdir(tmp_path)
-    sim = TransportSimulation(workdir)
+    cfg = common.config.load_config(str(workdir / "input_data" / "trans_mesh_config.yaml"))
+    sim = RandomTransportSimulation(cfg, workdir)
 
     result_format = sim.result_format()
 
@@ -47,9 +49,10 @@ def test_transport_simulation_runs_one_pair_with_sample_workspace(tmp_path: Path
     workdir = make_goal1_workdir(tmp_path)
     pool_dir = tmp_path / "pool"
     pool_dir.mkdir()
-    sim = TransportSimulation(workdir)
-    level_sim = sim.make_level_simulation([2], [1], level_id=1)
-    sample_input = ("L01_S0000000", np.array([3.0, 0.2, -0.5], dtype=float))
+    cfg = common.config.load_config(str(workdir / "input_data" / "trans_mesh_config.yaml"))
+    sim = RandomTransportSimulation(cfg, workdir)
+    level_sim = sim.make_level_simulation([10.0], [1.0], level_id=1)
+    sample_input = ("L01_S0000000", 3.0, 0.2, 0.0)
     old_cwd = Path.cwd()
     try:
         sample_id, result, err_msg, _running_time = SamplingPool.calculate_sample(

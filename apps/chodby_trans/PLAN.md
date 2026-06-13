@@ -124,6 +124,17 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-12: Added an independent `mlmc_analysis` subcommand that reads the
+  existing MLMC HDF storage, computes fine/coarse/difference variance
+  diagnostics for Sobol averaging quantities, and writes CSV plus PDF plots.
+- 2026-06-12: Made the MLMC driver instantiate the forward simulation class
+  named by `cfg.mlmc.sim_class` from `transport_simulation.py`. Added
+  `RandomTransportSimulation` for lightweight synthetic concentration runs and
+  removed the random-data branch from `TransportSimulation.calculate`.
+- 2026-06-13: Isolated Dask MLMC sample execution in per-sample subprocesses
+  so Gmsh signal handling and process cwd changes do not run in worker
+  threads. Tightened MLMC sampling waits and tests to require collected HDF
+  samples and fail on stored worker failures.
 - 2026-06-11: Fixed the first MLMC sampling blockers in the local app path:
   reversed `mlmc_level_parameters()` into MLMC order, read Goal 3 sample
   targets from `mlmc.levels[*].min_samples` and `min_finer_samples`, made the
@@ -198,3 +209,10 @@ Resolved:
   implementation must be rebased carefully onto that local state rather than
   overwrite it.
   AGENT: Just stage files with changes.
+- 2026-06-13 machine_config compatibility review: `submit_pbs` still reads
+  `cfg.machine_config.pbs` directly and will need the resolved machine block
+  under the new `machine_config.__resolved__` mechanism.
+- 2026-06-13 machine_config compatibility review: legacy
+  `src/endorse/scripts/endorse_mlmc.py:create_sampler` passes the full
+  `cfg.machine_config` host map to `create_sampling_pool`, which expects PBS
+  keys on the selected machine block.
