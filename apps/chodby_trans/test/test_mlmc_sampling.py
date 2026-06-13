@@ -18,6 +18,7 @@ from chodby_trans.sensitivity_sampling import (
 )
 from chodby_trans.transport_simulation import RandomTransportSimulation
 from mlmc.sampling_pool import SamplingPool
+script_dir = Path(__file__).absolute().parent
 
 
 def make_mlmc_workdir(
@@ -115,7 +116,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
     assert np.all(np.isfinite(fine))
     assert np.all(np.isfinite(coarse))
 
-@pytest.mark.skip
+#@pytest.mark.skip
 def test_transport_mlmc_random(smart_tmp_path: Path):
     """
     Document the synchronous forward-simulation path against the real MLMC transport config.
@@ -128,18 +129,21 @@ def test_transport_mlmc_random(smart_tmp_path: Path):
     workdir = smart_tmp_path / "transport_mlmc"
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True, exist_ok=True)
-    input_dir = Path(__file__).parent.parent / "input_data"
-    job.set_workdir(workdir, input_dir)
+    #input_dir = Path(__file__).parent.parent / "input_data"
+    job.set_workdir(workdir)
+    shutil.copytree(script_dir.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     # Patch config to use the random simulation class.
     cfg = common.load_config(job.input.transport_cfg_path)
     cfg_random = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
-    cfg_random_path = job.input.dir_path / "__transport_mlmc_random.yaml"
-    common.dump_config(cfg_random, cfg_random_path)
+    common.dump_config(cfg_random, job.input.transport_cfg_path)
+    reloaded_cfg = common.load_config(job.input.transport_cfg_path)
 
-    sensitivity_sampling.resolve_subcmd("mlmc", workdir, None)
+    assert reloaded_cfg.mlmc.sim_class == "RandomTransportSimulation"
 
+    sensitivity_sampling.resolve_subcmd("mlmc", workdir, None, copy_flag=False)
 
+@pytest.mark.skip
 def test_transport_simulation(smart_tmp_path: Path):
     """
     Exercise `TransportSimulation` directly for the fine-level setup from `transport_mlmc.yaml`.
