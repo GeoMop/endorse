@@ -176,64 +176,6 @@ transport_microscale:
     flow_solver__r_tol: *flow_solver__r_tol
     flow_solver__options: *flow_solver__options
 
-
-transport_macroscale:
-    input_template: transport_macroscale_tmpl.yaml
-    default_conductivity: 1e-16
-    input_fields_file: "input_fields.msh2"
-
-    bulk_field_params: *bulk_field_params
-    fr_field_params: *fr_field_params
-    output_times: *output_times
-    end_time: *end_time
-    dt_limits: *dt_limits
-
-    flow_solver__a_tol: *flow_solver__a_tol
-    flow_solver__r_tol: *flow_solver__r_tol
-    flow_solver__options: *flow_solver__options
-
-
-# parameters substituted into the TH model template
-transport_fullscale:
-    input_template: transport_fullscale_tmpl.yaml
-
-    # relative to main config
-    piezo_head_input_file: "large_model_local.msh2"
-#    conc_flux_file: "conc_flux_UOS_kg_y.csv"
-    conc_flux_file: "conc_flux_UOS.csv"
-    conc_name: I
-
-    bulk_field_params: *bulk_field_params
-    fr_field_params: *fr_field_params
-    output_times: *output_times
-    end_time: *end_time
-    dt_limits: *dt_limits
-
-    #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
-    #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
-    # diffusivity_effective: 1e-13    # should be smaller then advection
-    # dispersivity_L: 0.5    # [m]
-    # dispersivity_T: 0.05     # [m]
-    dg_penalty: 1
-
-    # backfill_cond: 1e-13
-    # backfill_diff_m: 1e-15
-    # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
-    # backfill_por: 0.003
-
-    # setup for source term
-    sources_params:
-        # UOS geometry
-        diameter: 0.914
-        length: 3.790
-        buffer_thickness: 0.368
-
-    flow_solver__a_tol: *flow_solver__a_tol
-    flow_solver__r_tol: *flow_solver__r_tol
-    flow_solver__options: *flow_solver__options
-
-    trans_solver__a_tol: 1e-15
-    trans_solver__r_tol: 1e-8
         # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
 #        # Boomeramg options:
 #        # -ksp_type richardson              - recomended usage when solving just by multigrid
@@ -290,6 +232,70 @@ transport_fullscale:
 
   # edz_phys_group: 77
 
+
+# parameters substituted into the TH model template
+transport_fullscale:
+    input_template: transport_fullscale_tmpl.yaml
+
+    # relative to main config
+    piezo_head_input_file: "large_model_local.msh2"
+#    conc_flux_file: "conc_flux_UOS_kg_y.csv"
+    conc_flux_file: "conc_flux_UOS.csv"
+    conc_name: I
+
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
+
+    #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
+    #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
+    # diffusivity_effective: 1e-13    # should be smaller then advection
+    # dispersivity_L: 0.5    # [m]
+    # dispersivity_T: 0.05     # [m]
+    dg_penalty: 1
+
+    # backfill_cond: 1e-13
+    # backfill_diff_m: 1e-15
+    # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
+    # backfill_por: 0.003
+
+    # setup for source term
+    sources_params:
+        # UOS geometry
+        diameter: 0.914
+        length: 3.790
+        buffer_thickness: 0.368
+
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
+
+    trans_solver__a_tol: 1e-15
+    trans_solver__r_tol: 1e-8
+
+transport_macroscale:
+    input_template: transport_macroscale_tmpl.yaml
+    default_conductivity: 1e-16
+    input_fields_file: "input_fields.msh2"
+
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
+
+    dg_penalty: 1
+
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
+
+    trans_solver__a_tol: 1e-15
+    trans_solver__r_tol: 1e-8
+
+  
 
 machine_config:
     # automatic resolution according to the socket.gethostname()

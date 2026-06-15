@@ -173,6 +173,11 @@ Resolved:
   `transport_simulation.py` so MLMC grouped inputs expand to the full
   transport parameter vector inside the worker. Added focused tests in
   `test/test_mlmc_sampling.py`.
+- 2026-06-14: Added `plot_scripts/dfn_trace_matrix.py` for deterministic DFN
+  trace visualization from the main transport config. It resolves the fracture
+  template locally, samples a large fracture cloud, clips traces to the problem
+  box, and renders XY/XZ/YZ projections for a geometric progression of
+  `r_limit` values.
 
 ## AGENT Questions And Remarks
 

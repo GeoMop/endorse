@@ -156,7 +156,9 @@ def test_transport_simulation(smart_tmp_path: Path):
     workdir.mkdir(parents=True, exist_ok=True)
     source_input_dir = Path(__file__).parent.parent / "input_data"
     input_dir = workdir / "input_data"
-    shutil.copytree(source_input_dir, input_dir)
+    if not input_dir.exists():
+        shutil.copytree(source_input_dir, input_dir)
+
     job.set_workdir(workdir, input_dir)
 
     cfg = common.load_config(job.input.transport_cfg_path)
