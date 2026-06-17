@@ -267,6 +267,8 @@ transport_fullscale:
         diameter: 0.914
         length: 3.790
         buffer_thickness: 0.368
+        # max. apparent diffusion of I in bentonite: D = 2e-10 [m2.s-1]
+        bentonite_diff: 2e-10
 
     flow_solver__a_tol: *flow_solver__a_tol
     flow_solver__r_tol: *flow_solver__r_tol

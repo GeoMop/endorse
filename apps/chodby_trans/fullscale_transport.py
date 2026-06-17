@@ -263,7 +263,9 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
     return conductivity_target
 
 
-def source_level_field(mesh, cfg_geometry):
+def source_level_field(mesh,
+                       cfg_geometry,
+                       source_dict):
     source_level = np.zeros(len(mesh.elements), dtype=float)
     dsb_idx = int(cfg_geometry.damaged_storage_borehole)
     if dsb_idx < 0:
@@ -274,10 +276,15 @@ def source_level_field(mesh, cfg_geometry):
     if region is None:
         return source_level
 
+    sigma_val = float(source_dict["sources_bentonite_diff"]) \
+                / float(source_dict["sources_buffer_thickness"]) \
+                * float(source_dict["sources_uos_surface"]) \
+                * float(source_dict["sources_container_vol"])
+
     region_id, region_dim = region
     for iel, el in enumerate(mesh.elements):
         if el.tags[0] == region_id and len(el.node_indices) - 1 == region_dim:
-            source_level[iel] = 1.0
+            source_level[iel] = sigma_val
     return source_level
 
 
@@ -308,10 +315,10 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
-    micro_fields["source_level"] = source_level_field(micro_mesh, cfg.mesh.geometry)
+    micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
     # test VTK output
     micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
-    
+
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
     conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
 
@@ -927,6 +934,7 @@ def set_source_term(cfg):
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
+        sources_bentonite_diff=cfg_src.bentonite_diff,
         conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
         storage_regions = [f"storage_{i}" for i in range(cfg_geom.n_storage_boreholes) if i != dsb_idx],
