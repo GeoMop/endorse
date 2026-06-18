@@ -670,8 +670,9 @@ APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 echo "FINISHED"
 """
 
-def submit_pbs(cfg, cmd='meta'):
-    cfg_pbs = cfg.machine_config.pbs
+def submit_pbs(cfg_machine, cmd='meta'):
+    cfg_machine = cfg_machine.get("__resolved__", cfg_machine)
+    cfg_pbs = cfg_machine.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
     pbs_path = job.output.pbs_script
     n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores-1)-2)# Not sure if we need reserve for the master scoop process
@@ -1042,9 +1043,9 @@ def resolve_subcmd(cmd, work_dir, scheduler, copy_flag=True):
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
             assert app_cmd in ["read", "continue", "meta", "mlmc", "mlmc_analysis", "plots"]
-            submit_pbs(cfg, cmd=app_cmd) # given app command
+            submit_pbs(cfg.machine_config, cmd=app_cmd) # given app command
         else:   # default app command
-            submit_pbs(cfg)
+            submit_pbs(cfg.machine_config)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         # read_parameters_by_rc([ReturnCode.NONE])
