@@ -178,6 +178,9 @@ Resolved:
   template locally, samples a large fracture cloud, clips traces to the problem
   box, and renders XY/XZ/YZ projections for a geometric progression of
   `r_limit` values.
+- 2026-06-15: Extended `plot_scripts/dfn_trace_matrix.py` to export each
+  thresholded fracture set as a full 3D Gmsh mesh named `mesh_{r_limit}.msh`
+  alongside the figure output.
 
 ## AGENT Questions And Remarks
 
