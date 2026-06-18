@@ -279,6 +279,7 @@ transport_fullscale:
 
 transport_macroscale:
     input_template: transport_macroscale_tmpl.yaml
+    conc_name: I
     default_conductivity: 1e-16
     input_fields_file: "input_fields.msh2"
 

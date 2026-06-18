@@ -343,8 +343,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
-    macro_fields["source_level"] = average_micro_field_to_macro(
-        micro_mesh, macro_mesh, micro_fields["source_level"]
+    macro_fields["source_sigma"] = average_micro_field_to_macro(
+        micro_mesh, macro_mesh, micro_fields["source_sigma"]
     )
 
     input_fields_path = Path(f"input_fields.msh2")
@@ -362,7 +362,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     return res, values
 
 
-# @memoize
+@memoize
 def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     """
     Fine full-scale transport model

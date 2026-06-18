@@ -115,7 +115,7 @@ def make_micro_mesh(cfg):
 
 
 
-#@memoize
+@memoize
 def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int],
                        fields: Dict[str, np.array]) -> File:
     """
