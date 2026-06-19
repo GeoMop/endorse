@@ -662,10 +662,10 @@ bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 clean_scratch
 
 
-PYEXEC="$PROJECT_DIR/venv/bin/python"
-APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
-"$PYEXEC" -u "$APP_PY" "$output_dir" read
-"$PYEXEC" -u "$APP_PY" "$output_dir" plots
+# PYEXEC="$PROJECT_DIR/venv/bin/python"
+# APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+# "$PYEXEC" -u "$APP_PY" "$output_dir" read
+# "$PYEXEC" -u "$APP_PY" "$output_dir" plots
 
 echo "FINISHED"
 """
@@ -868,6 +868,13 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
     """
+    # initialize job dir also on scheduler
+    client.run_on_scheduler(
+        init_mlmc_worker_job,
+        str(job.output.dir_path),
+        str(job.input.dir_path),
+    )
+
     worker_job_state = client.run(
         init_mlmc_worker_job,
         str(job.output.dir_path),
