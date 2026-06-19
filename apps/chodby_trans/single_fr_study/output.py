@@ -23,10 +23,10 @@ def write_outputs(
     cfg: StudyConfig,
     grid: StudyGrid,
     cases: list[FractureCase],
-    results: dict[str, np.ndarray],
+    results: dict[str, object],
     write_zarr: bool = True,
 ) -> None:
-    """Write all first-pass Method 1 outputs."""
+    """Write all aggregated study outputs."""
     dataset = results_dataset(cfg, grid, cases, results)
     write_summary_csv(cfg, grid, cases, results)
     if cfg.vtk_enabled:
@@ -121,7 +121,7 @@ def _write_zarr_worker(dataset: xr.Dataset, zarr_store: Path) -> None:
 
 
 def write_summary_csv(
-    cfg: StudyConfig, grid: StudyGrid, cases: list[FractureCase], results: dict[str, np.ndarray]
+    cfg: StudyConfig, grid: StudyGrid, cases: list[FractureCase], results: dict[str, object]
 ) -> None:
     """Write a flat CSV summary for quick inspection."""
     cfg.summary_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -186,7 +186,7 @@ def optional_scalar(
 
 
 def write_case_vtk_files(
-    cfg: StudyConfig, grid: StudyGrid, cases: list[FractureCase], results: dict[str, np.ndarray]
+    cfg: StudyConfig, grid: StudyGrid, cases: list[FractureCase], results: dict[str, object]
 ) -> None:
     """Write one macro-grid VTU diagnostics file per fracture case."""
     for case in cases:
@@ -240,4 +240,3 @@ def case_metadata(case: FractureCase, grid: StudyGrid) -> dict[str, object]:
         "block_names": grid.names,
         "block_centers": grid.centers.tolist(),
     }
-

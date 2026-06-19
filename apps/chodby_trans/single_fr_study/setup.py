@@ -144,7 +144,9 @@ class StudyGrid:
 @attrs.define(frozen=True)
 class FractureCase:
     """One deterministic single-fracture configuration."""
-
+    # AGENT: Simplify this class by a) using bgem.stochasti.Fractures os size=1
+    # b) using cached properties derived from the Fractures container.
+    # notably no tangent_u, tangent_v use the transform provided by Fractures.
     case_id: int
     size_id: int
     normal_id: int

@@ -109,8 +109,25 @@
    - Run the Method 1 driver under a timeout for smoke verification.
    - Full Flow123d verification is expected on the target Chodby/cluster environment.
 
+7. Driver and data-model cleanup from inline `AGENT:` notes
+   Status: IMPLEMENTED for `direct_study.py`; Method 2 mesh note remains separate.
+   - Replace the ad hoc dictionary-based study driver in `direct_study.py` with a study object and typed
+     per-case results.
+   - Reduce the `direct_study.py` CLI to the config-file argument and make the study always execute Method 1
+     plus Method 2.
+   - Keep aggregate output writing centralized while allowing per-case results to be accumulated incrementally in
+     the study object.
+   - Review the remaining Method 2 mesh-construction `AGENT:` note separately, because it asks for reuse of the
+     main transport fracture meshing path rather than the current structured-mesh shortcut.
+
 ## AGENT log
 
+- 2026-06-19: Reworked `direct_study.py` around `SingleFractureStudy`, typed per-case result containers, and a
+  config-only CLI. Method 1 and Method 2 are now always run for each case, and aggregate output writing stays in
+  the study object. Verified syntax with `apps/chodby_trans/venv/bin/python -m py_compile` on the study modules.
+- 2026-06-19: Started the cleanup pass driven by unresolved inline `AGENT:` notes in `single_fr_study`.
+  Current scope is the study driver/data model first, with the Method 2 fracture-meshing note tracked as the
+  next structural issue.
 - 2026-06-19: Refactored `direct_study.py` so the main execution loop iterates by fracture case and dispatches
   all enabled methods per case while reusing the existing direct/blob method implementations. Replaced the
   macro diagnostics multiblock `.vtm` with a single macro-grid `.vtu` per case and kept the Method 2
@@ -142,6 +159,9 @@
 
 - USER: No open questions after the compression pass.
 - Local Flow123d and xarray/Zarr environment checks pass with the fixed workdir probe paths.
+- The remaining unresolved inline `AGENT:` note is in `method2.py` and asks to replace the current structured
+  micro mesh with fracture-driven meshing reused from the main Chodby transport path. That is tracked as a
+  separate structural fix from the current driver/data-model cleanup.
 
 AGENT: The Vtk output issues:
   - no micro mesh output (from method 2)
