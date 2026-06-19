@@ -68,13 +68,13 @@
      sorted eigenvalues, eigenvectors as diagnostics, summary CSV, xarray/Zarr, and pyvista VTK.
 
 2. Method 2: existing blob homogenization
-   Status: NEXT.
-   - Build the single-fracture micro mesh on the extended domain and prepare three pressure-load fields.
-   - Call the existing `macro_conductivity` / `Subproblems` path without copying core code.
-   - Use a macro mesh whose element centers correspond to the 5 x 5 x 5 planned block centers, adding only
-     app-local glue if the study needs a custom mesh.
-   - Persist Flow123d return codes, mesh paths, field paths, and homogenization logs for cluster post-mortem.
-   - Verify Flow123d with `endorse.common.call_flow` and `environment.flow_call` from `config.yaml` first.
+   Status: IMPLEMENTED first pass in `method2.py`; full 24-case run still needs cluster-side review.
+   - Method 2 is enabled by `direct_study.py --include-method2`.
+   - The app builds a structured extended-domain micro mesh with a coarse voxelized fracture conductivity field.
+   - The app builds a macro mesh whose element centers correspond to the 5 x 5 x 5 planned block centers.
+   - Blob averaging uses `endorse.homogenisation.Subproblems` with an app-local 8 m cube macro shape.
+   - Flow123d runs through `endorse.common.call_flow` and `environment.flow_call` from `config.yaml`.
+   - Method 2 writes Flow123d inputs/outputs, macro/micro meshes, and VTK diagnostics under `workdir/study`.
 
 3. Method 3: CNN surrogate
    Status: NEXT.
@@ -111,8 +111,16 @@
 
 ## AGENT log
 
+- 2026-06-19: Refactored `direct_study.py` so the main execution loop iterates by fracture case and dispatches
+  all enabled methods per case while reusing the existing direct/blob method implementations. Replaced the
+  macro diagnostics multiblock `.vtm` with a single macro-grid `.vtu` per case and kept the Method 2
+  micro-mesh output as a separate file.
 - 2026-06-19: Compressed resolved Q&A and implemented steps into the current plan. Resolved decisions now live in
   `Setup`, `Plan`, and this log instead of the full historical Q&A text.
+- 2026-06-19: Implemented Method 2 first pass using app-generated macro/micro meshes, endorse
+  `Subproblems`, `homogenize_batch`, and Flow123d via `call_flow`; verified one Method 2 case locally.
+- 2026-06-19: Updated VTK diagnostics to include Method 2 micro mesh output, basic-domain macro tensor points,
+  and whole tensor/eigenvalue arrays instead of per-component tensor arrays.
 - 2026-06-19: Removed output path parametrization from `config.yaml`; study and environment checks now write
   fixed filenames under `single_fr_study/workdir`.
 - 2026-06-19: Flow123d wrapper probe passes with the configured `endorse_fterm --no-term run` command and a
@@ -134,3 +142,10 @@
 
 - USER: No open questions after the compression pass.
 - Local Flow123d and xarray/Zarr environment checks pass with the fixed workdir probe paths.
+
+AGENT: The Vtk output issues:
+  - no micro mesh output (from method 2)
+  - the gird for effective tensors is not the extended domain, but it should be only on the basic domain (0, 16)^3
+  - Output the eigen values and whole tensor in the grid points, no component only arrays.
+Resolved: VTK now adds `method2_micro_mesh`, keeps macro tensors on the 125 basic-domain grid centers, and writes
+`direct_tensor`, `direct_eigenvalues`, `blob_tensor`, and `blob_eigenvalues` arrays.

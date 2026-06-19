@@ -48,6 +48,8 @@ class StudyConfig:
     rotations_deg: np.ndarray
     clipping_resolution: int
     convergence_resolution: int
+    method2_micro_grid_1d_count: int
+    method2_pressure_loads: np.ndarray
     vtk_enabled: bool
     vtk_micro_grid_1d_count: int
     flow_call_config: dict[str, Any]
@@ -68,6 +70,7 @@ class StudyConfig:
         materials = raw["materials"]
         fracture = raw["fracture"]
         method1 = raw["method1"]
+        method2 = raw["method2"]
         vtk = raw["vtk"]
         environment = raw["environment"]
         cfg = cls(
@@ -88,6 +91,8 @@ class StudyConfig:
             rotations_deg=np.asarray(fracture["shape_rotations_deg"], dtype=float),
             clipping_resolution=int(method1["clipping_resolution"]),
             convergence_resolution=int(method1["convergence_resolution"]),
+            method2_micro_grid_1d_count=int(method2["micro_grid_1d_count"]),
+            method2_pressure_loads=np.asarray(method2["pressure_loads"], dtype=float),
             vtk_enabled=bool(vtk["enabled"]),
             vtk_micro_grid_1d_count=int(vtk["micro_grid_1d_count"]),
             flow_call_config=dict(environment["flow_call"]),
@@ -110,6 +115,9 @@ class StudyConfig:
             raise ValueError("macro_grid.block_size must be positive")
         if self.clipping_resolution < 2 or self.convergence_resolution < 2:
             raise ValueError("method1 clipping resolutions must be at least 2")
+        if self.method2_micro_grid_1d_count < 2:
+            raise ValueError("method2.micro_grid_1d_count must be at least 2")
+        validate_shape("method2_pressure_loads", self.method2_pressure_loads, (None, 3))
         if self.vtk_micro_grid_1d_count < 2:
             raise ValueError("vtk.micro_grid_1d_count must be at least 2")
         flow_executable = self.flow_call_config.get("flow_executable", [])

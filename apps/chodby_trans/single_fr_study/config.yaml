@@ -31,6 +31,13 @@ method1:
   clipping_resolution: 48
   convergence_resolution: 24
 
+method2:
+  micro_grid_1d_count: 7
+  pressure_loads:
+    - [1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, 1.0]
+
 vtk:
   enabled: true
   micro_grid_1d_count: 9
