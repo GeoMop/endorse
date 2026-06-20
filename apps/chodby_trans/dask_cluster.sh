@@ -17,6 +17,7 @@ APP_CMD_DEFAULT="meta"
 
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
 NCPUS=$(wc -l < "$PBS_NODEFILE")
+HEAD_WORKER_RESERVE=${DASK_HEAD_WORKER_RESERVE:-2}
 
 PYEXEC="$VENV/bin/python"
 DASK_BIN="$VENV/bin/dask"
@@ -75,16 +76,28 @@ start_scheduler() {
 }
 
 start_workers() {
-  echo "[worker] Launching workers on each node (one process per PBS slot, 1 thread each)..."
+  echo "[worker] Launching workers on each node (one process per worker slot, 1 thread each)..."
+  echo "[worker] Reserving $HEAD_WORKER_RESERVE slot(s) on scheduler node $HEAD_NODE."
   echo "$SCHED_ADDR"
   echo "$HOST_COUNTS"
   while read -r COUNT HOST; do
     [[ -z "${HOST:-}" ]] && continue
+    WORKER_COUNT=$COUNT
+    if [[ "$HOST" == "$HEAD_NODE" ]]; then
+      WORKER_COUNT=$((COUNT - HEAD_WORKER_RESERVE))
+      if (( WORKER_COUNT < 0 )); then
+        WORKER_COUNT=0
+      fi
+    fi
+    if (( WORKER_COUNT == 0 )); then
+      echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers; scheduler reserved) ---"
+      continue
+    fi
     # echo "--- $HOST --- "
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
-    echo "--- $HOST ($COUNT slots) ---"
-    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
+    echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
+    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
   done <<< "$HOST_COUNTS"
   echo "[worker] Workers started."
 }

@@ -124,6 +124,12 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-20: Updated `dask_cluster.sh` to reserve scheduler-node worker slots
+  through `DASK_HEAD_WORKER_RESERVE` (default 2), reducing CPU starvation of
+  the Dask scheduler and driver during MLMC sample bursts.
+- 2026-06-20: Added `ENDORSE_DISABLE_MEMOIZE=1` support in
+  `src/endorse/common/memoize.py` so cluster MLMC runs can bypass all existing
+  `@memoize` decorators without manually editing hot-path functions.
 - 2026-06-20: Changed `ot_sa.SensitivityAnalysis.from_cfg` caching to use a
   deterministic JSON key built from `dotdict.serialize(...)`, with the cached
   reconstruction moved into `_from_cfg_cached`. This avoids `TypeError:
