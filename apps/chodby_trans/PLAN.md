@@ -124,6 +124,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-20: Changed `ot_sa.SensitivityAnalysis.from_cfg` caching to use a
+  deterministic JSON key built from `dotdict.serialize(...)`, with the cached
+  reconstruction moved into `_from_cfg_cached`. This avoids `TypeError:
+  unhashable type: 'dotdict'` when memoizing scheduler-side deserialization.
 - 2026-06-12: Added an independent `mlmc_analysis` subcommand that reads the
   existing MLMC HDF storage, computes fine/coarse/difference variance
   diagnostics for Sobol averaging quantities, and writes CSV plus PDF plots.

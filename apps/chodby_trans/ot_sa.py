@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import *
+import json
 from functools import cached_property
 import xarray as xr
 import sys
@@ -13,6 +14,8 @@ import openturns as ot
 import pandas as pd
 from scipy.stats import alpha
 
+from functools import lru_cache
+from endorse.common import dotdict
 from chodby_trans import job
 
 """
@@ -786,9 +789,21 @@ class SensitivityAnalysis:
         repr=False,
         )
 
-
     @staticmethod
     def from_cfg(sa_cfg):
+        """
+        Build a sensitivity analysis from a mutable config object.
+
+        The public entry point accepts a ``dotdict`` or plain ``dict`` and
+        normalizes it to a deterministic JSON cache key for the cached helper.
+        """
+        sa_cfg_json = json.dumps(dotdict.serialize(sa_cfg), sort_keys=True)
+        return SensitivityAnalysis._from_cfg_cached(sa_cfg_json)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _from_cfg_cached(sa_cfg_json: str):
+        sa_cfg = dotdict.create(json.loads(sa_cfg_json))
         param_cfg = sa_cfg['parameters']
         # parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
         parameters = dict()
