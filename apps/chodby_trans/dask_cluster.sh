@@ -97,7 +97,9 @@ start_workers() {
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
     echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
-    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
+    pbsdsh -vh "$HOST" -- env \
+      ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}" \
+      bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
   done <<< "$HOST_COUNTS"
   echo "[worker] Workers started."
 }

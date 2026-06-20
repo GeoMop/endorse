@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-20: Fixed two PBS MLMC worker issues from `driver_174251`: worker
+  launch now passes `ENDORSE_DISABLE_MEMOIZE` explicitly through `pbsdsh`, and
+  fine mesh subprocess setup preserves the configured `input_data` directory.
 - 2026-06-20: Updated `dask_cluster.sh` to reserve scheduler-node worker slots
   through `DASK_HEAD_WORKER_RESERVE` (default 2), reducing CPU starvation of
   the Dask scheduler and driver during MLMC sample bursts.
