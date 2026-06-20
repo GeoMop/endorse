@@ -620,6 +620,7 @@ pbs_script_template = """
 set -x
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
+export ENDORSE_DISABLE_MEMOIZE=1
 
 output_dir={outputdir}
 # work_dir={workdir}
