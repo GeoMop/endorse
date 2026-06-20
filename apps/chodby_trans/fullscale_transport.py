@@ -117,8 +117,12 @@ def update_mesh_cfg(cfg_mesh, level_dict):
 
 
 @memoize
-# @run_in_subprocess
-def create_mesh(cfg_mesh, fr_set, n_large):
+@run_in_subprocess
+def create_mesh(workdir, cfg_mesh, fr_set, n_large):
+
+    # when running in subprocess, global variables are lost
+    # therefore we set the workdir again
+    job.set_workdir(workdir)
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
     mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
@@ -149,7 +153,7 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     if input_msh_filepath.exists():
         return File(str(input_msh_filepath))
 
-    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
+    full_mesh, el_to_ifr = create_mesh(workdir, cfg_mesh, fr_set, n_large)
 
     fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
@@ -163,9 +167,9 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
 def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
-    job.set_workdir(workdir)
+    # job.set_workdir(workdir)
 
-    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
+    full_mesh, el_to_ifr = create_mesh(workdir, cfg_mesh, fr_set, n_large)
     return full_mesh.file
     # TODO: pass homogenization fields
     # mesh_modified = load_mesh(mesh_modified_file)
@@ -229,7 +233,7 @@ def prepare_common_homogenization_mesh(cfg):
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
 
-    homo_mesh, _ = create_mesh(cfg_mesh, [], 0)
+    homo_mesh, _ = create_mesh(job.scratch.dir_path, cfg_mesh, [], 0)
 
     homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
 
@@ -306,7 +310,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
     cfg_mesh.mesh_name += f"_{variant}"
-    micro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
+    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, cfg_mesh, fracture_set, n_large)
 
     # load common homogenization mesh
     homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
@@ -329,7 +333,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
     logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
-    macro_mesh, el_to_ifr = create_mesh(cfg_mesh, coarse_fracture_set, n_large)
+    macro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, cfg_mesh, coarse_fracture_set, n_large)
 
     # macro: bulk conductivity tensor
     conductivity_macro = interpolate_conductivity_tensor(
@@ -379,7 +383,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
     else:
-        input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
+        input_msh = prepare_fine_input(job.scratch.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
 
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)

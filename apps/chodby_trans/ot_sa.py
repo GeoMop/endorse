@@ -821,6 +821,9 @@ class SensitivityAnalysis:
             else:
                 parameters[name] = Parameter.from_cfg(name, p_cfg)
 
+        info = SensitivityAnalysis._from_cfg_cached.cache_info()
+        print(info)
+
         return SensitivityAnalysis(
             parameters,
             cfg=sa_cfg,
