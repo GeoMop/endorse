@@ -118,11 +118,11 @@ def update_mesh_cfg(cfg_mesh, level_dict):
 
 @memoize
 @run_in_subprocess
-def create_mesh(workdir, cfg_mesh, fr_set, n_large):
+def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
-    job.set_workdir(workdir)
+    job.set_workdir(workdir, input_dir)
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
     mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
@@ -153,7 +153,8 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     if input_msh_filepath.exists():
         return File(str(input_msh_filepath))
 
-    full_mesh, el_to_ifr = create_mesh(workdir, cfg_mesh, fr_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    full_mesh, el_to_ifr = create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large)
 
     fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
@@ -169,7 +170,8 @@ def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # therefore we set the workdir again
     # job.set_workdir(workdir)
 
-    full_mesh, el_to_ifr = create_mesh(workdir, cfg_mesh, fr_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    full_mesh, el_to_ifr = create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large)
     return full_mesh.file
     # TODO: pass homogenization fields
     # mesh_modified = load_mesh(mesh_modified_file)
@@ -363,6 +365,7 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
                                input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
+    logging.info(f"macro results shape: {values.shape}")
     return res, values
 
 
@@ -389,6 +392,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
+    logging.info(f"fine results shape: {values.shape}")
     return res, values
 
 

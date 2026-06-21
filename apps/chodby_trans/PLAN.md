@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-21: Made `job.set_workdir(..., input_dir=...)` export the input
+  directory through `ENDORSE_INPUT_DIR`, so loky subprocesses that call
+  `job.set_workdir(workdir)` inherit the correct shared `input_data` path.
 - 2026-06-20: Fixed two PBS MLMC worker issues from `driver_174251`: worker
   launch now passes `ENDORSE_DISABLE_MEMOIZE` explicitly through `pbsdsh`, and
   fine mesh subprocess setup preserves the configured `input_data` directory.
