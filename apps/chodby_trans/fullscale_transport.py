@@ -117,7 +117,7 @@ def update_mesh_cfg(cfg_mesh, level_dict):
 
 
 @memoize
-@run_in_subprocess
+#@run_in_subprocess
 def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
     # when running in subprocess, global variables are lost
@@ -142,8 +142,8 @@ def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
     return full_mesh, el_to_ifr
 
-#@memoize
-# @run_in_subprocess
+@memoize
+@run_in_subprocess
 def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
@@ -235,7 +235,7 @@ def prepare_common_homogenization_mesh(cfg):
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
 
-    homo_mesh, _ = create_mesh(job.scratch.dir_path, cfg_mesh, [], 0)
+    homo_mesh, _ = create_mesh(job.scratch.dir_path, job.input.dir_path, cfg_mesh, [], 0)
 
     homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
 
