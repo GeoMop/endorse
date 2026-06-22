@@ -822,7 +822,7 @@ def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSim
             f"cfg.mlmc.sim_class={sim_class_name!r} is not a TransportSimulation class "
             "from chodby_trans.transport_simulation."
         )
-    return sim_class(cfg, job.output.dir_path)
+    return sim_class(cfg, job.scratch.dir_path)
 
 
 def resubmit_unfinished_samples(sampler: Sampler) -> int:
@@ -886,7 +886,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
 
     data_schema_key, data_schema = initialize_data_schema()
-    with common.workdir(str(job.output.dir_path), clean=False):
+    with common.workdir(str(job.scratch.dir_path), clean=False):
       prepare_common_homogenization_mesh(cfg)
 
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
@@ -908,7 +908,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     storage = SampleStorageHDF(str(storage_path))
     pool = SamplingPoolDask(
         client,
-        work_dir=str(job.output.dir_path),
+        work_dir=str(job.scratch.dir_path),
         debug=not cfg.ot_sensitivity.clean_sample_dir,
         clean=bool(cfg.ot_sensitivity.clean_sample_dir),
     )
