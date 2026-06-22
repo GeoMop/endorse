@@ -117,7 +117,7 @@ def update_mesh_cfg(cfg_mesh, level_dict):
 
 
 @memoize
-#@run_in_subprocess
+# @run_in_subprocess
 def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
     # when running in subprocess, global variables are lost
@@ -166,29 +166,7 @@ def prepare_fine_input(workdir, input_dir, cfg_mesh, cfg_trans, fr_set, n_large)
     return input_fields_file
 
 
-#@memoize
-# @run_in_subprocess
-def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
-    # when running in subprocess, global variables are lost
-    # therefore we set the workdir again
-    # job.set_workdir(workdir)
-
-    input_dir = job.input.dir_path if job.input is not None else None
-    full_mesh, el_to_ifr = create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large)
-    return full_mesh.file
-    # TODO: pass homogenization fields
-    # mesh_modified = load_mesh(mesh_modified_file)
-    # input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
-    #                                                  el_to_ifr, fractures, dim=3)
-    #
-    # # input_fields_file = File("input_fields.msh2")
-    # input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
-    # shutil.move(input_fields_file.path, input_msh_filepath)
-    # input_msh = File(input_msh_filepath)
-    # return input_msh
-
-
-# @memoize
+@memoize
 def transport_prepare_run(cfg_mesh):
     fracture_box = cfg_mesh.fractures.clip_box_ratio * np.array(cfg_mesh.geometry.box_dimensions)
     logging.info(f"box: {cfg_mesh.geometry.box_dimensions}")
@@ -223,8 +201,6 @@ def transport_run(cfg, level_id, param_dict):
     if level_id < len(cfg.mlmc.levels) - 1:
         with common.workdir("macro_trans", clean=False):
             logging.info(f"macro dir: {os.getcwd()}")
-            # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
-            # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
             c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
     else:
         c_values = None
@@ -233,7 +209,6 @@ def transport_run(cfg, level_id, param_dict):
 
 def prepare_common_homogenization_mesh(cfg):
     # macro homogenization: homogenization mesh
-    variant = "homo"
     macro_level = cfg.mlmc.levels[-1]
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
@@ -308,7 +283,10 @@ def average_micro_field_to_macro(micro_mesh, macro_mesh, micro_field):
     return macro_field
 
 
-def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
+@memoize
+@run_in_subprocess
+def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_id):
+    job.set_workdir(workdir, input_dir)
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
@@ -364,9 +342,13 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
     # test output to VTK
     macro_mesh.write_fields_vtu(input_fields_path.with_suffix(".vtu"), macro_fields)
+    return input_fields_file
 
 
-    # TODO run Flow123d on macro mesh
+def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
+
+    input_fields_file = prepare_coarse_input(job.scratch.dir_path, job.input.dir_path,
+                                             cfg, fracture_set, n_large, level_id)
     res, fo = parametrized_run(cfg, "transport_macroscale",
                                input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
