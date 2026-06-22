@@ -243,7 +243,7 @@ def parse_args() -> argparse.Namespace:
         help="Number of Saltelli base samples. Each sample runs 2 * (n_groups + 1) model evaluations.",
     )
     parser.add_argument("--seed", type=int, default=101, help="OpenTURNS random seed.")
-    parser.add_argument("--level-id", type=int, default=1, help="Transport MLMC level id from cfg.mlmc.levels.")
+    parser.add_argument("--level-id", type=int, default=0, help="Transport MLMC level id from cfg.mlmc.levels.")
     parser.add_argument(
         "--finer-sample-count",
         type=int,

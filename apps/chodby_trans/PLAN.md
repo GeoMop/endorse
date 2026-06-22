@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-22: Added a subprocess-region quick fix in `mesh/create_mesh.py`:
+  before meshing, BGEM `Region._max_reg_id` is bumped above the unpickled
+  fracture region ids to avoid collisions with newly created boundary regions.
 - 2026-06-22: Added `sequential_saltelli_samples.py` to run real
   `input_data/transport_mlmc.yaml` Saltelli terms sequentially without
   MLMC/Dask storage, writing generated group rows and transformed parameters.

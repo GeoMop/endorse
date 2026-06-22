@@ -16,6 +16,18 @@ from bgem.stochastic import Population
 
 import chodby_trans.exception_wrapper as exp
 
+
+def preserve_region_counter_after_unpickle(fracture_set) -> None:
+    """ Quick Fix
+        Keep BGEM-generated regions unique after fracture regions cross a subprocess boundary.
+    """
+    if not fracture_set:
+        return
+
+    max_fracture_region_id = max(fr.region.id for fr in fracture_set)
+    gmsh.Region._max_reg_id = max(gmsh.Region._max_reg_id, max_fracture_region_id)
+
+
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
     """
     :param factory:
@@ -528,6 +540,7 @@ def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
+    preserve_region_counter_after_unpickle(fracture_set)
     if cfg_mesh.geometry.resolution_type == "box_drilled":
         geometry_set = make_geometry(factory, cfg_mesh, fracture_set)
     elif cfg_mesh.geometry.resolution_type == "box":
