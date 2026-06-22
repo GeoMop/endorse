@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-22: Added `collect_sequential_saltelli_results.py` to collect
+  completed sequential Saltelli `result.npz` files into aligned parameter,
+  fine-result, and coarse-result CSV tables.
 - 2026-06-22: Added a subprocess-region quick fix in `mesh/create_mesh.py`:
   before meshing, BGEM `Region._max_reg_id` is bumped above the unpickled
   fracture region ids to avoid collisions with newly created boundary regions.
