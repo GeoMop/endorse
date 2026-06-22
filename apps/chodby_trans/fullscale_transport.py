@@ -235,7 +235,8 @@ def prepare_common_homogenization_mesh(cfg):
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
 
-    homo_mesh, _ = create_mesh(job.scratch.dir_path, cfg_mesh, [], 0)
+    input_dir = job.input.dir_path if job.input is not None else None
+    homo_mesh, _ = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, [], 0)
 
     homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
 
@@ -312,7 +313,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
     cfg_mesh.mesh_name += f"_{variant}"
-    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, cfg_mesh, fracture_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, fracture_set, n_large)
 
     # load common homogenization mesh
     homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
@@ -335,7 +337,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
     logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
-    macro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, cfg_mesh, coarse_fracture_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    macro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, coarse_fracture_set, n_large)
 
     # macro: bulk conductivity tensor
     conductivity_macro = interpolate_conductivity_tensor(

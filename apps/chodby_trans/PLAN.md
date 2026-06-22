@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-22: Added `sequential_saltelli_samples.py` to run real
+  `input_data/transport_mlmc.yaml` Saltelli terms sequentially without
+  MLMC/Dask storage, writing generated group rows and transformed parameters.
 - 2026-06-21: Made `job.set_workdir(..., input_dir=...)` export the input
   directory through `ENDORSE_INPUT_DIR`, so loky subprocesses that call
   `job.set_workdir(workdir)` inherit the correct shared `input_data` path.
