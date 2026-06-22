@@ -123,6 +123,7 @@ def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
     job.set_workdir(workdir, input_dir)
+    logging.info(cfg_mesh)
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
     mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
@@ -144,18 +145,20 @@ def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
 @memoize
 @run_in_subprocess
-def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
+def prepare_fine_input(workdir, input_dir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
     #job.set_workdir(workdir)
+    job.set_workdir(workdir, input_dir)
+    # common.dump_config(cfg_mesh, Path("cfg_mesh.yaml"))
+    with open("cfg_mesh.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(dotdict.serialize(cfg_mesh), f, sort_keys=False)
 
     input_msh_filepath = Path(f"input_fields.msh2")
     if input_msh_filepath.exists():
         return File(str(input_msh_filepath))
 
-    input_dir = job.input.dir_path if job.input is not None else None
-    full_mesh, el_to_ifr = create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large)
-
+    full_mesh, el_to_ifr = create_mesh(workdir, job.input.dir_path, cfg_mesh, fr_set, n_large)
     fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fr_set, dim=3)
@@ -389,8 +392,8 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
     else:
-        input_msh = prepare_fine_input(job.scratch.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
-
+        input_msh = prepare_fine_input(job.scratch.dir_path, job.input.dir_path,
+                                       cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)

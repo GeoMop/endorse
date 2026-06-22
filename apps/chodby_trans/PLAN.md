@@ -200,6 +200,10 @@ Resolved:
 
 ## AGENT Questions And Remarks
 
+- 2026-06-22: Investigation note: the real fine `box_drilled` mesh path still
+  drops boundary physical groups such as `.side_x0`, `.tunnel_head_y0`, and
+  `.fractures_out` before `input_fields.msh2` reaches Flow123d. This is now
+  separate from the lightweight MLMC sampling test, which should not run Flow.
 
 - `SA_USAGE.md` defines the generic MLMC contracts, but the exact
   Dask-compatible MLMC sampling-pool class expected in this project is still
