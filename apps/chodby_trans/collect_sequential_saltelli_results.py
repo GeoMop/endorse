@@ -257,6 +257,38 @@ def dataset_for_distribution_plot(sample_ids: list[str], values: np.ndarray, tim
     )
 
 
+def result_time_axis(times: list[float]) -> tuple[np.ndarray, bool]:
+    t_raw = np.asarray(times, dtype=float) / 1000.0
+    t_pos = t_raw[t_raw > 0]
+    if t_pos.size == 0:
+        return np.arange(len(times), dtype=float), False
+    return np.where(t_raw > 0, t_raw, float(t_pos.min()) * 0.999), True
+
+
+def load_paired_results(
+    workdir: Path,
+    output_dir_name: str,
+    config_name: str,
+) -> tuple[Path, list[str], np.ndarray, np.ndarray, list[float]]:
+    workdir = workdir.absolute()
+    output_dir = workdir / output_dir_name
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Sequential output directory does not exist: {output_dir}")
+
+    fine_ids, fine_values = load_result_matrix(output_dir, "fine")
+    coarse_ids, coarse_values = load_result_matrix(output_dir, "coarse")
+    if fine_ids != coarse_ids:
+        raise ValueError("Fine and coarse sample ids do not match.")
+    if fine_values.shape != coarse_values.shape:
+        raise ValueError(f"Fine/coarse shapes do not match: {fine_values.shape} != {coarse_values.shape}")
+
+    config_path = resolve_config_path(workdir, output_dir, config_name)
+    times = result_time_values(output_dir, config_path, fine_values.shape[1])
+    if times is None:
+        times = [float(idx) for idx in range(fine_values.shape[1])]
+    return output_dir, fine_ids, fine_values, coarse_values, times
+
+
 def plot_result_distribution(
     workdir: Path,
     output_dir_name: str = DEFAULT_OUTPUT_DIR,
@@ -308,22 +340,9 @@ def plot_fine_coarse_comparison(
     config_name: str = DEFAULT_CONFIG_NAME,
     plot_dir_name: str = "plots",
 ) -> Path:
-    workdir = workdir.absolute()
-    output_dir = workdir / output_dir_name
-    if not output_dir.exists():
-        raise FileNotFoundError(f"Sequential output directory does not exist: {output_dir}")
-
-    fine_ids, fine_values = load_result_matrix(output_dir, "fine")
-    coarse_ids, coarse_values = load_result_matrix(output_dir, "coarse")
-    if fine_ids != coarse_ids:
-        raise ValueError("Fine and coarse sample ids do not match.")
-    if fine_values.shape != coarse_values.shape:
-        raise ValueError(f"Fine/coarse shapes do not match: {fine_values.shape} != {coarse_values.shape}")
-
-    config_path = resolve_config_path(workdir, output_dir, config_name)
-    times = result_time_values(output_dir, config_path, fine_values.shape[1])
-    if times is None:
-        times = [float(idx) for idx in range(fine_values.shape[1])]
+    output_dir, _sample_ids, fine_values, coarse_values, times = load_paired_results(
+        workdir, output_dir_name, config_name
+    )
 
     import matplotlib
 
@@ -331,14 +350,7 @@ def plot_fine_coarse_comparison(
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
-    t_raw = np.asarray(times, dtype=float) / 1000.0
-    t_pos = t_raw[t_raw > 0]
-    if t_pos.size == 0:
-        t = np.arange(len(times), dtype=float)
-        use_log_x = False
-    else:
-        t = np.where(t_raw > 0, t_raw, float(t_pos.min()) * 0.999)
-        use_log_x = True
+    t, use_log_x = result_time_axis(times)
 
     fig, ax = plt.subplots(figsize=(14, 7))
     for fine, coarse in zip(fine_values, coarse_values):
@@ -372,6 +384,115 @@ def plot_fine_coarse_comparison(
     return out_path
 
 
+def plot_mlmc_diagnostics(
+    workdir: Path,
+    output_dir_name: str = DEFAULT_OUTPUT_DIR,
+    config_name: str = DEFAULT_CONFIG_NAME,
+    plot_dir_name: str = "plots",
+) -> Path:
+    output_dir, _sample_ids, fine_values, coarse_values, times = load_paired_results(
+        workdir, output_dir_name, config_name
+    )
+    diff_values = fine_values - coarse_values
+    n_samples = fine_values.shape[0]
+
+    fine_var = np.nanvar(fine_values, axis=0, ddof=1)
+    coarse_var = np.nanvar(coarse_values, axis=0, ddof=1)
+    diff_var = np.nanvar(diff_values, axis=0, ddof=1)
+    ratio = np.divide(coarse_var, fine_var, out=np.full_like(fine_var, np.nan), where=fine_var > 0)
+    reduction = np.divide(fine_var, diff_var, out=np.full_like(fine_var, np.nan), where=diff_var > 0)
+    bias = np.nanmean(diff_values, axis=0)
+    diff_q25, diff_q75 = np.nanquantile(diff_values, [0.25, 0.75], axis=0)
+
+    corr = np.empty(fine_values.shape[1], dtype=float)
+    for i_time in range(fine_values.shape[1]):
+        fine_t = fine_values[:, i_time]
+        coarse_t = coarse_values[:, i_time]
+        mask = np.isfinite(fine_t) & np.isfinite(coarse_t)
+        if np.count_nonzero(mask) < 2:
+            corr[i_time] = np.nan
+        elif np.nanstd(fine_t[mask]) == 0.0 or np.nanstd(coarse_t[mask]) == 0.0:
+            corr[i_time] = np.nan
+        else:
+            corr[i_time] = np.corrcoef(fine_t[mask], coarse_t[mask])[0, 1]
+
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+
+    t, use_log_x = result_time_axis(times)
+    fig, axes = plt.subplots(4, 1, figsize=(13, 13), sharex=True)
+
+    ax = axes[0]
+    ax.plot(t, fine_var, label="Var(fine)", color="tab:blue")
+    ax.plot(t, coarse_var, label="Var(coarse)", color="tab:orange")
+    ax.plot(t, diff_var, label="Var(fine - coarse)", color="tab:green")
+    ax.set_yscale("log")
+    ax.set_ylabel("Variance")
+    ax.legend(loc="best")
+    ax.grid(alpha=0.25)
+
+    ax = axes[1]
+    ax.plot(t, ratio, label="Var(coarse) / Var(fine)", color="tab:purple")
+    ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
+    ax.set_ylabel("Variance ratio")
+    ax.legend(loc="best")
+    ax.grid(alpha=0.25)
+
+    ax = axes[2]
+    ax.plot(t, corr, label="Corr(fine, coarse)", color="tab:red")
+    ax.set_ylim(-1.05, 1.05)
+    ax.set_ylabel("Correlation")
+    ax.legend(loc="best")
+    ax.grid(alpha=0.25)
+
+    ax = axes[3]
+    ax.fill_between(t, diff_q25, diff_q75, color="tab:green", alpha=0.2, label="IQR(fine - coarse)")
+    ax.plot(t, bias, label="Mean(fine - coarse)", color="tab:green")
+    ax.axhline(0.0, color="0.4", lw=0.8, ls="--")
+    ax.set_ylabel("Difference")
+    ax.legend(loc="best")
+    ax.grid(alpha=0.25)
+
+    if use_log_x:
+        axes[-1].set_xscale("log")
+        axes[-1].set_xlabel("Time from 50y pulse (ky)")
+    else:
+        axes[-1].set_xlabel("Output time index")
+
+    fig.suptitle(f"Fine/coarse MLMC diagnostics, n={n_samples}")
+    fig.tight_layout()
+
+    plot_dir = output_dir / plot_dir_name
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    out_path = plot_dir / "fine_coarse_mlmc_diagnostics.pdf"
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+
+    diagnostics_csv = plot_dir / "fine_coarse_mlmc_diagnostics.csv"
+    with diagnostics_csv.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "time",
+                "fine_var",
+                "coarse_var",
+                "diff_var",
+                "coarse_fine_var_ratio",
+                "fine_diff_var_reduction",
+                "fine_coarse_corr",
+                "mean_diff",
+                "diff_q25",
+                "diff_q75",
+            ]
+        )
+        for row in zip(t, fine_var, coarse_var, diff_var, ratio, reduction, corr, bias, diff_q25, diff_q75):
+            writer.writerow(row)
+
+    return out_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Collect result.npz files from sequential Saltelli samples into three CSV files.",
@@ -397,6 +518,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Write a simple comparison plot with all fine and coarse series.",
     )
+    parser.add_argument(
+        "--plot-diagnostics",
+        action="store_true",
+        help="Write MLMC diagnostics for fine/coarse variance, ratio, correlation, and bias.",
+    )
     return parser.parse_args()
 
 
@@ -413,6 +539,7 @@ def main() -> int:
         print(gather_dir)
         return 0
 
+    did_plot = False
     if args.plot_fine_coarse:
         print(
             plot_fine_coarse_comparison(
@@ -422,8 +549,18 @@ def main() -> int:
                 plot_dir_name=args.plot_dir,
             )
         )
-        if not args.plot:
-            return 0
+        did_plot = True
+
+    if args.plot_diagnostics:
+        print(
+            plot_mlmc_diagnostics(
+                workdir=args.workdir,
+                output_dir_name=args.output_dir,
+                config_name=args.config_name,
+                plot_dir_name=args.plot_dir,
+            )
+        )
+        did_plot = True
 
     if args.plot:
         result_keys = ("fine", "coarse") if args.plot_result == "both" else (args.plot_result,)
@@ -438,6 +575,9 @@ def main() -> int:
                     plot_all_lines=args.plot_all_lines,
                 )
             )
+        did_plot = True
+
+    if did_plot:
         return 0
 
     paths = collect_results(

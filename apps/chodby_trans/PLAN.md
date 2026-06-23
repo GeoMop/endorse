@@ -124,6 +124,12 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-23: Added `diagnostics_summary.md` next to the sequential Saltelli
+  plots, summarizing current fine/coarse MLMC diagnostics and physical
+  interpretation.
+- 2026-06-23: Added `--plot-diagnostics` to
+  `collect_sequential_saltelli_results.py`, producing fine/coarse variance,
+  variance-ratio, correlation, and difference-bias diagnostics plus CSV data.
 - 2026-06-23: Added `--plot-fine-coarse` to
   `collect_sequential_saltelli_results.py` for a simple paired fine/coarse
   time-series comparison figure without histograms.
