@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -16,7 +17,9 @@ from endorse.fullscale_transport import output_times
 
 
 DEFAULT_OUTPUT_DIR = "sequential_saltelli"
+DEFAULT_GATHER_DIR = "sequential_saltelli_gather"
 DEFAULT_CONFIG_NAME = "transport_mlmc.yaml"
+SAMPLE_GATHER_FILES = ("input.json", "status.json", "result.npz")
 
 
 def sample_sort_key(sample_dir: Path) -> tuple[int, int, str]:
@@ -45,12 +48,28 @@ def resolve_config_path(workdir: Path, output_dir: Path, config_name: str) -> Pa
     return workdir / "input_data" / config_name
 
 
-def time_columns(config_path: Path, result_size: int) -> list[str]:
+def write_json(path: Path, payload: Any) -> None:
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def output_time_values(config_path: Path) -> list[float] | None:
     if not config_path.exists():
-        return [f"t_{idx}" for idx in range(result_size)]
+        return None
 
     cfg = common.config.load_config(str(config_path))
-    times = [float(time) for time in output_times(cfg.transport_fullscale)]
+    return [float(time) for time in output_times(cfg.transport_fullscale)]
+
+
+def time_columns(output_dir: Path, config_path: Path, result_size: int) -> list[str]:
+    gathered_times_path = output_dir / "output_times.json"
+    if gathered_times_path.exists():
+        times = [float(time) for time in load_json(gathered_times_path)["output_times"]]
+    else:
+        times = output_time_values(config_path)
+
+    if times is None:
+        return [f"t_{idx}" for idx in range(result_size)]
+
     if len(times) != result_size:
         raise ValueError(
             f"Result size {result_size} does not match {len(times)} output times from {config_path}."
@@ -71,6 +90,52 @@ def load_result_vector(npz: np.lib.npyio.NpzFile, key: str, sample_dir: Path) ->
     if values.size == 0:
         raise ValueError(f"Empty {key!r} result in {sample_dir}")
     return values
+
+
+def gather_result_files(
+    workdir: Path,
+    output_dir_name: str = DEFAULT_OUTPUT_DIR,
+    gather_dir_name: str = DEFAULT_GATHER_DIR,
+    config_name: str = DEFAULT_CONFIG_NAME,
+    overwrite: bool = False,
+) -> Path:
+    """
+    Copy lightweight completed-sample files into a separate directory for local postprocessing.
+    """
+    workdir = workdir.absolute()
+    output_dir = workdir / output_dir_name
+    gather_dir = workdir / gather_dir_name
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Sequential output directory does not exist: {output_dir}")
+    if gather_dir.exists() and not overwrite:
+        raise FileExistsError(f"Gather directory already exists: {gather_dir}")
+    if gather_dir.exists():
+        shutil.rmtree(gather_dir)
+    gather_dir.mkdir(parents=True)
+
+    copied_samples = 0
+    for sample_dir in iter_completed_sample_dirs(output_dir):
+        target_dir = gather_dir / sample_dir.name
+        target_dir.mkdir()
+        for file_name in SAMPLE_GATHER_FILES:
+            source_file = sample_dir / file_name
+            if source_file.exists():
+                shutil.copy2(source_file, target_dir / file_name)
+        copied_samples += 1
+
+    if copied_samples == 0:
+        raise ValueError(f"No completed sequential samples with result.npz found in {output_dir}")
+
+    summary_path = output_dir / "summary.json"
+    if summary_path.exists():
+        shutil.copy2(summary_path, gather_dir / "summary.json")
+
+    config_path = resolve_config_path(workdir, output_dir, config_name)
+    times = output_time_values(config_path)
+    if times is not None:
+        write_json(gather_dir / "output_times.json", {"output_times": times})
+
+    return gather_dir
 
 
 def collect_results(
@@ -116,7 +181,7 @@ def collect_results(
         raise ValueError(f"No completed sequential samples with result.npz found in {output_dir}")
 
     config_path = resolve_config_path(workdir, output_dir, config_name)
-    result_columns = time_columns(config_path, result_size)
+    result_columns = time_columns(output_dir, config_path, result_size)
 
     parameters_csv = output_dir / f"{csv_prefix}parameters.csv"
     fine_csv = output_dir / f"{csv_prefix}fine_results.csv"
@@ -149,6 +214,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("workdir", type=Path, help="Workdir passed to sequential_saltelli_samples.py.")
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Sequential output subdirectory.")
+    parser.add_argument("--gather-dir", default=DEFAULT_GATHER_DIR, help="Output directory for --gather-only.")
+    parser.add_argument("--gather-only", action="store_true", help="Only gather lightweight result files.")
+    parser.add_argument("--overwrite-gather", action="store_true", help="Replace an existing gather directory.")
     parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME, help="Config name inside workdir/input_data.")
     parser.add_argument("--csv-prefix", default="", help="Optional prefix for generated CSV file names.")
     return parser.parse_args()
@@ -156,6 +224,17 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.gather_only:
+        gather_dir = gather_result_files(
+            workdir=args.workdir,
+            output_dir_name=args.output_dir,
+            gather_dir_name=args.gather_dir,
+            config_name=args.config_name,
+            overwrite=args.overwrite_gather,
+        )
+        print(gather_dir)
+        return 0
+
     paths = collect_results(
         workdir=args.workdir,
         output_dir_name=args.output_dir,
