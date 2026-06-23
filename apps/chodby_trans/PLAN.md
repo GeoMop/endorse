@@ -124,6 +124,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-23: Added bootstrap IQR uncertainty bands for fine, coarse, and
+  fine-coarse variance estimates to the sequential Saltelli MLMC diagnostics
+  plot and CSV output.
 - 2026-06-23: Added `diagnostics_summary.md` next to the sequential Saltelli
   plots, summarizing current fine/coarse MLMC diagnostics and physical
   interpretation.

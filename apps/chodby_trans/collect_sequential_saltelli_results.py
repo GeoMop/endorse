@@ -384,6 +384,32 @@ def plot_fine_coarse_comparison(
     return out_path
 
 
+def bootstrap_variance_iqr(
+    values: np.ndarray,
+    *,
+    n_bootstrap: int = 2000,
+    seed: int = 12345,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Estimate variance uncertainty by independent bootstrap resampling at each output time.
+    """
+    values = np.asarray(values, dtype=float)
+    rng = np.random.default_rng(seed)
+    lower = np.full(values.shape[1], np.nan, dtype=float)
+    upper = np.full(values.shape[1], np.nan, dtype=float)
+
+    for i_time in range(values.shape[1]):
+        time_values = values[:, i_time]
+        time_values = time_values[np.isfinite(time_values)]
+        if time_values.size < 2:
+            continue
+        sample_idx = rng.integers(0, time_values.size, size=(n_bootstrap, time_values.size))
+        boot_vars = np.var(time_values[sample_idx], axis=1, ddof=1)
+        lower[i_time], upper[i_time] = np.nanquantile(boot_vars, [0.25, 0.75])
+
+    return lower, upper
+
+
 def plot_mlmc_diagnostics(
     workdir: Path,
     output_dir_name: str = DEFAULT_OUTPUT_DIR,
@@ -399,8 +425,11 @@ def plot_mlmc_diagnostics(
     fine_var = np.nanvar(fine_values, axis=0, ddof=1)
     coarse_var = np.nanvar(coarse_values, axis=0, ddof=1)
     diff_var = np.nanvar(diff_values, axis=0, ddof=1)
+    fine_var_q25, fine_var_q75 = bootstrap_variance_iqr(fine_values, seed=12345)
+    coarse_var_q25, coarse_var_q75 = bootstrap_variance_iqr(coarse_values, seed=12346)
+    diff_var_q25, diff_var_q75 = bootstrap_variance_iqr(diff_values, seed=12347)
     ratio = np.divide(coarse_var, fine_var, out=np.full_like(fine_var, np.nan), where=fine_var > 0)
-    reduction = np.divide(fine_var, diff_var, out=np.full_like(fine_var, np.nan), where=diff_var > 0)
+    reduction = np.divide(coarse_var, diff_var, out=np.full_like(coarse_var, np.nan), where=diff_var > 0)
     bias = np.nanmean(diff_values, axis=0)
     diff_q25, diff_q75 = np.nanquantile(diff_values, [0.25, 0.75], axis=0)
 
@@ -425,6 +454,13 @@ def plot_mlmc_diagnostics(
     fig, axes = plt.subplots(4, 1, figsize=(13, 13), sharex=True)
 
     ax = axes[0]
+    for lower, upper, color in [
+        (fine_var_q25, fine_var_q75, "tab:blue"),
+        (coarse_var_q25, coarse_var_q75, "tab:orange"),
+        (diff_var_q25, diff_var_q75, "tab:green"),
+    ]:
+        lower_plot = np.where(lower > 0, lower, np.nan)
+        ax.fill_between(t, lower_plot, upper, color=color, alpha=0.16, linewidth=0.0)
     ax.plot(t, fine_var, label="Var(fine)", color="tab:blue")
     ax.plot(t, coarse_var, label="Var(coarse)", color="tab:orange")
     ax.plot(t, diff_var, label="Var(fine - coarse)", color="tab:green")
@@ -434,9 +470,9 @@ def plot_mlmc_diagnostics(
     ax.grid(alpha=0.25)
 
     ax = axes[1]
-    ax.plot(t, ratio, label="Var(coarse) / Var(fine)", color="tab:purple")
+    ax.plot(t, reduction, label="Var(coarse) / Var(fine - coarse)", color="tab:purple")
     ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
-    ax.set_ylabel("Variance ratio")
+    ax.set_ylabel("Variance reduction")
     ax.legend(loc="best")
     ax.grid(alpha=0.25)
 
@@ -477,8 +513,14 @@ def plot_mlmc_diagnostics(
             [
                 "time",
                 "fine_var",
+                "fine_var_q25",
+                "fine_var_q75",
                 "coarse_var",
+                "coarse_var_q25",
+                "coarse_var_q75",
                 "diff_var",
+                "diff_var_q25",
+                "diff_var_q75",
                 "coarse_fine_var_ratio",
                 "fine_diff_var_reduction",
                 "fine_coarse_corr",
@@ -487,7 +529,24 @@ def plot_mlmc_diagnostics(
                 "diff_q75",
             ]
         )
-        for row in zip(t, fine_var, coarse_var, diff_var, ratio, reduction, corr, bias, diff_q25, diff_q75):
+        for row in zip(
+            t,
+            fine_var,
+            fine_var_q25,
+            fine_var_q75,
+            coarse_var,
+            coarse_var_q25,
+            coarse_var_q75,
+            diff_var,
+            diff_var_q25,
+            diff_var_q75,
+            ratio,
+            reduction,
+            corr,
+            bias,
+            diff_q25,
+            diff_q75,
+        ):
             writer.writerow(row)
 
     return out_path
