@@ -60,7 +60,7 @@ def output_time_values(config_path: Path) -> list[float] | None:
     return [float(time) for time in output_times(cfg.transport_fullscale)]
 
 
-def time_columns(output_dir: Path, config_path: Path, result_size: int) -> list[str]:
+def result_time_values(output_dir: Path, config_path: Path, result_size: int) -> list[float] | None:
     gathered_times_path = output_dir / "output_times.json"
     if gathered_times_path.exists():
         times = [float(time) for time in load_json(gathered_times_path)["output_times"]]
@@ -68,12 +68,19 @@ def time_columns(output_dir: Path, config_path: Path, result_size: int) -> list[
         times = output_time_values(config_path)
 
     if times is None:
-        return [f"t_{idx}" for idx in range(result_size)]
+        return None
 
     if len(times) != result_size:
         raise ValueError(
             f"Result size {result_size} does not match {len(times)} output times from {config_path}."
         )
+    return times
+
+
+def time_columns(output_dir: Path, config_path: Path, result_size: int) -> list[str]:
+    times = result_time_values(output_dir, config_path, result_size)
+    if times is None:
+        return [f"t_{idx}" for idx in range(result_size)]
     return [f"{time:g}" for time in times]
 
 
@@ -208,6 +215,163 @@ def collect_results(
     return parameters_csv, fine_csv, coarse_csv
 
 
+def load_result_matrix(output_dir: Path, result_key: str) -> tuple[list[str], np.ndarray]:
+    sample_ids = []
+    rows = []
+    result_size = None
+    for sample_dir in iter_completed_sample_dirs(output_dir):
+        with np.load(sample_dir / "result.npz") as npz:
+            result = load_result_vector(npz, result_key, sample_dir)
+        if result_size is None:
+            result_size = result.size
+        elif result.size != result_size:
+            raise ValueError(f"Result size mismatch in {sample_dir}: {result.size} != {result_size}")
+        sample_ids.append(sample_dir.name)
+        rows.append(result)
+
+    if not rows:
+        raise ValueError(f"No completed sequential samples with result.npz found in {output_dir}")
+
+    return sample_ids, np.vstack(rows)
+
+
+def dataset_for_distribution_plot(sample_ids: list[str], values: np.ndarray, times: list[float]):
+    import xarray as xr
+
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 2:
+        raise ValueError(f"Expected result matrix with shape (samples, times), got {values.shape}")
+    if values.shape[1] != len(times):
+        raise ValueError(f"Result matrix has {values.shape[1]} columns, but got {len(times)} times.")
+
+    return xr.Dataset(
+        data_vars={
+            "log10_conc_q99": (("QMC", "IID"), np.nanmax(values, axis=1)[:, None]),
+            "log10_conc_q99_XYZ": (("QMC", "IID", "sim_time"), values[:, None, :]),
+        },
+        coords={
+            "QMC": sample_ids,
+            "IID": [0],
+            "sim_time": np.asarray(times, dtype=float),
+        },
+    )
+
+
+def plot_result_distribution(
+    workdir: Path,
+    output_dir_name: str = DEFAULT_OUTPUT_DIR,
+    config_name: str = DEFAULT_CONFIG_NAME,
+    result_key: str = "fine",
+    plot_dir_name: str = "plots",
+    plot_all_lines: bool = False,
+) -> Path:
+    workdir = workdir.absolute()
+    output_dir = workdir / output_dir_name
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Sequential output directory does not exist: {output_dir}")
+
+    sample_ids, values = load_result_matrix(output_dir, result_key)
+    config_path = resolve_config_path(workdir, output_dir, config_name)
+    times = result_time_values(output_dir, config_path, values.shape[1])
+    if times is None:
+        times = [float(idx) for idx in range(values.shape[1])]
+
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    try:
+        from chodby_trans.plots import plot_conc_timeseries_distribution1
+    except ModuleNotFoundError:
+        from plots import plot_conc_timeseries_distribution1
+
+    ds = dataset_for_distribution_plot(sample_ids, values, times)
+    fig = plot_conc_timeseries_distribution1(
+        ds,
+        n_slices=len(sample_ids),
+        max_extreme_lines=len(sample_ids),
+        plot_all_lines=plot_all_lines,
+    )
+    plot_dir = output_dir / plot_dir_name
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    out_path = plot_dir / f"{result_key}_timeseries_distribution.pdf"
+    fig.savefig(out_path, bbox_inches="tight")
+
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+    return out_path
+
+
+def plot_fine_coarse_comparison(
+    workdir: Path,
+    output_dir_name: str = DEFAULT_OUTPUT_DIR,
+    config_name: str = DEFAULT_CONFIG_NAME,
+    plot_dir_name: str = "plots",
+) -> Path:
+    workdir = workdir.absolute()
+    output_dir = workdir / output_dir_name
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Sequential output directory does not exist: {output_dir}")
+
+    fine_ids, fine_values = load_result_matrix(output_dir, "fine")
+    coarse_ids, coarse_values = load_result_matrix(output_dir, "coarse")
+    if fine_ids != coarse_ids:
+        raise ValueError("Fine and coarse sample ids do not match.")
+    if fine_values.shape != coarse_values.shape:
+        raise ValueError(f"Fine/coarse shapes do not match: {fine_values.shape} != {coarse_values.shape}")
+
+    config_path = resolve_config_path(workdir, output_dir, config_name)
+    times = result_time_values(output_dir, config_path, fine_values.shape[1])
+    if times is None:
+        times = [float(idx) for idx in range(fine_values.shape[1])]
+
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    t_raw = np.asarray(times, dtype=float) / 1000.0
+    t_pos = t_raw[t_raw > 0]
+    if t_pos.size == 0:
+        t = np.arange(len(times), dtype=float)
+        use_log_x = False
+    else:
+        t = np.where(t_raw > 0, t_raw, float(t_pos.min()) * 0.999)
+        use_log_x = True
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+    for fine, coarse in zip(fine_values, coarse_values):
+        ax.plot(t, fine, color="tab:blue", lw=0.8, alpha=0.45)
+        ax.plot(t, coarse, color="tab:orange", lw=0.8, alpha=0.45)
+
+    ax.plot(t, np.nanmedian(fine_values, axis=0), color="tab:blue", lw=2.2)
+    ax.plot(t, np.nanmedian(coarse_values, axis=0), color="tab:orange", lw=2.2)
+    if use_log_x:
+        ax.set_xscale("log")
+        ax.set_xlabel("Time from 50y pulse (ky)")
+    else:
+        ax.set_xlabel("Output time index")
+    ax.set_ylabel("Log10(conc)")
+    ax.set_title("Fine and coarse sequential Saltelli time series")
+    ax.grid(alpha=0.25)
+    ax.legend(
+        handles=[
+            Line2D([0], [0], color="tab:blue", lw=2.2, label="fine"),
+            Line2D([0], [0], color="tab:orange", lw=2.2, label="coarse"),
+        ],
+        loc="lower right",
+    )
+    fig.tight_layout()
+
+    plot_dir = output_dir / plot_dir_name
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    out_path = plot_dir / "fine_coarse_timeseries.pdf"
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Collect result.npz files from sequential Saltelli samples into three CSV files.",
@@ -219,6 +383,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite-gather", action="store_true", help="Replace an existing gather directory.")
     parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME, help="Config name inside workdir/input_data.")
     parser.add_argument("--csv-prefix", default="", help="Optional prefix for generated CSV file names.")
+    parser.add_argument("--plot", action="store_true", help="Write distribution plots from collected result.npz files.")
+    parser.add_argument(
+        "--plot-result",
+        choices=("fine", "coarse", "both"),
+        default="fine",
+        help="Result series to plot when using --plot.",
+    )
+    parser.add_argument("--plot-dir", default="plots", help="Plot output subdirectory below --output-dir.")
+    parser.add_argument("--plot-all-lines", action="store_true", help="Plot every time series in the bottom panel.")
+    parser.add_argument(
+        "--plot-fine-coarse",
+        action="store_true",
+        help="Write a simple comparison plot with all fine and coarse series.",
+    )
     return parser.parse_args()
 
 
@@ -233,6 +411,33 @@ def main() -> int:
             overwrite=args.overwrite_gather,
         )
         print(gather_dir)
+        return 0
+
+    if args.plot_fine_coarse:
+        print(
+            plot_fine_coarse_comparison(
+                workdir=args.workdir,
+                output_dir_name=args.output_dir,
+                config_name=args.config_name,
+                plot_dir_name=args.plot_dir,
+            )
+        )
+        if not args.plot:
+            return 0
+
+    if args.plot:
+        result_keys = ("fine", "coarse") if args.plot_result == "both" else (args.plot_result,)
+        for result_key in result_keys:
+            print(
+                plot_result_distribution(
+                    workdir=args.workdir,
+                    output_dir_name=args.output_dir,
+                    config_name=args.config_name,
+                    result_key=result_key,
+                    plot_dir_name=args.plot_dir,
+                    plot_all_lines=args.plot_all_lines,
+                )
+            )
         return 0
 
     paths = collect_results(
