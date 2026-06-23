@@ -5,6 +5,7 @@ import copy
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import sys
@@ -28,6 +29,10 @@ from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
 SCRIPT_PATH = Path(__file__).absolute()
 DEFAULT_INPUT_DIR = SCRIPT_PATH.parent / "input_data"
+
+TIMESTAMP_RE = re.compile(
+    rb"^\s*(\d+):([0-5]\d):([0-5]\d(?:\.\d+)?)\s+"
+)
 
 
 def setup_logging() -> None:
@@ -87,6 +92,75 @@ def atomic_write_json(path: Path, payload: dict) -> None:
     os.replace(tmp, path)
 
 
+def read_sample_times(
+    sample_dir: str | Path,
+) -> tuple[float, float]:
+    """
+    Return fine- and macroscale runtimes for one sample directory.
+
+    Parameters
+    ----------
+    sample_dir
+        Sample directory, for example::
+
+            .../sequential_saltelli/L00_S0000000_A
+
+    Returns
+    -------
+    fine_time, macro_time
+        Runtime in seconds, parsed from the leading ``HH:MM:SS.sss``
+        timestamp on the last non-empty line.
+
+        Missing files, empty files, or invalid final lines return ``np.nan``.
+    """
+    sample_dir = Path(sample_dir)
+
+    def read_last_runtime(path: Path) -> float:
+        try:
+            with path.open("rb") as file:
+                file.seek(0, 2)
+                position = file.tell()
+                reversed_line = bytearray()
+
+                while position > 0:
+                    position -= 1
+                    file.seek(position)
+                    char = file.read(1)
+
+                    if char == b"\n":
+                        line = bytes(reversed(reversed_line)).strip()
+                        reversed_line.clear()
+
+                        if line:
+                            break
+                    else:
+                        reversed_line.extend(char)
+                else:
+                    line = bytes(reversed(reversed_line)).strip()
+
+        except OSError:
+            return np.nan
+
+        match = TIMESTAMP_RE.match(line)
+        if match is None:
+            return np.nan
+
+        hours = int(match.group(1))
+        minutes = int(match.group(2))
+        seconds = float(match.group(3))
+
+        return 3600.0 * hours + 60.0 * minutes + seconds
+
+    fine_time = read_last_runtime(
+        sample_dir / "fine_trans/transport_fullscale_stdout"
+    )
+    macro_time = read_last_runtime(
+        sample_dir / "macro_trans/transport_macroscale_stdout"
+    )
+
+    return fine_time, macro_time
+
+
 def run_one_term(
     sim: transport_simulation.TransportSimulation,
     root_cfg,
@@ -132,10 +206,14 @@ def run_one_term(
             sample_input=sample_input,
             group_row=group_row,
         )
+
+        fine_time, coarse_time = read_sample_times(sample_dir)
         status = {
             **payload,
             "status": "ok",
             "elapsed_sec": elapsed,
+            "fine_time": fine_time,
+            "coarse_time": coarse_time,
             "fine_shape": list(np.asarray(fine).shape),
             "coarse_shape": list(np.asarray(coarse).shape),
         }
