@@ -124,6 +124,28 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-23: Added bootstrap IQR uncertainty bands for fine, coarse, and
+  fine-coarse variance estimates to the sequential Saltelli MLMC diagnostics
+  plot and CSV output.
+- 2026-06-23: Added `diagnostics_summary.md` next to the sequential Saltelli
+  plots, summarizing current fine/coarse MLMC diagnostics and physical
+  interpretation.
+- 2026-06-23: Added `--plot-diagnostics` to
+  `collect_sequential_saltelli_results.py`, producing fine/coarse variance,
+  variance-ratio, correlation, and difference-bias diagnostics plus CSV data.
+- 2026-06-23: Added `--plot-fine-coarse` to
+  `collect_sequential_saltelli_results.py` for a simple paired fine/coarse
+  time-series comparison figure without histograms.
+- 2026-06-23: Added a `plot_all_lines` option to
+  `plot_conc_timeseries_distribution1` and exposed it as `--plot-all-lines`
+  for sequential Saltelli result plots.
+- 2026-06-23: Added `--plot` support to
+  `collect_sequential_saltelli_results.py`, building the minimal xarray
+  dataset needed by `plot_conc_timeseries_distribution1` from gathered
+  `result.npz` files and writing fine/coarse distribution PDFs.
+- 2026-06-23: Extended `collect_sequential_saltelli_results.py` with a
+  `--gather-only` mode that copies lightweight per-sample result files into a
+  separate gather directory while preserving sample subdirectories.
 - 2026-06-22: Added `collect_sequential_saltelli_results.py` to collect
   completed sequential Saltelli `result.npz` files into aligned parameter,
   fine-result, and coarse-result CSV tables.
