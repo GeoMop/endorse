@@ -426,6 +426,32 @@ def bootstrap_variance_iqr(
     return lower, upper
 
 
+def read_times(file_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Read fine and coarse computation times from a CSV file.
+
+    Expected columns:
+        sample_id, fine_time, coarse_time
+
+    Returns
+    -------
+    fine_times, coarse_times
+        One-dimensional NumPy arrays of floating-point times.
+    """
+    data = np.genfromtxt(
+        file_path,
+        delimiter=",",
+        names=True,
+        dtype=None,
+        encoding="utf-8",
+    )
+
+    fine_times = np.asarray(data["fine_time"], dtype=float)
+    coarse_times = np.asarray(data["coarse_time"], dtype=float)
+
+    return fine_times, coarse_times
+
+
 def plot_mlmc_diagnostics(
     workdir: Path,
     output_dir_name: str = DEFAULT_OUTPUT_DIR,
@@ -437,6 +463,11 @@ def plot_mlmc_diagnostics(
     )
     diff_values = fine_values - coarse_values
     n_samples = fine_values.shape[0]
+
+    fine_times, coarse_times = read_times(workdir / output_dir_name / "times.csv")
+    assert len(fine_times) == len(coarse_times) == n_samples
+
+    cost_reduction = np.nanmean(fine_times+coarse_times) / np.nanmean(coarse_times)
 
     fine_var = np.nanvar(fine_values, axis=0, ddof=1)
     coarse_var = np.nanvar(coarse_values, axis=0, ddof=1)
@@ -488,6 +519,7 @@ def plot_mlmc_diagnostics(
     ax = axes[1]
     ax.plot(t, reduction, label="Var(coarse) / Var(fine - coarse)", color="tab:purple")
     ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
+    ax.axhline(cost_reduction, color="tab:green", lw=2.0, ls=":", label="cost_reduction")
     ax.set_ylabel("Variance reduction")
     ax.legend(loc="best")
     ax.grid(alpha=0.25)
