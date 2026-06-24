@@ -17,6 +17,19 @@ from endorse.fullscale_transport import output_times
 
 from sequential_saltelli_samples import read_sample_times
 
+import matplotlib
+matplotlib.use("Agg", force=True)
+import matplotlib.pyplot as plt
+plt.rcParams.update({
+    "font.size": 16,
+    # "axes.titlesize": 16,
+    # "axes.labelsize": 14,
+    # "xtick.labelsize": 12,
+    # "ytick.labelsize": 12,
+    # "legend.fontsize": 12,
+    # "figure.titlesize": 18,
+})
+
 
 DEFAULT_OUTPUT_DIR = "sequential_saltelli"
 DEFAULT_GATHER_DIR = "sequential_saltelli_gather"
@@ -492,11 +505,6 @@ def plot_mlmc_diagnostics(
         else:
             corr[i_time] = np.corrcoef(fine_t[mask], coarse_t[mask])[0, 1]
 
-    import matplotlib
-
-    matplotlib.use("Agg", force=True)
-    import matplotlib.pyplot as plt
-
     t, use_log_x = result_time_axis(times)
 
     plot_dir = output_dir / plot_dir_name
@@ -511,7 +519,7 @@ def plot_mlmc_diagnostics(
 
     def plot_variances(ax) -> None:
         for lower, upper, color in [
-            (fine_var_q25, fine_var_q75, "tab:blue"),
+            # (fine_var_q25, fine_var_q75, "tab:blue"),
             (coarse_var_q25, coarse_var_q75, "tab:orange"),
             (diff_var_q25, diff_var_q75, "tab:green"),
         ]:
@@ -527,12 +535,12 @@ def plot_mlmc_diagnostics(
                 linewidth=0.0,
             )
 
-        ax.plot(
-            t,
-            fine_var,
-            label="Var(fine)",
-            color="tab:blue",
-        )
+        # ax.plot(
+        #     t,
+        #     fine_var,
+        #     label="Var(fine)",
+        #     color="tab:blue",
+        # )
         ax.plot(
             t,
             coarse_var,
@@ -564,17 +572,53 @@ def plot_mlmc_diagnostics(
             lw=0.8,
             ls="--",
         )
-        ax.axhline(
-            cost_reduction,
-            color="tab:green",
-            lw=2.0,
-            ls=":",
-            label=f"Cost reduction = {cost_reduction:.3g}",
-        )
+        # ax.axhline(
+        #     cost_reduction,
+        #     color="tab:green",
+        #     lw=2.0,
+        #     ls=":",
+        #     label=f"Cost reduction = {cost_reduction:.3g}",
+        # )
+        # ax.text(
+        #     0.67,
+        #     0.55,
+        #     f"Cost reduction = {cost_reduction:.3g}",
+        #     transform=ax.transAxes,
+        #     ha="left",
+        #     va="top",
+        #     bbox={
+        #         "boxstyle": "round,pad=0.3",
+        #         "facecolor": "white",
+        #         "edgecolor": "0.5",
+        #         "alpha": 0.9,
+        #     },
+        # )
 
         ax.set_ylabel("Variance reduction")
-        ax.legend(loc="best")
+        legend = ax.legend(loc="best")
         ax.grid(alpha=0.25)
+
+        fig = ax.figure
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+
+        legend_bbox = legend.get_window_extent(renderer=renderer)
+        legend_bbox_axes = legend_bbox.transformed(ax.transAxes.inverted())
+
+        ax.text(
+            legend_bbox_axes.x0+0.1,
+            legend_bbox_axes.y0 - 0.1,
+            f"Cost reduction = {cost_reduction:.3g}",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            bbox={
+                "boxstyle": "round,pad=0.3",
+                "facecolor": "white",
+                "edgecolor": "0.5",
+                "alpha": 0.9,
+            },
+        )
 
     def plot_correlation(ax) -> None:
         ax.plot(
