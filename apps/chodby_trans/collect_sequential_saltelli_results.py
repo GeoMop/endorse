@@ -498,65 +498,194 @@ def plot_mlmc_diagnostics(
     import matplotlib.pyplot as plt
 
     t, use_log_x = result_time_axis(times)
-    fig, axes = plt.subplots(4, 1, figsize=(13, 13), sharex=True)
-
-    ax = axes[0]
-    for lower, upper, color in [
-        (fine_var_q25, fine_var_q75, "tab:blue"),
-        (coarse_var_q25, coarse_var_q75, "tab:orange"),
-        (diff_var_q25, diff_var_q75, "tab:green"),
-    ]:
-        lower_plot = np.where(lower > 0, lower, np.nan)
-        ax.fill_between(t, lower_plot, upper, color=color, alpha=0.16, linewidth=0.0)
-    ax.plot(t, fine_var, label="Var(fine)", color="tab:blue")
-    ax.plot(t, coarse_var, label="Var(coarse)", color="tab:orange")
-    ax.plot(t, diff_var, label="Var(fine - coarse)", color="tab:green")
-    ax.set_yscale("log")
-    ax.set_ylabel("Variance")
-    ax.legend(loc="best")
-    ax.grid(alpha=0.25)
-
-    ax = axes[1]
-    ax.plot(t, reduction, label="Var(coarse) / Var(fine - coarse)", color="tab:purple")
-    ax.axhline(1.0, color="0.4", lw=0.8, ls="--")
-    ax.axhline(cost_reduction, color="tab:green", lw=2.0, ls=":", label="cost_reduction")
-    ax.set_ylabel("Variance reduction")
-    ax.legend(loc="best")
-    ax.grid(alpha=0.25)
-
-    ax = axes[2]
-    ax.plot(t, corr, label="Corr(fine, coarse)", color="tab:red")
-    ax.set_ylim(-1.05, 1.05)
-    ax.set_ylabel("Correlation")
-    ax.legend(loc="best")
-    ax.grid(alpha=0.25)
-
-    ax = axes[3]
-    ax.fill_between(t, diff_q25, diff_q75, color="tab:green", alpha=0.2, label="IQR(fine - coarse)")
-    ax.plot(t, bias, label="Mean(fine - coarse)", color="tab:green")
-    ax.axhline(0.0, color="0.4", lw=0.8, ls="--")
-    ax.set_ylabel("Difference")
-    ax.legend(loc="best")
-    ax.grid(alpha=0.25)
-
-    if use_log_x:
-        axes[-1].set_xscale("log")
-        axes[-1].set_xlabel("Time from 50y pulse (ky)")
-    else:
-        axes[-1].set_xlabel("Output time index")
-
-    fig.suptitle(f"Fine/coarse MLMC diagnostics, n={n_samples}")
-    fig.tight_layout()
 
     plot_dir = output_dir / plot_dir_name
     plot_dir.mkdir(parents=True, exist_ok=True)
+
+    def configure_x_axis(ax) -> None:
+        if use_log_x:
+            ax.set_xscale("log")
+            ax.set_xlabel("Time from 50y pulse (ky)")
+        else:
+            ax.set_xlabel("Output time index")
+
+    def plot_variances(ax) -> None:
+        for lower, upper, color in [
+            (fine_var_q25, fine_var_q75, "tab:blue"),
+            (coarse_var_q25, coarse_var_q75, "tab:orange"),
+            (diff_var_q25, diff_var_q75, "tab:green"),
+        ]:
+            lower_plot = np.where(lower > 0, lower, np.nan)
+            upper_plot = np.where(upper > 0, upper, np.nan)
+
+            ax.fill_between(
+                t,
+                lower_plot,
+                upper_plot,
+                color=color,
+                alpha=0.16,
+                linewidth=0.0,
+            )
+
+        ax.plot(
+            t,
+            fine_var,
+            label="Var(fine)",
+            color="tab:blue",
+        )
+        ax.plot(
+            t,
+            coarse_var,
+            label="Var(coarse)",
+            color="tab:orange",
+        )
+        ax.plot(
+            t,
+            diff_var,
+            label="Var(fine - coarse)",
+            color="tab:green",
+        )
+
+        ax.set_yscale("log")
+        ax.set_ylabel("Variance")
+        ax.legend(loc="best")
+        ax.grid(alpha=0.25)
+
+    def plot_variance_reduction(ax) -> None:
+        ax.plot(
+            t,
+            reduction,
+            label="Var(coarse) / Var(fine - coarse)",
+            color="tab:purple",
+        )
+        ax.axhline(
+            1.0,
+            color="0.4",
+            lw=0.8,
+            ls="--",
+        )
+        ax.axhline(
+            cost_reduction,
+            color="tab:green",
+            lw=2.0,
+            ls=":",
+            label=f"Cost reduction = {cost_reduction:.3g}",
+        )
+
+        ax.set_ylabel("Variance reduction")
+        ax.legend(loc="best")
+        ax.grid(alpha=0.25)
+
+    def plot_correlation(ax) -> None:
+        ax.plot(
+            t,
+            corr,
+            label="Corr(fine, coarse)",
+            color="tab:red",
+        )
+
+        ax.set_ylim(-1.05, 1.05)
+        ax.set_ylabel("Correlation")
+        ax.legend(loc="best")
+        ax.grid(alpha=0.25)
+
+    def plot_difference(ax) -> None:
+        ax.fill_between(
+            t,
+            diff_q25,
+            diff_q75,
+            color="tab:green",
+            alpha=0.2,
+            label="IQR(fine - coarse)",
+        )
+        ax.plot(
+            t,
+            bias,
+            label="Mean(fine - coarse)",
+            color="tab:green",
+        )
+        ax.axhline(
+            0.0,
+            color="0.4",
+            lw=0.8,
+            ls="--",
+        )
+
+        ax.set_ylabel("Difference")
+        ax.legend(loc="best")
+        ax.grid(alpha=0.25)
+
+    # Combined four-panel plot.
+    fig, axes = plt.subplots(
+        4,
+        1,
+        figsize=(13, 13),
+        sharex=True,
+    )
+
+    plot_variances(axes[0])
+    plot_variance_reduction(axes[1])
+    plot_correlation(axes[2])
+    plot_difference(axes[3])
+    configure_x_axis(axes[-1])
+
+    fig.suptitle(
+        f"Fine/coarse MLMC diagnostics, n={n_samples}"
+    )
+    fig.tight_layout()
+
     out_path = plot_dir / "fine_coarse_mlmc_diagnostics.pdf"
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
 
-    diagnostics_csv = plot_dir / "fine_coarse_mlmc_diagnostics.csv"
-    with diagnostics_csv.open("w", newline="", encoding="utf-8") as handle:
+    # Individual plots.
+    individual_plots = [
+        (
+            "fine_coarse_variances.pdf",
+            "Fine/coarse variances",
+            plot_variances,
+        ),
+        (
+            "fine_coarse_variance_reduction.pdf",
+            "Fine/coarse variance reduction",
+            plot_variance_reduction,
+        ),
+        (
+            "fine_coarse_correlation.pdf",
+            "Fine/coarse correlation",
+            plot_correlation,
+        ),
+        (
+            "fine_coarse_difference.pdf",
+            "Fine/coarse difference",
+            plot_difference,
+        ),
+    ]
+
+    subfigs_dir = plot_dir / "subfigs"
+    subfigs_dir.mkdir(parents=True, exist_ok=True)
+    for filename, title, plot_function in individual_plots:
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        plot_function(ax)
+        configure_x_axis(ax)
+        ax.set_title(f"{title}, n={n_samples}")
+
+        fig.tight_layout()
+        fig.savefig( subfigs_dir / filename, bbox_inches="tight")
+        plt.close(fig)
+
+    diagnostics_csv = (
+        plot_dir / "fine_coarse_mlmc_diagnostics.csv"
+    )
+
+    with diagnostics_csv.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as handle:
         writer = csv.writer(handle)
+
         writer.writerow(
             [
                 "time",
@@ -577,6 +706,7 @@ def plot_mlmc_diagnostics(
                 "diff_q75",
             ]
         )
+
         for row in zip(
             t,
             fine_var,
