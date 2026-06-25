@@ -162,7 +162,7 @@ def prepare_msh_input(workdir, cfg, param_dict):
     logging.info(f"fracture_box: {fracture_box}")
     logging.info(f"DFN REPO:\n{cfg.fractures.population}")
 
-    fr_pop = Population.initialize_3d(cfg.fractures.population, fracture_box)
+    fr_pop = Population.from_cfg(cfg.fractures.population, fracture_box)
 
     dfn_seed_seq = ot_sa.Seed.get_seedsequence(cfg.fractures.dfn_seed)
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg.mesh.meshing_seed)
