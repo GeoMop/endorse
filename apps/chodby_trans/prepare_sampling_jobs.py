@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,20 @@ def _replace_yaml_line(text: str, key: str, replacement: str) -> str:
     return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
 
+def _append_yaml_value_suffix(text: str, key: str, suffix: str) -> str:
+    pattern = re.compile(rf"^(\s*{re.escape(key)}:\s*)([^#\n]+)(.*)$")
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        match = pattern.match(line)
+        if match and not line.lstrip().startswith("#"):
+            prefix, value, trailer = match.groups()
+            lines[idx] = f"{prefix}{value.strip()}{suffix}{trailer}"
+            break
+    else:
+        raise KeyError(f"Missing {key} line")
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+
+
 def write_job_input_data(
     job_dir: Path,
     source_input_data: Path,
@@ -49,11 +64,7 @@ def write_job_input_data(
 
     mesh_cfg_path = dest_input_data / "trans_mesh_config.yaml"
     text = mesh_cfg_path.read_text(encoding="utf-8")
-    text = _replace_yaml_line(
-        text,
-        "pbs_name",
-        f"pbs_name: trans_case_0_{job_index:02d}",
-    )
+    text = _append_yaml_value_suffix(text, "pbs_name", f"_{job_index:02d}")
     mesh_cfg_path.write_text(text, encoding="utf-8")
 
 

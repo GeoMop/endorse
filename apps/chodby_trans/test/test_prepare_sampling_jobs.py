@@ -18,7 +18,7 @@ def test_prepare_job_dirs_chunks_input_data_and_rewrites_limit_samples(tmp_path:
         "machine_config:\n"
         "  __default__:\n"
         "    pbs:\n"
-        "      pbs_name: trans_case_0\n"
+        "      pbs_name: trans_case_0_base\n"
         "# keep mesh comment\n",
         encoding="utf-8",
     )
@@ -44,7 +44,7 @@ def test_prepare_job_dirs_chunks_input_data_and_rewrites_limit_samples(tmp_path:
         assert f"limit_samples: [{sample_range[0]}, {sample_range[1]}]" in copied_cfg_text
         assert "# keep me" in copied_cfg_text
         mesh_cfg_text = (job_dir / "input_data" / "trans_mesh_config.yaml").read_text(encoding="utf-8")
-        assert f"pbs_name: trans_case_0_job_{job_index:03d}" in mesh_cfg_text
+        assert f"pbs_name: trans_case_0_base_{job_index:02d}" in mesh_cfg_text
         assert "# keep mesh comment" in mesh_cfg_text
         assert (job_dir / "input_data" / "payload.txt").read_text(encoding="utf-8") == "payload"
 
