@@ -37,6 +37,7 @@ import zarr_fuse as zf
 
 import chodby_trans.job as job
 import chodby_trans.transport_wrapper as transport_wrapper
+from chodby_trans.limit_samples import sample_in_limit_samples
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
@@ -157,7 +158,7 @@ def single_sample(args):
     cfg = common.config.load_config(str(conf_file))
     cfg["data_schema_key"] = data_schema_key
 
-    if tags[1] >= cfg.ot_sensitivity.limit_samples:
+    if not sample_in_limit_samples(tags[1], cfg.ot_sensitivity.limit_samples):
         return ReturnCode.SKIP
 
     sensitivity_dir = job.scratch.sensitivity_dir

@@ -23,6 +23,7 @@ import scipy.interpolate
 from endorse import common
 import chodby_trans.fullscale_transport as transport
 from chodby_trans import ot_sa
+from chodby_trans.limit_samples import sample_in_limit_samples
 
 from endorse.fullscale_transport import output_times
 import zarr_fuse as zf
@@ -63,7 +64,7 @@ class Wrapper:
                 ng = 20
                 slice_array = np.random.rand(len(times), ng, ng, 2)
                 rc = 42
-            elif tags[1] >= cfg.ot_sensitivity.limit_samples:
+            elif not sample_in_limit_samples(tags[1], cfg.ot_sensitivity.limit_samples):
                 return exp.ReturnCode.SKIP, np.array([])
             else:
                 rc, slice_array = transport.transport_run(
@@ -280,4 +281,3 @@ class Wrapper:
         except Exception as e:
             print_exp(e, tags)
             return -1000, slice_array
-
