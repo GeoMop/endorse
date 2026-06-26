@@ -16,21 +16,45 @@ def chunk_ranges(n_samples: int, samples_per_job: int) -> list[tuple[int, int]]:
     ]
 
 
-def write_job_input_data(job_dir: Path, source_input_data: Path, limit_samples: tuple[int, int]) -> None:
+def _replace_yaml_line(text: str, key: str, replacement: str) -> str:
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith(f"{key}:") and not stripped.startswith("#"):
+            indent = line[: len(line) - len(stripped)]
+            lines[idx] = f"{indent}{replacement}"
+            break
+    else:
+        raise KeyError(f"Missing {key} line")
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+
+
+def write_job_input_data(
+    job_dir: Path,
+    source_input_data: Path,
+    limit_samples: tuple[int, int],
+    job_index: int,
+) -> None:
     dest_input_data = job_dir / "input_data"
     shutil.copytree(source_input_data, dest_input_data)
 
     cfg_path = dest_input_data / "_ot_sensitivity.yaml"
     text = cfg_path.read_text(encoding="utf-8")
-    replacement = f"limit_samples: [{limit_samples[0]}, {limit_samples[1]}]"
-    lines = text.splitlines()
-    for idx, line in enumerate(lines):
-        if line.lstrip().startswith("limit_samples:"):
-            lines[idx] = replacement
-            break
-    else:
-        raise KeyError("Missing limit_samples line in _ot_sensitivity.yaml")
-    cfg_path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+    text = _replace_yaml_line(
+        text,
+        "limit_samples",
+        f"limit_samples: [{limit_samples[0]}, {limit_samples[1]}]",
+    )
+    cfg_path.write_text(text, encoding="utf-8")
+
+    mesh_cfg_path = dest_input_data / "trans_mesh_config.yaml"
+    text = mesh_cfg_path.read_text(encoding="utf-8")
+    text = _replace_yaml_line(
+        text,
+        "pbs_name",
+        f"pbs_name: trans_case_0_{job_index:02d}",
+    )
+    mesh_cfg_path.write_text(text, encoding="utf-8")
 
 
 def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | None = None) -> list[Path]:
@@ -48,8 +72,8 @@ def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | Non
 
     job_dirs = []
     for i, sample_range in enumerate(ranges):
-        job_dir = jobs_root / f"job_{i:03d}_{sample_range[0]:05d}_{sample_range[1]:05d}"
-        write_job_input_data(job_dir, source_input_data, sample_range)
+        job_dir = jobs_root / f"job_{i:02d}_{sample_range[0]:04d}_{sample_range[1]:04d}"
+        write_job_input_data(job_dir, source_input_data, sample_range, i)
         job_dirs.append(job_dir)
     return job_dirs
 
