@@ -72,7 +72,7 @@ def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | Non
     case_dir = Path(case_dir).resolve()
     source_input_data = case_dir / "input_data"
     if jobs_root is None:
-        jobs_root = case_dir / f"sampling_jobs_{samples_per_job}"
+        jobs_root = case_dir
     jobs_root = Path(jobs_root).resolve()
     jobs_root.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +83,7 @@ def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | Non
 
     job_dirs = []
     for i, sample_range in enumerate(ranges):
-        job_dir = jobs_root / f"job_{i:02d}_{sample_range[0]:04d}_{sample_range[1]:04d}"
+        job_dir = jobs_root / f"job_{i:02d}_{sample_range[0]:05d}_{sample_range[1]:05d}"
         write_job_input_data(job_dir, source_input_data, sample_range, i)
         job_dirs.append(job_dir)
     return job_dirs
