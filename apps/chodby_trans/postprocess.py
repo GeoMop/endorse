@@ -169,6 +169,8 @@ def save_reduced_statistics(
     ds_stat: xr.Dataset,
     ds: xr.Dataset,
     out_dir: Path,
+    *,
+    group_parameters: xr.DataArray,
     var_name: str = "log10_conc",
 ) -> xr.Dataset:
     """
@@ -186,36 +188,39 @@ def save_reduced_statistics(
         raise KeyError(f"Missing required statistics variables: {missing}")
     if "parameter" not in ds:
         raise KeyError("Dataset must contain variable 'parameter'.")
+    assert group_parameters is not None
 
-    reduced = xr.merge([ds_stat[keep_vars], ds["parameter"]]).copy()
+    merge_parts = [ds_stat[keep_vars], ds["parameter"]]
+    merge_parts.append(group_parameters.rename("group_parameters"))
+
+    reduced = xr.merge(merge_parts).copy()
     reduced.to_zarr(out_dir / "reduced_statistics.zarr", mode="w", consolidated=True)
 
-    # prepare Pandas dataframes (flat tables)
+    def _sample_table(da: xr.DataArray, value_name: str) -> pd.DataFrame:
+        index_dims = [dim for dim in ("IID", "QMC") if dim in da.dims]
+        value_dim = da.dims[-1]
+        table = da.to_dataframe(name=value_name).reset_index()
+        table = table.pivot(index=index_dims, columns=value_dim, values=value_name).reset_index()
+        return table[index_dims + [col for col in table.columns if col not in index_dims]]
+
+    def _frame(da: xr.DataArray, value_name: str) -> pd.DataFrame:
+        if da.ndim == 0:
+            return pd.DataFrame({value_name: [da.item()]})
+        return da.to_dataframe(name=value_name).reset_index()
+
     q99_name, q99_xyz_name = keep_vars
-    parameter_table = (
-        reduced["parameter"]
-        .to_dataframe(name="parameter")
-        .reset_index()
-        .pivot(index=["IID", "QMC"], columns="param_name", values="parameter")
-        .reset_index()
-    )
-    parameter_cols = ["IID", "QMC"] + [col for col in parameter_table.columns if col not in ("IID", "QMC")]
-    parameter_table = parameter_table[parameter_cols]
     tables = {
-        q99_name: reduced[q99_name].to_dataframe(name=q99_name).reset_index(),
-        q99_xyz_name: reduced[q99_xyz_name].to_dataframe(name=q99_xyz_name).reset_index(),
-        "parameter": parameter_table,
+        q99_name: _frame(reduced[q99_name], q99_name),
+        q99_xyz_name: _frame(reduced[q99_xyz_name], q99_xyz_name),
+        "parameter": _sample_table(reduced["parameter"], "parameter"),
     }
+    tables["group_parameters"] = _sample_table(reduced["group_parameters"], "group_parameters")
 
     # parquet output
     parquet_dir = out_dir / "reduced_statistics_parquet"
     parquet_dir.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
-        if name == "parameter":
-            coord_cols = [col for col in ["IID", "QMC"] if col in table.columns]
-            extra_cols = [col for col in table.columns if col not in coord_cols]
-            table = table[coord_cols + extra_cols]
-        elif name in reduced:
+        if name in reduced and name in table.columns:
             coord_cols = [dim for dim in reduced[name].dims if dim in table.columns]
             extra_cols = [col for col in table.columns if col not in coord_cols + [name]]
             table = table[coord_cols + extra_cols + [name]]
@@ -653,7 +658,13 @@ def make_transport_plots(cfg, seed):
 
     n = input_design.n_samples
     ds_stat = compute_statistics(ds, var_name)
-    save_reduced_statistics(ds_stat, ds, job.output.dir_path/ "reduced_statistics", var_name)
+    save_reduced_statistics(
+        ds_stat,
+        ds,
+        job.output.dir_path / "reduced_statistics",
+        group_parameters=input_design.group_xr,
+        var_name=var_name,
+    )
     print(list(ds_stat.data_vars.keys()))
     sobol_boot = lambda conc_da: input_design.compute_sobol_xr(conc_da, n_boot=100)
     sobol = lambda conc_da: input_design.compute_sobol_xr(conc_da)

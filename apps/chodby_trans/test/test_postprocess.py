@@ -500,3 +500,71 @@ def test_plot_vtk_end_to_end(smart_tmp_path):
     )
     expected_SI_A = np.concatenate([si_a_top, si_a_bot])
     # np.testing.assert_allclose(mesh.point_data["SI_A"], expected_SI_A, rtol=0, atol=1e-12)
+
+
+def test_save_reduced_statistics_writes_group_parameters(tmp_path, monkeypatch):
+    calls = {}
+
+    def fake_to_zarr(self, store, mode="w", consolidated=True):
+        calls["store"] = store
+        calls["vars"] = set(self.data_vars)
+        calls["consolidated"] = consolidated
+        store.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(xr.Dataset, "to_zarr", fake_to_zarr)
+
+    ds_stat = xr.Dataset(
+        data_vars={
+            "log10_conc_q99": ((), np.array(1.25)),
+            "log10_conc_q99_XYZ": (("sim_time",), np.array([1.0, 1.5])),
+        },
+        coords={"sim_time": np.array([0.0, 1.0])},
+    )
+    ds = xr.Dataset(
+        data_vars={
+            "parameter": (
+                ("IID", "QMC", "param_name"),
+                np.array(
+                    [
+                        [[0.1, 0.2], [0.3, 0.4]],
+                        [[0.5, 0.6], [0.7, 0.8]],
+                    ]
+                ),
+            ),
+            "group_parameters": (
+                ("IID", "QMC", "param"),
+                np.array(
+                    [
+                        [[1.1, 1.2], [1.3, 1.4]],
+                        [[1.5, 1.6], [1.7, 1.8]],
+                    ]
+                ),
+            ),
+        },
+        coords={
+            "IID": np.array([0, 1]),
+            "QMC": np.array([0, 1]),
+            "param_name": np.array(["p1", "p2"], dtype=object),
+            "param": np.array(["g1", "g2"], dtype=object),
+        },
+    )
+
+    out_dir = tmp_path / "reduced_statistics"
+    reduced = postprocess.save_reduced_statistics(
+        ds_stat,
+        ds,
+        out_dir,
+        var_name="log10_conc",
+        group_parameters=ds["group_parameters"],
+    )
+
+    assert (out_dir / "reduced_statistics.zarr").exists()
+    assert (out_dir / "reduced_statistics_parquet" / "parameter.parquet").exists()
+    assert (out_dir / "reduced_statistics_parquet" / "group_parameters.parquet").exists()
+    assert (out_dir / "reduced_statistics_csv" / "parameter.csv").exists()
+    assert (out_dir / "reduced_statistics_csv" / "group_parameters.csv").exists()
+
+    assert calls["store"] == out_dir / "reduced_statistics.zarr"
+    assert calls["consolidated"] is True
+    assert {"parameter", "group_parameters", "log10_conc_q99", "log10_conc_q99_XYZ"} <= calls["vars"]
+    assert "group_parameters" in reduced
