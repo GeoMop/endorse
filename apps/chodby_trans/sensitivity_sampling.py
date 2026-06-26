@@ -785,7 +785,7 @@ def main():
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "plots"]
+            assert app_cmd in ["read", "continue", "meta", "plots", "reduced_stats"]
             submit_pbs(cfg, cmd=app_cmd) # given app command
         else:   # default app command
             submit_pbs(cfg)
@@ -825,6 +825,9 @@ def main():
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)
+    elif cmd == 'reduced_stats':
+        with common.workdir(str(job.output.plots), clean=False):
+            pp.make_transport_plots(cfg, seed, reduced_stats=True)
 
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")

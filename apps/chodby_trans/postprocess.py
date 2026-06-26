@@ -651,7 +651,7 @@ def sobol_ds_summary(ds: xr.Dataset, df_si:pd.DataFrame) -> None:
 
     return tab_lines
 
-def make_transport_plots(cfg, seed):
+def make_transport_plots(cfg, seed, reduced_stats: bool = False):
     """
     Main processing function.
     Generates transport-related plots and saves them to out_dir.
@@ -662,15 +662,19 @@ def make_transport_plots(cfg, seed):
 
     n = input_design.n_samples
     ds_stat = compute_statistics(ds, var_name)
-    save_reduced_statistics(
-        ds_stat,
-        ds,
-        job.output.dir_path / "reduced_statistics",
-        group_parameters=input_design.group_xr,
-        parameter_group_map=input_design.parameter_group_xr,
-        var_name=var_name,
-    )
     print(list(ds_stat.data_vars.keys()))
+
+    if reduced_stats:
+        save_reduced_statistics(
+            ds_stat,
+            ds,
+            job.output.dir_path / "reduced_statistics",
+            group_parameters=input_design.group_xr,
+            parameter_group_map=input_design.parameter_group_xr,
+            var_name=var_name,
+        )
+        return
+
     sobol_boot = lambda conc_da: input_design.compute_sobol_xr(conc_da, n_boot=100)
     sobol = lambda conc_da: input_design.compute_sobol_xr(conc_da)
 
