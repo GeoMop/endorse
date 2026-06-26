@@ -171,6 +171,7 @@ def save_reduced_statistics(
     out_dir: Path,
     *,
     group_parameters: xr.DataArray,
+    parameter_group_map: xr.DataArray,
     var_name: str = "log10_conc",
 ) -> xr.Dataset:
     """
@@ -189,9 +190,11 @@ def save_reduced_statistics(
     if "parameter" not in ds:
         raise KeyError("Dataset must contain variable 'parameter'.")
     assert group_parameters is not None
+    assert parameter_group_map is not None
 
     merge_parts = [ds_stat[keep_vars], ds["parameter"]]
     merge_parts.append(group_parameters.rename("group_parameters"))
+    merge_parts.append(parameter_group_map.rename("parameter_group_map"))
 
     reduced = xr.merge(merge_parts).copy()
     reduced.to_zarr(out_dir / "reduced_statistics.zarr", mode="w", consolidated=True)
@@ -215,6 +218,7 @@ def save_reduced_statistics(
         "parameter": _sample_table(reduced["parameter"], "parameter"),
     }
     tables["group_parameters"] = _sample_table(reduced["group_parameters"], "group_parameters")
+    tables["parameter_group_map"] = _frame(reduced["parameter_group_map"], "parameter_group_map")
 
     # parquet output
     parquet_dir = out_dir / "reduced_statistics_parquet"
@@ -663,6 +667,7 @@ def make_transport_plots(cfg, seed):
         ds,
         job.output.dir_path / "reduced_statistics",
         group_parameters=input_design.group_xr,
+        parameter_group_map=input_design.parameter_group_xr,
         var_name=var_name,
     )
     print(list(ds_stat.data_vars.keys()))

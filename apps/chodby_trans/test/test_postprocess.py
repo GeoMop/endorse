@@ -548,6 +548,12 @@ def test_save_reduced_statistics_writes_group_parameters(tmp_path, monkeypatch):
             "param": np.array(["g1", "g2"], dtype=object),
         },
     )
+    parameter_group_map = xr.DataArray(
+        data=np.array(["g1", "g1"], dtype=object),
+        dims=("param_name",),
+        coords={"param_name": np.array(["p1", "p2"], dtype=object)},
+        name="parameter_group_map",
+    )
 
     out_dir = tmp_path / "reduced_statistics"
     reduced = postprocess.save_reduced_statistics(
@@ -556,15 +562,19 @@ def test_save_reduced_statistics_writes_group_parameters(tmp_path, monkeypatch):
         out_dir,
         var_name="log10_conc",
         group_parameters=ds["group_parameters"],
+        parameter_group_map=parameter_group_map,
     )
 
     assert (out_dir / "reduced_statistics.zarr").exists()
     assert (out_dir / "reduced_statistics_parquet" / "parameter.parquet").exists()
     assert (out_dir / "reduced_statistics_parquet" / "group_parameters.parquet").exists()
+    assert (out_dir / "reduced_statistics_parquet" / "parameter_group_map.parquet").exists()
     assert (out_dir / "reduced_statistics_csv" / "parameter.csv").exists()
     assert (out_dir / "reduced_statistics_csv" / "group_parameters.csv").exists()
+    assert (out_dir / "reduced_statistics_csv" / "parameter_group_map.csv").exists()
 
     assert calls["store"] == out_dir / "reduced_statistics.zarr"
     assert calls["consolidated"] is True
-    assert {"parameter", "group_parameters", "log10_conc_q99", "log10_conc_q99_XYZ"} <= calls["vars"]
+    assert {"parameter", "group_parameters", "parameter_group_map", "log10_conc_q99", "log10_conc_q99_XYZ"} <= calls["vars"]
     assert "group_parameters" in reduced
+    assert "parameter_group_map" in reduced
