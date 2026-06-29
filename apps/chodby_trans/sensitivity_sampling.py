@@ -463,8 +463,9 @@ def read_parameters_by_rc(rc_select: list[int]):
     plot_failed_return_codes(v_rc, v_ieval)
 
     mask = np.isin(v_rc, rc_select)
+    hist_mask = mask & (v_rc > ReturnCode.SKIP)
     logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy()[mask].ravel())
+    plot_sample_time_hist(ds['eval_time'].to_numpy()[hist_mask].ravel())
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
     f_rc = v_rc[mask]
@@ -584,7 +585,7 @@ def plot_sample_time_hist(st):
             transform=plt.gca().transAxes,
             ha="left", va="top",
             fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
-    ax.set_title('Sample time histogram')
+    ax.set_title(f"Sample time histogram (n={st.size})")
     ax.set_ylabel('count')
     ax.legend()
     fig.tight_layout()
