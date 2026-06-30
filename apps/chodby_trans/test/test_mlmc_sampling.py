@@ -66,7 +66,7 @@ def test_goal3_prepare_samples_prefixes_finer_count(tmp_path: Path):
         forward_simulation=RandomTransportSimulation(cfg, workdir),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
-        finer_finished_count=lambda _level_id: 7,
+        finer_samples_collected=lambda _sample_ids: 7,
     )
 
     coarse_level = simulation.level_instance([10.0], [0])
@@ -91,7 +91,7 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
         forward_simulation=RandomTransportSimulation(cfg, workdir),
         matrix_generator=make_group_matrix_generator(sa_obj),
         n_parameters=len(sa_obj.groups),
-        finer_finished_count=lambda _level_id: 3,
+        finer_samples_collected=lambda _sample_ids: 3,
     )
 
     assert mlmc_level_parameters(cfg) == [[10.0], [1.0]]

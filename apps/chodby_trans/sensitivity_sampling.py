@@ -49,7 +49,10 @@ from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 from mlmc.sample_storage_hdf import SampleStorageHDF
 from mlmc.sampler import Sampler
 from mlmc.sampling_pool_dask import SamplingPoolDask
-from mlmc.sim.saltelli_simulation import SaltelliSchemaSimulation
+from mlmc.level_simulation import LevelSimulation
+from mlmc.quantity.quantity_spec import QuantitySpec
+from mlmc.quantity.sobol import SaltelliSchema
+from mlmc.sim.simulation import Simulation
 
 import logging
 def setup_logging(name="driver"):
@@ -785,9 +788,12 @@ def parse_sample_level_id(sample_id: str) -> int:
     return int(level_tag[1:])
 
 
-class TransportSaltelliSimulation(SaltelliSchemaSimulation):
+class TransportSaltelliSimulation(Simulation):
     """
-    Saltelli MLMC wrapper that prepends the current finer-level sample count to each scheduled row.
+    Saltelli MLMC wrapper that evaluates one full Saltelli row per MLMC sample.
+
+    This variant is local to chodby_trans and does not depend on
+    ``mlmc.sim.saltelli_simulation.SaltelliSchemaSimulation``.
     """
 
     def __init__(
@@ -798,16 +804,106 @@ class TransportSaltelliSimulation(SaltelliSchemaSimulation):
         n_parameters: int,
         finer_samples_collected: Callable[[list[str]], int]
     ):
-        super().__init__(forward_simulation, matrix_generator, n_parameters)
-        self._finner_samples_collected = finer_samples_collected
+        self.forward_simulation = forward_simulation
+        self.matrix_generator = matrix_generator
+        self.schema = SaltelliSchema.make(n_parameters=n_parameters)
+        self.need_workspace = getattr(forward_simulation, "need_workspace", False)
+        self._finer_samples_collected = finer_samples_collected
+
+    def level_instance(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+    ) -> LevelSimulation:
+        """
+        Wrap the forward level simulation and install Saltelli sample planning.
+        """
+        forward_level_sim = self.forward_simulation.level_instance(
+            fine_level_params,
+            coarse_level_params,
+        )
+        level_sim = LevelSimulation(
+            config_dict={"forward_config": forward_level_sim.config_dict},
+            common_files=forward_level_sim.common_files,
+            need_sample_workspace=forward_level_sim.need_sample_workspace,
+            task_size=forward_level_sim.task_size,
+        )
+        level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
+        return level_sim
+
+    def result_format(self) -> list[QuantitySpec]:
+        """
+        Expose the wrapped result format with a leading Saltelli-term axis.
+        """
+        result_format = []
+        for spec in self.forward_simulation.result_format():
+            result_format.append(
+                QuantitySpec(
+                    name=spec.name,
+                    unit=spec.unit,
+                    shape=(self.schema.n_terms, *tuple(spec.shape)),
+                    times=spec.times,
+                    locations=spec.locations,
+                )
+            )
+        return result_format
+
+    def calculate(
+        self,
+        config_dict: dict[str, Any],
+        sample_input: Sequence[float],
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Evaluate all Saltelli terms for one MLMC sample.
+        """
+        if sample_input is None:
+            raise ValueError("Missing planned Saltelli sample input")
+
+        sample_array = np.asarray(sample_input, dtype=float)
+        own_size = self.schema.n_terms * self.schema.n_parameters
+        sample_matrix = sample_array[:own_size].reshape(
+            self.schema.n_terms,
+            self.schema.n_parameters,
+        )
+        forward_params = sample_array[own_size:]
+
+        fine_results = []
+        coarse_results = []
+        for input_vector in sample_matrix:
+            fine_result, coarse_result = self.forward_simulation.calculate(
+                config_dict["forward_config"],
+                (*input_vector, *forward_params),
+            )
+            fine_results.append(np.asarray(fine_result).flatten())
+            coarse_results.append(np.asarray(coarse_result).flatten())
+
+        return np.asarray(fine_results).flatten(), np.asarray(coarse_results).flatten()
+
+    def _generate_matrix(self, n_rows: int) -> np.ndarray:
+        matrix = np.asarray(
+            self.matrix_generator(int(n_rows), self.schema.n_parameters),
+            dtype=float,
+        )
+        if matrix.shape != (int(n_rows), self.schema.n_parameters):
+            raise ValueError(
+                f"Matrix generator returned shape {matrix.shape}, "
+                f"expected {(int(n_rows), self.schema.n_parameters)}."
+            )
+        if not np.all((0.0 <= matrix) & (matrix <= 1.0)):
+            raise ValueError("Matrix generator must return values in [0, 1].")
+        return matrix
 
     def prepare_samples(self, sample_ids: list[str]):
-        n_finner_collected =  self._finner_samples_collected(sample_ids)
-        orig_samples = super().prepare_samples(sample_ids)
+        """
+        Plan Saltelli terms and append the finer-level sample count.
+        """
+        n_finer_collected = self._finer_samples_collected(sample_ids)
+        a_matrix = self._generate_matrix(len(sample_ids))
+        b_matrix = self._generate_matrix(len(sample_ids))
 
         return [
-            (sample_id, *tail, n_finner_collected)
-            for sample_id, *tail in orig_samples
+            (sample_id, *list(self.schema.terms(a_row, b_row)), n_finer_collected)
+            for sample_id, a_row, b_row in zip(sample_ids, a_matrix, b_matrix)
         ]
 
 

@@ -96,7 +96,7 @@ Resolved:
   2. Add explicit workdir paths for MLMC HDF storage and an MLMC output
      directory in `job.py`.
   3. Build the MLMC forward simulation as:
-     `TransportSimulation -> SaltelliSchemaSimulation -> Sampler`.
+     `TransportSimulation -> TransportSaltelliSimulation -> Sampler`.
   4. Use `SamplingPoolDask` with the caller-owned Dask `Client` and
      `SampleStorageHDF` persisted inside the app workdir.
   5. Keep logging explicit around planned level counts, scheduled inputs, HDF
@@ -104,6 +104,9 @@ Resolved:
   6. Preserve grouped Sobol sampling by generating Saltelli matrices in group
      space and expanding group uniforms to full parameter vectors only inside
      `TransportSimulation`.
+  7. Inline the Saltelli wrapper behavior directly into
+     `TransportSaltelliSimulation` so it inherits from MLMC `Simulation`
+     without depending on `mlmc.sim.saltelli_simulation.SaltelliSchemaSimulation`.
 - Goal 3:
   1. Pass the number of avaliable fine samples to the coarser level as the 
      first value in input_vec.
@@ -124,6 +127,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-30: Inlined the Saltelli wrapper logic into
+  `TransportSaltelliSimulation`, so the chodby_trans MLMC path now subclasses
+  MLMC `Simulation` directly and no longer imports
+  `mlmc.sim.saltelli_simulation.SaltelliSchemaSimulation`.
 - 2026-06-23: Added bootstrap IQR uncertainty bands for fine, coarse, and
   fine-coarse variance estimates to the sequential Saltelli MLMC diagnostics
   plot and CSV output.
