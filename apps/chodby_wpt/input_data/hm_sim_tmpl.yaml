@@ -1,0 +1,109 @@
+flow123d_version: 4.0.0a01
+problem: !Coupling_Sequential
+  description:
+  mesh:
+    mesh_file: wpt_section.msh
+    regions:
+      - !Union
+        name: fractures
+        regions: [fracture_1, fracture_2, fracture_3]
+      - !Union
+        name: .fractures
+        regions: [.fracture_1, .fracture_2, .fracture_3]
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: BULK
+        biot_alpha: 0.2
+        fluid_density: 1000
+    time:
+      end_time: 5e5
+    a_tol: 0
+    r_tol: 1e-6
+    flow_equation: !Flow_Darcy_LMH
+        nonlinear_solver:
+          linear_solver: !Petsc
+            a_tol: 1e-50
+            r_tol: 1e-12
+            options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+        input_fields:
+          - region: rock
+            conductivity: <rock_conductivity> #1e-13
+            storativity: <rock_storativity> #1
+            init_pressure: 0
+
+          - region: [ packer_near, packer_far ]
+            conductivity: <packer_conductivity> #1e-13
+            storativity: <packer_storativity> #1
+            init_pressure: 0
+
+          - region: water
+            conductivity: <water_conductivity> #1e-6
+            storativity: <watyer_storativity> #1
+            init_pressure: 1e6
+
+          - region: fractures
+            conductivity: <fracture_conductivity> #1e-6
+            storativity: <fracture_storativity> #1
+            cross_section: <fracture_cross_section> #1e-3
+
+          - region: [ .rock, .fractures ]
+            bc_type: dirichlet
+            bc_pressure: 0
+
+          - region: water
+            time: 1e5
+            water_source_ref_pressure: 0
+            water_source_sigma: 1e3
+
+          - region: water
+            time: 2e5
+            water_source_ref_pressure: 2e6
+            water_source_sigma: 1e3
+
+          - region: water
+            time: 3e5
+            water_source_sigma: 0
+
+        output:
+          times: &output_times
+            - step: 1e5
+          fields:
+            - piezo_head_p0
+            - pressure_p0
+            - velocity_p0
+            - region_id
+        output_stream:
+          file: flow.pvd
+          format: !vtk
+    mechanics_equation:
+        output_stream:
+          file: mechanics.pvd
+          format: !vtk
+        output:
+          times: *output_times
+          fields:
+            - displacement
+            - stress
+            - region_id
+            - cross_section_updated
+        solver:
+          a_tol: 1e-50
+          r_tol: 1e-9
+        contact: true
+        input_fields:
+          - region: [ rock, packer_near, packer_far ]
+            young_modulus: <rock_young> #60e9
+            poisson_ratio: <rock_poisson> #0.25
+            initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+
+          - region: [ fractures, water ]
+            young_modulus: <fracture_young> #1e7
+            poisson_ratio: <fracture_poisson> #0.25
+
+          - region: [ .packer_near, .packer_far ]
+            bc_type: displacement
+            bc_displacement: 0
+
+          - region: .rock
+            bc_type: displacement_n
+            bc_displacement: 0

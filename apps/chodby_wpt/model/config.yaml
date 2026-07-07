@@ -1,0 +1,26 @@
+machine_config:
+  # Automatic resolution according to the socket.gethostname().
+  # The __default__ configuration is used when no host-specific entry matches.
+  __default__:
+    flow_executable:
+      - flow123d
+    pbs:
+      n_cores: 1
+      n_nodes: 1
+      mem: 6Gb
+      queue: charon
+      pbs_name: endorse-flow123d
+      walltime: "04:00:00"
+
+  pike:
+    flow_executable:
+      - /home/stebel/dev/git/flow123d/bin/fterm
+      - --no-term
+      # Use "own <docker-image>" here when you want a specific branch/image.
+      # - own
+      # - flow123d/endorse_ci:a785dd
+      # - flow123d/ci-gnu:4.0.0a_d61969
+      - dbg
+      - "@4.0.3"
+      - exec
+      - /home/stebel/dev/git/flow123d/build-JS_flow_source_sigma/bin/flow123d
