@@ -118,7 +118,12 @@ def update_mesh_cfg(cfg_mesh, level_dict):
 
 @memoize
 # @run_in_subprocess
-def create_mesh(cfg_mesh, fr_set, n_large):
+def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
+
+    # when running in subprocess, global variables are lost
+    # therefore we set the workdir again
+    job.set_workdir(workdir, input_dir)
+    logging.info(cfg_mesh)
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)
     mesh_seed = int(mesh_seed_seq.generate_state(1)[0])
@@ -138,19 +143,22 @@ def create_mesh(cfg_mesh, fr_set, n_large):
 
     return full_mesh, el_to_ifr
 
-#@memoize
-# @run_in_subprocess
-def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
+@memoize
+@run_in_subprocess
+def prepare_fine_input(workdir, input_dir, cfg_mesh, cfg_trans, fr_set, n_large):
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
     #job.set_workdir(workdir)
+    job.set_workdir(workdir, input_dir)
+    # common.dump_config(cfg_mesh, Path("cfg_mesh.yaml"))
+    with open("cfg_mesh.yaml", "w", encoding="utf-8") as f:
+        yaml.dump(dotdict.serialize(cfg_mesh), f, sort_keys=False)
 
     input_msh_filepath = Path(f"input_fields.msh2")
     if input_msh_filepath.exists():
         return File(str(input_msh_filepath))
 
-    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
-
+    full_mesh, el_to_ifr = create_mesh(workdir, job.input.dir_path, cfg_mesh, fr_set, n_large)
     fields, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh,
                                                      apply_fields.bulk_fields_mockup_tunnel,
                                                      el_to_ifr, fr_set, dim=3)
@@ -158,28 +166,7 @@ def prepare_fine_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
     return input_fields_file
 
 
-#@memoize
-# @run_in_subprocess
-def prepare_coarse_input(workdir, cfg_mesh, cfg_trans, fr_set, n_large):
-    # when running in subprocess, global variables are lost
-    # therefore we set the workdir again
-    job.set_workdir(workdir)
-
-    full_mesh, el_to_ifr = create_mesh(cfg_mesh, fr_set, n_large)
-    return full_mesh.file
-    # TODO: pass homogenization fields
-    # mesh_modified = load_mesh(mesh_modified_file)
-    # input_fields_file, est_velocity = compute_fields(cfg_mesh, cfg_trans, full_mesh, apply_fields.bulk_fields_mockup_tunnel,
-    #                                                  el_to_ifr, fractures, dim=3)
-    #
-    # # input_fields_file = File("input_fields.msh2")
-    # input_msh_filepath = Path(input_fields_file.path).with_suffix(".msh")
-    # shutil.move(input_fields_file.path, input_msh_filepath)
-    # input_msh = File(input_msh_filepath)
-    # return input_msh
-
-
-# @memoize
+@memoize
 def transport_prepare_run(cfg_mesh):
     fracture_box = cfg_mesh.fractures.clip_box_ratio * np.array(cfg_mesh.geometry.box_dimensions)
     logging.info(f"box: {cfg_mesh.geometry.box_dimensions}")
@@ -214,8 +201,6 @@ def transport_run(cfg, level_id, param_dict):
     if level_id < len(cfg.mlmc.levels) - 1:
         with common.workdir("macro_trans", clean=False):
             logging.info(f"macro dir: {os.getcwd()}")
-            # rc, slice = transport_coarse_run(cfg, fr_set, level_id + 1, n_large, tags, param_dict)
-            # rc, slice = transport_homo_run(cfg, fr_set, level_id, n_large, tags, param_dict)
             c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
     else:
         c_values = None
@@ -224,12 +209,12 @@ def transport_run(cfg, level_id, param_dict):
 
 def prepare_common_homogenization_mesh(cfg):
     # macro homogenization: homogenization mesh
-    variant = "homo"
     macro_level = cfg.mlmc.levels[-1]
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
 
-    homo_mesh, _ = create_mesh(cfg_mesh, [], 0)
+    input_dir = job.input.dir_path if job.input is not None else None
+    homo_mesh, _ = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, [], 0)
 
     homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
 
@@ -263,7 +248,9 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
     return conductivity_target
 
 
-def source_level_field(mesh, cfg_geometry):
+def source_level_field(mesh,
+                       cfg_geometry,
+                       source_dict):
     source_level = np.zeros(len(mesh.elements), dtype=float)
     dsb_idx = int(cfg_geometry.damaged_storage_borehole)
     if dsb_idx < 0:
@@ -274,10 +261,15 @@ def source_level_field(mesh, cfg_geometry):
     if region is None:
         return source_level
 
+    sigma_val = float(source_dict["sources_bentonite_diff"]) \
+                / float(source_dict["sources_buffer_thickness"]) \
+                * float(source_dict["sources_uos_surface"]) \
+                * float(source_dict["sources_container_vol"])
+
     region_id, region_dim = region
     for iel, el in enumerate(mesh.elements):
         if el.tags[0] == region_id and len(el.node_indices) - 1 == region_dim:
-            source_level[iel] = 1.0
+            source_level[iel] = sigma_val
     return source_level
 
 
@@ -291,7 +283,10 @@ def average_micro_field_to_macro(micro_mesh, macro_mesh, micro_field):
     return macro_field
 
 
-def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
+@memoize
+@run_in_subprocess
+def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_id):
+    job.set_workdir(workdir, input_dir)
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
@@ -299,7 +294,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
     cfg_mesh.mesh_name += f"_{variant}"
-    micro_mesh, el_to_ifr = create_mesh(cfg_mesh, fracture_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, fracture_set, n_large)
 
     # load common homogenization mesh
     homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
@@ -308,10 +304,10 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
-    micro_fields["source_level"] = source_level_field(micro_mesh, cfg.mesh.geometry)
+    micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
     # test VTK output
     micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
-    
+
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
     conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
 
@@ -322,7 +318,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
     logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
-    macro_mesh, el_to_ifr = create_mesh(cfg_mesh, coarse_fracture_set, n_large)
+    input_dir = job.input.dir_path if job.input is not None else None
+    macro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, coarse_fracture_set, n_large)
 
     # macro: bulk conductivity tensor
     conductivity_macro = interpolate_conductivity_tensor(
@@ -336,8 +333,8 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
-    macro_fields["source_level"] = average_micro_field_to_macro(
-        micro_mesh, macro_mesh, micro_fields["source_level"]
+    macro_fields["source_sigma"] = average_micro_field_to_macro(
+        micro_mesh, macro_mesh, micro_fields["source_sigma"]
     )
 
     input_fields_path = Path(f"input_fields.msh2")
@@ -345,17 +342,22 @@ def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
     # test output to VTK
     macro_mesh.write_fields_vtu(input_fields_path.with_suffix(".vtu"), macro_fields)
+    return input_fields_file
 
 
-    # TODO run Flow123d on macro mesh
+def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
+
+    input_fields_file = prepare_coarse_input(job.scratch.dir_path, job.input.dir_path,
+                                             cfg, fracture_set, n_large, level_id)
     res, fo = parametrized_run(cfg, "transport_macroscale",
                                input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
+    logging.info(f"macro results shape: {values.shape}")
     return res, values
 
 
-# @memoize
+@memoize
 def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     """
     Fine full-scale transport model
@@ -372,12 +374,13 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     if input_msh_filepath.exists():
         input_msh = File(str(input_msh_filepath))
     else:
-        input_msh = prepare_fine_input(job.output.dir_path, cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
-
+        input_msh = prepare_fine_input(job.scratch.dir_path, job.input.dir_path,
+                                       cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
 
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
+    logging.info(f"fine results shape: {values.shape}")
     return res, values
 
 
@@ -927,6 +930,7 @@ def set_source_term(cfg):
         # container region volume: V = pi * dc^2/4 * hc [m3]
         sources_container_vol=np.pi * 0.25 * cfg_bh.diameter ** 2 * (cfg_bh.length - cfg_bh.plug),
         sources_buffer_thickness=cfg_src.buffer_thickness,
+        sources_bentonite_diff=cfg_src.bentonite_diff,
         conc_flux_file= job.input.dir_path / cfg_fine.conc_flux_file,
 
         storage_regions = [f"storage_{i}" for i in range(cfg_geom.n_storage_boreholes) if i != dsb_idx],

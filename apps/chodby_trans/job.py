@@ -27,6 +27,8 @@ input = None
 scratch = None
 output = None
 
+INPUT_DIR_ENV = "ENDORSE_INPUT_DIR"
+
 
 
 @attrs.define
@@ -79,7 +81,13 @@ def set_workdir(workdir: Path, input_dir:Path = None):
         scratchdir = workdir
 
     if input_dir is None:
-        input_dir = workdir / "input_data"
+        input_dir_env = os.environ.get(INPUT_DIR_ENV)
+        if input_dir_env:
+            input_dir = Path(input_dir_env)
+        else:
+            input_dir = workdir / "input_data"
+    else:
+        os.environ[INPUT_DIR_ENV] = str(input_dir)
 
     global input, scratch, output
 

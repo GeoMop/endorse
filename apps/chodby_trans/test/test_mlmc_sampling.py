@@ -158,6 +158,8 @@ def test_transport_simulation(smart_tmp_path: Path):
     input_dir = workdir / "input_data"
     if not input_dir.exists():
         shutil.copytree(source_input_dir, input_dir)
+    else:
+        print(f"Using the existing input dir: {input_dir}")
 
     job.set_workdir(workdir, input_dir)
 

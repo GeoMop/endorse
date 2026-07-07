@@ -620,6 +620,7 @@ pbs_script_template = """
 set -x
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
+export ENDORSE_DISABLE_MEMOIZE=1
 
 output_dir={outputdir}
 # work_dir={workdir}
@@ -662,16 +663,17 @@ bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 clean_scratch
 
 
-PYEXEC="$PROJECT_DIR/venv/bin/python"
-APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
-"$PYEXEC" -u "$APP_PY" "$output_dir" read
-"$PYEXEC" -u "$APP_PY" "$output_dir" plots
+# PYEXEC="$PROJECT_DIR/venv/bin/python"
+# APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+# "$PYEXEC" -u "$APP_PY" "$output_dir" read
+# "$PYEXEC" -u "$APP_PY" "$output_dir" plots
 
 echo "FINISHED"
 """
 
-def submit_pbs(cfg, cmd='meta'):
-    cfg_pbs = cfg.machine_config.pbs
+def submit_pbs(cfg_machine, cmd='meta'):
+    cfg_machine = cfg_machine.get("__resolved__", cfg_machine)
+    cfg_pbs = cfg_machine.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
     pbs_path = job.output.pbs_script
     n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores-1)-2)# Not sure if we need reserve for the master scoop process
@@ -820,7 +822,7 @@ def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSim
             f"cfg.mlmc.sim_class={sim_class_name!r} is not a TransportSimulation class "
             "from chodby_trans.transport_simulation."
         )
-    return sim_class(cfg, job.output.dir_path)
+    return sim_class(cfg, job.scratch.dir_path)
 
 
 def resubmit_unfinished_samples(sampler: Sampler) -> int:
@@ -867,6 +869,13 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
     """
+    # initialize job dir also on scheduler
+    client.run_on_scheduler(
+        init_mlmc_worker_job,
+        str(job.output.dir_path),
+        str(job.input.dir_path),
+    )
+
     worker_job_state = client.run(
         init_mlmc_worker_job,
         str(job.output.dir_path),
@@ -877,7 +886,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
 
     data_schema_key, data_schema = initialize_data_schema()
-    with common.workdir(str(job.output.dir_path), clean=False):
+    with common.workdir(str(job.scratch.dir_path), clean=False):
       prepare_common_homogenization_mesh(cfg)
 
     sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
@@ -899,7 +908,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     storage = SampleStorageHDF(str(storage_path))
     pool = SamplingPoolDask(
         client,
-        work_dir=str(job.output.dir_path),
+        work_dir=str(job.scratch.dir_path),
         debug=not cfg.ot_sensitivity.clean_sample_dir,
         clean=bool(cfg.ot_sensitivity.clean_sample_dir),
     )
@@ -1042,9 +1051,9 @@ def resolve_subcmd(cmd, work_dir, scheduler, copy_flag=True):
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
             assert app_cmd in ["read", "continue", "meta", "mlmc", "mlmc_analysis", "plots"]
-            submit_pbs(cfg, cmd=app_cmd) # given app command
+            submit_pbs(cfg.machine_config, cmd=app_cmd) # given app command
         else:   # default app command
-            submit_pbs(cfg)
+            submit_pbs(cfg.machine_config)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         # read_parameters_by_rc([ReturnCode.NONE])

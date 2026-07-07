@@ -80,7 +80,7 @@ def _load_mesh(mesh_file: File, heal_tol):
 def mesh_compute_el_volumes(nodes:np.array, node_indices :np.array) -> np.array:
     return np.array([element_compute_volume(nodes, ni) for ni in node_indices])
 
-#@memoize
+@memoize
 def load_mesh(mesh_file: File, heal_tol=None) -> 'Mesh':
     return _load_mesh(mesh_file, heal_tol)
 

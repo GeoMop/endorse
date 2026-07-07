@@ -16,6 +16,18 @@ from bgem.stochastic import Population
 
 import chodby_trans.exception_wrapper as exp
 
+
+def preserve_region_counter_after_unpickle(fracture_set) -> None:
+    """ Quick Fix
+        Keep BGEM-generated regions unique after fracture regions cross a subprocess boundary.
+    """
+    if not fracture_set:
+        return
+
+    max_fracture_region_id = max(fr.region.id for fr in fracture_set)
+    gmsh.Region._max_reg_id = max(gmsh.Region._max_reg_id, max_fracture_region_id)
+
+
 def line_distance_edz(factory: "GeometryOCC", line, cfg_mesh: "dotdict") -> field.Field:
     """
     :param factory:
@@ -296,6 +308,8 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
 
     [print(k, v) for k, v in fr_dict.items()]
     [print(k, v) for k, v in fr_bnd_dict.items()]
+    print(box_sides_dict)
+    print("\n", flush=True)
 
     # include all volumetric fragments
     if "drilled_volume" in cfg_geom.include:
@@ -342,6 +356,7 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
 
 
     if "fractures" in cfg_geom.include:
+        print("setting fractures boundary", flush=True)
         # fractures and its boundary
         b_fractures_fr = fr_dict.get("fractures_group_fr").get_boundary().split_by_dimension()[1]
         b_fractures_out = b_fractures_fr \
@@ -357,9 +372,13 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
         if "drilled_volume" not in cfg_geom.include:
             geometry_set.append(b_fractures_in)
 
+    print(geometry_set)
+    print("\n", flush=True)
+
     # create refinement fields around drifts
     refinement_lines = []
     if "drilled_volume" in cfg_geom.include:
+        print("mesh fields")
         line_fields = [line_distance_edz(factory, line, cfg_mesh.storage_borehole_refinement) \
                        for line in storage_boreholes_lines]
         line_fields.append(line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement))
@@ -376,6 +395,8 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
 
     geometry_final = factory.group(*geometry_set)
 
+    print(f"geometry_final:\n{geometry_final}", flush=True)
+
     # exit(0)
     print("Finalize geometry...")
     factory.synchronize()
@@ -385,7 +406,7 @@ def make_geometry(factory, cfg_mesh:'dotdict', fracture_set):
     factory.remove_duplicate_entities()
     factory.synchronize()
 
-    print("Geometry finished...")
+    print("Geometry finished...", flush=True)
     return geometry_final
 
 
@@ -468,7 +489,7 @@ def meshing(factory, objects, mesh_filename):
     """
     Common EDZ and transport domain meshing setup.
     """
-    print("Meshing...")
+    print("Meshing...", flush=True)
     factory.write_brep()
     #factory.mesh_options.CharacteristicLengthMin = cfg.get("min_mesh_step", cfg.boreholes_mesh_step)
     #factory.mesh_options.CharacteristicLengthMax = cfg.boundary_mesh_step
@@ -495,9 +516,9 @@ def meshing(factory, objects, mesh_filename):
     # factory.show()
     #factory.remove_duplicate_entities()
     factory.make_mesh(objects, dim=3, eliminate=False)
-    print("Meshing finished.")
+    print("Meshing finished.", flush=True)
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
-    print("Mesh written.")
+    print("Mesh written.", flush=True)
 
 def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
     """
@@ -519,6 +540,7 @@ def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
     # gopt.ToleranceBoolean = 0.001
 
     # factory.show()
+    preserve_region_counter_after_unpickle(fracture_set)
     if cfg_mesh.geometry.resolution_type == "box_drilled":
         geometry_set = make_geometry(factory, cfg_mesh, fracture_set)
     elif cfg_mesh.geometry.resolution_type == "box":

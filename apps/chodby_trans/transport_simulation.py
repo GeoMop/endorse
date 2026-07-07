@@ -213,7 +213,8 @@ class TransportSimulation(Simulation):
         logging.info("Finer-level sample count at planning time: %s", finer_level_sample_size)
 
         fine_values, coarse_values = transport.transport_run(cfg, level, full_param_dict)
-
+        logging.info(f"results shape: {fine_values.shape}, {coarse_values.shape}")
+        
         fine_result = compact_concentration_series(fine_values)
         coarse_result = np.zeros_like(fine_result)
         if coarse_values is not None:

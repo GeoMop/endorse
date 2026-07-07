@@ -124,6 +124,53 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-06-23: Added bootstrap IQR uncertainty bands for fine, coarse, and
+  fine-coarse variance estimates to the sequential Saltelli MLMC diagnostics
+  plot and CSV output.
+- 2026-06-23: Added `diagnostics_summary.md` next to the sequential Saltelli
+  plots, summarizing current fine/coarse MLMC diagnostics and physical
+  interpretation.
+- 2026-06-23: Added `--plot-diagnostics` to
+  `collect_sequential_saltelli_results.py`, producing fine/coarse variance,
+  variance-ratio, correlation, and difference-bias diagnostics plus CSV data.
+- 2026-06-23: Added `--plot-fine-coarse` to
+  `collect_sequential_saltelli_results.py` for a simple paired fine/coarse
+  time-series comparison figure without histograms.
+- 2026-06-23: Added a `plot_all_lines` option to
+  `plot_conc_timeseries_distribution1` and exposed it as `--plot-all-lines`
+  for sequential Saltelli result plots.
+- 2026-06-23: Added `--plot` support to
+  `collect_sequential_saltelli_results.py`, building the minimal xarray
+  dataset needed by `plot_conc_timeseries_distribution1` from gathered
+  `result.npz` files and writing fine/coarse distribution PDFs.
+- 2026-06-23: Extended `collect_sequential_saltelli_results.py` with a
+  `--gather-only` mode that copies lightweight per-sample result files into a
+  separate gather directory while preserving sample subdirectories.
+- 2026-06-22: Added `collect_sequential_saltelli_results.py` to collect
+  completed sequential Saltelli `result.npz` files into aligned parameter,
+  fine-result, and coarse-result CSV tables.
+- 2026-06-22: Added a subprocess-region quick fix in `mesh/create_mesh.py`:
+  before meshing, BGEM `Region._max_reg_id` is bumped above the unpickled
+  fracture region ids to avoid collisions with newly created boundary regions.
+- 2026-06-22: Added `sequential_saltelli_samples.py` to run real
+  `input_data/transport_mlmc.yaml` Saltelli terms sequentially without
+  MLMC/Dask storage, writing generated group rows and transformed parameters.
+- 2026-06-21: Made `job.set_workdir(..., input_dir=...)` export the input
+  directory through `ENDORSE_INPUT_DIR`, so loky subprocesses that call
+  `job.set_workdir(workdir)` inherit the correct shared `input_data` path.
+- 2026-06-20: Fixed two PBS MLMC worker issues from `driver_174251`: worker
+  launch now passes `ENDORSE_DISABLE_MEMOIZE` explicitly through `pbsdsh`, and
+  fine mesh subprocess setup preserves the configured `input_data` directory.
+- 2026-06-20: Updated `dask_cluster.sh` to reserve scheduler-node worker slots
+  through `DASK_HEAD_WORKER_RESERVE` (default 2), reducing CPU starvation of
+  the Dask scheduler and driver during MLMC sample bursts.
+- 2026-06-20: Added `ENDORSE_DISABLE_MEMOIZE=1` support in
+  `src/endorse/common/memoize.py` so cluster MLMC runs can bypass all existing
+  `@memoize` decorators without manually editing hot-path functions.
+- 2026-06-20: Changed `ot_sa.SensitivityAnalysis.from_cfg` caching to use a
+  deterministic JSON key built from `dotdict.serialize(...)`, with the cached
+  reconstruction moved into `_from_cfg_cached`. This avoids `TypeError:
+  unhashable type: 'dotdict'` when memoizing scheduler-side deserialization.
 - 2026-06-12: Added an independent `mlmc_analysis` subcommand that reads the
   existing MLMC HDF storage, computes fine/coarse/difference variance
   diagnostics for Sobol averaging quantities, and writes CSV plus PDF plots.
@@ -184,6 +231,10 @@ Resolved:
 
 ## AGENT Questions And Remarks
 
+- 2026-06-22: Investigation note: the real fine `box_drilled` mesh path still
+  drops boundary physical groups such as `.side_x0`, `.tunnel_head_y0`, and
+  `.fractures_out` before `input_fields.msh2` reaches Flow123d. This is now
+  separate from the lightweight MLMC sampling test, which should not run Flow.
 
 - `SA_USAGE.md` defines the generic MLMC contracts, but the exact
   Dask-compatible MLMC sampling-pool class expected in this project is still
