@@ -650,10 +650,10 @@ bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 clean_scratch
 
 
-PYEXEC="$PROJECT_DIR/venv/bin/python"
-APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
-"$PYEXEC" -u "$APP_PY" "$output_dir" read
-"$PYEXEC" -u "$APP_PY" "$output_dir" plots
+# PYEXEC="$PROJECT_DIR/venv/bin/python"
+# APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+# "$PYEXEC" -u "$APP_PY" "$output_dir" read
+# "$PYEXEC" -u "$APP_PY" "$output_dir" plots
 
 echo "FINISHED"
 """
