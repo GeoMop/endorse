@@ -447,7 +447,7 @@ def setup_data_storage(cfg: dotdict,
     tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
-def read_parameters_by_rc(rc_select: list[int]):
+def read_parameters_by_rc(rc_select: list[int], make_plots: bool = True):
     print("=========== READ ZARR ==============")
     ds = xr.open_zarr(str(job.output.zarr_store_path))
     print(ds)
@@ -460,12 +460,14 @@ def read_parameters_by_rc(rc_select: list[int]):
     v_param = ds['parameter'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
-    plot_failed_return_codes(v_rc, v_ieval)
+    if make_plots:
+        plot_failed_return_codes(v_rc, v_ieval)
 
     mask = np.isin(v_rc, rc_select)
-    hist_mask = mask & (v_rc > ReturnCode.SKIP)
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy()[hist_mask].ravel())
+    if make_plots:
+        hist_mask = mask & (v_rc > ReturnCode.SKIP)
+        logging.info("plotting eval time histogram...")
+        plot_sample_time_hist(ds['eval_time'].to_numpy()[hist_mask].ravel())
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
     f_rc = v_rc[mask]

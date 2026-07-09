@@ -68,6 +68,17 @@ def write_job_input_data(
     mesh_cfg_path.write_text(text, encoding="utf-8")
 
 
+def ensure_job_input_data(
+    job_dir: Path,
+    source_input_data: Path,
+    limit_samples: tuple[int, int],
+    job_index: int,
+) -> None:
+    if job_dir.exists():
+        return
+    write_job_input_data(job_dir, source_input_data, limit_samples, job_index)
+
+
 def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | None = None) -> list[Path]:
     case_dir = Path(case_dir).resolve()
     source_input_data = case_dir / "input_data"
@@ -84,18 +95,73 @@ def prepare_job_dirs(case_dir: Path, samples_per_job: int, jobs_root: Path | Non
     job_dirs = []
     for i, sample_range in enumerate(ranges):
         job_dir = jobs_root / f"job_{i:02d}_{sample_range[0]:05d}_{sample_range[1]:05d}"
-        write_job_input_data(job_dir, source_input_data, sample_range, i)
+        ensure_job_input_data(job_dir, source_input_data, sample_range, i)
         job_dirs.append(job_dir)
     return job_dirs
 
 
-def run_job(job_dir: Path) -> None:
+def run_job(job_dir: Path, app_cmd: str = "meta") -> None:
     app_dir = Path(__file__).resolve().parent
     subprocess.run(
-        [sys.executable, "sensitivity_sampling.py", str(job_dir), "submit", "meta"],
+        [sys.executable, "sensitivity_sampling.py", str(job_dir), "submit", app_cmd],
         cwd=app_dir,
         check=True,
     )
+
+
+def _archived_path(path: Path) -> Path:
+    for i in range(1, 1000):
+        archived = path.with_name(f"{path.name}.rerun_{i:02d}")
+        if not archived.exists():
+            return archived
+    raise RuntimeError(f"Unable to find archive name for {path}")
+
+
+def archive_job_submission_files(job_dir: Path) -> list[Path]:
+    log_paths = sorted(job_dir.glob("*.out"))
+    if len(log_paths) > 1:
+        raise RuntimeError(f"Expected at most one .out file in {job_dir}, found {len(log_paths)}")
+
+    rename_paths = [
+        job_dir / "logs.tar.gz",
+        job_dir / "sensitivity_sampling.pbs",
+        *log_paths,
+    ]
+    archived = []
+    for path in rename_paths:
+        if not path.exists():
+            continue
+        archived_path = _archived_path(path)
+        path.rename(archived_path)
+        archived.append(archived_path)
+    return archived
+
+
+def count_none_samples(job_dir: Path) -> int:
+    import chodby_trans.job as job
+    import chodby_trans.sensitivity_sampling as sampling
+    from chodby_trans.exception_wrapper import ReturnCode
+
+    job.set_workdir(job_dir)
+    job.output.plots.mkdir(parents=True, exist_ok=True)
+    tags, _parameters = sampling.read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
+    return len(tags)
+
+
+def rerun_incomplete_jobs(job_dirs: list[Path], dry_run: bool = False) -> list[Path]:
+    rerun_jobs = []
+    for job_dir in job_dirs:
+        n_none = count_none_samples(job_dir)
+        if n_none == 0:
+            print(f"{job_dir}: skip")
+            continue
+        print(f"{job_dir}: continue ({n_none} NONE samples)")
+        rerun_jobs.append(job_dir)
+        if dry_run:
+            continue
+        archive_job_submission_files(job_dir)
+        run_job(job_dir, app_cmd="continue")
+    return rerun_jobs
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -118,9 +184,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Prepare job directories but do not launch sensitivity_sampling.py.",
     )
+    parser.add_argument(
+        "--rerun-none",
+        action="store_true",
+        help="Resubmit only jobs that still contain samples with NONE return code.",
+    )
     args = parser.parse_args(argv)
 
     job_dirs = prepare_job_dirs(args.case_dir, args.samples_per_job, jobs_root=args.jobs_root)
+    if args.rerun_none:
+        rerun_incomplete_jobs(job_dirs, dry_run=args.dry_run)
+        return 0
+
     for job_dir in job_dirs:
         print(job_dir)
         if not args.dry_run:
