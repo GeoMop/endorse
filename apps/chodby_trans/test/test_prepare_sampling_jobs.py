@@ -1,4 +1,6 @@
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from chodby_trans import prepare_sampling_jobs as prep
 
@@ -116,3 +118,34 @@ def test_rerun_incomplete_jobs_submits_continue_only_for_jobs_with_none(tmp_path
     assert rerun_jobs == [job_a]
     assert archived == [job_a]
     assert submitted == [(job_a, "continue")]
+
+
+def test_count_none_samples_filters_to_job_limit_samples(tmp_path: Path, monkeypatch):
+    job_dir = tmp_path / "job_00_00000_00500"
+    input_data = job_dir / "input_data"
+    input_data.mkdir(parents=True)
+    (input_data / "_ot_sensitivity.yaml").write_text(
+        "limit_samples: [0, 500]\n",
+        encoding="utf-8",
+    )
+
+    fake_job = SimpleNamespace(
+        output=SimpleNamespace(plots=job_dir / "plots"),
+        set_workdir=lambda _workdir: None,
+    )
+    fake_sampling = SimpleNamespace(
+        read_parameters_by_rc=lambda _codes, make_plots=False: (
+            [
+                (10, 10, 0),
+                (11, 499, 1),
+                (12, 500, 0),
+                (13, 700, 1),
+            ],
+            None,
+        )
+    )
+
+    monkeypatch.setitem(sys.modules, "chodby_trans.job", fake_job)
+    monkeypatch.setitem(sys.modules, "chodby_trans.sensitivity_sampling", fake_sampling)
+
+    assert prep.count_none_samples(job_dir) == 2

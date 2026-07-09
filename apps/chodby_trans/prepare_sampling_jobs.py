@@ -144,8 +144,10 @@ def count_none_samples(job_dir: Path) -> int:
 
     job.set_workdir(job_dir)
     job.output.plots.mkdir(parents=True, exist_ok=True)
+    cfg = yaml.safe_load((job_dir / "input_data" / "_ot_sensitivity.yaml").read_text(encoding="utf-8"))
+    start, stop = (int(v) for v in cfg["limit_samples"])
     tags, _parameters = sampling.read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
-    return len(tags)
+    return sum(start <= int(i_sample) < stop for _i_eval, i_sample, _i_saltelli in tags)
 
 
 def rerun_incomplete_jobs(job_dirs: list[Path], dry_run: bool = False) -> list[Path]:
