@@ -257,9 +257,9 @@ def prepare_sample_args(cfg, seed):
     recompute = cfg.ot_sensitivity.recompute_failed or cfg.ot_sensitivity.recompute_done
     if job.output.zarr_store_path.exists() and recompute:
         if cfg.ot_sensitivity.recompute_failed:
-            tags, parameters, _rc_stats = read_parameters_by_rc(ReturnCode.failed_list())
+            tags, parameters, _rc_stats = read_parameters_by_rc(ReturnCode.failed_list(), make_plots=False)
         elif cfg.ot_sensitivity.recompute_done:
-            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.OK])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.OK], make_plots=False)
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
@@ -815,7 +815,7 @@ def main():
             # data_schema_key is not valid - zarr_fuse not used currently
             # if needed, we have to pass the correct key which was originally used
             data_schema_key, data_schema = initialize_data_schema()
-            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.NONE])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
             sample_args = gather_sample_args(data_schema_key, tags, parameters)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'meta' or cmd == 'local':
