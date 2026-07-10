@@ -65,18 +65,23 @@ def count_samples_by_rc(job_dir: Path, rc_select: list[int]) -> int:
 
     start, stop = _job_sample_range(job_dir)
     job.set_workdir(job_dir)
-    tags, _parameters = sampling.read_parameters_by_rc(rc_select, make_plots=False)
+    tags, _parameters, _rc_stats = sampling.read_parameters_by_rc(rc_select, make_plots=False)
     return sum(start <= int(i_sample) < stop for _i_eval, i_sample, _i_saltelli in tags)
 
 
 def job_return_code_stats(job_dir: Path) -> dict:
     from chodby_trans.exception_wrapper import ReturnCode
+    import chodby_trans.job as job
+    import chodby_trans.sensitivity_sampling as sampling
 
     start, stop = _job_sample_range(job_dir)
-    counts = OrderedDict(
-        (code, count_samples_by_rc(job_dir, [code]))
-        for code in ReturnCode.to_list()
-    )
+    job.set_workdir(job_dir)
+    tags, _parameters, rc_stats = sampling.read_parameters_by_rc(ReturnCode.to_list(), make_plots=False)
+    eval_to_sample = {int(i_eval): int(i_sample) for i_eval, i_sample, _i_saltelli in tags}
+    counts = OrderedDict()
+    for code in ReturnCode.to_list():
+        ids = rc_stats.get(code, [])
+        counts[code] = sum(start <= eval_to_sample.get(int(i_eval), -1) < stop for i_eval in ids)
     return {
         "job_dir": job_dir.resolve(),
         "limit_samples": (start, stop),

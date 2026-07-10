@@ -100,6 +100,7 @@ def test_count_samples_by_rc_filters_to_job_limit_samples(tmp_path: Path, monkey
                 (13, 700, 1),
             ],
             None,
+            {},
         )
     )
     monkeypatch.setitem(sys.modules, "chodby_trans.job", fake_job)
@@ -137,3 +138,43 @@ def test_write_job_return_code_report_writes_summary(tmp_path: Path, monkeypatch
     assert "n_results_non_none: 6990" in text
     assert "NONE [-2000]: 10" in text
     assert "OK [0]: 7000" in text
+
+
+def test_job_return_code_stats_reads_storage_once(tmp_path: Path, monkeypatch) -> None:
+    case_dir = tmp_path / "CASE_0_32k"
+    job_dir = case_dir / "job_00_00000_00500"
+    input_data = job_dir / "input_data"
+    input_data.mkdir(parents=True)
+    (input_data / "_ot_sensitivity.yaml").write_text(
+        "limit_samples: [0, 500]\n",
+        encoding="utf-8",
+    )
+
+    calls = []
+    fake_job = SimpleNamespace(set_workdir=lambda _workdir: None)
+
+    def fake_read(codes, make_plots=False):
+        calls.append((tuple(codes), make_plots))
+        return (
+            [
+                (10, 10, 0),
+                (11, 499, 1),
+                (12, 500, 0),
+                (13, 700, 1),
+            ],
+            None,
+            {
+                -2000: np.array([10, 12, 13]),
+                0: np.array([11]),
+            },
+        )
+
+    fake_sampling = SimpleNamespace(read_parameters_by_rc=fake_read)
+    monkeypatch.setitem(sys.modules, "chodby_trans.job", fake_job)
+    monkeypatch.setitem(sys.modules, "chodby_trans.sensitivity_sampling", fake_sampling)
+
+    stats = collect.job_return_code_stats(job_dir)
+
+    assert calls == [((-2000, -1999, -1100, -1020, -1010, -1003, -1002, -1001, -1000, 0), False)]
+    assert stats["counts"][-2000] == 1
+    assert stats["counts"][0] == 1

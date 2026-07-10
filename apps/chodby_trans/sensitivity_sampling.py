@@ -257,9 +257,9 @@ def prepare_sample_args(cfg, seed):
     recompute = cfg.ot_sensitivity.recompute_failed or cfg.ot_sensitivity.recompute_done
     if job.output.zarr_store_path.exists() and recompute:
         if cfg.ot_sensitivity.recompute_failed:
-            tags, parameters = read_parameters_by_rc(ReturnCode.failed_list())
+            tags, parameters, _rc_stats = read_parameters_by_rc(ReturnCode.failed_list())
         elif cfg.ot_sensitivity.recompute_done:
-            tags, parameters = read_parameters_by_rc([ReturnCode.OK])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.OK])
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
@@ -473,9 +473,10 @@ def read_parameters_by_rc(rc_select: list[int], make_plots: bool = True):
     f_rc = v_rc[mask]
     logging.info(f"found n_evals: {len(f_ieval)}")
 
-    # just print a summary of found RC
-    codes = np.unique(f_rc)
-    rc_dict = {code: f_ieval[f_rc == code] for code in codes}
+    rc_dict = {
+        int(code): f_ieval[f_rc == code]
+        for code in np.unique(f_rc)
+    }
     for code, ids in rc_dict.items():
         print(f"{code}: {ids}")
 
@@ -485,7 +486,7 @@ def read_parameters_by_rc(rc_select: list[int], make_plots: bool = True):
 
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     logging.info(f"first 20 tags:\n{tags[:20]}")
-    return tags, f_param
+    return tags, f_param, rc_dict
 
 def select_single(i_eval: int):
 
@@ -814,7 +815,7 @@ def main():
             # data_schema_key is not valid - zarr_fuse not used currently
             # if needed, we have to pass the correct key which was originally used
             data_schema_key, data_schema = initialize_data_schema()
-            tags, parameters = read_parameters_by_rc([ReturnCode.NONE])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.NONE])
             sample_args = gather_sample_args(data_schema_key, tags, parameters)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'meta' or cmd == 'local':
