@@ -1,4 +1,6 @@
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -77,3 +79,61 @@ def test_collect_job_stores_merges_i_sample_ranges(tmp_path: Path, monkeypatch) 
     np.testing.assert_array_equal(stores[output_store]["i_eval"][:2], np.array([[70, 71], [72, 73]]))
     np.testing.assert_array_equal(stores[output_store]["i_eval"][2:], np.array([[90, 91], [92, 93]]))
     np.testing.assert_array_equal(stores[output_store]["param_name"], np.array(["a", "b"], dtype=object))
+
+
+def test_count_samples_by_rc_filters_to_job_limit_samples(tmp_path: Path, monkeypatch) -> None:
+    job_dir = tmp_path / "job_00_00000_00500"
+    input_data = job_dir / "input_data"
+    input_data.mkdir(parents=True)
+    (input_data / "_ot_sensitivity.yaml").write_text(
+        "limit_samples: [0, 500]\n",
+        encoding="utf-8",
+    )
+
+    fake_job = SimpleNamespace(set_workdir=lambda _workdir: None)
+    fake_sampling = SimpleNamespace(
+        read_parameters_by_rc=lambda _codes, make_plots=False: (
+            [
+                (10, 10, 0),
+                (11, 499, 1),
+                (12, 500, 0),
+                (13, 700, 1),
+            ],
+            None,
+        )
+    )
+    monkeypatch.setitem(sys.modules, "chodby_trans.job", fake_job)
+    monkeypatch.setitem(sys.modules, "chodby_trans.sensitivity_sampling", fake_sampling)
+
+    assert collect.count_samples_by_rc(job_dir, [-2000]) == 2
+
+
+def test_write_job_return_code_report_writes_summary(tmp_path: Path, monkeypatch) -> None:
+    case_dir = tmp_path / "CASE_0_32k"
+    job0 = case_dir / "job_00_00000_00500"
+    job1 = case_dir / "job_01_00500_01000"
+    report_path = case_dir / "job_return_code_stats.txt"
+
+    monkeypatch.setattr(collect, "list_job_dirs", lambda _: [job0, job1])
+    monkeypatch.setattr(
+        collect,
+        "job_return_code_stats",
+        lambda job_dir: {
+            "job_dir": job_dir,
+            "limit_samples": (0, 500) if job_dir == job0 else (500, 1000),
+            "limit_range_size": 500,
+            "n_results_non_none": 6990 if job_dir == job0 else 7000,
+            "counts": {-2000: 10 if job_dir == job0 else 0, 0: 6990 if job_dir == job0 else 7000},
+        },
+    )
+
+    written_path = collect.write_job_return_code_report(case_dir, output_path=report_path)
+    text = report_path.read_text(encoding="utf-8")
+
+    assert written_path == report_path.resolve()
+    assert "Case:" in text
+    assert "job_00_00000_00500" in text
+    assert "limit_range_size: 500" in text
+    assert "n_results_non_none: 6990" in text
+    assert "NONE [-2000]: 10" in text
+    assert "OK [0]: 7000" in text

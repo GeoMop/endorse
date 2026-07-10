@@ -138,16 +138,10 @@ def archive_job_submission_files(job_dir: Path) -> list[Path]:
 
 
 def count_none_samples(job_dir: Path) -> int:
-    import chodby_trans.job as job
-    import chodby_trans.sensitivity_sampling as sampling
     from chodby_trans.exception_wrapper import ReturnCode
+    from chodby_trans.collect_sampling_jobs import count_samples_by_rc
 
-    job.set_workdir(job_dir)
-    job.output.plots.mkdir(parents=True, exist_ok=True)
-    cfg = yaml.safe_load((job_dir / "input_data" / "_ot_sensitivity.yaml").read_text(encoding="utf-8"))
-    start, stop = (int(v) for v in cfg["limit_samples"])
-    tags, _parameters = sampling.read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
-    return sum(start <= int(i_sample) < stop for _i_eval, i_sample, _i_saltelli in tags)
+    return count_samples_by_rc(job_dir, [ReturnCode.NONE])
 
 
 def rerun_incomplete_jobs(job_dirs: list[Path], dry_run: bool = False) -> list[Path]:

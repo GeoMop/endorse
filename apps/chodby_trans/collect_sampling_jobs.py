@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sys
+from collections import OrderedDict
 from pathlib import Path
 
 import yaml
@@ -57,6 +59,73 @@ def list_job_dirs(case_dir: Path) -> list[Path]:
     )
 
 
+def count_samples_by_rc(job_dir: Path, rc_select: list[int]) -> int:
+    import chodby_trans.job as job
+    import chodby_trans.sensitivity_sampling as sampling
+
+    start, stop = _job_sample_range(job_dir)
+    job.set_workdir(job_dir)
+    tags, _parameters = sampling.read_parameters_by_rc(rc_select, make_plots=False)
+    return sum(start <= int(i_sample) < stop for _i_eval, i_sample, _i_saltelli in tags)
+
+
+def job_return_code_stats(job_dir: Path) -> dict:
+    from chodby_trans.exception_wrapper import ReturnCode
+
+    start, stop = _job_sample_range(job_dir)
+    counts = OrderedDict(
+        (code, count_samples_by_rc(job_dir, [code]))
+        for code in ReturnCode.to_list()
+    )
+    return {
+        "job_dir": job_dir.resolve(),
+        "limit_samples": (start, stop),
+        "limit_range_size": stop - start,
+        "n_results_non_none": sum(
+            count
+            for code, count in counts.items()
+            if code != ReturnCode.NONE
+        ),
+        "counts": counts,
+    }
+
+
+def _return_code_labels() -> dict[int, str]:
+    from chodby_trans.exception_wrapper import ReturnCode
+
+    return {code: name for name, code in ReturnCode.to_dict().items()}
+
+
+def _job_stats_lines(stats: dict) -> list[str]:
+    labels = _return_code_labels()
+    start, stop = stats["limit_samples"]
+    lines = [
+        f"{Path(stats['job_dir']).name}",
+        f"  limit_samples: [{start}, {stop}]",
+        f"  limit_range_size: {stats['limit_range_size']}",
+        f"  n_results_non_none: {stats['n_results_non_none']}",
+    ]
+    for code, count in stats["counts"].items():
+        lines.append(f"  {labels.get(code, str(code))} [{code}]: {count}")
+    return lines
+
+
+def write_job_return_code_report(case_dir: Path, output_path: Path | None = None) -> Path:
+    case_dir = case_dir.resolve()
+    if output_path is None:
+        output_path = case_dir / "job_return_code_stats.txt"
+    output_path = output_path.resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    stats_by_job = [job_return_code_stats(job_dir) for job_dir in list_job_dirs(case_dir)]
+    lines = [f"Case: {case_dir}", f"Jobs: {len(stats_by_job)}", ""]
+    for stats in stats_by_job:
+        lines.extend(_job_stats_lines(stats))
+        lines.append("")
+    output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return output_path
+
+
 def collect_job_stores(case_dir: Path, output_store: Path | None = None, force: bool = False) -> Path:
     case_dir = case_dir.resolve()
     job_dirs = list_job_dirs(case_dir)
@@ -103,7 +172,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Replace the destination store if it already exists.",
     )
+    parser.add_argument(
+        "--job-stats",
+        action="store_true",
+        help="Inspect existing job directories and write a return-code summary text report.",
+    )
+    parser.add_argument(
+        "--report-path",
+        type=Path,
+        default=None,
+        help="Output path for --job-stats. Defaults to <case-dir>/job_return_code_stats.txt.",
+    )
     args = parser.parse_args(argv)
+
+    if args.job_stats:
+        report_path = write_job_return_code_report(args.case_dir, output_path=args.report_path)
+        print(report_path)
+        return 0
 
     output_store = collect_job_stores(args.case_dir, output_store=args.output_store, force=args.force)
     print(output_store)
