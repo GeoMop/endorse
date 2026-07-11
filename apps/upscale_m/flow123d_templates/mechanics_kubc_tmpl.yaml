@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------------------------------------------
+# Flow123d input template: linear elastic buffered cube, kinematic (displacement) boundary conditions.
+# Adapted from R. Siddall's kinematic templates (src_internship_cvut/Templates_dont_delete) to the
+# endorse angle-bracket placeholder convention: ONE template serves all six load states, the
+# displacement formula u = E_q x is substituted per case (see kubc.py:formula_from_matrix).
+#
+# Placeholders (each used below in angle brackets): mesh_file, bc_displacement_formula,
+#   rock_young_modulus, rock_poisson_ratio, fracture_young_modulus, fracture_poisson_ratio,
+#   cross_section, description
+#
+# Regions (see micro_mesh.py): rock_inner + rock_outer (bulk), fractures (2D), .surface_* (boundary).
+# ---------------------------------------------------------------------------------------------------------------
+
+flow123d_version: 4.0.3dev_e651b9
+
+problem: !Coupling_Sequential
+  description: "<description>"
+  mesh:
+    mesh_file: <mesh_file>
+
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: <bulk_regions>
+    time:
+      end_time: 1.0
+    a_tol: 1e-18
+    r_tol: 1e-18
+
+    flow_equation: !Flow_Darcy_LMH
+      gravity: [0, 0, 0]
+      input_fields:
+        - region: fractures
+          cross_section: <cross_section>
+
+        - region: <bulk_regions>
+          bc_type: dirichlet
+          bc_pressure: 0
+
+      output:
+        fields: []
+
+    mechanics_equation: !Elasticity_Linear
+      output_stream:
+        file: mechanics.pvd
+        format: !vtk
+          variant: ascii
+      output:
+        fields:
+          - displacement
+          - stress
+          - region_id
+          - cross_section_updated
+
+      solver: !Petsc
+        a_tol: 1e-14
+        r_tol: 1e-14
+
+      input_fields:
+        - region: <bulk_regions>
+          young_modulus: <rock_young_modulus>
+          poisson_ratio: <rock_poisson_ratio>
+
+        - region: fractures
+          young_modulus: <fracture_young_modulus>
+          poisson_ratio: <fracture_poisson_ratio>
+
+        - region: [.surface_x_plus, .surface_x_minus, .surface_y_plus, .surface_y_minus, .surface_z_plus, .surface_z_minus]
+          bc_type: displacement
+          bc_displacement: !FieldFormula
+            value: "<bc_displacement_formula>"

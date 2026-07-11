@@ -1,0 +1,55 @@
+# Example DFN configuration: stochastic fracture network in the buffered domain (L_ext = 2),
+# Note: all radii are GEOMETRIC disc radii
+
+machine_config:
+    LAPTOP-MM6A3LRF:  # Ronald Siddall, Windows + Docker Desktop
+        flow_executable:
+        - C:/Plocha/Semestral_internship_cvut/endorse/venv/Scripts/python.exe
+        - C:/Plocha/Semestral_internship_cvut/endorse/apps/upscale_m/flow_win_wrapper.py
+
+geometry:
+    L_inner: 1.0
+    L_ext_factor: 2.0
+
+fractures:
+    mode: stochastic
+    stochastic:
+        seed: 1234
+        # mean fracture area per unit volume, defined over the POPULATION range below.
+        # NOTE: keep population_radius_range equal to sample_radius_range, otherwise most of the
+        # intensity is spent on radii that are never generated (power law: small radii dominate)
+        p_32: 0.3
+        # power-law exponent k_r
+        power: 2.5
+        # geometric radii of the natural population (intensity defined on this range)
+        population_radius_range: [0.15, 0.3]
+        # geometric radii actually generated
+        sample_radius_range: [0.15, 0.3]
+        fisher: {trend: 0.0, plunge: 90.0, concentration: 7.0}
+        # set e.g. [0, 0, 1] to force all normals (horizontal discs); null = Fisher sampling
+        fixed_normal: null
+        allow_boundary_intersections: 'yes'   # fractures clipped at the outer boundary
+        boundary_distance: 0.0
+
+mesh:
+    mesh_name: micro_mesh_dfn
+    # 0.1 keeps the ~15-fracture buffered mesh laptop-sized; refine once the run works
+    fracture_mesh_step: 0.05
+    mesh_size_min_fraction: 10.0
+    tolerance: 1e-6
+    tolerance_boolean: 1e-5
+    tolerance_initial_delaunay: 0.01
+    heal_gamma_tol: 0.01
+    show_gui: 'no'
+
+materials:
+    young_modulus_rock: 1e9
+    poisson_ratio_rock: 0.25
+    young_modulus_fracture: 1e3
+    poisson_ratio_fracture: 0.25
+    aperture_per_r: 1e-3
+
+loads:
+    bc_type: kubc
+    deformation_parameter_beta: 1e-2
+    stress_parameter_alpha: 1e6

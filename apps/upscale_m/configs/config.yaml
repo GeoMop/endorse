@@ -1,0 +1,60 @@
+# Main configuration for apps/upscale_m (loaded with endorse.common.load_config -> dotdict).
+
+machine_config:
+    # resolved automatically by socket.gethostname()
+    LAPTOP-MM6A3LRF:  # Ronald Siddall, Windows + Docker Desktop
+        flow_executable:
+        # docker wrapper around flow123d/ci-gnu:4.0.3dev_e651b9; translates CWD to container path
+        - C:/Plocha/Semestral_internship_cvut/endorse/venv/Scripts/python.exe
+        - C:/Plocha/Semestral_internship_cvut/endorse/apps/upscale_m/flow_win_wrapper.py
+
+geometry:
+    # Edge of the inner homogenization (averaging) cube [m].
+    L_inner: 1.0
+    # Outer cube edge = L_ext_factor * L_inner. Factor 2.0 => buffer shell L/2 thick on every face.
+    # Set to 1.0 to reproduce the unbuffered single-cube RVE
+    L_ext_factor: 2.0
+    # Subdomain grid inside the averaging cube: one effective tensor per cell, all cells read
+    # from the SAME six solutions (mirrors macro_conductivity's per-subdomain tensors).
+    # Cells are imprinted into the mesh, so per-cell averaging is exact. [1,1,1] = one tensor.
+    subdomains: [2, 2, 2]
+
+fractures:
+    # 'explicit' (list below) or 'stochastic' (bgem population; see PLAN.md task 4)
+    mode: explicit
+    # Circular (penny-shaped) fractures: radius r, center, unit-ish normal (normalized on load).
+    # Coordinates live in the OUTER domain [0, L_ext]^3; domain center is at L_ext/2.
+    # Reference validation case: r = 0.2 L, XY-plane fracture at the domain center
+    explicit_list:
+        - r: 0.2
+          center: [1.0, 1.0, 1.0]
+          normal: [0.0, 0.0, 1.0]
+
+mesh:
+    # base name of the generated mesh files
+    mesh_name: micro_mesh_one_fracture
+    # target element size on/near fractures and global maximum
+    fracture_mesh_step: 0.1
+    # MeshSizeMin = fracture_mesh_step / mesh_size_min_fraction
+    mesh_size_min_fraction: 10.0
+    tolerance: 1e-6
+    tolerance_boolean: 1e-5
+    tolerance_initial_delaunay: 0.01
+    heal_gamma_tol: 0.01
+    # 'yes' opens the gmsh GUI after meshing (interactive runs only)
+    show_gui: 'no'
+
+materials:
+    young_modulus_rock: 1e9        # Pa
+    poisson_ratio_rock: 0.25
+    young_modulus_fracture: 1e3    # Pa
+    poisson_ratio_fracture: 0.25
+    # initial fracture thickness (cross_section): delta = aperture_per_r * r
+    aperture_per_r: 1e-3
+
+loads:
+    # 'kubc', 'subc' or 'both'  (subc pending rigid-body decision, see PLAN.md)
+    bc_type: kubc
+    # KUBC loading parameter beta (dimensionless) and SUBC parameter alpha [Pa]
+    deformation_parameter_beta: 1e-2
+    stress_parameter_alpha: 1e6
