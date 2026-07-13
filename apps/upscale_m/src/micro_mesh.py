@@ -1,278 +1,331 @@
 """
-Micro mesh generation for mechanical upscaling (apps/upscale_m).
+Micro mesh generation for mechanical upscaling (apps/upscale_m) — built directly on bgem/endorse.
 
-Geometry: two concentric cubes. The outer cube [0, L_ext]^3 carries the boundary conditions, the
-inner cube (edge L, centered) is the homogenization/averaging volume. Default L_ext = 2 L gives a
-buffer shell of thickness L/2 on every face: BC artifacts decay across the buffer (Saint-Venant)
-before reaching the averaging volume.
+STRUCTURE mirrors apps/chodby_trans/mesh/create_mesh.py function-for-function:
+    make_fractures -> make_geometry (≈ make_geometry_box) -> meshing -> make_gmsh
+    -> make_heal_mesh -> make_mesh, orchestrated by make_micro_mesh (returns MicroMesh).
+`meshing` stays local for the same reason chodby_trans defines its own: the endorse
+`mesh_tools.edz_meshing` hard-codes MinimumCirclePoints, while J. Brezina requires the disc
+approximation to be controlled from the config (item B.6); the msh2-write + rename follows
+edz_meshing (gmsh chooses the format by extension, bgem GmshIO reads v2 only).
 
-The domain is fragmented by the inner cube, so the final mesh CONFORMS to the averaging-volume
-boundary: every bulk and fracture element lies entirely inside or outside it, making the inner-cube
-selection exact (by region for bulk, by barycenter for fracture elements).
+Geometry: a single cube of edge L_ext = L_ext_factor * L_inner CENTERED AT THE ORIGIN (bgem
+convention: mesh_tools.box_with_sides and UniformBoxPosition both center at 0) carrying the
+boundary conditions. The inner averaging cube [-L/2, L/2]^3 is NOT part of the geometry: averaging
+volumes are endorse-side windows applied in postprocess (J. Brezina, meeting 10. 7. 2026), so the
+mesh does not conform to them. KUBC results are invariant to the coordinate shift (u = E x changes
+by a rigid translation only).
 
-Physical regions in the healed mesh (msh2, Flow123d ready):
-    rock_inner  (3D, tag 1)  rock inside the averaging cube
-    rock_outer  (3D, tag 2)  buffer rock
-    fractures   (2D, tag 3)  fracture elements (whole domain, clipped to the outer cube)
-    .surface_[xyz]_[minus|plus]  (2D)  outer boundary faces for BC prescription
-      (names match R. Siddall's existing Flow123d templates)
+PER-FRACTURE FIELDS (the endorse field pipeline of fullscale_transport/macro_flow_model):
+the mesh keeps geometry_gmsh's per-fracture regions fam_<family>_<iii> (their index encodes the
+fracture order) all the way through — MicroMesh.mesh_file IS the healed mesh, unmodified.
+The per-element mechanical aperture cross_section = aperture_per_r * rho(fracture) is computed
+via endorse `fracture_map` (element -> fracture map; the region-JOIN side effect of fracture_map
+is irrelevant here — element ids/topology are untouched by it, only region TAGS on an in-memory
+copy are, and that copy is never written back over the healed mesh) and written by endorse
+`fields_file` into a SEPARATE small field file (MicroMesh.cross_section_file), consumed by the
+template as `cross_section: !FieldFE {mesh_data_file: <cross_section_file>, ...}` (the idiom of
+J. Brezina's flow_micro_tmpl, with mesh_file and the field file deliberately distinct — as
+endorse's own macro_conductivity keeps `mesh_file` and `input_fields_file` separate).
 
-Fracture input: explicit list of penny-shaped fractures (r, center, normal). Stochastic population
-sampling is a separate step (PLAN.md task 4; bgem@JB_homo API differs from the original code).
+Physical regions in the healed mesh (v2 content, Flow123d ready):
+    box        (3D)  the whole rock domain
+    fam_<family>_<iii>  (2D)  one region PER FRACTURE (bgem geometry_gmsh naming, never
+      renamed/joined) — the template's <fracture_regions> placeholder is the full bracket-list
+      of these names (Flow123d accepts a region list wherever a single region is accepted)
+    .side_[xyz][01]  (2D)  boundary faces for BC prescription — the endorse box_with_sides names
+      with the chodby_trans '.'+side convention (all six get the same KUBC formula anyway)
+The physical name -> region id map is read back from the healed mesh (bgem GmshIO) and carried in
+MicroMesh.regions, replacing the previously hard-coded region tags.
 
-Meshing options are ported from R. Siddall's proven mesher (src_internship_cvut). Entity
-classification after boolean fragmentation uses the occ.fragment output map instead of geometric
-heuristics, so axis-aligned fractures cannot be confused with the inner-cube interface.
+Fracture input (cfg.fractures):
+  - mode 'explicit': list of penny-shaped fractures given by GEOMETRIC disc radius r, center and
+    normal (centered coordinates). Converted to bgem Fracture objects at this boundary: bgem
+    EllipseShape is the disc of UNIT AREA, so bgem size = sqrt(area) = r * sqrt(pi).
+  - mode 'stochastic': cfg.fractures.stochastic.population is passed VERBATIM to
+    bgem Population.from_cfg (B.6); sampling via endorse `mesh_tools.generate_fractures`
+    ('seed', optional 'sample_range', optional 'n_frac_limit' with endorse range adaptation).
 """
 import os
 from dataclasses import dataclass
-from typing import List, Tuple
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
-import gmsh as raw_gmsh
 
-from bgem.gmsh import heal_mesh
-from endorse.common import dotdict, File
+from bgem.gmsh import gmsh, gmsh_io, heal_mesh, options
+from bgem.stochastic import EllipseShape, Fracture, FractureSet, Population
+from bgem.stochastic import fr_mesh
+from endorse.common import dotdict, File, memoize
+from endorse.fullscale_transport import fracture_map
+from endorse.macro_flow_model import fields_file
+from endorse.mesh import mesh_tools
+from endorse.mesh.fracture_tools import RegionFracture
+from endorse.mesh_class import load_mesh
 
-# geometric tolerance for bounding-box classification (fraction of unit cube)
-EPS_GEO = 1e-4
+SQRT_PI = float(np.sqrt(np.pi))
 
 
-@dataclass
-class MicroFracture:
-    """One penny-shaped fracture: radius, center and unit normal (in outer-domain coordinates)."""
-    r: float
-    center: np.ndarray
-    normal: np.ndarray
+def _ellipse_gmsh_base_shape(self, gmsh_geom):
+    # AGENT: workaround for bgem@JB_homo: EllipseShape.gmsh_base_shape references the undefined
+    # attribute `self.scale` (AttributeError); the unit-area disc radius is `self.R`.
+    # Remove once fixed upstream (question recorded in PLAN.md).
+    return gmsh_geom.disc(rx=self.R, ry=self.R)
+
+
+EllipseShape.gmsh_base_shape = _ellipse_gmsh_base_shape
 
 
 @dataclass
 class MicroMesh:
     """Result of make_micro_mesh."""
+    # the healed mesh, unmodified — the single Flow123d `mesh_file`
     mesh_file: File
-    # healed msh2 mesh with the regions documented in the module docstring
-    fractures: List[MicroFracture]
-    # inner averaging cube bounds: (lo, hi) so the cube is [lo, hi]^3
+    # per-element cross_section (aperture) field, a SEPARATE small file (endorse fields_file);
+    # Flow123d reads it via `!FieldFE {mesh_data_file: <cross_section_file>}` — same element ids
+    # as mesh_file, so it lines up automatically (see module docstring)
+    cross_section_file: File
+    fractures: FractureSet
+    # inner averaging window bounds: (lo, hi) so the window is [lo, hi]^3 (NOT imprinted)
     inner_box: Tuple[float, float]
     # outer cube edge
     L_ext: float
-    # True when a buffer shell exists (region 'rock_outer' present in the mesh)
-    has_buffer: bool = True
-    # subdomain grid inside the averaging cube (mirrors macro_conductivity's per-subdomain
-    # tensors): (nx, ny, nz) and one (lo_xyz, hi_xyz) box per cell, z-fastest order. Cells are
-    # imprinted into the mesh (conforming), so per-cell averaging stays exact — no weights needed.
-    subdivision: Tuple[int, int, int] = (1, 1, 1)
-    subdomain_boxes: List[Tuple[np.ndarray, np.ndarray]] = None
+    # physical name -> (region id, dim), read from the healed mesh
+    regions: Dict[str, Tuple[int, int]]
+    # one region name PER FRACTURE (bgem geometry_gmsh's fam_<family>_<iii>, never joined)
+    fracture_regions: List[str]
 
-    def subdomain_index(self, i: int) -> Tuple[int, int, int]:
-        """Flat subdomain index -> (ix, iy, iz)."""
-        nx, ny, nz = self.subdivision
-        return i // (ny * nz), (i // nz) % ny, i % nz
+    @property
+    def bulk_region_id(self) -> int:
+        return self.regions["box"][0]
+
+    @property
+    def fracture_region_ids(self) -> List[int]:
+        return [self.regions[name][0] for name in self.fracture_regions]
+
+    @property
+    def fracture_radii(self) -> np.ndarray:
+        """Geometric disc radii rho; bgem stores size r = sqrt(area) = rho * sqrt(pi).
+        (bgem FractureSet.area is broken upstream — base_shapes bitrot, question in PLAN.md.)"""
+        if len(self.fractures) == 0:
+            return np.array([])
+        return self.fractures.radius[:, 0] * self.fractures.base_shape.R
 
 
-def fractures_from_config(cfg_fractures: dotdict, L_domain: float) -> List[MicroFracture]:
-    """Fracture set for the outer domain [0, L_domain]^3, per cfg (explicit list or stochastic)."""
+@memoize
+def make_fractures(cfg_fractures: dotdict, box) -> FractureSet:
+    """
+    Fracture set for the domain box (centered at origin), per cfg (explicit or stochastic).
+    Mirrors chodby_trans create_mesh.make_fractures (memoized; the seed lives in the config).
+    Stochastic sampling goes through endorse mesh_tools.generate_fractures (range adaptation
+    for optional n_frac_limit, seed handling); the population config is Population.from_cfg
+    verbatim
+    """
     mode = str(cfg_fractures.mode).strip().lower()
     if mode == "explicit":
-        fractures = []
+        fr_list = []
         for item in cfg_fractures.explicit_list:
             normal = np.asarray(item["normal"], dtype=float)
-            norm = np.linalg.norm(normal)
-            assert norm > 0.0, f"Zero fracture normal: {item}"
-            fractures.append(MicroFracture(
-                r=float(item["r"]),
-                center=np.asarray(item["center"], dtype=float),
-                normal=normal / norm))
-        return fractures
+            fr_list.append(Fracture(EllipseShape.id, float(item["r"]) * SQRT_PI, np.asarray(item["center"], dtype=float),
+                                    normal / np.linalg.norm(normal)))
+        return FractureSet.from_list(fr_list)
     elif mode == "stochastic":
-        from stochastic_dfn import stochastic_fracture_set
-        return stochastic_fracture_set(cfg_fractures.stochastic, L_domain)
+        cfg_st = cfg_fractures.stochastic
+        population = Population.from_cfg(cfg_st.population, box, shape=EllipseShape())
+        sample_range = tuple(float(r) for r in cfg_st.sample_range) \
+            if cfg_st.get("sample_range", None) is not None else (None, None)
+        fractures = mesh_tools.generate_fractures(
+            population, sample_range, cfg_st.get("n_frac_limit", None), box,
+            int(cfg_st.get("seed", 0)))
+        fr_set = FractureSet.from_list(fractures)
+        print(f"[upscale_m dfn] sampled {len(fr_set)} fracture(s), bgem sizes in "
+              f"[{fr_set.radius[:, 0].min():.4g}, {fr_set.radius[:, 0].max():.4g}]")
+        return fr_set
+    raise ValueError(f"Unknown fractures.mode: {cfg_fractures.mode!r}")
+
+
+def make_geometry(factory, cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_set: FractureSet):
+    """
+    Outer cube + fractures + named boundary sides; one mutual fragment.
+    Mirrors chodby_trans create_mesh.make_geometry_box (incl. the '.'+side_name boundary
+    regions). Fractures KEEP geometry_gmsh's per-fracture regions fam_<family>_<iii> — endorse
+    fracture_map joins them after healing and uses them for the element -> fracture map.
+    """
+    L_ext = float(cfg_geometry.get("L_ext_factor", 2.0)) * float(cfg_geometry.L_inner)
+    box_dims = [L_ext, L_ext, L_ext]
+
+    box, sides = mesh_tools.box_with_sides(factory, box_dims)  # centered at origin
+    geometry_set = [box]
+    if len(fracture_set) > 0:
+        fr_shapes, _region_map = fr_mesh.geometry_gmsh(fracture_set, factory)
+        fr_group = fr_shapes.intersect(box).mesh_step(float(cfg_mesh.fracture_mesh_step))
+        geometry_set.append(fr_group)
     else:
-        raise ValueError(f"Unknown fractures.mode: {cfg_fractures.mode!r}")
+        print("[upscale_m mesh] WARNING: empty fracture set, mesh has no fracture regions")
+
+    factory.synchronize()
+    fragmented = factory.fragment(*geometry_set, *sides.values())
+    geometry_final = fragmented[:len(geometry_set)]
+    for side_name, side_fr in zip(sides.keys(), fragmented[len(geometry_set):]):
+        geometry_final.append(side_fr.set_region('.' + side_name))
+
+    geometry_final = factory.group(*geometry_final)
+    factory.synchronize()
+    factory.keep_only(geometry_final)
+    factory.synchronize()
+    factory.remove_duplicate_entities()
+    factory.synchronize()
+    return geometry_final
 
 
-def _add_rotated_disk(occ, fr: MicroFracture) -> int:
-    """Add a disk of radius fr.r at fr.center, rotated from the base normal [0,0,1] to fr.normal."""
-    tag = occ.addDisk(fr.center[0], fr.center[1], fr.center[2], fr.r, fr.r)
-    base = np.array([0.0, 0.0, 1.0])
-    dot = float(np.clip(np.dot(base, fr.normal), -1.0, 1.0))
-    if dot > 1.0 - 1e-9:
-        pass  # already oriented
-    elif dot < -1.0 + 1e-9:
-        occ.rotate([(2, tag)], *fr.center, 1.0, 0.0, 0.0, np.pi)
+def meshing(factory, objects, mesh_filename: str, cfg_mesh: dotdict):
+    """
+    Common meshing setup, mirrors chodby_trans create_mesh.meshing and endorse edz_meshing
+    (bgem mesh options; kept local so MinimumCirclePoints stays config-driven, see B.6).
+    The mesh is written as v2 content (bgem GmshIO/Flow123d) and renamed to the target name,
+    exactly as endorse mesh_tools.edz_meshing does.
+    """
+    step = float(cfg_mesh.fracture_mesh_step)
+    factory.write_brep(os.path.splitext(mesh_filename)[0])
+    factory.mesh_options.CharacteristicLengthMin = step / float(cfg_mesh.get("mesh_size_min_fraction", 10.0))
+    factory.mesh_options.CharacteristicLengthMax = step
+    # disc approximation: minimum number of boundary points per full circle (J. Brezina, B.6)
+    factory.mesh_options.MinimumCirclePoints = int(cfg_mesh.get("min_circle_points", 16))
+    factory.mesh_options.MinimumCurvePoints = int(cfg_mesh.get("min_curve_points", 16))
+    factory.mesh_options.ToleranceInitialDelaunay = float(cfg_mesh.get("tolerance_initial_delaunay", 0.01))
+    factory.mesh_options.Algorithm = options.Algorithm3d.Delaunay
+
+    factory.make_mesh(objects, dim=3, eliminate=False)
+    factory.write_mesh(format=gmsh.MeshFormat.msh2)  # writes <model_name>.msh2 (v2 content)
+    os.rename(factory.model_name + ".msh2", mesh_filename)
+
+
+def make_gmsh(cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_set: FractureSet,
+              work_dir: str = ".") -> File:
+    """
+    Geometry + meshing in a fresh gmsh model. Mirrors chodby_trans create_mesh.make_gmsh.
+    """
+    mesh_name = cfg_mesh.get("mesh_name", "micro_mesh")
+    final_mesh_filename = os.path.join(work_dir, mesh_name + ".msh")
+
+    factory = gmsh.GeometryOCC(mesh_name, verbose=False)
+    factory.geom_options.Tolerance = float(cfg_mesh.get("tolerance", 1e-6))
+    factory.geom_options.ToleranceBoolean = float(cfg_mesh.get("tolerance_boolean", 1e-5))
+
+    geometry_final = make_geometry(factory, cfg_geometry, cfg_mesh, fracture_set)
+
+    print(f"[upscale_m mesh] meshing: L_ext={cfg_geometry.get('L_ext_factor', 2.0)}*"
+          f"{cfg_geometry.L_inner}, step={cfg_mesh.fracture_mesh_step}, "
+          f"{len(fracture_set)} fracture(s)")
+    meshing(factory, [geometry_final], final_mesh_filename, cfg_mesh)
+
+    if str(cfg_mesh.get("show_gui", "no")).lower() in ("yes", "y", "true"):
+        try:
+            factory.show()
+        except Exception as e:
+            print(f"[upscale_m mesh] gmsh GUI unavailable: {e}")
+    factory.close()  # release gmsh so repeated in-process meshing works
+    return File(final_mesh_filename)
+
+
+def make_heal_mesh(mesh_name: str, mesh_file: File, work_dir: str = ".",
+                   gamma_tol: float = 0.01) -> Path:
+    """
+    Heal the raw mesh (required for stable Flow123d runs). Mirrors chodby_trans
+    create_mesh.make_heal_mesh incl. the file-existence guard.
+    (The endorse load_mesh(heal_tol) path is NOT used: its heal branch is broken upstream —
+    mesh_class.py:73 calls the nonexistent Mesh.load_mesh; question in PLAN.md.)
+    """
+    mesh_file_healed = Path(work_dir) / (mesh_name + "_healed.msh")
+    if not mesh_file_healed.exists():
+        print("[upscale_m mesh] healing mesh ...")
+        hm = heal_mesh.HealMesh.read_mesh(mesh_file.path)
+        hm.heal_mesh(gamma_tol=gamma_tol)
+        hm.write(file_name=str(mesh_file_healed))
+        print(f"[upscale_m mesh] healed mesh written: {mesh_file_healed}")
+    return mesh_file_healed
+
+
+def make_mesh(cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_set: FractureSet,
+              work_dir: str = ".") -> File:
+    """
+    Raw mesh (skipped when the file already exists, as chodby_trans create_mesh.make_mesh)
+    + healing. Returns the healed mesh File.
+    """
+    mesh_name = cfg_mesh.get("mesh_name", "micro_mesh")
+    raw_mesh_path = Path(work_dir) / (mesh_name + ".msh")
+    if not raw_mesh_path.exists():
+        mesh_file = make_gmsh(cfg_geometry, cfg_mesh, fracture_set, work_dir)
     else:
-        axis = np.cross(base, fr.normal)
-        axis = axis / np.linalg.norm(axis)
-        occ.rotate([(2, tag)], *fr.center, axis[0], axis[1], axis[2], float(np.arccos(dot)))
-    return tag
+        mesh_file = File(str(raw_mesh_path))
+
+    mesh_file_healed = make_heal_mesh(mesh_name, mesh_file, work_dir,
+                                      gamma_tol=float(cfg_mesh.get("heal_gamma_tol", 0.01)))
+    return File(str(mesh_file_healed))
 
 
-def _bbox_outside(dim_tag, L_ext: float, eps: float) -> bool:
-    xmin, ymin, zmin, xmax, ymax, zmax = raw_gmsh.model.getBoundingBox(*dim_tag)
-    return (xmin < -eps or xmax > L_ext + eps or
-            ymin < -eps or ymax > L_ext + eps or
-            zmin < -eps or zmax > L_ext + eps)
+def make_cross_section_field(healed_file: File, fracture_set: FractureSet, aperture_per_r: float,
+                             field_path: Path) -> None:
+    """
+    The endorse field pipeline (fullscale_transport/macro_flow_model) for the mechanical
+    aperture: load the healed mesh (endorse load_mesh), rebuild the per-fracture RegionFracture
+    list from the fam_* physical names (their index = fracture order in the FractureSet) and use
+    endorse `fracture_map` for the element -> fracture map (its region-JOIN side effect only
+    touches this in-memory copy, never the healed mesh on disk — see module docstring), fill
+    cross_section[el] = aperture_per_r * rho(fracture) and write it to a SEPARATE small field
+    file via endorse `fields_file` (msh2 content + vtu preview) — analogous to endorse
+    macro_flow_model's own `input_fields_file`, distinct from the geometry `mesh_file`.
+    (endorse apply_fields.fr_fields_repo is NOT reused: it is transmissivity-specific,
+    tr_a/tr_b power law + cubic-law conductivity.)
+    """
+    mesh = load_mesh(healed_file)
+    cross_section = np.ones(len(mesh.elements))
+    fam_names = sorted((n for n in mesh.gmsh_io.physical if n.startswith("fam_")),
+                       key=lambda n: int(n.rsplit("_", 1)[1]))
+    if fam_names:
+        region_fractures = [
+            RegionFracture(fracture_set[int(n.rsplit("_", 1)[1])], gmsh.Region.get(n))
+            for n in fam_names]
+        elm_to_ifr = fracture_map(mesh, region_fractures, n_large=0, dim=3)
+        # geometric radii of the PRESENT fractures; bgem size r = rho * sqrt(pi)
+        rho = np.array([fr.r for fr in region_fractures]) * fracture_set.base_shape.R
+        el_idx = np.fromiter(elm_to_ifr.keys(), dtype=int)
+        i_fr = np.fromiter(elm_to_ifr.values(), dtype=int)
+        cross_section[el_idx] = aperture_per_r * rho[i_fr]
+    fields_file(mesh, dict(cross_section=cross_section), file_name=str(field_path))
 
 
 def make_micro_mesh(cfg_geometry: dotdict, cfg_mesh: dotdict, cfg_fractures: dotdict,
-                    work_dir: str = ".") -> MicroMesh:
+                    aperture_per_r: float, work_dir: str = ".") -> MicroMesh:
     """
-    Build, mesh and heal the buffered fractured cube. Returns MicroMesh with the healed msh file.
-    All output files are written into `work_dir`.
+    Fracture set + mesh + healing + the separate cross_section field file (all files written
+    into `work_dir`); the region map is read back from the healed mesh itself.
+    Top-level equivalent of chodby_trans create_mesh.main.
     """
     L = float(cfg_geometry.L_inner)
     factor = float(cfg_geometry.get("L_ext_factor", 2.0))
     assert factor >= 1.0, f"L_ext_factor must be >= 1 (got {factor})"
     L_ext = factor * L
-    lo = (L_ext - L) / 2.0
-    hi = lo + L
-    eps = EPS_GEO * L_ext
-    embed_inner = factor > 1.0 + 1e-12  # factor 1.0 => no buffer, no inner box to embed
 
-    # subdomain grid inside the averaging cube: one effective tensor per cell (default: one cell)
-    sub = cfg_geometry.get("subdomains", [1, 1, 1])
-    nx, ny, nz = (int(v) for v in sub)
-    assert nx >= 1 and ny >= 1 and nz >= 1, f"subdomains must be positive ints, got {sub}"
-    n_cells = nx * ny * nz
-    cell = np.array([L / nx, L / ny, L / nz])
-    subdomain_boxes = []
-    for ix in range(nx):
-        for iy in range(ny):
-            for iz in range(nz):
-                lo3 = np.array([lo, lo, lo]) + np.array([ix, iy, iz]) * cell
-                subdomain_boxes.append((lo3, lo3 + cell))
-
-    fractures = fractures_from_config(cfg_fractures, L_ext)
+    fracture_set = make_fractures(cfg_fractures, [L_ext, L_ext, L_ext])
+    healed_file = make_mesh(cfg_geometry, cfg_mesh, fracture_set, work_dir)
 
     mesh_name = cfg_mesh.get("mesh_name", "micro_mesh")
-    mesh_path = os.path.join(work_dir, mesh_name + ".msh")
+    cross_section_path = Path(work_dir) / (mesh_name + "_cross_section.msh")
+    if not cross_section_path.exists():
+        make_cross_section_field(healed_file, fracture_set, float(aperture_per_r), cross_section_path)
+        print(f"[upscale_m mesh] cross_section field written: {cross_section_path}")
 
-    if raw_gmsh.isInitialized():
-        raw_gmsh.clear()
-    else:
-        raw_gmsh.initialize()
-    occ = raw_gmsh.model.occ
-
-    raw_gmsh.option.setNumber("Geometry.Tolerance", float(cfg_mesh.get("tolerance", 1e-6)))
-    raw_gmsh.option.setNumber("Geometry.ToleranceBoolean", float(cfg_mesh.get("tolerance_boolean", 1e-5)))
-
-    # --- geometry --------------------------------------------------------------------------
-    outer_tag = occ.addBox(0, 0, 0, L_ext, L_ext, L_ext)
-    tools = []
-    n_cell_tools = 0
-    if n_cells > 1:
-        # imprint every subdomain cell (their union = the inner cube, so no separate inner box)
-        for lo3, hi3 in subdomain_boxes:
-            size3 = hi3 - lo3
-            tools.append((3, occ.addBox(lo3[0], lo3[1], lo3[2], size3[0], size3[1], size3[2])))
-        n_cell_tools = n_cells
-    elif embed_inner:
-        tools.append((3, occ.addBox(lo, lo, lo, L, L, L)))
-        n_cell_tools = 1
-    disk_tags = [_add_rotated_disk(occ, fr) for fr in fractures]
-    tools += [(2, t) for t in disk_tags]
-
-    # Fragment: makes everything conforming and returns the input -> output entity map.
-    # Map entries follow the input order: [outer_box, (cell boxes...), disk_0, disk_1, ...]
-    _, out_map = occ.fragment([(3, outer_tag)], tools)
-    occ.synchronize()
-
-    all_vols = [tag for dim, tag in out_map[0] if dim == 3]
-    if n_cell_tools:
-        inner_vols = sorted({tag for k in range(1, 1 + n_cell_tools)
-                             for dim, tag in out_map[k] if dim == 3})
-        i_disk_map = 1 + n_cell_tools
-    else:
-        inner_vols = all_vols
-        i_disk_map = 1
-    inner_set = set(inner_vols)
-    outer_vols = [t for t in all_vols if t not in inner_set]
-    assert inner_vols, "No inner (averaging) volumes after fragmentation."
-
-    # Fracture pieces: keep those inside the outer cube, delete protruding remnants.
-    kept_fracture_surfs = []
-    to_remove = []
-    for i in range(len(disk_tags)):
-        for dim, tag in out_map[i_disk_map + i]:
-            if dim != 2:
-                continue
-            if _bbox_outside((dim, tag), L_ext, eps):
-                to_remove.append((dim, tag))
-            else:
-                kept_fracture_surfs.append(tag)
-    if to_remove:
-        occ.remove(to_remove, recursive=True)
-        occ.synchronize()
-        print(f"[upscale_m mesh] clipped {len(to_remove)} fracture fragment(s) outside the domain")
-    assert kept_fracture_surfs or not fractures, "All fracture surfaces were clipped away."
-
-    # --- boundary faces of the outer cube --------------------------------------------------
-    def faces_in_slab(x0, y0, z0, x1, y1, z1):
-        ents = raw_gmsh.model.getEntitiesInBoundingBox(
-            x0 - eps, y0 - eps, z0 - eps, x1 + eps, y1 + eps, z1 + eps, dim=2)
-        return [tag for _, tag in ents]
-
-    E = L_ext
-    boundary_faces = {
-        ".surface_x_minus": faces_in_slab(0, 0, 0, 0, E, E),
-        ".surface_x_plus":  faces_in_slab(E, 0, 0, E, E, E),
-        ".surface_y_minus": faces_in_slab(0, 0, 0, E, 0, E),
-        ".surface_y_plus":  faces_in_slab(0, E, 0, E, E, E),
-        ".surface_z_minus": faces_in_slab(0, 0, 0, E, E, 0),
-        ".surface_z_plus":  faces_in_slab(0, 0, E, E, E, E),
-    }
-    for name, tags in boundary_faces.items():
-        assert tags, f"No boundary faces found for {name}"
-
-    # --- physical regions ------------------------------------------------------------------
-    raw_gmsh.model.addPhysicalGroup(3, inner_vols, tag=1, name="rock_inner")
-    if outer_vols:
-        raw_gmsh.model.addPhysicalGroup(3, outer_vols, tag=2, name="rock_outer")
-    if kept_fracture_surfs:
-        raw_gmsh.model.addPhysicalGroup(2, kept_fracture_surfs, tag=3, name="fractures")
-    for name, tags in boundary_faces.items():
-        raw_gmsh.model.addPhysicalGroup(2, tags, name=name)
-
-    # --- meshing --------------------------------------------------------------------------
-    step = float(cfg_mesh.fracture_mesh_step)
-    min_fraction = float(cfg_mesh.get("mesh_size_min_fraction", 10.0))
-    raw_gmsh.option.setNumber("Mesh.MeshSizeMin", step / min_fraction)
-    raw_gmsh.option.setNumber("Mesh.MeshSizeMax", step)
-    raw_gmsh.option.setNumber("Mesh.CharacteristicLengthFromPoints", 1)
-    raw_gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
-    raw_gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 2)
-    raw_gmsh.option.setNumber("Mesh.MinimumCirclePoints", 6)
-    raw_gmsh.option.setNumber("Mesh.ToleranceInitialDelaunay",
-                              float(cfg_mesh.get("tolerance_initial_delaunay", 0.01)))
-    raw_gmsh.option.setNumber("Mesh.Algorithm", 6)
-    # Flow123d / bgem GmshIO consume the legacy v2.2 format.
-    raw_gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
-
-    print(f"[upscale_m mesh] meshing: L={L}, L_ext={L_ext}, step={step}, "
-          f"{len(fractures)} fracture(s), subdomains {nx}x{ny}x{nz}")
-    raw_gmsh.model.mesh.generate(3)
-    raw_gmsh.write(mesh_path)
-
-    if str(cfg_mesh.get("show_gui", "no")).lower() in ("yes", "y", "true"):
-        try:
-            raw_gmsh.fltk.run()
-        except Exception as e:
-            print(f"[upscale_m mesh] gmsh GUI unavailable: {e}")
-
-    # --- healing (required for stable Flow123d runs) ----------------------------------------
-    print("[upscale_m mesh] healing mesh ...")
-    hm = heal_mesh.HealMesh.read_mesh(mesh_path)
-    hm.heal_mesh(gamma_tol=float(cfg_mesh.get("heal_gamma_tol", 0.01)))
-    healed_path = os.path.join(work_dir, mesh_name + "_healed.msh")
-    hm.write(healed_path)
-    print(f"[upscale_m mesh] healed mesh written: {healed_path}")
+    # physical name -> (region id, dim), authoritative for postprocess element selection
+    regions = dict(gmsh_io.GmshIO(healed_file.path).physical)
+    fracture_regions = sorted(n for n in regions if n.startswith("fam_"))
 
     return MicroMesh(
-        mesh_file=File(healed_path),
-        fractures=fractures,
-        inner_box=(lo, hi),
+        mesh_file=healed_file,
+        cross_section_file=File(str(cross_section_path)),
+        fractures=fracture_set,
+        inner_box=(-L / 2.0, L / 2.0),
         L_ext=L_ext,
-        has_buffer=bool(outer_vols),
-        subdivision=(nx, ny, nz),
-        subdomain_boxes=subdomain_boxes,
+        regions=regions,
+        fracture_regions=fracture_regions,
     )

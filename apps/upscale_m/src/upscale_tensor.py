@@ -1,24 +1,30 @@
 """
 Assembly of the effective elastic tensor from the six load-case results.
 
-Method: exact 6-case inversion C = Sigma @ E^-1 (report sec. 2.5.2). BOTH matrices are MEASURED:
-column q of E and Sigma holds the volume-averaged strain/stress over the inner cube for load case
-q. The prescribed load values are deliberately NOT used as results: with fractures intersecting
-the outer boundary the average strain theorem fails (displacement jumps contribute on the
-boundary), so <eps> over the averaging volume is the only consistent strain measure. The
-prescribed formula remains what it physically is — just the boundary condition.
+Method: least-squares identification of the linear map responses = C @ loads via the endorse
+equivalent-tensor machinery (`endorse.equivalent_field.eq_tensor`, dimension-generic; used here
+with D = 6 on the Voigt vectors). With exactly 6 independent loads the LS solution IS the exact
+6-case inversion C = Sigma @ E^-1 (report sec. 2.5.2); more (e.g. mixed) load states extend it
+to a genuine LS fit with no code change. BOTH matrices are MEASURED: column q of E and Sigma
+holds the volume-averaged strain/stress over the inner cube for load case q. The prescribed load
+values are deliberately NOT used as results: with fractures intersecting the outer boundary the
+average strain theorem fails (displacement jumps contribute on the boundary), so <eps> over the
+averaging volume is the only consistent strain measure. The prescribed formula remains what it
+physically is — just the boundary condition.
+
+(The SYMMETRY-constrained fit — 21 unknowns — needs a dim-6 Voigt-pair table in endorse
+eq_tensor.tn_homo_kernel_sym, which currently stops at dim 3: upstream question in PLAN.md.)
 
 The report format mirrors R. Siddall's original GenerateKinematicEffectiveElasticTensor output
 (sections Sigma, E, C_k, S_k; same prefixes and rulers).
-
-The symmetric least-squares fit (21 unknowns, 6x6+ equations) will replace method='exact' later;
-the interface already accepts general (loads, responses) column matrices.
 """
 import os
 from datetime import datetime
 from typing import List
 
 import numpy as np
+
+from endorse.equivalent_field import eq_tensor
 
 
 def assemble_matrices(results: List["LoadCaseResult"], i_sub: int = 0):
@@ -31,18 +37,17 @@ def assemble_matrices(results: List["LoadCaseResult"], i_sub: int = 0):
     return E, Sigma
 
 
-def equivalent_tensor(loads: np.ndarray, responses: np.ndarray, method: str = "exact") -> np.ndarray:
+def equivalent_tensor(loads: np.ndarray, responses: np.ndarray) -> np.ndarray:
     """
-    Effective tensor C from load/response column matrices (responses = C @ loads).
-    method 'exact': C = responses @ loads^-1 (requires exactly 6 independent loads).
-    method 'ls_symmetric': symmetric least-squares fit — pending
+    Effective tensor C (6x6) from load/response COLUMN matrices (responses = C @ loads),
+    via endorse eq_tensor LS (rows of eq_tensor input = load cases, hence the transposes).
+    Exactly 6 independent loads -> unique solution = the exact inversion.
     """
-    if method == "exact":
-        assert loads.shape == (6, 6), f"exact inversion needs 6x6 loads, got {loads.shape}"
-        return responses @ np.linalg.inv(loads)
-    elif method == "ls_symmetric":
-        raise NotImplementedError("Symmetric LS fit pending.")
-    raise ValueError(f"Unknown method: {method!r}")
+    assert loads.shape[0] == 6 and loads.shape == responses.shape, \
+        f"need 6-row Voigt column matrices, got {loads.shape} / {responses.shape}"
+    eq = eq_tensor(dim=6)  # unconstrained 36-unknown kernel; 'sym' pending upstream (PLAN.md)
+    C_flat = eq.flat(loads.T, responses.T)
+    return eq.to_full_tn(C_flat).reshape(6, 6)
 
 
 def _write_matrix(f, title, symbol, M, title_indent=26):
@@ -79,7 +84,7 @@ def write_report(path: str, results, E, Sigma, C, meta: dict,
                       s_sym, S, title_indent=18)
 
         f.write("-" * 118 + "\n")
-        f.write("Result computed using the following .vtu files:\n")
+        f.write("Result computed using the following Flow123d output files:\n")
         for r in results:
-            f.write(f"- [{r.name}] {r.vtu_file}\n")
+            f.write(f"- [{r.name}] {r.spatial_file}\n")
     print(f"[upscale_m] tensor report written: {os.path.abspath(path)}")
