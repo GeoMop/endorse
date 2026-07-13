@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from dask.distributed import Client
+import xarray as xr
 
 from endorse import common
 
@@ -54,6 +55,15 @@ def make_mlmc_workdir(
         else:
             content = content.replace("mlmc:\n", "mlmc:\n  sim_class: RandomTransportSimulation\n", 1)
         target_path.write_text(content, encoding="utf-8")
+    return workdir
+
+
+def make_full_input_workdir(tmp_path: Path, name: str) -> Path:
+    workdir = tmp_path / name
+    shutil.rmtree(workdir, ignore_errors=True)
+    workdir.mkdir(parents=True, exist_ok=True)
+    source_input_dir = Path(__file__).parent.parent / "input_data"
+    shutil.copytree(source_input_dir, workdir / "input_data")
     return workdir
 
 @pytest.mark.skip
@@ -200,3 +210,41 @@ def test_transport_simulation(smart_tmp_path: Path):
     assert coarse_result.shape == (expected_len,)
     assert np.all(np.isfinite(fine_result))
     assert np.all(np.isfinite(coarse_result))
+
+
+def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
+    workdir = make_full_input_workdir(smart_tmp_path, "transport_saltelli_zarr")
+    input_dir = workdir / "input_data"
+    job.set_workdir(workdir, input_dir)
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    simulation = TransportSaltelliSimulation(
+        cfg_levels=cfg.mlmc.levels,
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
+        matrix_generator=make_group_matrix_generator(sa_obj),
+        n_parameters=len(sa_obj.groups),
+        finer_samples_collected=lambda _sample_ids: 0,
+    )
+
+    level_sim = simulation.level_instance([1.0], [10.0])
+    sample_input = level_sim.prepare_samples(["L00_S0000000"])[0]
+    sample_id = sample_input[0]
+    with common.workdir(str(workdir / "pool" / sample_id), clean=True):
+        result = simulation.calculate(level_sim.config_dict, sample_input[1:])
+
+    assert sample_id == "L00_S0000000"
+    assert result[0].shape[0] == simulation.schema.n_terms * len(simulation.result_format()[0].times)
+
+    ds = xr.open_zarr(
+        str(job.output.zarr_store_path),
+        group="mlmc/level_00",
+        consolidated=False,
+    )
+    assert ds["fine_return_code"].isel(i_sample=0, i_saltelli=0).item() == 0
+    assert ds["coarse_return_code"].isel(i_sample=0, i_saltelli=0).item() == 0
+    assert ds["fine_eval_time"].isel(i_sample=0, i_saltelli=0).item() == 0.0
+    assert ds["coarse_eval_time"].isel(i_sample=0, i_saltelli=0).item() == 0.0
+    assert np.any(ds["fine_conc"].isel(i_sample=0).to_numpy() != 0.0)
+    assert np.any(ds["coarse_conc"].isel(i_sample=0).to_numpy() != 0.0)
+    assert np.all(np.isfinite(ds["parameter"].isel(i_sample=0, i_saltelli=0).to_numpy()))

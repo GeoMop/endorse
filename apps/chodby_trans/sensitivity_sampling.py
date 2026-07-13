@@ -463,42 +463,121 @@ def setup_data_storage(cfg: dotdict,
     tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
+
+def _mlmc_level_ids(store_path: Path) -> list[int]:
+    root = zarr.open_group(str(store_path), mode="r")
+    if transport_simulation.MLMC_ZARR_GROUP not in root:
+        return []
+    mlmc_group = root[transport_simulation.MLMC_ZARR_GROUP]
+    level_ids = []
+    for key in mlmc_group.group_keys():
+        if key.startswith("level_"):
+            level_ids.append(int(key.split("_", 1)[1]))
+    return sorted(level_ids)
+
+
+def _merge_mlmc_side_selection(
+    selected: dict[tuple[int, int, int, int], np.ndarray],
+    *,
+    level_id: int,
+    i_eval: np.ndarray,
+    i_sample: np.ndarray,
+    i_saltelli: np.ndarray,
+    parameters: np.ndarray,
+) -> None:
+    for idx in range(len(i_eval)):
+        key = (
+            int(level_id),
+            int(i_eval[idx]),
+            int(i_sample[idx]),
+            int(i_saltelli[idx]),
+        )
+        selected.setdefault(key, np.asarray(parameters[idx], dtype=float))
+
+
+def _read_parameters_by_rc_mlmc(rc_select: list[int]):
+    store_path = job.output.zarr_store_path
+    level_ids = _mlmc_level_ids(store_path)
+    if not level_ids:
+        raise ValueError(f"No MLMC level groups found in Zarr store: {store_path}")
+
+    root = zarr.open_group(str(store_path), mode="r")
+    mlmc_group = root[transport_simulation.MLMC_ZARR_GROUP]
+    selected: dict[tuple[int, int, int, int], np.ndarray] = {}
+    for level_id in level_ids:
+        group_name = f"level_{level_id:02d}"
+        level_group = mlmc_group[group_name]
+        print("=========== READ ZARR ==============")
+        print(f"group=mlmc/{group_name}")
+        print(f"arrays={list(level_group.array_keys())}")
+        print("=========== END READ ZARR ==============")
+
+        for side in ("fine", "coarse"):
+            v_param = np.asarray(level_group["parameter"])
+            v_ieval = np.asarray(level_group["i_eval"])
+            v_rc = np.asarray(level_group[f"{side}_return_code"])
+            v_eval_time = np.asarray(level_group[f"{side}_eval_time"])
+
+            label = f"level_{level_id:02d}_{side}"
+            plot_failed_return_codes(
+                v_rc,
+                v_ieval,
+                title=f"Return Code Distribution {label}",
+                output_name=f"return_code_{label}.pdf",
+            )
+
+            mask = np.isin(v_rc, rc_select)
+            logging.info(
+                "plotting eval time histogram for %s, selected=%s",
+                label,
+                int(np.count_nonzero(mask)),
+            )
+            plot_sample_time_hist(
+                v_eval_time[mask].ravel(),
+                title=f"Sample time histogram {label}",
+                output_name=f"sample_time_hist_{label}.pdf",
+            )
+
+            f_param = v_param[mask]
+            f_ieval = v_ieval[mask]
+            f_rc = v_rc[mask]
+            logging.info("found n_evals for %s: %s", label, len(f_ieval))
+
+            codes = np.unique(f_rc)
+            rc_dict = {code: f_ieval[f_rc == code] for code in codes}
+            print(f"Summary for {label}:")
+            for code, ids in rc_dict.items():
+                print(f"{code}: {ids}")
+
+            i_idx, q_idx = np.where(mask)
+            sample_coords = np.asarray(level_group["i_sample"])
+            saltelli_coords = np.asarray(level_group["i_saltelli"])
+            f_isample = sample_coords[i_idx]
+            f_isaltelli = saltelli_coords[q_idx]
+            _merge_mlmc_side_selection(
+                selected,
+                level_id=level_id,
+                i_eval=f_ieval,
+                i_sample=f_isample,
+                i_saltelli=f_isaltelli,
+                parameters=f_param,
+            )
+
+    if not selected:
+        tags = np.empty((0, 4), dtype=int)
+        params = np.empty((0, 0), dtype=float)
+    else:
+        sorted_items = sorted(selected.items())
+        tags = np.asarray([item[0] for item in sorted_items], dtype=int)
+        params = np.asarray([item[1] for item in sorted_items], dtype=float)
+
+    logging.info(f"first 20 MLMC tags:\n{tags[:20]}")
+    return tags, params
+
+
 def read_parameters_by_rc(rc_select: list[int]):
-    print("=========== READ ZARR ==============")
-    ds = xr.open_zarr(str(job.output.zarr_store_path))
-    print(ds)
-    # print(read_ds['A_sample'].to_numpy())
-    # print("sample_id:\n", ds['sample_id'].to_numpy())
-    # print(ds['parameter'].to_numpy())
-    # print("return_code:\n", ds['return_code'].to_numpy())
-    print("=========== END READ ZARR ==============")
     logging.info(f"getting samples by RC: {rc_select}")
-    v_param = ds['parameter'].to_numpy()
-    v_ieval = ds['i_eval'].to_numpy()
-    v_rc = ds['return_code'].to_numpy()
-    plot_failed_return_codes(v_rc, v_ieval)
-
-    mask = np.isin(v_rc, rc_select)
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy()[mask].ravel())
-    f_param = v_param[mask]
-    f_ieval = v_ieval[mask]
-    f_rc = v_rc[mask]
-    logging.info(f"found n_evals: {len(f_ieval)}")
-
-    # just print a summary of found RC
-    codes = np.unique(f_rc)
-    rc_dict = {code: f_ieval[f_rc == code] for code in codes}
-    for code, ids in rc_dict.items():
-        print(f"{code}: {ids}")
-
-    i_idx, q_idx = np.where(mask)  # integer indices
-    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
-    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
-
-    tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
-    logging.info(f"first 20 tags:\n{tags[:20]}")
-    return tags, f_param
+    return _read_parameters_by_rc_mlmc(rc_select)
 
 def select_single(i_eval: int):
 
@@ -527,7 +606,7 @@ def run_single_sample(tags, parameters):
     assert len(sample_args) == 1
     single_sample(sample_args[0])
 
-def plot_failed_return_codes(v_rc, v_ieval):
+def plot_failed_return_codes(v_rc, v_ieval, title: str = None, output_name: str = "return_code.pdf"):
     # Flatten the matrix and count occurrences
     unique_vals, counts = np.unique(v_rc, return_counts=True)
 
@@ -545,7 +624,9 @@ def plot_failed_return_codes(v_rc, v_ieval):
     counts_plot = counts[mask]
     labels_plot = [k for k, v in labels_map.items() if v in unique_vals[mask]]
     ax.bar(labels_plot, counts_plot)
-    ax.set_title(f"Return Code Distribution (n={np.sum(counts)})")
+    if title is None:
+        title = f"Return Code Distribution (n={np.sum(counts)})"
+    ax.set_title(title)
     ax.set_xlabel("Return Code")
     ax.set_ylabel("Count")
     ax.grid(axis="y", linestyle="--", alpha=0.7)
@@ -571,15 +652,22 @@ def plot_failed_return_codes(v_rc, v_ieval):
     ax.set_ylim(0, ymax * 1.5)
 
     fig.tight_layout()
-    fig.savefig(job.output.plots / 'return_code.pdf', format='pdf')
+    fig.savefig(job.output.plots / output_name, format='pdf')
     # plt.show()
 
 
-def plot_sample_time_hist(st):
+def plot_sample_time_hist(st, title: str = "Sample time histogram", output_name: str = "sample_time_hist.pdf"):
+    st = np.asarray(st, dtype=float)
+    if st.size == 0:
+        logging.info("Skipping sample time histogram for empty selection: %s", output_name)
+        return
     upper_limit = 2000
     n_removed = np.sum(st > upper_limit)
     print(f"count st > {upper_limit}: {n_removed}")
     cst = st[st <= upper_limit]
+    if cst.size == 0:
+        logging.info("Skipping sample time histogram with all values above upper limit: %s", output_name)
+        return
 
     cst_std = cst.std()
     cst_mean = cst.mean()
@@ -600,11 +688,11 @@ def plot_sample_time_hist(st):
             transform=plt.gca().transAxes,
             ha="left", va="top",
             fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
-    ax.set_title('Sample time histogram')
+    ax.set_title(title)
     ax.set_ylabel('count')
     ax.legend()
     fig.tight_layout()
-    fig.savefig(job.output.plots / 'sample_time_hist.pdf', format='pdf')
+    fig.savefig(job.output.plots / output_name, format='pdf')
 
 
 pbs_script_template = """
@@ -788,24 +876,6 @@ def parse_sample_level_id(sample_id: str) -> int:
     return int(level_tag[1:])
 
 
-def parse_sample_workspace(path: str | Path) -> tuple[int, int]:
-    """
-    Extract the numeric MLMC level id and sample id from a sample workspace path.
-    """
-    sample_dir_name = Path(path).name
-    parts = sample_dir_name.split("_", 1)
-    if len(parts) != 2:
-        raise ValueError(f"Unexpected MLMC sample workspace format: {sample_dir_name}")
-
-    level_tag, sample_tag = parts
-    if len(level_tag) < 2 or not level_tag.startswith("L"):
-        raise ValueError(f"Unexpected MLMC sample workspace level tag: {sample_dir_name}")
-    if len(sample_tag) < 2 or not sample_tag.startswith("S"):
-        raise ValueError(f"Unexpected MLMC sample workspace sample tag: {sample_dir_name}")
-
-    return int(level_tag[1:]), int(sample_tag[1:])
-
-
 class TransportSaltelliSimulation(Simulation):
     """
     Saltelli MLMC wrapper that evaluates one full Saltelli row per MLMC sample.
@@ -841,10 +911,21 @@ class TransportSaltelliSimulation(Simulation):
             coarse_level_params,
         )
         level_sim = LevelSimulation(
-            config_dict={"forward_config": forward_level_sim.config_dict},
+            config_dict={
+                "forward_config": {
+                    **forward_level_sim.config_dict,
+                    "n_saltelli": int(self.schema.n_terms),
+                }
+            },
             common_files=forward_level_sim.common_files,
             need_sample_workspace=forward_level_sim.need_sample_workspace,
             task_size=forward_level_sim.task_size,
+        )
+        transport_level_id = int(forward_level_sim.config_dict["level_id"])
+        transport_simulation.ensure_mlmc_level_zarr_storage(
+            self.forward_simulation.cfg,
+            transport_level_id,
+            int(self.schema.n_terms),
         )
         level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
         return level_sim
@@ -876,7 +957,7 @@ class TransportSaltelliSimulation(Simulation):
         """
         if sample_input is None:
             raise ValueError("Missing planned Saltelli sample input")
-        mlmc_level_id, mlmc_sample_id = parse_sample_workspace(os.getcwd())
+        mlmc_level_id, mlmc_sample_id = transport_simulation.parse_sample_workspace(os.getcwd())
         sample_dir_name = Path(os.getcwd()).name
         # transport_level_id = int(config_dict["forward_config"]["level_id"])
 
@@ -897,10 +978,10 @@ class TransportSaltelliSimulation(Simulation):
 
         fine_results = []
         coarse_results = []
-        for input_vector in sample_matrix:
+        for i_saltelli, input_vector in enumerate(sample_matrix):
             fine_result, coarse_result = self.forward_simulation.calculate(
                 config_dict["forward_config"],
-                (*input_vector, *forward_params),
+                (*input_vector, i_saltelli, *forward_params),
             )
             fine_results.append(np.asarray(fine_result).flatten())
             coarse_results.append(np.asarray(coarse_result).flatten())

@@ -7,7 +7,7 @@ Goal 1: Introduce TransportSimulation for factory of level simulations and calcu
         Make a test to this end which restricts the end time of the simulation (use specific
         test config file). With a wise setup we can make it run under 5 minutes.
         The single pair calculation should replace the single_sample function from
-        sensitivity_sampling.py. For the dask pool we doesn't need data_schema_key and tags,
+        sensitivity_sampling.py. For the dask pool we don't need data_schema_key and tags,
         which are used in current implementation to write the samples to a ZARR storage. We
         instead want to pass results through Dask's means back to the master process where it
         is saved into a HDF5 storage maintained by MLMC. MLMC also prepares and provides the
@@ -25,6 +25,11 @@ Goal 3: Use the sampler to evaluate first N samples of the finest level (l=L) an
         planning samples on level l-1. To make evaluation of samples reproducible we will
         pass the number of l-level samples at the time of sample planning as the first item of
         the sample input vector.
+
+Goal 4: Side by side to MLMC, we still need to save the results in ZARR storage.
+        For this, we need to create the storage node for each level (sofar identified the place into `TransportSaltelliSimulation:level_instance`),
+        and write the results (sofar identified the place into `TransportSimulation:calculate`).
+        
         
         
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
@@ -122,11 +127,36 @@ Resolved:
   5. Persist scheduled work items in HDF and re-submit unfinished samples on
      restart because `SamplingPoolDask` itself does not hold permanent tasks.
 
--  Goal 4 (PE work):
-   transport_macro: homogenization fo fixed mesh and interpolation to macro mesh
+- Goal 4:
+  1. Keep MLMC Zarr storage separate from the legacy OpenTURNS storage layout,
+     but reuse the same axis conventions where possible.
+  2. Create one fixed-capacity Zarr group per MLMC level from
+     `TransportSaltelliSimulation.level_instance()`.
+  3. Size the per-level storage as:
+     `i_sample = cfg.ot_sensitivity.n_samples`,
+     `i_saltelli = schema.n_terms`.
+  4. Store both fine and coarse outputs and metadata in dedicated variables:
+     `fine_conc`, `coarse_conc`, `fine_return_code`, `coarse_return_code`,
+     `fine_eval_time`, `coarse_eval_time`.
+  5. Move MLMC sample-path parsing from `sensitivity_sampling.py` into
+     `transport_simulation.py` so `TransportSimulation.calculate()` can derive
+     `(level_id, i_sample)` from the sample workspace path.
+  6. Extend the per-term forward input tail to carry both `i_saltelli` and the
+     finer-level collected-sample count, and let
+     `TransportSimulation.calculate()` decompose that tail before writing.
 
 
 ## AGENT Log
+- 2026-07-13: Simplified `read_parameters_by_rc()` for the development MLMC
+  Zarr path only. It now assumes `mlmc/level_*` groups exist, reads them
+  through `zarr` directly, and emits separate fine/coarse diagnostics per
+  level without any legacy-layout fallback or local metadata repair.
+- 2026-07-13: Implemented Goal 4 MLMC-side Zarr integration across
+  `transport_simulation.py`, `sensitivity_sampling.py`, and
+  `fullscale_transport.py`: added fixed-capacity per-level MLMC groups,
+  per-term `i_saltelli` propagation, worker-side writes of fine/coarse
+  concentration blocks plus return/time metadata, and a focused synthetic
+  storage test in `test/test_mlmc_sampling.py`.
 - 2026-06-30: Inlined the Saltelli wrapper logic into
   `TransportSaltelliSimulation`, so the chodby_trans MLMC path now subclasses
   MLMC `Simulation` directly and no longer imports
@@ -279,3 +309,6 @@ Resolved:
   `src/endorse/scripts/endorse_mlmc.py:create_sampler` passes the full
   `cfg.machine_config` host map to `create_sampling_pool`, which expects PBS
   keys on the selected machine block.
+- 2026-07-13 local verification note: `py_compile` passes for the Goal 4
+  changes, but the focused local MLMC Zarr probe still hangs during runtime
+  execution in this environment before a clean passing test result is reached.

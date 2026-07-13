@@ -195,16 +195,22 @@ def transport_run(cfg, level_id, param_dict):
 
     with common.workdir("fine_trans", clean=False):
         logging.info(f"fine dir: {os.getcwd()}")
+        fine_t0 = time.time()
         f_rc, f_values = transport_fine_run(cfg, fr_set, level_id, n_large,  param_dict)
+        fine_eval_time = time.time() - fine_t0
 
     logging.info(f"sample dir: {os.getcwd()}")
     if level_id < len(cfg.mlmc.levels) - 1:
         with common.workdir("macro_trans", clean=False):
             logging.info(f"macro dir: {os.getcwd()}")
+            coarse_t0 = time.time()
             c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
+            coarse_eval_time = time.time() - coarse_t0
     else:
+        c_rc = exp.ReturnCode.NONE
         c_values = None
-    return f_values, c_values
+        coarse_eval_time = -1.0
+    return f_rc, f_values, c_rc, c_values, fine_eval_time, coarse_eval_time
 
 
 def prepare_common_homogenization_mesh(cfg):
