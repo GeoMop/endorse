@@ -788,6 +788,24 @@ def parse_sample_level_id(sample_id: str) -> int:
     return int(level_tag[1:])
 
 
+def parse_sample_workspace(path: str | Path) -> tuple[int, int]:
+    """
+    Extract the numeric MLMC level id and sample id from a sample workspace path.
+    """
+    sample_dir_name = Path(path).name
+    parts = sample_dir_name.split("_", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Unexpected MLMC sample workspace format: {sample_dir_name}")
+
+    level_tag, sample_tag = parts
+    if len(level_tag) < 2 or not level_tag.startswith("L"):
+        raise ValueError(f"Unexpected MLMC sample workspace level tag: {sample_dir_name}")
+    if len(sample_tag) < 2 or not sample_tag.startswith("S"):
+        raise ValueError(f"Unexpected MLMC sample workspace sample tag: {sample_dir_name}")
+
+    return int(level_tag[1:]), int(sample_tag[1:])
+
+
 class TransportSaltelliSimulation(Simulation):
     """
     Saltelli MLMC wrapper that evaluates one full Saltelli row per MLMC sample.
@@ -858,6 +876,9 @@ class TransportSaltelliSimulation(Simulation):
         """
         if sample_input is None:
             raise ValueError("Missing planned Saltelli sample input")
+        mlmc_level_id, mlmc_sample_id = parse_sample_workspace(os.getcwd())
+        sample_dir_name = Path(os.getcwd()).name
+        # transport_level_id = int(config_dict["forward_config"]["level_id"])
 
         sample_array = np.asarray(sample_input, dtype=float)
         own_size = self.schema.n_terms * self.schema.n_parameters
@@ -866,6 +887,13 @@ class TransportSaltelliSimulation(Simulation):
             self.schema.n_parameters,
         )
         forward_params = sample_array[own_size:]
+        logging.info(
+            "Evaluating Saltelli MLMC sample %s (sample_no=%s) on MLMC level %s with %s terms.",
+            sample_dir_name,
+            mlmc_sample_id,
+            mlmc_level_id,
+            self.schema.n_terms,
+        )
 
         fine_results = []
         coarse_results = []
