@@ -55,12 +55,11 @@ compute_host_counts() {
 
 start_scheduler() {
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
-  HEAD_IP=$(getent hosts "$HEAD_NODE" | awk '{print $1}')
-  SCHED_ADDR="tcp://${HEAD_IP}:8786"
+  SCHED_ADDR="tcp://${HEAD_NODE}:8786"
   DASH_ADDR=":8787"
 
   echo "[sched] Starting scheduler on $HEAD_NODE ($SCHED_ADDR)..."
-  nohup "$DASK_BIN" scheduler --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
+  nohup "$DASK_BIN" scheduler --host "$HEAD_NODE" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # pbsdsh -vh "$HEAD_NODE" -- bash -lc `nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &`
   # pbsdsh -vh "$HEAD_NODE" -- cat "$SCRATCHDIR/logs/scheduler.log"
@@ -71,7 +70,7 @@ start_scheduler() {
   # cat "pid: $SCRATCHDIR/scheduler.pid"
   # cat "$SCRATCHDIR/logs/scheduler.log"
   echo "$SCHED_ADDR" > "$SCRATCHDIR/SCHED_ADDR.txt"
-  echo "[sched] Scheduler: $SCHED_ADDR (dashboard on $HEAD_IP$DASH_ADDR)"
+  echo "[sched] Scheduler: $SCHED_ADDR (dashboard on $HEAD_NODE$DASH_ADDR)"
 }
 
 start_workers() {
