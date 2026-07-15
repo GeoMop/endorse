@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -79,6 +80,24 @@ def apply_sample_parameters(
     return common.apply_variant(cfg, variant_patch), param_dict
 
 
+def full_parameter_names(cfg: dotdict) -> list[str]:
+    """
+    Return the expanded transport parameter names in the same order as the
+    full parameter vector used by ``SensitivityAnalysis.param_vec_to_dict``.
+    """
+    sa = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    return list(sa.parameters.keys())
+
+
+def full_parameter_values(cfg: dotdict, param_dict: dict[str, float]) -> np.ndarray:
+    """
+    Convert a full parameter dictionary to a vector with the canonical
+    expanded parameter ordering for storage and transport execution metadata.
+    """
+    names = full_parameter_names(cfg)
+    return np.asarray([param_dict[name] for name in names], dtype=float)
+
+
 def compact_concentration_series(
     concentration: np.ndarray,
     quantile: float = 0.99,
@@ -142,11 +161,11 @@ def parse_sample_workspace(path: str | Path) -> tuple[int, int]:
     Extract the numeric MLMC level id and sample id from a sample workspace path.
     """
     sample_dir_name = Path(path).name
-    parts = sample_dir_name.split("_", 1)
-    if len(parts) != 2:
+    parts = sample_dir_name.split("_")
+    if len(parts) < 2:
         raise ValueError(f"Unexpected MLMC sample workspace format: {sample_dir_name}")
 
-    level_tag, sample_tag = parts
+    level_tag, sample_tag = parts[:2]
     if len(level_tag) < 2 or not level_tag.startswith("L"):
         raise ValueError(f"Unexpected MLMC sample workspace level tag: {sample_dir_name}")
     if len(sample_tag) < 2 or not sample_tag.startswith("S"):
@@ -157,6 +176,10 @@ def parse_sample_workspace(path: str | Path) -> tuple[int, int]:
 
 def _mlmc_level_group(level_id: int) -> str:
     return f"{MLMC_ZARR_GROUP}/level_{level_id:02d}"
+
+
+def _mlmc_level_group_path(store_path: str | Path, level_id: int) -> Path:
+    return Path(store_path) / MLMC_ZARR_GROUP / f"level_{level_id:02d}"
 
 
 def _load_zarr_schema_template() -> dict:
@@ -197,19 +220,13 @@ def ensure_mlmc_level_zarr_storage(cfg: dotdict, level_id: int, n_saltelli: int)
     """
     store_path = str(job.output.zarr_store_path)
     group = _mlmc_level_group(level_id)
-    try:
-        xr.open_zarr(store_path, group=group, consolidated=False)
-        return
-    except Exception:
-        pass
-
     schema = _load_zarr_schema_template()
     coords = schema["COORDS"]
     grid_shape = tuple(int(v) for v in schema["ATTRS"]["grid_step"])
     times = np.asarray(output_times(cfg.transport_fullscale), dtype=float)
 
     n_samples = int(cfg.ot_sensitivity.n_samples)
-    param_names = np.asarray(list(cfg.ot_sensitivity.parameters.keys()), dtype=str)
+    param_names = np.asarray(full_parameter_names(cfg), dtype=str)
     n_params = len(param_names)
 
     conc_chunks = (
@@ -602,7 +619,7 @@ class TransportSimulation(Simulation):
             None if coarse_values is None else coarse_values.shape,
         )
 
-        parameter_values = np.asarray(list(full_param_dict.values()), dtype=float)
+        parameter_values = full_parameter_values(cfg, full_param_dict)
         write_mlmc_level_result(
             cfg=cfg,
             level_id=level,
@@ -645,7 +662,7 @@ class RandomTransportSimulation(TransportSimulation):
 
         cfg, full_param_dict = apply_sample_parameters(root_cfg, parameters)
         times = output_times(cfg.transport_fullscale)
-        full_parameters = np.asarray(list(full_param_dict.values()), dtype=float)
+        full_parameters = full_parameter_values(cfg, full_param_dict)
 
         sample_dir = Path(os.getcwd())
         logging.info("Running random MLMC transport sample in %s, level %s.", sample_dir, level)

@@ -147,6 +147,17 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-15: Made `ensure_mlmc_level_zarr_storage()` recreate stale local
+  MLMC level groups when their shape or expanded `param_name` axis no longer
+  matches the current transport config, avoiding reuse of incompatible
+  development-era Zarr schemas across reruns.
+- 2026-07-15: Fixed MLMC Zarr parameter-axis sizing in
+  `transport_simulation.py` to use the expanded `SensitivityAnalysis`
+  parameter names rather than the raw config keys, matching the actual stored
+  full parameter vector for DFN population-derived parameters.
+- 2026-07-15: Realigned `sequential_saltelli_samples.py` with the current
+  `TransportSimulation.calculate()` contract by passing the per-term Saltelli
+  index and `n_saltelli` through `sample_input` and `config_dict`.
 - 2026-07-13: Simplified `read_parameters_by_rc()` for the development MLMC
   Zarr path only. It now assumes `mlmc/level_*` groups exist, reads them
   through `zarr` directly, and emits separate fine/coarse diagnostics per

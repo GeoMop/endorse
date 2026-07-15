@@ -166,25 +166,35 @@ def run_one_term(
     root_cfg,
     output_dir: Path,
     level_id: int,
-    saltelli_index: int,
+    sample_index: int,
+    term_index: int,
+    n_saltelli_terms: int,
     term_name: str,
     group_row: np.ndarray,
     finer_sample_count: int,
 ) -> dict:
-    sample_dir = output_dir / f"L{level_id:02d}_S{saltelli_index:07d}_{term_name}"
+    sample_dir = output_dir / f"L{level_id:02d}_S{sample_index:07d}_{term_name}"
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     config_dict = {
         "level_id": level_id,
         "root_cfg": copy.deepcopy(root_cfg),
+        "n_saltelli": int(n_saltelli_terms),
     }
-    sample_input = np.concatenate([group_row, np.array([float(finer_sample_count)])])
+    sample_input = np.concatenate(
+        [
+            group_row,
+            np.array([float(term_index), float(finer_sample_count)]),
+        ]
+    )
     full_parameters = transport_simulation.expand_sample_parameters(root_cfg, group_row)
     parameter_dict = ot_sa.SensitivityAnalysis.from_cfg(root_cfg.ot_sensitivity).param_vec_to_dict(full_parameters)
 
     payload = {
         "level_id": level_id,
-        "saltelli_index": saltelli_index,
+        "sample_index": sample_index,
+        "term_index": term_index,
+        "n_saltelli_terms": n_saltelli_terms,
         "term": term_name,
         "group_row": group_row.tolist(),
         "sample_input": sample_input.tolist(),
@@ -278,15 +288,18 @@ def run_sequential_saltelli(args: argparse.Namespace) -> int:
         "statuses": [],
     }
 
+    n_saltelli_terms = 2 * (len(sa_obj.groups) + 1)
     for i_sample in range(args.n_saltelli):
-        for term_name, group_row in saltelli_terms(a_matrix[i_sample], b_matrix[i_sample]):
+        for i_term, (term_name, group_row) in enumerate(saltelli_terms(a_matrix[i_sample], b_matrix[i_sample])):
             logging.info("Running sample %s term %s", i_sample, term_name)
             status = run_one_term(
                 sim=sim,
                 root_cfg=cfg,
                 output_dir=output_dir,
                 level_id=args.level_id,
-                saltelli_index=i_sample,
+                sample_index=i_sample,
+                term_index=i_term,
+                n_saltelli_terms=n_saltelli_terms,
                 term_name=term_name,
                 group_row=group_row,
                 finer_sample_count=args.finer_sample_count,
