@@ -218,7 +218,10 @@ def ensure_mlmc_level_zarr_storage(cfg: dotdict, level_id: int, n_saltelli: int)
     """
     Create the fixed-capacity MLMC Zarr group for one transport level if it does not exist yet.
     """
-    store_path = str(job.output.zarr_store_path)
+    store_path = job.output.zarr_store_path
+    if store_path.exists():
+        return
+
     group = _mlmc_level_group(level_id)
     schema = _load_zarr_schema_template()
     coords = schema["COORDS"]
@@ -243,6 +246,7 @@ def ensure_mlmc_level_zarr_storage(cfg: dotdict, level_id: int, n_saltelli: int)
     )
     par_chunks = meta_chunks + (int(coords["param_name"]["chunk_size"]),)
 
+    logging.info(f"Creating ZARR storage: {store_path}")
     root = zarr.open_group(store_path, mode="a")
     mlmc_group = root.require_group(MLMC_ZARR_GROUP)
     level_group = mlmc_group.require_group(f"level_{level_id:02d}")
@@ -586,7 +590,7 @@ class TransportSimulation(Simulation):
         # Resolved: the worker keeps the current MLMC sample workspace and does not reset the working directory.
 
         cfg, full_param_dict = apply_sample_parameters(root_cfg, parameters)
-        cfg["data_schema_key"] = MLMC_ZARR_GROUP
+        # cfg["data_schema_key"] = MLMC_ZARR_GROUP
 
         sample_dir = Path(os.getcwd())
         logging.info("Running MLMC transport sample in %s, level %s.", sample_dir, level)

@@ -122,7 +122,7 @@ def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
 
     # when running in subprocess, global variables are lost
     # therefore we set the workdir again
-    job.set_workdir(workdir, input_dir)
+    # job.set_workdir(workdir, input_dir)
     logging.info(cfg_mesh)
 
     mesh_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.meshing_seed)

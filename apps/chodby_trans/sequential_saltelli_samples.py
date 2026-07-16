@@ -25,6 +25,7 @@ import chodby_trans.job as job
 import chodby_trans.transport_simulation as transport_simulation
 from chodby_trans import ot_sa
 from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
+from chodby_trans.sensitivity_sampling import initialize_data_schema
 
 
 SCRIPT_PATH = Path(__file__).absolute()
@@ -262,6 +263,9 @@ def run_sequential_saltelli(args: argparse.Namespace) -> int:
 
     output_dir = workdir / args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    data_schema_key, data_schema = initialize_data_schema()
+    cfg["data_schema_key"] = data_schema_key
 
     with common.workdir(str(job.scratch.dir_path), clean=False):
         prepare_common_homogenization_mesh(cfg)
