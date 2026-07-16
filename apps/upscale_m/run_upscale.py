@@ -15,24 +15,22 @@ in/outputs, and the tensor report (name from config key output.report_name; all 
 the MEASURED inner-cube averages; prescribed load values are only boundary conditions, see
 upscale_tensor.py).
 """
+import logging
 import os
 import sys
 
 _app_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_app_dir, "src"))
 
-import numpy as np
-
 from endorse import common
 
-from bgem.upscale.fem import Grid
-
-from micro_mesh import make_micro_mesh
+from micro_mesh import make_micro_mesh, make_averaging_grid
 from kubc import run_kubc
-from upscale_tensor import assemble_matrices, equivalent_tensor, write_report
+from upscale_tensor import write_all_reports
 
 
 def main(work_dir="default", config_file="config.yaml"):
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     common.CallCache.instance()
     # configs live in configs/; accept both bare names and explicit paths
     cfg_path = os.path.join(_app_dir, "configs", config_file)
@@ -56,52 +54,12 @@ def main(work_dir="default", config_file="config.yaml"):
                                 cfg.materials.aperture_per_r, work_dir=".")
 
         print("=== upscale_m: KUBC load cases ===", flush=True)
-        results = run_kubc(cfg, micro)
+        grid = make_averaging_grid(cfg.geometry, micro)
+        results = run_kubc(cfg, micro, grid)
 
         print("=== upscale_m: tensor assembly ===", flush=True)
-        report_name = cfg.output.report_name
-        subdivision = [int(v) for v in cfg.geometry.get("subdomains", [1, 1, 1])]
-        # geometric disc radii for the report (bgem stores r = sqrt(area))
-        geo_radii = micro.fracture_radii
-        meta = dict(
-            L_inner=cfg.geometry.L_inner,
-            L_ext_factor=cfg.geometry.get("L_ext_factor", 2.0),
-            subdomains=subdivision,
-            beta=cfg.loads.deformation_parameter_beta,
-            E_rock=cfg.materials.young_modulus_rock,
-            nu_rock=cfg.materials.poisson_ratio_rock,
-            E_fracture=cfg.materials.young_modulus_fracture,
-            nu_fracture=cfg.materials.poisson_ratio_fracture,
-            fractures=[(float(rho), list(map(float, center)), list(map(float, normal)))
-                       for rho, center, normal
-                       in zip(geo_radii, micro.fractures.center, micro.fractures.normal)],
-        )
-        # one tensor per averaging window (bgem Grid over the inner cube, not imprinted in
-        # the mesh), all from the same six solutions
-        # (mirrors macro_conductivity's per-subdomain loop; single window = the classic run)
-        lo, hi = micro.inner_box
-        grid = Grid(np.full(3, hi - lo), np.asarray(subdivision), origin=np.full(3, lo))
-        n_sub = int(grid.n_elements)
-        for i_sub, center in enumerate(grid.barycenters()):
-            lo3, hi3 = center - grid.step / 2.0, center + grid.step / 2.0
-            E, Sigma = assemble_matrices(results, i_sub)
-            C_k = equivalent_tensor(E, Sigma)
-            meta_i = dict(meta)
-            meta_i["subdomain_box"] = [list(np.round(lo3, 6)), list(np.round(hi3, 6))]
-            if n_sub == 1:
-                report_path = report_name
-            else:
-                ix, iy, iz = np.unravel_index(i_sub, tuple(grid.shape))
-                report_path = os.path.join(f"subdomain_{ix}_{iy}_{iz}", report_name)
-            write_report(report_path, results, E, Sigma, C_k, meta_i)
+        write_all_reports(cfg, micro, grid, results)
 
-            if n_sub == 1:
-                with np.printoptions(precision=3, suppress=False, linewidth=140):
-                    print("\nC_k:\n", C_k)
-            else:
-                ix, iy, iz = np.unravel_index(i_sub, tuple(grid.shape))
-                print(f"  subdomain ({ix},{iy},{iz}): "
-                      f"C11 = {C_k[0, 0]:.4e}  C33 = {C_k[2, 2]:.4e}  C66 = {C_k[5, 5]:.4e}")
     print("\n=== upscale_m: DONE ===")
 
 
