@@ -56,6 +56,7 @@ import numpy as np
 from bgem.gmsh import gmsh, gmsh_io, heal_mesh, options
 from bgem.stochastic import EllipseShape, Fracture, FractureSet, Population
 from bgem.stochastic import fr_mesh
+from bgem.upscale.fem import Grid
 from endorse.common import dotdict, File, memoize
 from endorse.fullscale_transport import fracture_map
 from endorse.macro_flow_model import fields_file
@@ -67,13 +68,33 @@ SQRT_PI = float(np.sqrt(np.pi))
 
 
 def _ellipse_gmsh_base_shape(self, gmsh_geom):
-    # AGENT: workaround for bgem@JB_homo: EllipseShape.gmsh_base_shape references the undefined
+    # workaround for bgem@JB_homo: EllipseShape.gmsh_base_shape references the undefined
     # attribute `self.scale` (AttributeError); the unit-area disc radius is `self.R`.
     # Remove once fixed upstream (question recorded in PLAN.md).
     return gmsh_geom.disc(rx=self.R, ry=self.R)
 
 
-EllipseShape.gmsh_base_shape = _ellipse_gmsh_base_shape
+_orig_fracture_set_from_list = FractureSet.from_list.__func__
+
+
+def _fracture_set_from_list(cls, fr_list):
+    # workaround for bgem@JB_homo: FractureSet.from_list (bgem/stochastic/fr_set.py)
+    # unconditionally sets family_idx = np.full(len(fr_list), 0), discarding each input
+    # Fracture's own `.family` (correctly set per-fracture by Population.sample() for stochastic
+    # DFNs). Harmless for 'explicit' mode (Fracture.family is always None there, family is
+    # meaningless), but for 'stochastic' mode with 2+ population families this silently collapses
+    # every fracture's region into fam_0_<iii> regardless of which population family it actually
+    # came from (fr_mesh.geometry_gmsh names regions "fam_{fr.family}_{i:03d}") -- confirmed
+    # empirically (R. Siddall report, 2026-07-14): a 2-family, 35-fracture DFN sampled correctly
+    # as {family 0: 15, family 1: 20} but read back as {family 0: 35} after from_list. Restore
+    # the real per-fracture family here; falls back to from_list's own default (0) whenever
+    # every input Fracture.family is None (explicit mode), so that mode is unaffected.
+    # Remove once fixed upstream (question recorded in PLAN.md).
+    fr_set = _orig_fracture_set_from_list(cls, fr_list)
+    families = [getattr(fr, "family", None) for fr in fr_list]
+    if any(f is not None for f in families):
+        fr_set.family = np.array([0 if f is None else f for f in families], dtype=np.int32)
+    return fr_set
 
 
 @dataclass
@@ -86,7 +107,7 @@ class MicroMesh:
     # as mesh_file, so it lines up automatically (see module docstring)
     cross_section_file: File
     fractures: FractureSet
-    # inner averaging window bounds: (lo, hi) so the window is [lo, hi]^3 (NOT imprinted)
+    # inner averaging window bounds: (lo, hi) so the window is [lo, hi]^3
     inner_box: Tuple[float, float]
     # outer cube edge
     L_ext: float
@@ -101,15 +122,55 @@ class MicroMesh:
 
     @property
     def fracture_region_ids(self) -> List[int]:
+        """Region ids in ALPHABETICAL name order — fine for set/membership use (region
+        classification in WindowSubdomain.create)"""
         return [self.regions[name][0] for name in self.fracture_regions]
 
     @property
     def fracture_radii(self) -> np.ndarray:
-        """Geometric disc radii rho; bgem stores size r = sqrt(area) = rho * sqrt(pi).
-        (bgem FractureSet.area is broken upstream — base_shapes bitrot, question in PLAN.md.)"""
+        """Geometric disc radii rho, in FractureSet GENERATION order; bgem stores size
+        r = sqrt(area) = rho * sqrt(pi)"""
         if len(self.fractures) == 0:
             return np.array([])
         return self.fractures.radius[:, 0] * self.fractures.base_shape.R
+
+    @property
+    def fracture_radius_by_region_id(self) -> Dict[int, float]:
+        """
+        region id -> geometric radius, correctly matched via the GENERATION index ENCODED IN
+        each region's own name (bgem fr_mesh.geometry_gmsh: f"fam_{fr.family}_{i:03d}", i =
+        position in the FractureSet) rather than by position in the alphabetically-sorted
+        fracture_regions list. Naively zipping fracture_region_ids (alphabetical) against
+        fracture_radii (generation order) — as an earlier version of this code and
+        debug_postprocess.py did — silently pairs a fracture with ANOTHER fracture's radius as
+        soon as the two orders diverge: zero-padding to 3 digits keeps alphabetical == numeric
+        order only for indices 0-999, so this first breaks at exactly 1000 fractures, not
+        gradually — confirmed empirically (chatgpt-codex-connector PR review, 2026-07-14): a
+        5615-fracture two-family DFN test mismatched 5514/5615 region-to-radius pairs this way.
+        """
+        radii = self.fracture_radii
+        return {
+            self.regions[name][0]: float(radii[int(name.rsplit("_", 1)[1])])
+            for name in self.fracture_regions
+        }
+
+    def aperture_by_region_id(self, aperture_per_r: float) -> Dict[int, float]:
+        """UNDEFORMED per-fracture aperture, keyed by region id via
+        fracture_radius_by_region_id -- single source of truth for kubc.run_kubc and
+        debug_postprocess.main, which both need exactly this dict."""
+        return {rid: aperture_per_r * radius
+                for rid, radius in self.fracture_radius_by_region_id.items()}
+
+
+def make_averaging_grid(cfg_geometry: dotdict, micro: MicroMesh) -> Grid:
+    """
+    bgem Grid of averaging windows over the inner cube (NOT imprinted in the mesh) -- single
+    source of truth for run_upscale.main, kubc.run_kubc and debug_postprocess.main, which all
+    need exactly this grid (geometry.subdomains = [1,1,1] gives the classic single window).
+    """
+    lo, hi = micro.inner_box
+    subdivision = np.asarray(cfg_geometry.get("subdomains", [1, 1, 1]))
+    return Grid(np.full(3, hi - lo), subdivision, origin=np.full(3, lo))
 
 
 @memoize
@@ -302,6 +363,11 @@ def make_micro_mesh(cfg_geometry: dotdict, cfg_mesh: dotdict, cfg_fractures: dot
     into `work_dir`); the region map is read back from the healed mesh itself.
     Top-level equivalent of chodby_trans create_mesh.main.
     """
+    # patch the two real bgem bugs above in place, here rather than at module import time so
+    # merely importing micro_mesh has no side effect on bgem process-wide
+    EllipseShape.gmsh_base_shape = _ellipse_gmsh_base_shape
+    FractureSet.from_list = classmethod(_fracture_set_from_list)
+
     L = float(cfg_geometry.L_inner)
     factor = float(cfg_geometry.get("L_ext_factor", 2.0))
     assert factor >= 1.0, f"L_ext_factor must be >= 1 (got {factor})"

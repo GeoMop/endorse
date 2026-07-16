@@ -20,7 +20,7 @@ The report format mirrors R. Siddall's original GenerateKinematicEffectiveElasti
 """
 import os
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
@@ -50,6 +50,87 @@ def equivalent_tensor(loads: np.ndarray, responses: np.ndarray) -> np.ndarray:
     return eq.to_full_tn(C_flat).reshape(6, 6)
 
 
+def spectral_properties(M: np.ndarray) -> Tuple[np.ndarray, float]:
+    """
+    Eigenvalues and spectral norm ||M||_2 of a general square matrix (R. Siddall's SVD note:
+    ||M||_2 = sigma_max(M) = sqrt(lambda_max(M^T M)), which reduces to max|eigenvalue| only for
+    a SYMMETRIC M). C_k is not exactly symmetric -- least-squares noise from the 6-case fit, small
+    but nonzero (see PLAN.md's [1,1,1] vs [2,2,2] check) -- so eigenvalues are the general spectrum
+    of C_k itself (np.linalg.eigvals; may come out as a complex-conjugate pair when that asymmetry
+    is present) and the norm goes via SVD (np.linalg.norm(..., ord=2)), NOT via max|eigenvalue|.
+    Eigenvalues are returned as a COLUMN vector, shape (n, 1) -- matching the LaTeX convention of
+    stacking vectors as columns, e.g. V = [v_1 v_2 ... v_n].
+    """
+    eigenvalues = np.linalg.eigvals(M).reshape(-1, 1)
+    spectral_norm = np.linalg.norm(M, ord=2)
+    return eigenvalues, spectral_norm
+
+
+def _write_vector(f, title, symbol, v, title_indent=26):
+    """Column layout, one entry per row -- mirrors _write_matrix's bracket/prefix convention."""
+    f.write("=" * 118 + "\n")
+    f.write(" " * title_indent + title + "\n")
+    f.write("=" * 118 + "\n\n")
+    v = np.ravel(v)
+    mid = len(v) // 2
+    for i, x in enumerate(v):
+        prefix = f"{symbol} =".ljust(8) if i == mid else " " * 8
+        entry = f"{x.real:+.6e}{x.imag:+.6e}j" if np.iscomplexobj(v) else f"{x:.6e}"
+        f.write(f"{prefix} [ {entry:>28s} ]\n")
+    f.write("\n\n")
+
+
+def write_all_reports(cfg, micro, grid, results: List["LoadCaseResult"]) -> List[np.ndarray]:
+    """
+    Assemble and write the effective-tensor report for every averaging window in `grid` -- single
+    source of truth for the tensor-assembly step, used identically by run_upscale.py (after a real
+    Flow123d run) and debug_postprocess.py (against cached outputs, no Docker): both already build
+    the same `micro`/`grid` beforehand, so recomputing the reports for an existing run needs no
+    resimulation, just re-running this loop against the cached mechanics_fields.msh files.
+    Returns the list of C_k matrices, one per window (grid order).
+    """
+    report_name = cfg.output.report_name
+    subdivision = [int(v) for v in cfg.geometry.get("subdomains", [1, 1, 1])]
+    geo_radii = micro.fracture_radii
+    meta = dict(
+        L_inner=cfg.geometry.L_inner,
+        L_ext_factor=cfg.geometry.get("L_ext_factor", 2.0),
+        subdomains=subdivision,
+        beta=cfg.loads.deformation_parameter_beta,
+        E_rock=cfg.materials.young_modulus_rock,
+        nu_rock=cfg.materials.poisson_ratio_rock,
+        E_fracture=cfg.materials.young_modulus_fracture,
+        nu_fracture=cfg.materials.poisson_ratio_fracture,
+        fractures=[(float(rho), list(map(float, center)), list(map(float, normal)))
+                   for rho, center, normal
+                   in zip(geo_radii, micro.fractures.center, micro.fractures.normal)],
+    )
+    n_sub = int(grid.n_elements)
+    all_C = []
+    for i_sub, center in enumerate(grid.barycenters()):
+        lo3, hi3 = center - grid.step / 2.0, center + grid.step / 2.0
+        E, Sigma = assemble_matrices(results, i_sub)
+        C_k = equivalent_tensor(E, Sigma)
+        meta_i = dict(meta)
+        meta_i["subdomain_box"] = [list(np.round(lo3, 6)), list(np.round(hi3, 6))]
+        if n_sub == 1:
+            report_path = report_name
+        else:
+            ix, iy, iz = np.unravel_index(i_sub, tuple(grid.shape))
+            report_path = os.path.join(f"subdomain_{ix}_{iy}_{iz}", report_name)
+        write_report(report_path, results, E, Sigma, C_k, meta_i)
+        all_C.append(C_k)
+
+        if n_sub == 1:
+            with np.printoptions(precision=3, suppress=False, linewidth=140):
+                print("\nC_k:\n", C_k)
+        else:
+            ix, iy, iz = np.unravel_index(i_sub, tuple(grid.shape))
+            print(f"  subdomain ({ix},{iy},{iz}): "
+                  f"C11 = {C_k[0, 0]:.4e}  C33 = {C_k[2, 2]:.4e}  C66 = {C_k[5, 5]:.4e}")
+    return all_C
+
+
 def _write_matrix(f, title, symbol, M, title_indent=26):
     f.write("=" * 118 + "\n")
     f.write(" " * title_indent + title + "\n")
@@ -64,10 +145,12 @@ def _write_matrix(f, title, symbol, M, title_indent=26):
 def write_report(path: str, results, E, Sigma, C, meta: dict,
                  bc_label: str = "kinematic boundary conditions", symbol_suffix: str = "k"):
     """
-    Sigma, E (measured), C_<suffix>, S_<suffix>, source VTU list.
+    Sigma, E (measured), C_<suffix>, S_<suffix>, eigenvalues/spectral norm of C_<suffix>, source
+    VTU list.
     """
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     S = np.linalg.inv(C)
+    eigenvalues, spectral_norm = spectral_properties(C)
     c_sym, s_sym = f"C_{symbol_suffix}", f"S_{symbol_suffix}"
     with open(path, "w") as f:
         f.write(f"upscale_m effective elastic tensor report ({bc_label})\n")
@@ -82,6 +165,9 @@ def write_report(path: str, results, E, Sigma, C, meta: dict,
                       c_sym, C, title_indent=18)
         _write_matrix(f, f"Compliance Tensor {s_sym} (inverse of {c_sym}) for {bc_label}",
                       s_sym, S, title_indent=18)
+        _write_vector(f, f"Eigenvalues of {c_sym} for {bc_label}", f"eig({c_sym})", eigenvalues,
+                     title_indent=18)
+        f.write(f"Spectral norm ||{c_sym}||_2 = {spectral_norm:.6e}\n\n")
 
         f.write("-" * 118 + "\n")
         f.write("Result computed using the following Flow123d output files:\n")
