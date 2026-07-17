@@ -96,6 +96,8 @@ def time_columns(output_dir: Path, config_path: Path, result_size: int) -> list[
     times = result_time_values(output_dir, config_path, result_size)
     if times is None:
         return [f"t_{idx}" for idx in range(result_size)]
+    else:
+        return times
 
 
 def iter_completed_sample_dirs(output_dir: Path) -> Iterable[Path]:
