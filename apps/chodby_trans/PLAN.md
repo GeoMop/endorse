@@ -147,6 +147,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-17: Added continue-mode handling for
+  `sequential_saltelli_samples.py`: existing `status.json` files are treated
+  as authoritative for restart, unfinished sample dirs without status are
+  rerun, and `summary.json` is rebuilt from on-disk statuses at the end.
 - 2026-07-15: Made `ensure_mlmc_level_zarr_storage()` recreate stale local
   MLMC level groups when their shape or expanded `param_name` axis no longer
   matches the current transport config, avoiding reuse of incompatible

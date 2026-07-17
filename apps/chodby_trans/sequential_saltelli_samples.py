@@ -93,6 +93,73 @@ def atomic_write_json(path: Path, payload: dict) -> None:
     os.replace(tmp, path)
 
 
+def sample_dir_name(level_id: int, sample_index: int, term_name: str) -> str:
+    return f"L{level_id:02d}_S{sample_index:07d}_{term_name}"
+
+
+def load_status(status_path: Path) -> dict | None:
+    try:
+        return json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def existing_sample_status(sample_dir: Path) -> dict | None:
+    status_path = sample_dir / "status.json"
+    result_path = sample_dir / "result.npz"
+    status = load_status(status_path)
+    if status is None:
+        return None
+    if status.get("status") == "ok" and not result_path.exists():
+        return None
+    return status
+
+
+def collect_existing_statuses(output_dir: Path) -> list[dict]:
+    statuses = []
+    for status_path in sorted(output_dir.glob("L*_*/status.json")):
+        status = load_status(status_path)
+        if status is not None:
+            statuses.append(status)
+
+    def sort_key(item: dict) -> tuple[int, int, int, str]:
+        return (
+            int(item.get("level_id", -1)),
+            int(item.get("sample_index", -1)),
+            int(item.get("term_index", -1)),
+            str(item.get("term", "")),
+        )
+
+    return sorted(statuses, key=sort_key)
+
+
+def write_summary(
+    *,
+    output_dir: Path,
+    cfg_path: Path,
+    workdir: Path,
+    level_id: int,
+    seed: int,
+    n_saltelli: int,
+    groups: list[str],
+    disable_memoize: bool,
+) -> dict:
+    summary = {
+        "config": str(cfg_path),
+        "workdir": str(workdir),
+        "output_dir": str(output_dir),
+        "level_id": level_id,
+        "seed": seed,
+        "n_saltelli": n_saltelli,
+        "n_groups": len(groups),
+        "groups": groups,
+        "disable_memoize": bool(disable_memoize),
+        "statuses": collect_existing_statuses(output_dir),
+    }
+    atomic_write_json(output_dir / "summary.json", summary)
+    return summary
+
+
 def read_sample_times(
     sample_dir: str | Path,
 ) -> tuple[float, float]:
@@ -174,7 +241,7 @@ def run_one_term(
     group_row: np.ndarray,
     finer_sample_count: int,
 ) -> dict:
-    sample_dir = output_dir / f"L{level_id:02d}_S{sample_index:07d}_{term_name}"
+    sample_dir = output_dir / sample_dir_name(level_id, sample_index, term_name)
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     config_dict = {
@@ -279,22 +346,19 @@ def run_sequential_saltelli(args: argparse.Namespace) -> int:
     b_matrix = make_group_matrix(sa_obj, args.n_saltelli)
 
     sim = transport_simulation.TransportSimulation(cfg, workdir)
-    summary = {
-        "config": str(cfg_path),
-        "workdir": str(workdir),
-        "output_dir": str(output_dir),
-        "level_id": args.level_id,
-        "seed": args.seed,
-        "n_saltelli": args.n_saltelli,
-        "n_groups": len(sa_obj.groups),
-        "groups": list(sa_obj.groups),
-        "disable_memoize": bool(args.disable_memoize),
-        "statuses": [],
-    }
-
     n_saltelli_terms = 2 * (len(sa_obj.groups) + 1)
     for i_sample in range(args.n_saltelli):
         for i_term, (term_name, group_row) in enumerate(saltelli_terms(a_matrix[i_sample], b_matrix[i_sample])):
+            sample_dir = output_dir / sample_dir_name(args.level_id, i_sample, term_name)
+            if args.continue_run:
+                existing_status = existing_sample_status(sample_dir)
+                if existing_status is not None:
+                    logging.info(
+                        "Skipping existing sample %s with status=%s",
+                        sample_dir.name,
+                        existing_status.get("status"),
+                    )
+                    continue
             logging.info("Running sample %s term %s", i_sample, term_name)
             status = run_one_term(
                 sim=sim,
@@ -315,11 +379,29 @@ def run_sequential_saltelli(args: argparse.Namespace) -> int:
                 status["status"],
                 status["elapsed_sec"],
             )
-            summary["statuses"].append(status)
-            atomic_write_json(output_dir / "summary.json", summary)
             if status["status"] != "ok" and args.stop_on_error:
-                return 1
+                summary = write_summary(
+                    output_dir=output_dir,
+                    cfg_path=cfg_path,
+                    workdir=workdir,
+                    level_id=args.level_id,
+                    seed=args.seed,
+                    n_saltelli=args.n_saltelli,
+                    groups=list(sa_obj.groups),
+                    disable_memoize=args.disable_memoize,
+                )
+                return 1 if any(s["status"] != "ok" for s in summary["statuses"]) else 0
 
+    summary = write_summary(
+        output_dir=output_dir,
+        cfg_path=cfg_path,
+        workdir=workdir,
+        level_id=args.level_id,
+        seed=args.seed,
+        n_saltelli=args.n_saltelli,
+        groups=list(sa_obj.groups),
+        disable_memoize=args.disable_memoize,
+    )
     n_failed = sum(1 for status in summary["statuses"] if status["status"] != "ok")
     logging.info("Sequential Saltelli run finished, failed=%s/%s", n_failed, len(summary["statuses"]))
     return 1 if n_failed else 0
@@ -348,6 +430,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", type=Path, default=DEFAULT_INPUT_DIR, help="Source real input_data directory.")
     parser.add_argument("--config-name", default="transport_mlmc.yaml", help="Config file name inside input_data.")
     parser.add_argument("--output-dir", default="sequential_saltelli", help="Output subdirectory under workdir.")
+    parser.add_argument(
+        "--continue",
+        action="store_true",
+        dest="continue_run",
+        help="Skip samples that already have a status file and rebuild summary.json at the end.",
+    )
     parser.add_argument("--overwrite-input", action="store_true", help="Replace workdir/input_data before running.")
     parser.add_argument(
         "--enable-memoize",
