@@ -17,13 +17,11 @@ ot_sensitivity:
 mlmc:
   sim_class: RandomTransportSimulation
   levels:
-    - id: 0
-      fr_min_limit: 0
-      task_size: 10
-      params: {}
-    - id: 1
-      fr_min_limit: 5.0
+    - fr_min_limit: 5.0
       task_size: 1
+      params: {}
+    - fr_min_limit: 0
+      task_size: 10
       params: {}
 
 transport_fullscale:

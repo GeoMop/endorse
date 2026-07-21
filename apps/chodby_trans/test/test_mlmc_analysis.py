@@ -38,7 +38,7 @@ def _write_test_hdf(path: Path, schema: SaltelliSchema, n_outputs: int = 2) -> N
         )
     ]
     storage = SampleStorageHDF(str(path))
-    storage.save_global_data(level_parameters=[[10.0], [1.0]], result_format=result_format)
+    storage.save_global_data(level_parameters=[[1.0], [10.0]], result_format=result_format)
 
     successful = {0: [], 1: []}
     for i_sample in range(4):

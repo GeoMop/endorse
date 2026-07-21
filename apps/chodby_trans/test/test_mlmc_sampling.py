@@ -79,8 +79,8 @@ def test_goal3_prepare_samples_prefixes_finer_count(tmp_path: Path):
         finer_samples_collected=lambda _sample_ids: 7,
     )
 
-    coarse_level = simulation.level_instance([10.0], [0])
-    fine_level = simulation.level_instance([1.0], [10.0])
+    coarse_level = simulation.level_instance([1.0], [0])
+    fine_level = simulation.level_instance([10.0], [1.0])
 
     coarse_input = coarse_level.prepare_samples(["L00_S0000000"])[0][1]
     fine_input = fine_level.prepare_samples(["L01_S0000000"])[0][1]
@@ -104,9 +104,9 @@ def test_goal3_grouped_sample_runs_transport_simulation(tmp_path: Path):
         finer_samples_collected=lambda _sample_ids: 3,
     )
 
-    assert mlmc_level_parameters(cfg) == [[10.0], [1.0]]
+    assert mlmc_level_parameters(cfg) == [[1.0], [10.0]]
 
-    level_sim = simulation.level_instance([1.0], [10.0])
+    level_sim = simulation.level_instance([10.0], [1.0])
     sample_input = level_sim.prepare_samples(["L01_S0000000"])[0]
     pool_dir = tmp_path / "pool"
     pool_dir.mkdir()
@@ -183,12 +183,12 @@ def test_transport_simulation(smart_tmp_path: Path):
     #cfg = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
     simulation = make_transport_simulation(cfg)
 
-    fine_level_sim = simulation.make_level_simulation([1.0], [10.0], level_id=1)
+    fine_level_sim = simulation.make_level_simulation([10.0], [1.0], level_id=1)
 
     sample_input = np.concatenate(
         (
             np.full(len(sa_obj.groups), 0.5, dtype=float),
-            np.array([0.0], dtype=float),
+            np.array([0.0, 0.0], dtype=float),
         )
     )
     pool_dir = workdir / "pool"
@@ -205,7 +205,7 @@ def test_transport_simulation(smart_tmp_path: Path):
 
     assert sample_id == "L01_S0000000"
     assert err_msg == ""
-    assert fine_level_sim.config_dict["level_id"] == 0
+    assert fine_level_sim.config_dict["level_id"] == 1
     assert fine_result.shape == (expected_len,)
     assert coarse_result.shape == (expected_len,)
     assert np.all(np.isfinite(fine_result))
@@ -227,7 +227,7 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
         finer_samples_collected=lambda _sample_ids: 0,
     )
 
-    level_sim = simulation.level_instance([1.0], [10.0])
+    level_sim = simulation.level_instance([1.0], [0])
     sample_input = level_sim.prepare_samples(["L00_S0000000"])[0]
     sample_id = sample_input[0]
     with common.workdir(str(workdir / "pool" / sample_id), clean=True):
@@ -241,10 +241,10 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
         group="mlmc/level_00",
         consolidated=False,
     )
-    assert ds["fine_return_code"].isel(i_sample=0, i_saltelli=0).item() == 0
-    assert ds["coarse_return_code"].isel(i_sample=0, i_saltelli=0).item() == 0
-    assert ds["fine_eval_time"].isel(i_sample=0, i_saltelli=0).item() == 0.0
-    assert ds["coarse_eval_time"].isel(i_sample=0, i_saltelli=0).item() == 0.0
+    assert ds["fine_return_code"].isel(i_sample=0, i_saltelli=0).to_numpy().item() == 0
+    assert ds["coarse_return_code"].isel(i_sample=0, i_saltelli=0).to_numpy().item() == 0
+    assert ds["fine_eval_time"].isel(i_sample=0, i_saltelli=0).to_numpy().item() == 0.0
+    assert ds["coarse_eval_time"].isel(i_sample=0, i_saltelli=0).to_numpy().item() == 0.0
     assert np.any(ds["fine_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.any(ds["coarse_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.all(np.isfinite(ds["parameter"].isel(i_sample=0, i_saltelli=0).to_numpy()))

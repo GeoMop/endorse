@@ -147,6 +147,27 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-21: Added an explicit MLMC Zarr capacity guard in
+  `transport_simulation.py` so writes now fail with a direct
+  `sample_id/saltelli_id outside storage extent` error instead of an opaque
+  xarray dimension-mismatch when the planned MLMC sample count exceeds the
+  fixed-capacity Zarr layout.
+- 2026-07-21: Fixed two MLMC Zarr write regressions found in
+  `workdir_test/logs/worker_0.log`: per-level storage creation now checks for
+  the specific `mlmc/level_XX` group instead of the root store, and the
+  Dask-region lock helper now derives chunk lengths from the `i_sample` and
+  `i_saltelli` dimensions directly.
+- 2026-07-21: Moved MLMC mesh-level patching into
+  `chodby_trans/mlmc_levels.py` and reused it from both
+  `fullscale_transport.py` and `mesh/run_create_mesh.py`. While rewiring the
+  helper, fixed the remaining old-order coarse/fine neighbor direction in
+  `fullscale_transport.py` to match the new `cfg.mlmc.levels` order.
+- 2026-07-21: Updated the MLMC level-order contract to follow
+  `cfg.mlmc.levels` directly as `coarse -> fine`: removed the reverse mapping
+  from `mlmc_level_parameters()`, switched staged scheduling and finer-sample
+  gating to computed coarse/fine indices, and aligned local fixtures/helpers
+  that still assumed the older `fine -> coarse` config order or explicit
+  per-level `id` fields.
 - 2026-07-17: Added continue-mode handling for
   `sequential_saltelli_samples.py`: existing `status.json` files are treated
   as authoritative for restart, unfinished sample dirs without status are
@@ -327,3 +348,10 @@ Resolved:
 - 2026-07-13 local verification note: `py_compile` passes for the Goal 4
   changes, but the focused local MLMC Zarr probe still hangs during runtime
   execution in this environment before a clean passing test result is reached.
+- 2026-07-21 investigation note: current MLMC scheduling count and MLMC Zarr
+  capacity are driven by different config fields. `run_mlmc_sampling()`
+  schedules from `cfg.mlmc.levels[*].min_samples` (currently 10 in
+  `transport_mlmc.yaml`), while `ensure_mlmc_level_zarr_storage()` allocates
+  `i_sample` from `cfg.ot_sensitivity.n_samples` (currently 4 in
+  `_ot_sensitivity.yaml`). These values must match, or one side must be made
+  authoritative.

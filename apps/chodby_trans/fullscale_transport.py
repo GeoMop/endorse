@@ -34,6 +34,7 @@ from endorse.homogenisation import MacroTetra, Subdomain
 
 import chodby_trans.job as job
 import chodby_trans.input_data as input_data
+from chodby_trans.mlmc_levels import coarsest_level_id, update_mesh_cfg
 from chodby_trans.mesh.create_mesh import make_fractures, make_mesh
 from chodby_trans import ot_sa
 
@@ -106,14 +107,6 @@ def update_dfn_params(cfg_fr, param_dict):
         dfn_cfg = population_parametrized(cfg_fr.population, param_dict)
     else:
         raise Exception("Fracture population not set, neither template file given.")
-
-
-def update_mesh_cfg(cfg_mesh, level_dict):
-
-    mcfg = common.apply_variant(cfg_mesh, level_dict.params)
-    # assert mcfg == cfg_mesh
-    mcfg.mesh_name = mcfg.mesh_name + f"_L{level_dict.id}"
-    return mcfg
 
 
 @memoize
@@ -200,7 +193,7 @@ def transport_run(cfg, level_id, param_dict):
         fine_eval_time = time.time() - fine_t0
 
     logging.info(f"sample dir: {os.getcwd()}")
-    if level_id < len(cfg.mlmc.levels) - 1:
+    if level_id > coarsest_level_id(cfg):
         with common.workdir("macro_trans", clean=False):
             logging.info(f"macro dir: {os.getcwd()}")
             coarse_t0 = time.time()
@@ -215,8 +208,9 @@ def transport_run(cfg, level_id, param_dict):
 
 def prepare_common_homogenization_mesh(cfg):
     # macro homogenization: homogenization mesh
-    macro_level = cfg.mlmc.levels[-1]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
+    macro_level_id = coarsest_level_id(cfg)
+    macro_level = cfg.mlmc.levels[macro_level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level_id, macro_level)
     cfg_mesh.mesh_name = homogenization_mesh_name
 
     input_dir = job.input.dir_path if job.input is not None else None
@@ -296,7 +290,7 @@ def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_i
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level_id, level)
     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
     cfg_mesh.mesh_name += f"_{variant}"
@@ -319,8 +313,9 @@ def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_i
 
     # macro: target coarse mesh
     variant = "macro"
-    macro_level = cfg.mlmc.levels[level_id + 1]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level)
+    macro_level_id = level_id - 1
+    macro_level = cfg.mlmc.levels[macro_level_id]
+    cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level_id, macro_level)
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
     logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")
     cfg_mesh.mesh_name += f"_{variant}"
@@ -373,7 +368,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     """
     variant = "fine"
     level = cfg.mlmc.levels[level_id]
-    cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+    cfg_mesh = update_mesh_cfg(cfg.mesh, level_id, level)
     cfg_mesh.mesh_name += f"_{variant}"
 
     input_msh_filepath = Path(f"input_fields.msh")

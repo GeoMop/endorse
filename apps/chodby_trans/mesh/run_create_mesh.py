@@ -5,17 +5,10 @@ import logging
 from endorse import common
 from endorse.mesh import fracture_tools
 from chodby_trans import job
+from chodby_trans.mlmc_levels import coarsest_level_id, finest_level_id, update_mesh_cfg
 from chodby_trans.mesh.create_mesh import make_fractures, make_mesh
 
 script_path = Path(__file__).absolute()
-
-
-def update_mesh_cfg(cfg_mesh, level_dict):
-
-    mcfg = common.apply_variant(cfg_mesh, level_dict.params)
-    # assert mcfg == cfg_mesh
-    mcfg.mesh_name = mcfg.mesh_name + f"_L{level_dict.id}"
-    return mcfg
 
 
 def main(cfg, workdir, dfn_seed, mesh_seed):
@@ -29,23 +22,26 @@ def main(cfg, workdir, dfn_seed, mesh_seed):
               f"avg: {fr_stats['avg_radius']},\n"
               f"med: {fr_stats['med_radius']}")
 
-        # L0 fine
-        level = cfg.mlmc.levels[0]
-        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        fine_level_id = finest_level_id(cfg)
+        coarse_level_id = coarsest_level_id(cfg)
+
+        # finest
+        level = cfg.mlmc.levels[fine_level_id]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, fine_level_id, level)
         cfg_mesh.mesh_name += "_fine"
         make_mesh(cfg_mesh, fracture_set, mesh_seed)
 
-        # L0 fine with buffer
-        level = cfg.mlmc.levels[0]
-        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        # finest with buffer
+        level = cfg.mlmc.levels[fine_level_id]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, fine_level_id, level)
         cfg_mesh.geometry.box_dimensions = [v + 2*level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
         cfg_mesh.geometry.main_tunnel.length += 2*level.buffer_width
         cfg_mesh.mesh_name += "_fine_buffer"
         make_mesh(cfg_mesh, fracture_set, mesh_seed)
 
-        # L0 coarse
-        level = cfg.mlmc.levels[1]
-        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        # coarsest
+        level = cfg.mlmc.levels[coarse_level_id]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, coarse_level_id, level)
         cfg_mesh.mesh_name += "_coarse"
         coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
         print(f"N coarse fracture set: {len(coarse_fracture_set)}")

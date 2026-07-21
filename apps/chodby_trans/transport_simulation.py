@@ -119,7 +119,7 @@ def synthetic_concentration(
     times: Sequence[float],
     level_id: int,
     parameters: Sequence[float],
-    grid_step: Iterable[int] = (4, 3, 2),
+    grid_step: Iterable[int] = (20, 20, 2),
 ) -> np.ndarray:
     """
     Build deterministic synthetic concentration data for fast Goal 1 tests.
@@ -204,13 +204,15 @@ def _make_region_locks(ds: xr.Dataset, region: dict[str, slice]) -> list[Lock]:
     except ValueError:
         return []
 
+    sample_chunk_len = ds.chunksizes["i_sample"][0]
+    saltelli_chunk_len = ds.chunksizes["i_saltelli"][0]
+
     lock_names: list[str] = []
-    for var_name, chunkshape in ds.chunksizes.items():
-        sample_chunks = _chunk_ranges(region["i_sample"], chunkshape[0])
-        saltelli_chunks = _chunk_ranges(region["i_saltelli"], chunkshape[1])
-        for i_sample_chunk in sample_chunks:
-            for i_saltelli_chunk in saltelli_chunks:
-                lock_names.append(f"zarr-{var_name}-{i_sample_chunk}-{i_saltelli_chunk}")
+    sample_chunks = _chunk_ranges(region["i_sample"], sample_chunk_len)
+    saltelli_chunks = _chunk_ranges(region["i_saltelli"], saltelli_chunk_len)
+    for i_sample_chunk in sample_chunks:
+        for i_saltelli_chunk in saltelli_chunks:
+            lock_names.append(f"zarr-i_sample-{i_sample_chunk}-i_saltelli-{i_saltelli_chunk}")
     return [Lock(name) for name in sorted(set(lock_names))]
 
 
@@ -219,7 +221,8 @@ def ensure_mlmc_level_zarr_storage(cfg: dotdict, level_id: int, n_saltelli: int)
     Create the fixed-capacity MLMC Zarr group for one transport level if it does not exist yet.
     """
     store_path = job.output.zarr_store_path
-    if store_path.exists():
+    group_path = _mlmc_level_group_path(store_path, level_id)
+    if group_path.exists():
         return
 
     group = _mlmc_level_group(level_id)
@@ -428,6 +431,22 @@ def write_mlmc_level_result(
     group = _mlmc_level_group(level_id)
     ds = xr.open_zarr(store_path, group=group, consolidated=False)
 
+    max_samples = int(ds.sizes["i_sample"])
+    max_saltelli = int(ds.sizes["i_saltelli"])
+    if not 0 <= int(sample_id) < max_samples:
+        raise ValueError(
+            "MLMC Zarr storage capacity exceeded for "
+            f"{group}: sample_id={sample_id} is outside [0, {max_samples - 1}]. "
+            f"Storage capacity comes from cfg.ot_sensitivity.n_samples={cfg.ot_sensitivity.n_samples}. "
+            "Planned MLMC sample count must not exceed this value."
+        )
+    if not 0 <= int(saltelli_id) < max_saltelli:
+        raise ValueError(
+            "MLMC Zarr Saltelli capacity exceeded for "
+            f"{group}: saltelli_id={saltelli_id} is outside [0, {max_saltelli - 1}]. "
+            f"Storage capacity was created for n_saltelli={max_saltelli}."
+        )
+
     region = {
         "i_sample": slice(int(sample_id), int(sample_id) + 1),
         "i_saltelli": slice(int(saltelli_id), int(saltelli_id) + 1),
@@ -502,7 +521,7 @@ def write_mlmc_level_result(
                 ),
             }
         )
-        ds_slice.to_zarr(store_path, group=group, mode="r+", region=region)
+        ds_slice.to_zarr(store_path, group=group, mode="r+", region=region, consolidated=False)
     finally:
         for lock in reversed(locks):
             lock.release()
@@ -533,6 +552,7 @@ class TransportSimulation(Simulation):
 
         config_dict = {
             "level_id": fine_level_id,
+            "n_saltelli": 1,
             "root_cfg": copy.deepcopy(self.cfg),
         }
         # AGNET:this config value is obligatory since MLMC need a relative time estiamte for the optimization of
@@ -596,7 +616,7 @@ class TransportSimulation(Simulation):
         logging.info("Running MLMC transport sample in %s, level %s.", sample_dir, level)
         logging.info("Finer-level sample count at planning time: %s", finer_level_sample_size)
 
-        fine_return_code = ReturnCode.OK
+        fine_return_code = ReturnCode.NONE
         coarse_return_code = ReturnCode.NONE
         fine_eval_time = -1.0
         coarse_eval_time = -1.0

@@ -843,10 +843,10 @@ def set_threadsafe_environ():
 
 def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
     """
-    Map transport levels ordered finest->coarsest in config to MLMC levels ordered coarsest->finest.
+    Map config levels ordered coarsest->finest to geometric MLMC selectors.
     REVIEWED.
     """
-    return [[float(10 ** level.id)] for level in reversed(cfg.mlmc.levels)]
+    return [[float(10 ** level_id)] for level_id, _level in enumerate(cfg.mlmc.levels)]
 
 
 def make_group_matrix_generator(sa_obj: ot_sa.SensitivityAnalysis) -> Callable[[int, int], np.ndarray]:
@@ -1067,6 +1067,7 @@ def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
     Initialize `job` globals on one Dask worker to match the master process.
     """
     job.set_workdir(Path(output_dir), Path(input_dir))
+    setup_logging(name=f"T{os.getpid()}")
     return job.to_str()
 
 
@@ -1102,12 +1103,11 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     # min_fine_before_coarse = int(cfg.get("min_fine_before_coarse", min(10, fine_samples)))
 
 
-    fine_target = cfg.mlmc.levels[0].min_samples
-    coarse_target = cfg.mlmc.levels[1].min_samples
-    min_fine_before_coarse = cfg.mlmc.levels[1].min_finer_samples
-
-    fine_level_id = len(level_parameters) - 1
     coarse_level_id = 0
+    fine_level_id = len(level_parameters) - 1
+    fine_target = cfg.mlmc.levels[fine_level_id].min_samples
+    coarse_target = cfg.mlmc.levels[coarse_level_id].min_samples
+    min_fine_before_coarse = cfg.mlmc.levels[coarse_level_id].min_finer_samples
 
     storage_path = job.output.mlmc_hdf_path
     storage = SampleStorageHDF(str(storage_path))
@@ -1121,8 +1121,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
 
     n_finner_samples = 0
     def finner_samples(sample_ids):
-        level, id = sample_ids[0].split('_')
-        if level != 'L01' and  n_finner_samples < min_fine_before_coarse:
+        level_tag, _sample_tag = sample_ids[0].split('_', 1)
+        if level_tag != f"L{fine_level_id:02d}" and n_finner_samples < min_fine_before_coarse:
             raise ValueError(f"Can not plan samples {sample_ids[:5]} ... "
                              f"until number of samples on finer level"
                          f"{n_finner_samples} >= {min_fine_before_coarse}")
