@@ -495,7 +495,8 @@ def _merge_mlmc_side_selection(
         selected.setdefault(key, np.asarray(parameters[idx], dtype=float))
 
 
-def _read_parameters_by_rc_mlmc(rc_select: list[int]):
+def read_parameters_by_rc(rc_select: list[int]):
+    logging.info(f"getting samples by RC: {rc_select}")
     store_path = job.output.zarr_store_path
     level_ids = _mlmc_level_ids(store_path)
     if not level_ids:
@@ -574,10 +575,6 @@ def _read_parameters_by_rc_mlmc(rc_select: list[int]):
     logging.info(f"first 20 MLMC tags:\n{tags[:20]}")
     return tags, params
 
-
-def read_parameters_by_rc(rc_select: list[int]):
-    logging.info(f"getting samples by RC: {rc_select}")
-    return _read_parameters_by_rc_mlmc(rc_select)
 
 def select_single(i_eval: int):
 

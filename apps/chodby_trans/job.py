@@ -50,7 +50,7 @@ class Input(DotDir):
     _transport_cfg_path = "transport_mlmc.yaml"
 
 class Scratch(DotDir):
-    _zarr_store_path = "transport_sampling"
+    # _zarr_store_path = "transport_sampling"
     _sensitivity_dir = "sensitivity"
     _param_dir = "parameters"
     # _empty_hdf_dir = "empty_hdfs"
