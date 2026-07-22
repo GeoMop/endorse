@@ -193,7 +193,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     for job_dir in job_dirs:
-        print(job_dir)
+        if (job_dir / "transport_sampling").exists():
+            print(f"{job_dir} skipped")
+            continue
+        else:
+            print(job_dir)
         if not args.dry_run:
             run_job(job_dir)
     return 0
