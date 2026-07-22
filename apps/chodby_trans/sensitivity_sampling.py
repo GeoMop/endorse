@@ -276,6 +276,11 @@ def gather_sample_args(data_schema_key, tags, parameters):
     logging.info(f"eval_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
     return sample_args
 
+def filter_sample_args_by_limits(sample_args, limit_samples):
+    filtered_args = [args for args in sample_args if sample_in_limit_samples(args[2][1], limit_samples)]
+    logging.info("Filtered sample args by limit_samples=%s: %d -> %d", limit_samples, len(sample_args), len(filtered_args))
+    return filtered_args
+
 def all_samples(cfg, sample_args, client=None):
     
     # Set directories to avoid NFS IO errors
@@ -302,7 +307,12 @@ def all_samples(cfg, sample_args, client=None):
         # results = list(ex.map(single_sample, bh_args))
 
     # Dask
-    t0 = time.time()    
+    sample_args = filter_sample_args_by_limits(sample_args, cfg.ot_sensitivity.limit_samples)
+    if not sample_args:
+        logging.info("No samples within limit_samples=%s, nothing to schedule.", cfg.ot_sensitivity.limit_samples)
+        return
+
+    t0 = time.time()
     futures = client.map(single_sample, sample_args, pure=False)
     results = client.gather(futures)
     logging.info("Completed %d tasks in %.2fs", len(results), time.time() - t0)
