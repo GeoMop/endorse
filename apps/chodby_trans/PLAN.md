@@ -147,6 +147,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-23: Configured Metacentrum Dask workers as non-daemonic before
+  launch so MLMC tasks can start the loky subprocess used for mesh preparation.
+  Added process name/PID/PPID/daemon logging at Dask worker initialization and
+  immediately before loky submission for post-mortem verification.
 - 2026-07-21: Added an explicit MLMC Zarr capacity guard in
   `transport_simulation.py` so writes now fail with a direct
   `sample_id/saltelli_id outside storage extent` error instead of an opaque

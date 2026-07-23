@@ -1,4 +1,5 @@
 import shutil
+import multiprocessing
 from typing import *
 import csv
 import os, sys, socket
@@ -1065,6 +1066,14 @@ def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
     """
     job.set_workdir(Path(output_dir), Path(input_dir))
     setup_logging(name=f"T{os.getpid()}")
+    process = multiprocessing.current_process()
+    logging.info(
+        "Initialized MLMC process context: name=%s pid=%s ppid=%s daemon=%s",
+        process.name,
+        os.getpid(),
+        os.getppid(),
+        process.daemon,
+    )
     return job.to_str()
 
 

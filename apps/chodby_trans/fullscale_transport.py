@@ -1,4 +1,5 @@
 import math
+import multiprocessing
 import os, sys
 import subprocess
 import pickle
@@ -52,6 +53,15 @@ def run_in_subprocess(func):
     """Execute the function in a separate process (loky) with picklable args/return."""
     @wraps(func)
     def wrapper(*args, **kwargs):
+        process = multiprocessing.current_process()
+        logging.info(
+            "Starting loky subprocess for %s from process name=%s pid=%s ppid=%s daemon=%s",
+            func.__qualname__,
+            process.name,
+            os.getpid(),
+            os.getppid(),
+            process.daemon,
+        )
         # fresh executor each call ⇒ fresh process & clean main thread
         with ProcessPoolExecutor(max_workers=1) as ex:
             fut = ex.submit(func, *args, **kwargs)
