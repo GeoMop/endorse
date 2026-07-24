@@ -147,6 +147,11 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-24: Added explicit Dask worker preloading for the heavy transport
+  module stack, including import time and peak-RSS logging, driver-side
+  readiness validation, and single-thread limits for native numerical
+  libraries. Documented worker startup, heartbeat delays, and the unchanged
+  loky/Gmsh process boundary in `DASK_WORKER_STARTUP.md`.
 - 2026-07-24: Persisted MLMC transport failures to the per-level Zarr store
   before re-raising them to MLMC. Known wrapper exceptions retain their
   geometry, mesh, healing, or Flow123d return code; unexpected exceptions use

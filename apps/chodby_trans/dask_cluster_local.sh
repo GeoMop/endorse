@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+export DASK_DISTRIBUTED__WORKER__DAEMON=False
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 # ======= EDIT THESE PATHS =======
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR=${1}
@@ -71,6 +76,7 @@ start_workers() {
   CMD=( "$DASK_BIN" worker "$addr"
       --nworkers 1 --nthreads 1
       --no-nanny
+      --preload chodby_trans.dask_worker_preload
       --local-directory "$RUNTIME_DIR"
       --memory-limit auto )
 

@@ -18,12 +18,14 @@ from chodby_trans.sensitivity_sampling import (
     make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
+    validate_mlmc_worker_preloads,
     validate_result_grid_size,
 )
 from chodby_trans.mlmc_worker import (
     TransportLevelSimulation,
     calculate_transport_saltelli,
     return_result_format,
+    transport_preload_status,
 )
 from chodby_trans.transport_simulation import (
     RandomTransportSimulation,
@@ -38,6 +40,48 @@ from chodby_trans.exception_wrapper import (
 from mlmc.sampling_pool import SamplingPool
 from mlmc.level_simulation import LevelSimulation
 script_dir = Path(__file__).absolute().parent
+
+
+def test_transport_preload_status_is_lightweight(monkeypatch):
+    monkeypatch.delitem(
+        sensitivity_sampling.sys.modules,
+        "chodby_trans.dask_worker_preload",
+        raising=False,
+    )
+
+    status = transport_preload_status()
+
+    assert status["completed"] is False
+    assert status["seconds"] is None
+    assert status["peak_rss_mib"] is None
+
+
+def test_validate_mlmc_worker_preloads():
+    with pytest.raises(RuntimeError, match="No Dask workers"):
+        validate_mlmc_worker_preloads({})
+
+    states = {
+        "tcp://worker-0": {
+            "completed": True,
+            "pid": 10,
+            "seconds": 2.5,
+            "peak_rss_mib": 512.0,
+        },
+    }
+    validate_mlmc_worker_preloads(states)
+
+    with pytest.raises(RuntimeError, match="tcp://worker-1"):
+        validate_mlmc_worker_preloads(
+            {
+                **states,
+                "tcp://worker-1": {
+                    "completed": False,
+                    "pid": 11,
+                    "seconds": None,
+                    "peak_rss_mib": None,
+                },
+            }
+        )
 
 
 def test_validate_result_grid_size():

@@ -8,6 +8,7 @@ not execute the full sensitivity-analysis driver in the Dask scheduler.
 import logging
 import os
 from pathlib import Path
+import sys
 from typing import Any, Sequence
 
 from mlmc.level_simulation import LevelSimulation
@@ -30,6 +31,27 @@ def return_result_format(result_format: list[QuantitySpec]) -> list[QuantitySpec
     Return a precomputed MLMC result format without capturing the simulation.
     """
     return result_format
+
+
+def transport_preload_status() -> dict[str, Any]:
+    """
+    Return preload state without importing the heavy transport stack.
+    """
+    module = sys.modules.get("chodby_trans.dask_worker_preload")
+    if module is None:
+        return {
+            "completed": False,
+            "pid": os.getpid(),
+            "seconds": None,
+            "peak_rss_mib": None,
+        }
+
+    return {
+        "completed": bool(getattr(module, "PRELOAD_COMPLETED", False)),
+        "pid": int(getattr(module, "PRELOAD_PID", os.getpid())),
+        "seconds": float(getattr(module, "PRELOAD_SECONDS", -1.0)),
+        "peak_rss_mib": float(getattr(module, "PRELOAD_PEAK_RSS_MIB", -1.0)),
+    }
 
 
 def _parse_sample_workspace(path: str | Path) -> tuple[int, int]:

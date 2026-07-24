@@ -48,6 +48,7 @@ from chodby_trans.mlmc_worker import (
     TransportLevelSimulation,
     calculate_transport_saltelli,
     return_result_format,
+    transport_preload_status,
 )
 from chodby_trans.exception_wrapper import ReturnCode
 import chodby_trans.transport_simulation as transport_simulation
@@ -1079,10 +1080,41 @@ def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
     return job.to_str()
 
 
+def validate_mlmc_worker_preloads(worker_states: dict[str, dict]) -> None:
+    """
+    Require every connected Dask worker to complete transport preloading.
+    """
+    if not worker_states:
+        raise RuntimeError("No Dask workers are connected for MLMC sampling.")
+
+    incomplete = [
+        worker_addr
+        for worker_addr, state in worker_states.items()
+        if not state.get("completed", False)
+    ]
+    if incomplete:
+        raise RuntimeError(
+            "MLMC transport preload did not complete on workers: "
+            + ", ".join(sorted(incomplete))
+        )
+
+    for worker_addr, state in worker_states.items():
+        logging.info(
+            "Verified MLMC transport preload on %s: pid=%s, elapsed=%.2fs, peak_rss=%.1f MiB.",
+            worker_addr,
+            state["pid"],
+            state["seconds"],
+            state["peak_rss_mib"],
+        )
+
+
 def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
     """
+    worker_preload_states = client.run(transport_preload_status)
+    validate_mlmc_worker_preloads(worker_preload_states)
+
     # initialize job dir also on scheduler
     client.run_on_scheduler(
         init_mlmc_worker_job,
