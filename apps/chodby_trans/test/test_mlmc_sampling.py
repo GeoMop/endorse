@@ -12,12 +12,13 @@ import xarray as xr
 
 from endorse import common
 
-from chodby_trans import ot_sa, job, sensitivity_sampling
+from chodby_trans import fullscale_transport, ot_sa, job, sensitivity_sampling
 from chodby_trans.sensitivity_sampling import (
     TransportSaltelliSimulation,
     make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
+    validate_result_grid_size,
 )
 from chodby_trans.mlmc_worker import (
     TransportLevelSimulation,
@@ -28,6 +29,36 @@ from chodby_trans.transport_simulation import RandomTransportSimulation
 from mlmc.sampling_pool import SamplingPool
 from mlmc.level_simulation import LevelSimulation
 script_dir = Path(__file__).absolute().parent
+
+
+def test_validate_result_grid_size():
+    data_schema = {"ATTRS": {"grid_step": [20, 20, 2]}}
+
+    assert validate_result_grid_size(
+        common.dotdict.create({"grid_size": [20, 20, 2]}),
+        data_schema,
+    ) == (20, 20, 2)
+
+    with pytest.raises(ValueError, match="does not match"):
+        validate_result_grid_size(
+            common.dotdict.create({"grid_size": [20, 10, 2]}),
+            data_schema,
+        )
+
+
+def test_process_results_uses_configured_grid_size(monkeypatch):
+    expected_values = np.ones((2, 3), dtype=float)
+    observed = {}
+
+    def get_indicator(cfg, flow_output, grid_size):
+        observed["grid_size"] = grid_size
+        return object(), expected_values
+
+    monkeypatch.setattr(fullscale_transport, "get_indicator", get_indicator)
+    cfg = common.dotdict.create({"grid_size": [20, 20, 2]})
+
+    assert fullscale_transport.process_results(cfg, object()) is expected_values
+    assert observed["grid_size"] == (20, 20, 2)
 
 
 def make_mlmc_workdir(

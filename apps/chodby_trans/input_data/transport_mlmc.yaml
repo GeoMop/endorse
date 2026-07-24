@@ -1,5 +1,6 @@
 
 test_random_data: False
+grid_size: [20, 20, 2]
 
 ot_sensitivity: !include _ot_sensitivity.yaml
 

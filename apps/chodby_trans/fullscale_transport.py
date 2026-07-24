@@ -492,12 +492,10 @@ def parametrized_run(cfg: dotdict, transport_key: str, input_fields_file:File, p
 
 
 def process_results(cfg: dotdict, fo: common.FlowOutput):
-    data_schema_path = job.input.data_schema_yaml
-    with data_schema_path.open("r", encoding="utf-8") as file:
-        content = file.read()
-        data_schema = yaml.safe_load(content)
-        grid_size = data_schema[cfg.data_schema_key]["ATTRS"]["grid_step"]
-
+    """
+    Interpolate Flow123d output onto the result grid configured for the model.
+    """
+    grid_size = tuple(int(size) for size in cfg.grid_size)
     grid, values = get_indicator(cfg, fo, grid_size)
 
     return values

@@ -355,6 +355,23 @@ def initialize_data_schema():
     return data_schema_key, data_schema[data_schema_key]
 
 
+def validate_result_grid_size(cfg: dotdict, data_schema: dict) -> tuple[int, int, int]:
+    """
+    Validate that model and storage configurations use the same result grid.
+    """
+    config_grid_size = tuple(int(size) for size in cfg.grid_size)
+    schema_grid_size = tuple(int(size) for size in data_schema["ATTRS"]["grid_step"])
+    if len(config_grid_size) != 3:
+        raise ValueError(f"Configured grid_size must have three dimensions, got {config_grid_size}.")
+    if config_grid_size != schema_grid_size:
+        raise ValueError(
+            f"Configured grid_size {config_grid_size} does not match "
+            f"data schema grid_step {schema_grid_size}."
+        )
+    logging.info("Validated result grid size against data schema: %s", config_grid_size)
+    return config_grid_size
+
+
 def setup_data_storage(cfg: dotdict,
                        store_path: str,
                        data_schema: dict,                       
@@ -1082,7 +1099,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     for worker_addr, state in worker_job_state.items():
         logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
 
-    data_schema_key, data_schema = initialize_data_schema()
+    _data_schema_key, data_schema = initialize_data_schema()
+    validate_result_grid_size(cfg, data_schema)
     with common.workdir(str(job.scratch.dir_path), clean=False):
       prepare_common_homogenization_mesh(cfg)
 

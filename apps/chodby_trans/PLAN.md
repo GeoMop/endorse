@@ -147,6 +147,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-24: Made the transport result grid an explicit `grid_size`
+  configuration value. MLMC startup validates it against the generated data
+  schema, while worker postprocessing no longer depends on a run-specific
+  `data_schema_key`.
 - 2026-07-23: Replaced bound `TransportSaltelliSimulation` Dask task
   callables with functions from the importable lightweight `mlmc_worker`
   module. Worker deserialization no longer reconstructs the directly executed
