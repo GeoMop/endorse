@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import shutil
+from functools import partial
 from pathlib import Path
 
+import cloudpickle
 import numpy as np
 import pytest
 from dask.distributed import Client
@@ -17,8 +19,14 @@ from chodby_trans.sensitivity_sampling import (
     make_group_matrix_generator,
     mlmc_level_parameters,
 )
+from chodby_trans.mlmc_worker import (
+    TransportLevelSimulation,
+    calculate_transport_saltelli,
+    return_result_format,
+)
 from chodby_trans.transport_simulation import RandomTransportSimulation
 from mlmc.sampling_pool import SamplingPool
+from mlmc.level_simulation import LevelSimulation
 script_dir = Path(__file__).absolute().parent
 
 
@@ -227,11 +235,15 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
         finer_samples_collected=lambda _sample_ids: 0,
     )
 
-    level_sim = simulation.level_instance([1.0], [0])
+    level_sim = simulation.make_level_simulation([1.0], [0], level_id=0)
     sample_input = level_sim.prepare_samples(["L00_S0000000"])[0]
+    worker_level_sim = cloudpickle.loads(cloudpickle.dumps(level_sim))
+    assert worker_level_sim._calculate is calculate_transport_saltelli
+    assert "prepare_samples" not in worker_level_sim.__dict__
+
     sample_id = sample_input[0]
     with common.workdir(str(workdir / "pool" / sample_id), clean=True):
-        result = simulation.calculate(level_sim.config_dict, sample_input[1:])
+        result = level_sim._calculate(level_sim.config_dict, sample_input[1:])
 
     assert sample_id == "L00_S0000000"
     assert result[0].shape[0] == simulation.schema.n_terms * len(simulation.result_format()[0].times)
@@ -248,3 +260,31 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
     assert np.any(ds["fine_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.any(ds["coarse_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.all(np.isfinite(ds["parameter"].isel(i_sample=0, i_saltelli=0).to_numpy()))
+
+
+class _SerializationBomb:
+    """Fail the test if driver-only planning state reaches cloudpickle."""
+
+    def __reduce__(self):
+        raise AssertionError("Driver-only Saltelli planning state was serialized")
+
+
+def test_transport_saltelli_worker_serialization_omits_planning_state():
+    planning_state = _SerializationBomb()
+
+    def prepare_samples(_sample_ids):
+        assert planning_state is not None
+        return []
+
+    level_sim = TransportLevelSimulation(config_dict={})
+    level_sim._calculate = calculate_transport_saltelli
+    level_sim._result_format = partial(return_result_format, [])
+    level_sim.prepare_samples = prepare_samples
+
+    assert level_sim.prepare_samples(["L00_S0000000"]) == []
+    restored = cloudpickle.loads(cloudpickle.dumps(level_sim))
+
+    assert "prepare_samples" not in restored.__dict__
+    assert restored._calculate is calculate_transport_saltelli
+    assert restored._calculate.__module__ == "chodby_trans.mlmc_worker"
+    assert restored._result_format() == []

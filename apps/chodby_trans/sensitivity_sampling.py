@@ -12,6 +12,7 @@ import subprocess
 import json
 import tarfile
 import traceback
+from functools import partial
 
 import matplotlib.pyplot as plt
 from scipy.stats import norm
@@ -43,6 +44,11 @@ from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 from chodby_trans.mlmc_analysis import run_mlmc_analysis
+from chodby_trans.mlmc_worker import (
+    TransportLevelSimulation,
+    calculate_transport_saltelli,
+    return_result_format,
+)
 from chodby_trans.exception_wrapper import ReturnCode
 import chodby_trans.transport_simulation as transport_simulation
 from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
@@ -908,12 +914,15 @@ class TransportSaltelliSimulation(Simulation):
             fine_level_params,
             coarse_level_params,
         )
-        level_sim = LevelSimulation(
+        level_sim = TransportLevelSimulation(
             config_dict={
                 "forward_config": {
                     **forward_level_sim.config_dict,
                     "n_saltelli": int(self.schema.n_terms),
-                }
+                },
+                "forward_simulation_class": type(self.forward_simulation).__name__,
+                "n_saltelli_terms": int(self.schema.n_terms),
+                "n_parameters": int(self.schema.n_parameters),
             },
             common_files=forward_level_sim.common_files,
             need_sample_workspace=forward_level_sim.need_sample_workspace,
@@ -926,6 +935,21 @@ class TransportSaltelliSimulation(Simulation):
             int(self.schema.n_terms),
         )
         level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
+        return level_sim
+
+    def make_level_simulation(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+        level_id: int,
+    ) -> LevelSimulation:
+        """
+        Bind only lightweight importable worker callables to the level object.
+        """
+        level_sim = self.level_instance(fine_level_params, coarse_level_params)
+        level_sim._calculate = calculate_transport_saltelli
+        level_sim._result_format = partial(return_result_format, self.result_format())
+        level_sim._level_id = level_id
         return level_sim
 
     def result_format(self) -> list[QuantitySpec]:
@@ -945,46 +969,7 @@ class TransportSaltelliSimulation(Simulation):
             )
         return result_format
 
-    def calculate(
-        self,
-        config_dict: dict[str, Any],
-        sample_input: Sequence[float],
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Evaluate all Saltelli terms for one MLMC sample.
-        """
-        if sample_input is None:
-            raise ValueError("Missing planned Saltelli sample input")
-        mlmc_level_id, mlmc_sample_id = transport_simulation.parse_sample_workspace(os.getcwd())
-        sample_dir_name = Path(os.getcwd()).name
-        # transport_level_id = int(config_dict["forward_config"]["level_id"])
-
-        sample_array = np.asarray(sample_input, dtype=float)
-        own_size = self.schema.n_terms * self.schema.n_parameters
-        sample_matrix = sample_array[:own_size].reshape(
-            self.schema.n_terms,
-            self.schema.n_parameters,
-        )
-        forward_params = sample_array[own_size:]
-        logging.info(
-            "Evaluating Saltelli MLMC sample %s (sample_no=%s) on MLMC level %s with %s terms.",
-            sample_dir_name,
-            mlmc_sample_id,
-            mlmc_level_id,
-            self.schema.n_terms,
-        )
-
-        fine_results = []
-        coarse_results = []
-        for i_saltelli, input_vector in enumerate(sample_matrix):
-            fine_result, coarse_result = self.forward_simulation.calculate(
-                config_dict["forward_config"],
-                (*input_vector, i_saltelli, *forward_params),
-            )
-            fine_results.append(np.asarray(fine_result).flatten())
-            coarse_results.append(np.asarray(coarse_result).flatten())
-
-        return np.asarray(fine_results).flatten(), np.asarray(coarse_results).flatten()
+    calculate = staticmethod(calculate_transport_saltelli)
 
     def _generate_matrix(self, n_rows: int) -> np.ndarray:
         matrix = np.asarray(

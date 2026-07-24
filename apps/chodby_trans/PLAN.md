@@ -147,6 +147,12 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-23: Replaced bound `TransportSaltelliSimulation` Dask task
+  callables with functions from the importable lightweight `mlmc_worker`
+  module. Worker deserialization no longer reconstructs the directly executed
+  `sensitivity_sampling.py` module or its driver-side sample-planning closure;
+  transport root configs cross Dask as plain built-in containers. Added a
+  focused cloudpickle regression test for the worker boundary.
 - 2026-07-23: Configured Metacentrum Dask workers as non-daemonic before
   launch so MLMC tasks can start the loky subprocess used for mesh preparation.
   Added process name/PID/PPID/daemon logging at Dask worker initialization and

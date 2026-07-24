@@ -553,10 +553,11 @@ class TransportSimulation(Simulation):
         config_dict = {
             "level_id": fine_level_id,
             "n_saltelli": 1,
-            "root_cfg": copy.deepcopy(self.cfg),
+            "root_cfg": dotdict.serialize(self.cfg),
         }
         # AGNET:this config value is obligatory since MLMC need a relative time estiamte for the optimization of
         # the samples per level; so provide it in test configs
+        # Resolved: every level reads its required relative `task_size` from the MLMC configuration below.
         task_size = float(self.cfg.mlmc.levels[fine_level_id].task_size)
         return LevelSimulation(
             config_dict=config_dict,
@@ -597,7 +598,7 @@ class TransportSimulation(Simulation):
         The real transport branch calls ``transport_run`` as requested by the
         in-code instructions.
         """
-        root_cfg = copy.deepcopy(config_dict["root_cfg"])
+        root_cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
         parameters, saltelli_index, finer_level_sample_size = TransportSimulation._parse_sample_input(sample_input)
 
         level = int(config_dict["level_id"])
@@ -677,7 +678,7 @@ class RandomTransportSimulation(TransportSimulation):
         Calculate one synthetic MLMC sample in the current sample workspace.
         """
         logging.info("start sim calculate")
-        root_cfg = copy.deepcopy(config_dict["root_cfg"])
+        root_cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
         parameters, saltelli_index, finer_level_sample_size = TransportSimulation._parse_sample_input(sample_input)
         level = int(config_dict["level_id"])
         mlmc_level_id, mlmc_sample_id = parse_sample_workspace(os.getcwd())
