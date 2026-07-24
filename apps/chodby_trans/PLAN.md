@@ -147,6 +147,10 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-24: Persisted MLMC transport failures to the per-level Zarr store
+  before re-raising them to MLMC. Known wrapper exceptions retain their
+  geometry, mesh, healing, or Flow123d return code; unexpected exceptions use
+  `UNKNOWN_ERROR`, with zero-valued concentration placeholders.
 - 2026-07-24: Made the transport result grid an explicit `grid_size`
   configuration value. MLMC startup validates it against the generated data
   schema, while worker postprocessing no longer depends on a run-specific

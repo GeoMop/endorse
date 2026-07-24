@@ -416,7 +416,7 @@ def write_mlmc_level_result(
     sample_id: int,
     saltelli_id: int,
     parameter_values: Sequence[float],
-    fine_conc: np.ndarray,
+    fine_conc: np.ndarray | None,
     coarse_conc: np.ndarray | None,
     fine_return_code: int,
     coarse_return_code: int,
@@ -458,12 +458,14 @@ def write_mlmc_level_result(
         ds.sizes["Z"],
     )
 
-    fine_array = np.asarray(fine_conc, dtype=float)
-    if fine_array.shape != expected_shape:
-        logging.warning("fine_conc shape mismatch for level %s sample %s term %s: %s != %s",
-                        level_id, sample_id, saltelli_id, fine_array.shape, expected_shape)
-        fine_array = np.zeros(expected_shape, dtype=float)
-        fine_return_code = ReturnCode.ZARR_ERROR
+    fine_array = np.zeros(expected_shape, dtype=float)
+    if fine_conc is not None:
+        fine_array = np.asarray(fine_conc, dtype=float)
+        if fine_array.shape != expected_shape:
+            logging.warning("fine_conc shape mismatch for level %s sample %s term %s: %s != %s",
+                            level_id, sample_id, saltelli_id, fine_array.shape, expected_shape)
+            fine_array = np.zeros(expected_shape, dtype=float)
+            fine_return_code = ReturnCode.ZARR_ERROR
 
     coarse_array = np.zeros(expected_shape, dtype=float)
     if coarse_conc is not None:
@@ -525,6 +527,52 @@ def write_mlmc_level_result(
     finally:
         for lock in reversed(locks):
             lock.release()
+
+
+def failure_return_code(error: Exception) -> int:
+    """
+    Map known transport exceptions to stable Zarr return codes.
+    """
+    if isinstance(error, WrapperException):
+        return int(error.code)
+    return ReturnCode.UNKNOWN_ERROR
+
+
+def write_mlmc_failure_result(
+    *,
+    cfg: dotdict,
+    level_id: int,
+    n_saltelli: int,
+    sample_id: int,
+    saltelli_id: int,
+    parameter_values: Sequence[float],
+    return_code: int,
+) -> None:
+    """
+    Persist failure metadata without masking the original model exception.
+    """
+    try:
+        write_mlmc_level_result(
+            cfg=cfg,
+            level_id=level_id,
+            n_saltelli=n_saltelli,
+            sample_id=sample_id,
+            saltelli_id=saltelli_id,
+            parameter_values=parameter_values,
+            fine_conc=None,
+            coarse_conc=None,
+            fine_return_code=return_code,
+            coarse_return_code=return_code,
+            fine_eval_time=-1.0,
+            coarse_eval_time=-1.0,
+        )
+    except Exception:
+        logging.exception(
+            "Failed to persist MLMC failure metadata for level %s sample %s term %s.",
+            level_id,
+            sample_id,
+            saltelli_id,
+        )
 
 
 class TransportSimulation(Simulation):
@@ -623,6 +671,7 @@ class TransportSimulation(Simulation):
         coarse_eval_time = -1.0
         fine_values: np.ndarray | None = None
         coarse_values: np.ndarray | None = None
+        parameter_values = full_parameter_values(cfg, full_param_dict)
 
         try:
             (
@@ -633,9 +682,17 @@ class TransportSimulation(Simulation):
                 fine_eval_time,
                 coarse_eval_time,
             ) = transport.transport_run(cfg, level, full_param_dict)
-        except WrapperException as exc:
-            fine_return_code = int(exc.code)
-            coarse_return_code = int(exc.code)
+        except Exception as exc:
+            return_code = failure_return_code(exc)
+            write_mlmc_failure_result(
+                cfg=cfg,
+                level_id=level,
+                n_saltelli=int(config_dict["n_saltelli"]),
+                sample_id=mlmc_sample_id,
+                saltelli_id=saltelli_index,
+                parameter_values=parameter_values,
+                return_code=return_code,
+            )
             raise
 
         logging.info(
@@ -644,7 +701,6 @@ class TransportSimulation(Simulation):
             None if coarse_values is None else coarse_values.shape,
         )
 
-        parameter_values = full_parameter_values(cfg, full_param_dict)
         write_mlmc_level_result(
             cfg=cfg,
             level_id=level,

@@ -25,7 +25,16 @@ from chodby_trans.mlmc_worker import (
     calculate_transport_saltelli,
     return_result_format,
 )
-from chodby_trans.transport_simulation import RandomTransportSimulation
+from chodby_trans.transport_simulation import (
+    RandomTransportSimulation,
+    TransportSimulation,
+    failure_return_code,
+)
+from chodby_trans.exception_wrapper import (
+    Flow123dException,
+    MeshException,
+    ReturnCode,
+)
 from mlmc.sampling_pool import SamplingPool
 from mlmc.level_simulation import LevelSimulation
 script_dir = Path(__file__).absolute().parent
@@ -59,6 +68,66 @@ def test_process_results_uses_configured_grid_size(monkeypatch):
 
     assert fullscale_transport.process_results(cfg, object()) is expected_values
     assert observed["grid_size"] == (20, 20, 2)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_code"),
+    [
+        (MeshException("mesh failed"), ReturnCode.BGEM_GMSH_ERROR),
+        (Flow123dException("flow failed"), ReturnCode.FLOW123_ERROR),
+        (RuntimeError("unexpected failure"), ReturnCode.UNKNOWN_ERROR),
+    ],
+)
+def test_failure_return_code(error, expected_code):
+    assert failure_return_code(error) == expected_code
+
+
+def test_transport_failure_is_written_to_mlmc_zarr(smart_tmp_path: Path, monkeypatch):
+    workdir = make_full_input_workdir(smart_tmp_path, "transport_failure_zarr")
+    input_dir = workdir / "input_data"
+    job.set_workdir(workdir, input_dir)
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    simulation = TransportSimulation(cfg, workdir)
+    level_sim = simulation.make_level_simulation([1.0], [0], level_id=0)
+    sample_input = np.concatenate(
+        (
+            np.full(len(sa_obj.groups), 0.5, dtype=float),
+            np.array([0.0, 0.0], dtype=float),
+        )
+    )
+
+    def fail_transport(*_args, **_kwargs):
+        raise MeshException("synthetic mesh failure")
+
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation.transport,
+        "transport_run",
+        fail_transport,
+    )
+    sample_dir = workdir / "pool" / "L00_S0000000"
+    with common.workdir(str(sample_dir), clean=True):
+        with pytest.raises(MeshException, match="synthetic mesh failure"):
+            level_sim._calculate(level_sim.config_dict, sample_input)
+
+    ds = xr.open_zarr(
+        str(job.output.zarr_store_path),
+        group="mlmc/level_00",
+        consolidated=False,
+    )
+    term = {"i_sample": 0, "i_saltelli": 0}
+    fine_code = ds["fine_return_code"].isel(**term).to_numpy().item()
+    coarse_code = ds["coarse_return_code"].isel(**term).to_numpy().item()
+    fine_time = ds["fine_eval_time"].isel(**term).to_numpy().item()
+    coarse_time = ds["coarse_eval_time"].isel(**term).to_numpy().item()
+    assert fine_code == ReturnCode.BGEM_GMSH_ERROR
+    assert coarse_code == ReturnCode.BGEM_GMSH_ERROR
+    assert fine_time == -1.0
+    assert coarse_time == -1.0
+    assert np.count_nonzero(ds["fine_conc"].isel(**term).to_numpy()) == 0
+    assert np.count_nonzero(ds["coarse_conc"].isel(**term).to_numpy()) == 0
+    assert np.all(np.isfinite(ds["parameter"].isel(**term).to_numpy()))
 
 
 def make_mlmc_workdir(
