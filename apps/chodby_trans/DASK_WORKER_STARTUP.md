@@ -92,6 +92,11 @@ sample on that worker.
 The driver-side check reports each worker's preload time, process ID, and peak resident memory. It fails before
 sampling if any connected worker has not completed the preload.
 
+The scheduler starts with the separate `chodby_trans.dask_scheduler_preload` module. It imports the lightweight
+`mlmc_worker` task module before registering workers or accepting the sampling client. This moves the scheduler's
+first task-module import out of graph submission. The driver checks and logs scheduler preload time, process ID, and
+peak resident memory before checking workers.
+
 Worker launch scripts also set these native-library thread limits:
 
 ```text
@@ -121,10 +126,11 @@ first measure child startup separately and consider Gmsh state, working-director
 
 ## Reading Startup Logs
 
-A healthy worker log should show a successful transport-preload message with elapsed seconds and peak RSS
-before normal Dask registration. It should later show the `Initialized MLMC process context` message and the first
-`Evaluating Saltelli MLMC sample` message without a new cold-import delay. The driver log separately confirms the
-preload state reported by every worker.
+A healthy scheduler log should show its preload before the scheduler starts accepting connections. A healthy worker
+log should show a successful transport-preload message with elapsed seconds and peak RSS before normal Dask
+registration. It should later show the `Initialized MLMC process context` message and the first `Evaluating Saltelli
+MLMC sample` message without a new cold-import delay. The driver log separately confirms the preload state reported
+by the scheduler and every worker.
 
-Preload failures should be treated as worker-startup failures. A worker that registers without preload completion is
+Preload failures should be treated as cluster-startup failures. A scheduler or worker without preload completion is
 rejected by the MLMC driver's readiness validation.

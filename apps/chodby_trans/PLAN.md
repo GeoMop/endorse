@@ -147,6 +147,9 @@ Resolved:
 
 
 ## AGENT Log
+- 2026-07-24: Added timed scheduler preloading of the lightweight MLMC task
+  module, with peak-RSS reporting and driver-side readiness validation, to
+  move the remaining first task-module import out of graph submission.
 - 2026-07-24: Added explicit Dask worker preloading for the heavy transport
   module stack, including import time and peak-RSS logging, driver-side
   readiness validation, and single-thread limits for native numerical

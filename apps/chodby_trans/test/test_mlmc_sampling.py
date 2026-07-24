@@ -18,6 +18,7 @@ from chodby_trans.sensitivity_sampling import (
     make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
+    validate_mlmc_scheduler_preload,
     validate_mlmc_worker_preloads,
     validate_result_grid_size,
 )
@@ -25,6 +26,7 @@ from chodby_trans.mlmc_worker import (
     TransportLevelSimulation,
     calculate_transport_saltelli,
     return_result_format,
+    scheduler_preload_status,
     transport_preload_status,
 )
 from chodby_trans.transport_simulation import (
@@ -54,6 +56,34 @@ def test_transport_preload_status_is_lightweight(monkeypatch):
     assert status["completed"] is False
     assert status["seconds"] is None
     assert status["peak_rss_mib"] is None
+
+
+def test_scheduler_preload_status_is_lightweight(monkeypatch):
+    monkeypatch.delitem(
+        sensitivity_sampling.sys.modules,
+        "chodby_trans.dask_scheduler_preload",
+        raising=False,
+    )
+
+    status = scheduler_preload_status()
+
+    assert status["completed"] is False
+    assert status["seconds"] is None
+    assert status["peak_rss_mib"] is None
+
+
+def test_validate_mlmc_scheduler_preload():
+    with pytest.raises(RuntimeError, match="Dask scheduler"):
+        validate_mlmc_scheduler_preload({"completed": False})
+
+    validate_mlmc_scheduler_preload(
+        {
+            "completed": True,
+            "pid": 9,
+            "seconds": 1.5,
+            "peak_rss_mib": 256.0,
+        }
+    )
 
 
 def test_validate_mlmc_worker_preloads():

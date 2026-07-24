@@ -33,11 +33,11 @@ def return_result_format(result_format: list[QuantitySpec]) -> list[QuantitySpec
     return result_format
 
 
-def transport_preload_status() -> dict[str, Any]:
+def _preload_status(module_name: str) -> dict[str, Any]:
     """
-    Return preload state without importing the heavy transport stack.
+    Return preload state without importing the target module.
     """
-    module = sys.modules.get("chodby_trans.dask_worker_preload")
+    module = sys.modules.get(module_name)
     if module is None:
         return {
             "completed": False,
@@ -52,6 +52,20 @@ def transport_preload_status() -> dict[str, Any]:
         "seconds": float(getattr(module, "PRELOAD_SECONDS", -1.0)),
         "peak_rss_mib": float(getattr(module, "PRELOAD_PEAK_RSS_MIB", -1.0)),
     }
+
+
+def transport_preload_status() -> dict[str, Any]:
+    """
+    Return Dask worker transport-preload state.
+    """
+    return _preload_status("chodby_trans.dask_worker_preload")
+
+
+def scheduler_preload_status() -> dict[str, Any]:
+    """
+    Return Dask scheduler task-module preload state.
+    """
+    return _preload_status("chodby_trans.dask_scheduler_preload")
 
 
 def _parse_sample_workspace(path: str | Path) -> tuple[int, int]:

@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 # ======= EDIT THESE PATHS =======
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR=${1}
@@ -61,7 +65,12 @@ start_scheduler() {
   DASH_ADDR=":8787"
 
   echo "[sched] Starting scheduler on $HEAD_NODE ($SCHED_ADDR)..."
-  nohup "$DASK_BIN" scheduler --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
+  nohup "$DASK_BIN" scheduler \
+      --host "$HEAD_IP" \
+      --port 8786 \
+      --dashboard-address "$DASH_ADDR" \
+      --preload chodby_trans.dask_scheduler_preload \
+      >"$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # pbsdsh -vh "$HEAD_NODE" -- bash -lc `nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &`
   # pbsdsh -vh "$HEAD_NODE" -- cat "$SCRATCHDIR/logs/scheduler.log"

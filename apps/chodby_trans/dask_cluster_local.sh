@@ -50,6 +50,7 @@ start_scheduler() {
       --host "$host_ip" \
       --port "$SCHED_PORT" \
       --dashboard-address ":${DASH_PORT}" \
+      --preload chodby_trans.dask_scheduler_preload \
       >"$LOG_DIR/scheduler.log" 2>&1 < /dev/null &
 
   echo $! > "$SCHED_PID_FILE"
