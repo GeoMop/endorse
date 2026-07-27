@@ -145,8 +145,22 @@ Resolved:
      finer-level collected-sample count, and let
      `TransportSimulation.calculate()` decompose that tail before writing.
 
+- MLMC failure diagnostics:
+  1. Keep fine and coarse failure state separate in Zarr, retaining a completed
+     fine result when the following coarse calculation fails.
+  2. Add explicit fine, coarse, and homogenization failure codes and exception
+     boundaries with stage-specific logging.
+  3. Execute every Saltelli term in a persistent two-digit subdirectory below
+     its MLMC sample workspace.
+  4. Seed the OpenTURNS matrix generator explicitly and cover repeatability and
+     per-term workspace behavior with focused tests.
 
 ## AGENT Log
+- 2026-07-24: Separated fine, coarse, and homogenization failures in MLMC Zarr
+  metadata, retained completed fine data across coarse failures, and added full
+  stage and loky traceback logging. Saltelli terms now keep two-digit workdirs,
+  and production OpenTURNS matrices are explicitly seeded for repeatable fresh
+  runs with the same configuration and scheduling sequence.
 - 2026-07-24: Added timed scheduler preloading of the lightweight MLMC task
   module, with peak-RSS reporting and driver-side readiness validation, to
   move the remaining first task-module import out of graph submission.
@@ -326,6 +340,9 @@ Resolved:
   `r_limit` values.
 
 ## AGENT Questions And Remarks
+
+- 2026-07-24: `AGENTS.md` requires `python_coding.md`, but that file is not
+  present in the repository workspace and could not be reviewed.
 
 - 2026-06-22: Investigation note: the real fine `box_drilled` mesh path still
   drops boundary physical groups such as `.side_x0`, `.tunnel_head_y0`, and

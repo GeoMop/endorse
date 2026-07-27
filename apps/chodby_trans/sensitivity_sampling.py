@@ -872,11 +872,19 @@ def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
     return [[float(10 ** level_id)] for level_id, _level in enumerate(cfg.mlmc.levels)]
 
 
-def make_group_matrix_generator(sa_obj: ot_sa.SensitivityAnalysis) -> Callable[[int, int], np.ndarray]:
-    """
-    Build a generator of unit-cube matrices consistent with the configured OpenTURNS experiment design.
-    """
+def make_group_matrix_generator(
+    sa_obj: ot_sa.SensitivityAnalysis,
+    seed: int | None = None,
+) -> Callable[[int, int], np.ndarray]:
+    """Build a reproducibly seeded OpenTURNS unit-cube matrix generator."""
+    seeded = False
+
     def generate(n_rows: int, n_parameters: int) -> np.ndarray:
+        nonlocal seeded
+        if seed is not None and not seeded:
+            ot.RandomGenerator.SetSeed(int(seed))
+            seeded = True
+            logging.info("Seeded OpenTURNS Saltelli matrix generator with seed=%s.", seed)
         if n_parameters != len(sa_obj.groups):
             raise ValueError(
                 f"Saltelli requested {n_parameters} group dimensions, expected {len(sa_obj.groups)}."
@@ -1174,8 +1182,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     pool = SamplingPoolDask(
         client,
         work_dir=str(job.scratch.dir_path),
-        debug=not cfg.ot_sensitivity.clean_sample_dir,
-        clean=bool(cfg.ot_sensitivity.clean_sample_dir),
+        debug=True,
+        clean=False,
     )
 
 
@@ -1193,7 +1201,7 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     simulation = TransportSaltelliSimulation(
         cfg.mlmc.levels,
         forward_simulation=make_transport_simulation(cfg),
-        matrix_generator=make_group_matrix_generator(sa_obj),
+        matrix_generator=make_group_matrix_generator(sa_obj, seed=seed),
         n_parameters=len(sa_obj.groups),
         finer_samples_collected=finner_samples
     )

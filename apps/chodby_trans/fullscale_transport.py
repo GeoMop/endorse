@@ -65,7 +65,14 @@ def run_in_subprocess(func):
         # fresh executor each call ⇒ fresh process & clean main thread
         with ProcessPoolExecutor(max_workers=1) as ex:
             fut = ex.submit(func, *args, **kwargs)
-            return fut.result()
+            try:
+                return fut.result()
+            except Exception:
+                logging.exception(
+                    "Loky subprocess for %s failed while awaiting its result.",
+                    func.__qualname__,
+                )
+                raise
     return wrapper
 
 
@@ -192,23 +199,52 @@ def transport_prepare_run(cfg_mesh):
     return fr_pop, fracture_set, n_large
 
 
+def _stage_failure_code(error: Exception, fallback: int) -> int:
+    """Preserve a known model code or use the stage-specific fallback."""
+    if isinstance(error, exp.WrapperException):
+        return int(error.code)
+    return fallback
+
+
 def transport_run(cfg, level_id, param_dict):
     update_dfn_params(cfg.mesh.fractures, param_dict)
     fr_pop, fr_set, n_large = transport_prepare_run(cfg.mesh)
 
-    with common.workdir("fine_trans", clean=False):
-        logging.info(f"fine dir: {os.getcwd()}")
-        fine_t0 = time.time()
-        f_rc, f_values = transport_fine_run(cfg, fr_set, level_id, n_large,  param_dict)
-        fine_eval_time = time.time() - fine_t0
+    # times = output_times(cfg.transport_fullscale)
+    # ng = 20
+    # slice_array = np.random.rand(len(times), ng, ng, 2)
+    # return exp.ReturnCode.OK, slice_array, exp.ReturnCode.OK, 2 * slice_array, 0.0, 0.0
+
+    fine_t0 = time.time()
+    try:
+        with common.workdir("fine_trans", clean=False):
+            logging.info(f"fine dir: {os.getcwd()}")
+            f_rc, f_values = transport_fine_run(cfg, fr_set, level_id, n_large, param_dict)
+    except Exception as error:
+        logging.exception("Fine transport stage failed after %.1f s.", time.time() - fine_t0)
+        raise exp.FineTransportException(
+            "Fine transport stage failed.",
+            code=_stage_failure_code(error, exp.ReturnCode.FINE_TRANSPORT_ERROR),
+        ) from error
+    fine_eval_time = time.time() - fine_t0
 
     logging.info(f"sample dir: {os.getcwd()}")
     if level_id > coarsest_level_id(cfg):
-        with common.workdir("macro_trans", clean=False):
-            logging.info(f"macro dir: {os.getcwd()}")
-            coarse_t0 = time.time()
-            c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id,  param_dict)
-            coarse_eval_time = time.time() - coarse_t0
+        coarse_t0 = time.time()
+        try:
+            with common.workdir("macro_trans", clean=False):
+                logging.info(f"macro dir: {os.getcwd()}")
+                c_rc, c_values = transport_macro(cfg, fr_set, n_large, level_id, param_dict)
+        except Exception as error:
+            logging.exception("Coarse transport stage failed after %.1f s.", time.time() - coarse_t0)
+            raise exp.CoarseTransportException(
+                "Coarse transport stage failed.",
+                code=_stage_failure_code(error, exp.ReturnCode.COARSE_TRANSPORT_ERROR),
+                fine_return_code=f_rc,
+                fine_values=f_values,
+                fine_eval_time=fine_eval_time,
+            ) from error
+        coarse_eval_time = time.time() - coarse_t0
     else:
         c_rc = exp.ReturnCode.NONE
         c_values = None
@@ -319,7 +355,17 @@ def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_i
     micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
 
     macro_el_bulk = homogenization_mesh.el_dim_slice(dim=3)
-    conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
+    logging.info(
+        "Starting conductivity homogenization: micro_elements=%s macro_bulk_elements=%s.",
+        len(micro_mesh.elements),
+        macro_el_bulk.stop - macro_el_bulk.start,
+    )
+    try:
+        conductivity_file = macro_conductivity(cfg, micro_mesh, homogenization_mesh, macro_el_bulk, micro_fields)
+    except Exception as error:
+        logging.exception("Conductivity homogenization failed inside prepare_coarse_input.")
+        raise exp.HomogenizationException("Conductivity homogenization failed.") from error
+    logging.info("Conductivity homogenization completed: %s", conductivity_file)
 
     # macro: target coarse mesh
     variant = "macro"

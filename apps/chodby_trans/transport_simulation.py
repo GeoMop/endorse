@@ -20,7 +20,11 @@ from endorse.fullscale_transport import output_times
 import chodby_trans.fullscale_transport as transport
 import chodby_trans.job as job
 from chodby_trans import ot_sa
-from chodby_trans.exception_wrapper import ReturnCode, WrapperException
+from chodby_trans.exception_wrapper import (
+    CoarseTransportException,
+    ReturnCode,
+    WrapperException,
+)
 
 from mlmc.level_simulation import LevelSimulation
 from mlmc.quantity.quantity_spec import QuantitySpec
@@ -158,20 +162,29 @@ def level_selector_to_id(level_params: Sequence[float], n_levels: int) -> int | 
 
 def parse_sample_workspace(path: str | Path) -> tuple[int, int]:
     """
-    Extract the numeric MLMC level id and sample id from a sample workspace path.
+    Extract numeric MLMC ids from a sample workspace or its descendant.
     """
-    sample_dir_name = Path(path).name
-    parts = sample_dir_name.split("_")
-    if len(parts) < 2:
-        raise ValueError(f"Unexpected MLMC sample workspace format: {sample_dir_name}")
+    candidate_path = Path(path)
+    for candidate in (candidate_path, *candidate_path.parents):
+        sample_dir_name = candidate.name
+        parts = sample_dir_name.split("_")
+        if len(parts) < 2:
+            continue
 
-    level_tag, sample_tag = parts[:2]
-    if len(level_tag) < 2 or not level_tag.startswith("L"):
-        raise ValueError(f"Unexpected MLMC sample workspace level tag: {sample_dir_name}")
-    if len(sample_tag) < 2 or not sample_tag.startswith("S"):
-        raise ValueError(f"Unexpected MLMC sample workspace sample tag: {sample_dir_name}")
+        level_tag, sample_tag = parts[:2]
+        if (
+            not level_tag.startswith("L")
+            or not sample_tag.startswith("S")
+        ):
+            continue
+        try:
+            return int(level_tag[1:]), int(sample_tag[1:])
+        except ValueError:
+            continue
 
-    return int(level_tag[1:]), int(sample_tag[1:])
+    raise ValueError(
+        f"No MLMC sample workspace ancestor found for: {candidate_path}"
+    )
 
 
 def _mlmc_level_group(level_id: int) -> str:
@@ -538,6 +551,14 @@ def failure_return_code(error: Exception) -> int:
     return ReturnCode.UNKNOWN_ERROR
 
 
+def failure_return_codes(error: Exception) -> tuple[int, int]:
+    """Map a staged exception to separate fine and coarse return codes."""
+    code = failure_return_code(error)
+    if isinstance(error, CoarseTransportException):
+        return int(error.fine_return_code), code
+    return code, ReturnCode.NONE
+
+
 def write_mlmc_failure_result(
     *,
     cfg: dotdict,
@@ -546,7 +567,12 @@ def write_mlmc_failure_result(
     sample_id: int,
     saltelli_id: int,
     parameter_values: Sequence[float],
-    return_code: int,
+    fine_return_code: int,
+    coarse_return_code: int,
+    fine_conc: np.ndarray | None = None,
+    coarse_conc: np.ndarray | None = None,
+    fine_eval_time: float = -1.0,
+    coarse_eval_time: float = -1.0,
 ) -> None:
     """
     Persist failure metadata without masking the original model exception.
@@ -559,12 +585,12 @@ def write_mlmc_failure_result(
             sample_id=sample_id,
             saltelli_id=saltelli_id,
             parameter_values=parameter_values,
-            fine_conc=None,
-            coarse_conc=None,
-            fine_return_code=return_code,
-            coarse_return_code=return_code,
-            fine_eval_time=-1.0,
-            coarse_eval_time=-1.0,
+            fine_conc=fine_conc,
+            coarse_conc=coarse_conc,
+            fine_return_code=fine_return_code,
+            coarse_return_code=coarse_return_code,
+            fine_eval_time=fine_eval_time,
+            coarse_eval_time=coarse_eval_time,
         )
     except Exception:
         logging.exception(
@@ -683,7 +709,20 @@ class TransportSimulation(Simulation):
                 coarse_eval_time,
             ) = transport.transport_run(cfg, level, full_param_dict)
         except Exception as exc:
-            return_code = failure_return_code(exc)
+            fine_return_code, coarse_return_code = failure_return_codes(exc)
+            if isinstance(exc, CoarseTransportException):
+                fine_values = exc.fine_values
+                fine_eval_time = exc.fine_eval_time
+
+            logging.exception(
+                "Transport term failed: level=%s sample=%s term=%s "
+                "fine_code=%s coarse_code=%s.",
+                level,
+                mlmc_sample_id,
+                saltelli_index,
+                fine_return_code,
+                coarse_return_code,
+            )
             write_mlmc_failure_result(
                 cfg=cfg,
                 level_id=level,
@@ -691,8 +730,15 @@ class TransportSimulation(Simulation):
                 sample_id=mlmc_sample_id,
                 saltelli_id=saltelli_index,
                 parameter_values=parameter_values,
-                return_code=return_code,
+                fine_return_code=fine_return_code,
+                coarse_return_code=coarse_return_code,
+                fine_conc=fine_values,
+                coarse_conc=coarse_values,
+                fine_eval_time=fine_eval_time,
+                coarse_eval_time=coarse_eval_time,
             )
+            if isinstance(exc, CoarseTransportException):
+                exc.fine_values = None
             raise
 
         logging.info(

@@ -33,9 +33,12 @@ from chodby_trans.transport_simulation import (
     RandomTransportSimulation,
     TransportSimulation,
     failure_return_code,
+    failure_return_codes,
 )
 from chodby_trans.exception_wrapper import (
+    CoarseTransportException,
     Flow123dException,
+    HomogenizationException,
     MeshException,
     ReturnCode,
 )
@@ -149,11 +152,30 @@ def test_process_results_uses_configured_grid_size(monkeypatch):
     [
         (MeshException("mesh failed"), ReturnCode.BGEM_GMSH_ERROR),
         (Flow123dException("flow failed"), ReturnCode.FLOW123_ERROR),
+        (HomogenizationException("homogenization failed"), ReturnCode.HOMOGENIZATION_ERROR),
         (RuntimeError("unexpected failure"), ReturnCode.UNKNOWN_ERROR),
     ],
 )
 def test_failure_return_code(error, expected_code):
     assert failure_return_code(error) == expected_code
+
+
+def test_failure_return_codes_preserve_stage():
+    fine_error = MeshException("fine mesh failed")
+    coarse_error = CoarseTransportException(
+        "coarse homogenization failed",
+        code=ReturnCode.HOMOGENIZATION_ERROR,
+        fine_return_code=ReturnCode.OK,
+    )
+
+    assert failure_return_codes(fine_error) == (
+        ReturnCode.BGEM_GMSH_ERROR,
+        ReturnCode.NONE,
+    )
+    assert failure_return_codes(coarse_error) == (
+        ReturnCode.OK,
+        ReturnCode.HOMOGENIZATION_ERROR,
+    )
 
 
 def test_transport_failure_is_written_to_mlmc_zarr(smart_tmp_path: Path, monkeypatch):
@@ -196,12 +218,68 @@ def test_transport_failure_is_written_to_mlmc_zarr(smart_tmp_path: Path, monkeyp
     fine_time = ds["fine_eval_time"].isel(**term).to_numpy().item()
     coarse_time = ds["coarse_eval_time"].isel(**term).to_numpy().item()
     assert fine_code == ReturnCode.BGEM_GMSH_ERROR
-    assert coarse_code == ReturnCode.BGEM_GMSH_ERROR
+    assert coarse_code == ReturnCode.NONE
     assert fine_time == -1.0
     assert coarse_time == -1.0
     assert np.count_nonzero(ds["fine_conc"].isel(**term).to_numpy()) == 0
     assert np.count_nonzero(ds["coarse_conc"].isel(**term).to_numpy()) == 0
     assert np.all(np.isfinite(ds["parameter"].isel(**term).to_numpy()))
+
+
+def test_coarse_failure_retains_fine_result(smart_tmp_path: Path, monkeypatch):
+    workdir = make_full_input_workdir(smart_tmp_path, "coarse_failure_zarr")
+    input_dir = workdir / "input_data"
+    job.set_workdir(workdir, input_dir)
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    simulation = TransportSimulation(cfg, workdir)
+    level_sim = simulation.make_level_simulation([10.0], [1.0], level_id=1)
+    sample_input = np.concatenate(
+        (
+            np.full(len(sa_obj.groups), 0.5, dtype=float),
+            np.array([0.0, 0.0], dtype=float),
+        )
+    )
+    fine_values = np.ones(
+        (len(fullscale_transport.output_times(cfg.transport_fullscale)), *cfg.grid_size),
+        dtype=float,
+    )
+
+    def fail_coarse(*_args, **_kwargs):
+        raise CoarseTransportException(
+            "synthetic homogenization failure",
+            code=ReturnCode.HOMOGENIZATION_ERROR,
+            fine_return_code=ReturnCode.OK,
+            fine_values=fine_values,
+            fine_eval_time=12.5,
+        )
+
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation.transport,
+        "transport_run",
+        fail_coarse,
+    )
+    sample_dir = workdir / "pool" / "L01_S0000000"
+    with common.workdir(str(sample_dir), clean=True):
+        with pytest.raises(CoarseTransportException, match="synthetic homogenization"):
+            level_sim._calculate(level_sim.config_dict, sample_input)
+
+    ds = xr.open_zarr(
+        str(job.output.zarr_store_path),
+        group="mlmc/level_01",
+        consolidated=False,
+    )
+    term = {"i_sample": 0, "i_saltelli": 0}
+    assert ds["fine_return_code"].isel(**term).to_numpy().item() == ReturnCode.OK
+    assert (
+        ds["coarse_return_code"].isel(**term).to_numpy().item()
+        == ReturnCode.HOMOGENIZATION_ERROR
+    )
+    assert ds["fine_eval_time"].isel(**term).to_numpy().item() == 12.5
+    assert ds["coarse_eval_time"].isel(**term).to_numpy().item() == -1.0
+    assert np.all(ds["fine_conc"].isel(**term).to_numpy() == 1.0)
+    assert np.count_nonzero(ds["coarse_conc"].isel(**term).to_numpy()) == 0
 
 
 def make_mlmc_workdir(
@@ -394,6 +472,24 @@ def test_transport_simulation(smart_tmp_path: Path):
     assert np.all(np.isfinite(coarse_result))
 
 
+def test_group_matrix_generator_repeats_from_seed(smart_tmp_path: Path):
+    workdir = make_full_input_workdir(smart_tmp_path, "seeded_group_matrix")
+    job.set_workdir(workdir, workdir / "input_data")
+    cfg = common.load_config(job.input.transport_cfg_path)
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    n_parameters = len(sa_obj.groups)
+
+    def draw_matrices():
+        generator = make_group_matrix_generator(sa_obj, seed=101)
+        return generator(3, n_parameters), generator(3, n_parameters)
+
+    first_a, first_b = draw_matrices()
+    second_a, second_b = draw_matrices()
+
+    np.testing.assert_array_equal(first_a, second_a)
+    np.testing.assert_array_equal(first_b, second_b)
+
+
 def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
     workdir = make_full_input_workdir(smart_tmp_path, "transport_saltelli_zarr")
     input_dir = workdir / "input_data"
@@ -416,8 +512,14 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
     assert "prepare_samples" not in worker_level_sim.__dict__
 
     sample_id = sample_input[0]
-    with common.workdir(str(workdir / "pool" / sample_id), clean=True):
+    sample_workspace = workdir / "pool" / sample_id
+    with common.workdir(str(sample_workspace), clean=True):
         result = level_sim._calculate(level_sim.config_dict, sample_input[1:])
+
+    term_directories = sorted(
+        path.name for path in sample_workspace.iterdir() if path.is_dir()
+    )
+    assert term_directories == [f"{term_id:02d}" for term_id in range(simulation.schema.n_terms)]
 
     assert sample_id == "L00_S0000000"
     assert result[0].shape[0] == simulation.schema.n_terms * len(simulation.result_format()[0].times)
@@ -434,6 +536,40 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
     assert np.any(ds["fine_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.any(ds["coarse_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.all(np.isfinite(ds["parameter"].isel(i_sample=0, i_saltelli=0).to_numpy()))
+
+
+def test_failed_saltelli_term_keeps_its_workspace(smart_tmp_path: Path, monkeypatch):
+    class FailingTermSimulation:
+        @staticmethod
+        def calculate(_config_dict, sample_input):
+            term_id = int(sample_input[-1])
+            if term_id == 2:
+                raise RuntimeError("synthetic term failure")
+            result = np.asarray([term_id], dtype=float)
+            return result, result
+
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation,
+        "FailingTermSimulation",
+        FailingTermSimulation,
+        raising=False,
+    )
+    config_dict = {
+        "forward_config": {},
+        "forward_simulation_class": "FailingTermSimulation",
+        "n_saltelli_terms": 3,
+        "n_parameters": 1,
+    }
+    sample_workspace = smart_tmp_path / "L01_S0000000"
+    with common.workdir(str(sample_workspace), clean=False):
+        with pytest.raises(RuntimeError, match="synthetic term failure"):
+            calculate_transport_saltelli(config_dict, [0.1, 0.2, 0.3])
+
+    assert sorted(path.name for path in sample_workspace.iterdir()) == [
+        "00",
+        "01",
+        "02",
+    ]
 
 
 class _SerializationBomb:
