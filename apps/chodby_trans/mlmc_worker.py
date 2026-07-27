@@ -110,6 +110,7 @@ def calculate_transport_saltelli(
     )
 
     import numpy as np
+    from endorse import common
     import chodby_trans.transport_simulation as transport_simulation
 
     sample_array = np.asarray(sample_input, dtype=float)
@@ -122,11 +123,29 @@ def calculate_transport_saltelli(
 
     fine_results = []
     coarse_results = []
+    sample_workspace = Path.cwd()
     for i_saltelli, input_vector in enumerate(sample_matrix):
-        fine_result, coarse_result = simulation_class.calculate(
-            config_dict["forward_config"],
-            (*input_vector, i_saltelli, *forward_params),
+        work_dir = sample_workspace / f"{i_saltelli:02d}"
+        logging.info(
+            "Starting Saltelli term %s/%s in %s.",
+            i_saltelli,
+            n_terms - 1,
+            work_dir,
         )
+        try:
+            with common.workdir(str(work_dir), clean=False):
+                fine_result, coarse_result = simulation_class.calculate(
+                    config_dict["forward_config"],
+                    (*input_vector, i_saltelli, *forward_params),
+                )
+        except Exception:
+            logging.exception(
+                "Saltelli term %s failed in persistent workspace %s.",
+                i_saltelli,
+                work_dir,
+            )
+            raise
+        logging.info("Completed Saltelli term %s in %s.", i_saltelli, work_dir)
         fine_results.append(np.asarray(fine_result).flatten())
         coarse_results.append(np.asarray(coarse_result).flatten())
 
