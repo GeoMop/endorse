@@ -156,6 +156,10 @@ Resolved:
      per-term workspace behavior with focused tests.
 
 ## AGENT Log
+- 2026-07-27: Added a reusable read-only PBS run inspector subagent specification, with general PBS output,
+  scheduler, worker, node-scratch, timeline, and failure-summary guidance plus an MLMC-skill handoff.
+- 2026-07-27: Added the repository-local `inspect-mlmc-run` skill with a read-only summarizer for PBS logs,
+  MLMC HDF state, Zarr return codes, copied node scratch artifacts, and native core dumps.
 - 2026-07-27: Moved the run-global homogenization mesh from node-local scratch to the shared
   `<job.output.dir_path>/homogenization` directory and covered the location with a focused test.
 - 2026-07-24: Separated fine, coarse, and homogenization failures in MLMC Zarr

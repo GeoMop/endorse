@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-Endorse is a chaotic set of tools for solving real case problems uing parametrized models.
+Endorse is a chaotic set of tools for solving real case problems using parametrized models.
 
 
 ## Structure
@@ -53,13 +53,23 @@ Endorse is a chaotic set of tools for solving real case problems uing parametriz
 - For code changes, run targeted tests first, then broader verification when
   the change affects shared behavior.
 
+
+## Agents Skills
+Agents skills specific to `chodby_trans` application are defined in
+`apps/chodby_trans/.agents/skills/inspect-mlmc-run/SKILL.md`.
+
+## Subagents
+Subagents specific to `chodby_trans` application are defined in
+`apps/chodby_trans/.agents/subagents`.
+
+
 ## Coding Rules
 
 Include and adapt: `python_coding.md`.
 
 Chodby_trans -specific interpretation:
 - All MD files have hard limit 120 chars per line.
-- The code can not be tested with a simplified model and the full model takes about half an hour to run. 
+- The code cannot be tested with a simplified model and the full model takes about half an hour to run. 
   So we need good logging for post moretem inspection.
 - The edits should work correctly on a first run, do detailed review of the call path before edits instead of the run.
 - Iteratively add type hints and doc strings to touched code.
