@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 
 import cloudpickle
 import numpy as np
@@ -145,6 +146,46 @@ def test_process_results_uses_configured_grid_size(monkeypatch):
 
     assert fullscale_transport.process_results(cfg, object()) is expected_values
     assert observed["grid_size"] == (20, 20, 2)
+
+
+def test_common_homogenization_mesh_uses_shared_output(
+    smart_tmp_path: Path,
+    monkeypatch,
+):
+    output_dir = smart_tmp_path / "homogenization_shared_output"
+    scratch_dir = smart_tmp_path / "homogenization_node_scratch"
+    input_dir = output_dir / "input_data"
+    shutil.rmtree(output_dir, ignore_errors=True)
+    shutil.rmtree(scratch_dir, ignore_errors=True)
+    output_dir.mkdir(parents=True)
+    scratch_dir.mkdir(parents=True)
+    input_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(job, "output", job.Output(output_dir))
+    monkeypatch.setattr(job, "scratch", job.Scratch(scratch_dir))
+    monkeypatch.setattr(job, "input", job.Input(input_dir))
+    monkeypatch.setattr(fullscale_transport, "coarsest_level_id", lambda _cfg: 0)
+    monkeypatch.setattr(
+        fullscale_transport,
+        "update_mesh_cfg",
+        lambda _mesh, _level_id, _level: common.dotdict.create({"mesh_name": "unused"}),
+    )
+
+    def create_test_mesh(*_args, **_kwargs):
+        mesh_path = Path("generated_homogenization.msh2")
+        mesh_path.write_text("shared mesh", encoding="utf-8")
+        return SimpleNamespace(file=SimpleNamespace(path=str(mesh_path))), None
+
+    monkeypatch.setattr(fullscale_transport, "create_mesh", create_test_mesh)
+    cfg = common.dotdict.create({"mesh": {}, "mlmc": {"levels": [{}]}})
+
+    with common.workdir(str(scratch_dir), clean=False):
+        mesh_file = fullscale_transport.prepare_common_homogenization_mesh(cfg)
+
+    expected_path = output_dir / "homogenization" / "trans_mesh_homogenization.msh"
+    assert Path(mesh_file.path) == expected_path
+    assert expected_path.read_text(encoding="utf-8") == "shared mesh"
+    assert not (scratch_dir / "trans_mesh_homogenization.msh").exists()
 
 
 @pytest.mark.parametrize(

@@ -156,6 +156,8 @@ Resolved:
      per-term workspace behavior with focused tests.
 
 ## AGENT Log
+- 2026-07-27: Moved the run-global homogenization mesh from node-local scratch to the shared
+  `<job.output.dir_path>/homogenization` directory and covered the location with a focused test.
 - 2026-07-24: Separated fine, coarse, and homogenization failures in MLMC Zarr
   metadata, retained completed fine data across coarse failures, and added full
   stage and loky traceback logging. Saltelli terms now keep two-digit workdirs,

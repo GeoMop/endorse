@@ -49,6 +49,12 @@ NULL_RESULT = 0, np.array([])
 
 homogenization_mesh_name = "trans_mesh_homogenization"
 
+
+def homogenization_mesh_path() -> Path:
+    """Return the shared, run-specific homogenization mesh path."""
+    return job.output.dir_path / "homogenization" / f"{homogenization_mesh_name}.msh"
+
+
 def run_in_subprocess(func):
     """Execute the function in a separate process (loky) with picklable args/return."""
     @wraps(func)
@@ -252,7 +258,8 @@ def transport_run(cfg, level_id, param_dict):
     return f_rc, f_values, c_rc, c_values, fine_eval_time, coarse_eval_time
 
 
-def prepare_common_homogenization_mesh(cfg):
+def prepare_common_homogenization_mesh(cfg) -> File:
+    """Create the run-global homogenization mesh in the shared output directory."""
     # macro homogenization: homogenization mesh
     macro_level_id = coarsest_level_id(cfg)
     macro_level = cfg.mlmc.levels[macro_level_id]
@@ -260,13 +267,15 @@ def prepare_common_homogenization_mesh(cfg):
     cfg_mesh.mesh_name = homogenization_mesh_name
 
     input_dir = job.input.dir_path if job.input is not None else None
-    homo_mesh, _ = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, [], 0)
+    shared_dir = homogenization_mesh_path().parent
+    with common.workdir(str(shared_dir), clean=False):
+        homo_mesh, _ = create_mesh(job.output.dir_path, input_dir, cfg_mesh, [], 0)
 
-    homo_msh_filepath = Path(f"{homogenization_mesh_name}.msh")
+        homo_msh_filepath = homogenization_mesh_path()
 
-    # msh2 -> msh
-    shutil.move(homo_mesh.file.path, homo_msh_filepath)
-    return File(str(homo_msh_filepath))
+        # msh2 -> msh
+        shutil.move(homo_mesh.file.path, homo_msh_filepath)
+        return File(str(homo_msh_filepath))
 
 
 def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_mesh):
@@ -331,8 +340,8 @@ def average_micro_field_to_macro(micro_mesh, macro_mesh, micro_field):
 
 @memoize
 @run_in_subprocess
-def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_id):
-    job.set_workdir(workdir, input_dir)
+def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, level_id):
+    job.set_workdir(output_dir, input_dir)
     # micro: fine mesh of buffer domain
     variant = "micro"
     level = cfg.mlmc.levels[level_id]
@@ -344,7 +353,10 @@ def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_i
     micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, fracture_set, n_large)
 
     # load common homogenization mesh
-    homogenization_mesh = load_mesh(File(job.scratch.dir_path / f"{homogenization_mesh_name}.msh" ), heal_tol=None)  # already healed
+    homogenization_mesh = load_mesh(
+        File(homogenization_mesh_path()),
+        heal_tol=None,
+    )  # already healed
 
     # homogenization onto common coarse mesh
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
@@ -404,7 +416,7 @@ def prepare_coarse_input(workdir, input_dir, cfg, fracture_set, n_large, level_i
 
 def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
-    input_fields_file = prepare_coarse_input(job.scratch.dir_path, job.input.dir_path,
+    input_fields_file = prepare_coarse_input(job.output.dir_path, job.input.dir_path,
                                              cfg, fracture_set, n_large, level_id)
     res, fo = parametrized_run(cfg, "transport_macroscale",
                                input_fields_file=input_fields_file, param_dict=param_dict)
