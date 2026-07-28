@@ -13,12 +13,19 @@ import xarray as xr
 
 from endorse import common
 
-from chodby_trans import fullscale_transport, ot_sa, job, sensitivity_sampling
+from chodby_trans import (
+    dask_worker_preload,
+    fullscale_transport,
+    job,
+    ot_sa,
+    sensitivity_sampling,
+)
 from chodby_trans.sensitivity_sampling import (
     TransportSaltelliSimulation,
     make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
+    wait_for_expected_mlmc_workers,
     validate_mlmc_scheduler_preload,
     validate_mlmc_worker_preloads,
     validate_result_grid_size,
@@ -116,6 +123,42 @@ def test_validate_mlmc_worker_preloads():
                 },
             }
         )
+
+
+def test_dask_worker_preload_initializes_job(monkeypatch, tmp_path):
+    output_dir = tmp_path / "run"
+    input_dir = output_dir / "input_data"
+    input_dir.mkdir(parents=True)
+    monkeypatch.delenv("SCRATCHDIR", raising=False)
+    monkeypatch.setenv(job.OUTPUT_DIR_ENV, str(output_dir))
+    monkeypatch.setenv(job.INPUT_DIR_ENV, str(input_dir))
+    dask_worker_preload.PRELOAD_COMPLETED = False
+
+    dask_worker_preload.dask_setup(SimpleNamespace(address="tcp://worker-0"))
+
+    assert dask_worker_preload.PRELOAD_COMPLETED is True
+    assert job.input.dir_path == input_dir
+    assert job.scratch.dir_path == output_dir
+    assert job.output.dir_path == output_dir
+
+
+def test_wait_for_expected_mlmc_workers(monkeypatch):
+    calls = []
+    client = SimpleNamespace(
+        wait_for_workers=lambda count, timeout: calls.append((count, timeout)),
+        scheduler_info=lambda: {"workers": {"worker-0": {}, "worker-1": {}}},
+    )
+    monkeypatch.setenv("DASK_EXPECTED_WORKERS", "2")
+    monkeypatch.setenv("DASK_WORKER_STARTUP_TIMEOUT", "45")
+
+    assert wait_for_expected_mlmc_workers(client) == 2
+    assert calls == [(2, 45.0)]
+
+
+def test_wait_for_expected_mlmc_workers_without_launcher_env(monkeypatch):
+    monkeypatch.delenv("DASK_EXPECTED_WORKERS", raising=False)
+
+    assert wait_for_expected_mlmc_workers(SimpleNamespace()) is None
 
 
 def test_validate_result_grid_size():

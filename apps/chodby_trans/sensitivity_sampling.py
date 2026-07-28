@@ -1113,7 +1113,7 @@ def wait_for_expected_mlmc_workers(client: Client) -> int | None:
         expected_workers,
     )
     client.wait_for_workers(expected_workers, timeout=timeout)
-    connected_workers = len(client.scheduler_info()["workers"])
+    connected_workers = len(client.scheduler_info(n_workers=-1)["workers"])
     logging.info(
         "MLMC worker registration barrier complete: expected=%s connected=%s.",
         expected_workers,
