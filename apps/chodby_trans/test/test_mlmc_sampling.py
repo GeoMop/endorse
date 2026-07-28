@@ -144,15 +144,19 @@ def test_dask_worker_preload_initializes_job(monkeypatch, tmp_path):
 
 def test_wait_for_expected_mlmc_workers(monkeypatch):
     calls = []
+    scheduler_calls = []
     client = SimpleNamespace(
         wait_for_workers=lambda count, timeout: calls.append((count, timeout)),
-        scheduler_info=lambda: {"workers": {"worker-0": {}, "worker-1": {}}},
+        scheduler_info=lambda **kwargs: (
+            scheduler_calls.append(kwargs) or {"workers": {"worker-0": {}, "worker-1": {}}}
+        ),
     )
     monkeypatch.setenv("DASK_EXPECTED_WORKERS", "2")
     monkeypatch.setenv("DASK_WORKER_STARTUP_TIMEOUT", "45")
 
     assert wait_for_expected_mlmc_workers(client) == 2
     assert calls == [(2, 45.0)]
+    assert scheduler_calls == [{"n_workers": -1}]
 
 
 def test_wait_for_expected_mlmc_workers_without_launcher_env(monkeypatch):

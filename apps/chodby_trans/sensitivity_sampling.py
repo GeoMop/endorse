@@ -1217,8 +1217,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     pool = SamplingPoolDask(
         client,
         work_dir=str(job.scratch.dir_path),
-        debug=True,
-        clean=False,
+        debug=not cfg.ot_sensitivity.clean_sample_dir,
+        clean=bool(cfg.ot_sensitivity.clean_sample_dir),
     )
 
 
