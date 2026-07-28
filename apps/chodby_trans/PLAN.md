@@ -29,9 +29,16 @@ Goal 3: Use the sampler to evaluate first N samples of the finest level (l=L) an
 Goal 4: Side by side to MLMC, we still need to save the results in ZARR storage.
         For this, we need to create the storage node for each level (sofar identified the place into `TransportSaltelliSimulation:level_instance`),
         and write the results (sofar identified the place into `TransportSimulation:calculate`).
-        
-        
-        
+
+Goal 5: Add a low-impact paired-sampling mode for coarse-model setup and variance diagnostics.
+        One scheduled MLMC sample shall evaluate exactly one shared parameter vector with the
+        fine and coarse models, without constructing Saltelli A/B/cross terms. Keep the working
+        Saltelli mode unchanged for later Sobol analysis. Use the MLMC HDF and Zarr results to
+        replace the auxiliary sequential sampling and collection workflow. After equivalent
+        sampling, restart, failure-diagnostic, and plotting functionality is available through
+        MLMC, remove `sequential_saltelli_samples.py` and
+        `collect_sequential_saltelli_results.py`.
+
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
 details of the goals that you need to specify better or my specification is ambiguous.
 Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`, `python_coding.md`, 
@@ -144,6 +151,30 @@ Resolved:
   6. Extend the per-term forward input tail to carry both `i_saltelli` and the
      finer-level collected-sample count, and let
      `TransportSimulation.calculate()` decompose that tail before writing.
+
+- Goal 5:
+  1. Add an explicit `mlmc.sample_mode` switch with `saltelli` as the
+     backward-compatible default and `paired` as the coarse-model diagnostic mode.
+  2. Add a small paired simulation wrapper beside `TransportSaltelliSimulation`.
+     Generate one grouped QMC/MC parameter row per MLMC sample, use
+     `n_saltelli=1`, and reuse the existing lightweight worker with one term.
+  3. Keep `TransportSimulation.calculate()`, fine/coarse execution, return codes,
+     persistent `00` workspaces, Dask initialization, and concurrent Zarr writes
+     unchanged. Treat Zarr `i_saltelli=0` as a compatibility index only.
+  4. Expose the paired fine/coarse compact time series in HDF without a logical
+     Saltelli axis. Schedule the desired tens or hundreds of pairs through the
+     finest level's `min_samples`.
+  5. Make the paired sample target and Zarr `i_sample` capacity consistent.
+     Initially document the required configuration relationship; make one field
+     authoritative only if the implementation review shows that this is safer.
+  6. Add an MLMC paired-results collector that reads compact collected pairs from
+     HDF and return codes, parameters, and timings from Zarr, then reuses the
+     existing variance, correlation, bias, cost, bootstrap, and plotting logic.
+  7. Cover paired input generation, deterministic scheduling, singleton Zarr
+     indexing, result shape, and unchanged Saltelli behavior with focused tests.
+     Once MLMC has equivalent operational and diagnostic coverage, remove
+     `sequential_saltelli_samples.py` and
+     `collect_sequential_saltelli_results.py`.
 
 - MLMC failure diagnostics:
   1. Keep fine and coarse failure state separate in Zarr, retaining a completed
