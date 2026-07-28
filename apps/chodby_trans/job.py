@@ -28,6 +28,7 @@ scratch = None
 output = None
 
 INPUT_DIR_ENV = "ENDORSE_INPUT_DIR"
+OUTPUT_DIR_ENV = "ENDORSE_OUTPUT_DIR"
 
 
 

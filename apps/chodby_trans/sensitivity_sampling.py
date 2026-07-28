@@ -1089,6 +1089,39 @@ def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
     return job.to_str()
 
 
+def wait_for_expected_mlmc_workers(client: Client) -> int | None:
+    """
+    Wait for the worker count recorded by the Dask cluster launcher.
+    """
+    expected_raw = os.environ.get("DASK_EXPECTED_WORKERS")
+    if expected_raw is None:
+        logging.warning(
+            "DASK_EXPECTED_WORKERS is not set; skipping the MLMC worker registration barrier."
+        )
+        return None
+
+    expected_workers = int(expected_raw)
+    timeout = float(os.environ.get("DASK_WORKER_STARTUP_TIMEOUT", "600"))
+    if expected_workers < 1:
+        raise ValueError(
+            f"DASK_EXPECTED_WORKERS must be positive, got {expected_workers}."
+        )
+
+    logging.info(
+        "Waiting up to %.1fs for %s Dask workers before MLMC initialization.",
+        timeout,
+        expected_workers,
+    )
+    client.wait_for_workers(expected_workers, timeout=timeout)
+    connected_workers = len(client.scheduler_info()["workers"])
+    logging.info(
+        "MLMC worker registration barrier complete: expected=%s connected=%s.",
+        expected_workers,
+        connected_workers,
+    )
+    return connected_workers
+
+
 def validate_mlmc_worker_preloads(worker_states: dict[str, dict]) -> None:
     """
     Require every connected Dask worker to complete transport preloading.
@@ -1136,6 +1169,8 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
     """
     Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
     """
+    wait_for_expected_mlmc_workers(client)
+
     scheduler_state = client.run_on_scheduler(scheduler_preload_status)
     validate_mlmc_scheduler_preload(scheduler_state)
 

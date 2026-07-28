@@ -12,6 +12,7 @@ export MKL_NUM_THREADS=1
 # ======= EDIT THESE PATHS =======
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR=${1}
+EXPECTED_WORKERS_FILE="$SCRATCHDIR/DASK_EXPECTED_WORKERS.txt"
 #WORK_DIRNAME="workdir"
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
@@ -89,6 +90,7 @@ start_workers() {
   echo "[worker] Reserving $HEAD_WORKER_RESERVE slot(s) on scheduler node $HEAD_NODE."
   echo "$SCHED_ADDR"
   echo "$HOST_COUNTS"
+  EXPECTED_WORKERS=0
   while read -r COUNT HOST; do
     [[ -z "${HOST:-}" ]] && continue
     WORKER_COUNT=$COUNT
@@ -102,15 +104,19 @@ start_workers() {
       echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers; scheduler reserved) ---"
       continue
     fi
+    EXPECTED_WORKERS=$((EXPECTED_WORKERS + WORKER_COUNT))
     # echo "--- $HOST --- "
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
     echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
     pbsdsh -vh "$HOST" -- env \
       ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}" \
+      ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data" \
+      ENDORSE_OUTPUT_DIR="$OUTPUT_DIR" \
       bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
   done <<< "$HOST_COUNTS"
-  echo "[worker] Workers started."
+  printf '%s\n' "$EXPECTED_WORKERS" > "$EXPECTED_WORKERS_FILE"
+  echo "[worker] Workers started; expecting $EXPECTED_WORKERS registrations."
 }
 
 stop_cluster() {
@@ -152,9 +158,12 @@ run_example() {
   echo "[run] Running driver against $SCHED ..."
 
   local app_cmd=${1}
+  local expected_workers
+  expected_workers=$(<"$EXPECTED_WORKERS_FILE")
   echo "app_cmd = $app_cmd"
 
-  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR $app_cmd "$SCHED" \
+  DASK_EXPECTED_WORKERS="$expected_workers" \
+  "$PYEXEC" -u "$APP_PY" "$OUTPUT_DIR" "$app_cmd" "$SCHED" \
       2>&1 | tee "$SCRATCHDIR/logs/driver_$(date +%H%M%S).log"
 }
 

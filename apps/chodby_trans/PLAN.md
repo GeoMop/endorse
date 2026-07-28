@@ -156,6 +156,8 @@ Resolved:
      per-term workspace behavior with focused tests.
 
 ## AGENT Log
+- 2026-07-27: Initialized `job` paths in every Dask worker preload, propagated shared input/output paths from both
+  cluster launchers, and added an expected-worker registration barrier before MLMC scheduling.
 - 2026-07-27: Added a reusable read-only PBS run inspector subagent specification, with general PBS output,
   scheduler, worker, node-scratch, timeline, and failure-summary guidance plus an MLMC-skill handoff.
 - 2026-07-27: Added the repository-local `inspect-mlmc-run` skill with a read-only summarizer for PBS logs,
