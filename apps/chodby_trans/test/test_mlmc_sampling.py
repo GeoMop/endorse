@@ -21,7 +21,9 @@ from chodby_trans import (
     sensitivity_sampling,
 )
 from chodby_trans.sensitivity_sampling import (
+    TransportPairedSimulation,
     TransportSaltelliSimulation,
+    make_mlmc_simulation,
     make_transport_simulation,
     make_group_matrix_generator,
     mlmc_level_parameters,
@@ -624,6 +626,160 @@ def test_transport_saltelli_simulation_writes_mlmc_zarr(smart_tmp_path: Path):
     assert np.any(ds["fine_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.any(ds["coarse_conc"].isel(i_sample=0).to_numpy() != 0.0)
     assert np.all(np.isfinite(ds["parameter"].isel(i_sample=0, i_saltelli=0).to_numpy()))
+
+
+def test_make_mlmc_simulation_defaults_to_saltelli(smart_tmp_path: Path):
+    workdir = make_full_input_workdir(smart_tmp_path, "default_mlmc_sample_mode")
+    job.set_workdir(workdir, workdir / "input_data")
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    cfg = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
+    if "sample_mode" in cfg.mlmc:
+        del cfg.mlmc["sample_mode"]
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+
+    simulation = make_mlmc_simulation(
+        cfg,
+        sa_obj,
+        seed=101,
+        finer_samples_collected=lambda _sample_ids: 0,
+    )
+
+    assert isinstance(simulation, TransportSaltelliSimulation)
+
+
+def test_saltelli_simulation_retains_leading_term_axis(smart_tmp_path: Path, monkeypatch):
+    workdir = make_full_input_workdir(smart_tmp_path, "saltelli_axis_contract")
+    job.set_workdir(workdir, workdir / "input_data")
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    cfg = common.apply_variant(cfg, {"mlmc/sim_class": "RandomTransportSimulation"})
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    simulation = TransportSaltelliSimulation(
+        cfg_levels=cfg.mlmc.levels,
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
+        matrix_generator=lambda n_rows, n_parameters: np.full((n_rows, n_parameters), 0.5, dtype=float),
+        n_parameters=len(sa_obj.groups),
+        finer_samples_collected=lambda _sample_ids: 0,
+    )
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation,
+        "ensure_mlmc_level_zarr_storage",
+        lambda *_args, **_kwargs: None,
+    )
+
+    level_sim = simulation.make_level_simulation([1.0], [0], level_id=0)
+    sample_input = level_sim.prepare_samples(["L00_S0000000"])[0]
+
+    assert simulation.result_format()[0].shape == (simulation.schema.n_terms,)
+    assert level_sim.config_dict["n_saltelli_terms"] == simulation.schema.n_terms
+    assert level_sim.config_dict["forward_config"]["n_saltelli"] == simulation.schema.n_terms
+    sample_matrix = np.asarray(sample_input[1:-1]).reshape(
+        simulation.schema.n_terms,
+        len(sa_obj.groups),
+    )
+    assert sample_matrix.shape == (simulation.schema.n_terms, len(sa_obj.groups))
+
+
+def test_paired_simulation_prepares_single_group_row(smart_tmp_path: Path, monkeypatch):
+    workdir = make_full_input_workdir(smart_tmp_path, "paired_planning")
+    job.set_workdir(workdir, workdir / "input_data")
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    cfg = common.apply_variant(
+        cfg,
+        {
+            "mlmc/sim_class": "RandomTransportSimulation",
+            "mlmc/sample_mode": "paired",
+        },
+    )
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    rows = np.arange(2 * len(sa_obj.groups), dtype=float).reshape(2, len(sa_obj.groups))
+    rows = rows / float(rows.max() + 1)
+    simulation = TransportPairedSimulation(
+        cfg_levels=cfg.mlmc.levels,
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
+        matrix_generator=lambda n_rows, _n_parameters: rows[:n_rows],
+        n_parameters=len(sa_obj.groups),
+        finer_samples_collected=lambda _sample_ids: 7,
+    )
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation,
+        "ensure_mlmc_level_zarr_storage",
+        lambda *_args, **_kwargs: None,
+    )
+
+    level_sim = simulation.make_level_simulation([1.0], [0], level_id=0)
+    sample_inputs = level_sim.prepare_samples(["L00_S0000000", "L00_S0000001"])
+
+    assert simulation.result_format()[0].shape == (1,)
+    assert level_sim.config_dict["n_saltelli_terms"] == 1
+    assert level_sim.config_dict["forward_config"]["n_saltelli"] == 1
+    assert sample_inputs == [
+        ("L00_S0000000", *rows[0].tolist(), 7),
+        ("L00_S0000001", *rows[1].tolist(), 7),
+    ]
+
+
+def test_transport_paired_simulation_writes_singleton_mlmc_zarr(smart_tmp_path: Path, monkeypatch):
+    workdir = make_full_input_workdir(smart_tmp_path, "transport_paired_zarr")
+    input_dir = workdir / "input_data"
+    job.set_workdir(workdir, input_dir)
+
+    cfg = common.load_config(job.input.transport_cfg_path)
+    cfg = common.apply_variant(
+        cfg,
+        {
+            "mlmc/sim_class": "RandomTransportSimulation",
+            "mlmc/sample_mode": "paired",
+        },
+    )
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    simulation = TransportPairedSimulation(
+        cfg_levels=cfg.mlmc.levels,
+        forward_simulation=RandomTransportSimulation(cfg, workdir),
+        matrix_generator=lambda n_rows, n_parameters: np.full((n_rows, n_parameters), 0.5, dtype=float),
+        n_parameters=len(sa_obj.groups),
+        finer_samples_collected=lambda _sample_ids: 0,
+    )
+    writes = []
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation,
+        "ensure_mlmc_level_zarr_storage",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        sensitivity_sampling.transport_simulation,
+        "write_mlmc_level_result",
+        lambda **kwargs: writes.append(kwargs),
+    )
+
+    level_sim = simulation.make_level_simulation([1.0], [0], level_id=0)
+    sample_input = level_sim.prepare_samples(["L00_S0000000"])[0]
+    worker_level_sim = cloudpickle.loads(cloudpickle.dumps(level_sim))
+    assert worker_level_sim._calculate is calculate_transport_saltelli
+    assert "prepare_samples" not in worker_level_sim.__dict__
+
+    sample_workspace = workdir / "pool" / sample_input[0]
+    with common.workdir(str(sample_workspace), clean=False):
+        result = level_sim._calculate(level_sim.config_dict, sample_input[1:])
+
+    term_directories = sorted(
+        path.name for path in sample_workspace.iterdir() if path.is_dir()
+    )
+    assert term_directories == ["00"]
+    assert result[0].shape[0] == len(simulation.result_format()[0].times)
+    assert result[1].shape[0] == len(simulation.result_format()[0].times)
+    assert len(writes) == 1
+    assert writes[0]["level_id"] == 0
+    assert writes[0]["n_saltelli"] == 1
+    assert writes[0]["sample_id"] == 0
+    assert writes[0]["saltelli_id"] == 0
+    assert writes[0]["fine_return_code"] == ReturnCode.OK
+    assert writes[0]["coarse_return_code"] == ReturnCode.OK
+    assert np.any(np.asarray(writes[0]["fine_conc"]) != 0.0)
+    assert np.any(np.asarray(writes[0]["coarse_conc"]) != 0.0)
+    assert np.all(np.isfinite(writes[0]["parameter_values"]))
 
 
 def test_failed_saltelli_term_keeps_its_workspace(smart_tmp_path: Path, monkeypatch):

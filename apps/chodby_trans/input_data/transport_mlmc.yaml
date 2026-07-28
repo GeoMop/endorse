@@ -6,6 +6,7 @@ ot_sensitivity: !include _ot_sensitivity.yaml
 
 mlmc:
   sim_class: TransportSimulation
+  sample_mode: paired # saltelli
   levels:
     # coarsest
     - task_size: 15000  # estimated number of elements

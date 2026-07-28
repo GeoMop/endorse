@@ -48,6 +48,29 @@ def _write_test_hdf(path: Path, schema: SaltelliSchema, n_outputs: int = 2) -> N
     storage.save_samples(successful, {0: [], 1: []})
 
 
+def _write_paired_test_hdf(path: Path, n_outputs: int = 2) -> None:
+    result_format = [
+        QuantitySpec(
+            name="value",
+            unit="1",
+            shape=(1,),
+            times=[0.0, 1.0],
+            locations=["0"],
+        )
+    ]
+    storage = SampleStorageHDF(str(path))
+    storage.save_global_data(level_parameters=[[1.0], [10.0]], result_format=result_format)
+
+    successful = {0: [], 1: []}
+    for i_sample in range(4):
+        outputs = np.arange(n_outputs, dtype=float)
+        coarse = 10.0 + outputs + float(i_sample)
+        fine = coarse + 0.05 * float(i_sample)
+        successful[0].append((f"L00_S{i_sample:07d}", (fine, coarse)))
+        successful[1].append((f"L01_S{i_sample:07d}", (fine, coarse)))
+    storage.save_samples(successful, {0: [], 1: []})
+
+
 def test_run_mlmc_analysis_writes_variance_diagnostics(tmp_path: Path):
     """
     Check that the MLMC analysis subcommand reads HDF sample pairs and writes variance diagnostics.
@@ -78,3 +101,31 @@ def test_run_mlmc_analysis_writes_variance_diagnostics(tmp_path: Path):
     ]
     assert not paired_mean.empty
     assert np.all(paired_mean["diff_variance"] < paired_mean["coarse_variance"])
+
+
+def test_run_mlmc_analysis_writes_paired_diagnostics(tmp_path: Path):
+    """
+    Check that paired MLMC HDF samples write diagnostics without a Saltelli axis.
+    """
+    workdir = tmp_path / "workdir"
+    input_dir = workdir / "input_data"
+    input_dir.mkdir(parents=True)
+    cfg_path = Path(__file__).parent / "input_data" / "trans_mesh_config_mlmc_goal1.yaml"
+    cfg = common.config.load_config(str(cfg_path))
+    cfg.mlmc["sample_mode"] = "paired"
+    job.set_workdir(workdir, input_dir)
+
+    _write_paired_test_hdf(job.output.mlmc_hdf_path)
+
+    run_mlmc_analysis(cfg)
+
+    analysis_dir = job.output.plots / "mlmc_analysis"
+    csv_path = analysis_dir / "mlmc_paired_diagnostics.csv"
+    assert csv_path.exists()
+    assert (analysis_dir / "mlmc_paired_value.pdf").exists()
+
+    diagnostics = pd.read_csv(csv_path)
+    assert set(["correlation", "bias", "diff_variance"]).issubset(diagnostics.columns)
+    paired_level = diagnostics[diagnostics["level_id"] == 1]
+    assert not paired_level.empty
+    assert np.all(paired_level["diff_variance"] < paired_level["coarse_variance"])

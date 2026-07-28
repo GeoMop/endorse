@@ -27,7 +27,8 @@ Goal 3: Use the sampler to evaluate first N samples of the finest level (l=L) an
         the sample input vector.
 
 Goal 4: Side by side to MLMC, we still need to save the results in ZARR storage.
-        For this, we need to create the storage node for each level (sofar identified the place into `TransportSaltelliSimulation:level_instance`),
+        For this, we need to create the storage node for each level (sofar identified the place into
+        `TransportSaltelliSimulation:level_instance`),
         and write the results (sofar identified the place into `TransportSimulation:calculate`).
 
 Goal 5: Add a low-impact paired-sampling mode for coarse-model setup and variance diagnostics.
@@ -41,8 +42,9 @@ Goal 5: Add a low-impact paired-sampling mode for coarse-model setup and varianc
 
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
 details of the goals that you need to specify better or my specification is ambiguous.
-Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`, `python_coding.md`, 
-current entry points, config, and relevant tests. Main ambiguities are recorded below in `AGENT Questions And Remarks`.
+Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`,
+`python_coding.md`, current entry points, config, and relevant tests. Main ambiguities are recorded below in
+`AGENT Questions And Remarks`.
 
 ## Current Repository State
 
@@ -187,6 +189,9 @@ Resolved:
      per-term workspace behavior with focused tests.
 
 ## AGENT Log
+- 2026-07-28: Added Goal 5 paired MLMC sample mode beside Saltelli. Paired mode schedules one grouped
+  parameter row per MLMC sample, keeps singleton Zarr term metadata, exposes HDF results without a
+  logical Saltelli axis, and adds paired MLMC variance/correlation/bias diagnostics.
 - 2026-07-27: Initialized `job` paths in every Dask worker preload, propagated shared input/output paths from both
   cluster launchers, and added an expected-worker registration barrier before MLMC scheduling.
 - 2026-07-27: Added a reusable read-only PBS run inspector subagent specification, with general PBS output,
@@ -437,3 +442,7 @@ Resolved:
   `i_sample` from `cfg.ot_sensitivity.n_samples` (currently 4 in
   `_ot_sensitivity.yaml`). These values must match, or one side must be made
   authoritative.
+- 2026-07-28 local verification note: direct MLMC Zarr storage creation still
+  hangs locally in `zarr.open_group(...)` during existing Zarr-backed sampling
+  tests. Goal 5 tests patch the Zarr boundary and verify singleton write
+  arguments instead of exercising the local Zarr backend.

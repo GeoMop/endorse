@@ -1026,6 +1026,128 @@ class TransportSaltelliSimulation(Simulation):
         ]
 
 
+class TransportPairedSimulation(Simulation):
+    """
+    Paired MLMC wrapper that evaluates one shared parameter vector per sample.
+
+    This mode is intended for fine/coarse variance diagnostics. It deliberately
+    avoids Saltelli A/B/cross construction while keeping the same forward worker
+    and per-level Zarr storage path.
+    """
+
+    def __init__(
+        self,
+        cfg_levels,
+        forward_simulation: transport_simulation.TransportSimulation,
+        matrix_generator: Callable[[int, int], np.ndarray],
+        n_parameters: int,
+        finer_samples_collected: Callable[[list[str]], int],
+    ):
+        self.forward_simulation = forward_simulation
+        self.matrix_generator = matrix_generator
+        self.n_parameters = int(n_parameters)
+        self.need_workspace = getattr(forward_simulation, "need_workspace", False)
+        self._finer_samples_collected = finer_samples_collected
+
+    def level_instance(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+    ) -> LevelSimulation:
+        """
+        Wrap the forward level simulation and install paired sample planning.
+        """
+        forward_level_sim = self.forward_simulation.level_instance(
+            fine_level_params,
+            coarse_level_params,
+        )
+        level_sim = TransportLevelSimulation(
+            config_dict={
+                "forward_config": {
+                    **forward_level_sim.config_dict,
+                    "n_saltelli": 1,
+                },
+                "forward_simulation_class": type(self.forward_simulation).__name__,
+                "n_saltelli_terms": 1,
+                "n_parameters": self.n_parameters,
+            },
+            common_files=forward_level_sim.common_files,
+            need_sample_workspace=forward_level_sim.need_sample_workspace,
+            task_size=forward_level_sim.task_size,
+        )
+        transport_level_id = int(forward_level_sim.config_dict["level_id"])
+        transport_simulation.ensure_mlmc_level_zarr_storage(
+            self.forward_simulation.cfg,
+            transport_level_id,
+            1,
+        )
+        level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
+        return level_sim
+
+    def make_level_simulation(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+        level_id: int,
+    ) -> LevelSimulation:
+        """
+        Bind only lightweight importable worker callables to the level object.
+        """
+        level_sim = self.level_instance(fine_level_params, coarse_level_params)
+        level_sim._calculate = calculate_transport_saltelli
+        level_sim._result_format = partial(return_result_format, self.result_format())
+        level_sim._level_id = level_id
+        return level_sim
+
+    def result_format(self) -> list[QuantitySpec]:
+        """
+        Expose compact fine/coarse time series without a logical Saltelli axis.
+        """
+        result_format = []
+        for spec in self.forward_simulation.result_format():
+            shape = tuple(spec.shape)
+            if shape == ():
+                shape = (1,)
+            result_format.append(
+                QuantitySpec(
+                    name=spec.name,
+                    unit=spec.unit,
+                    shape=shape,
+                    times=spec.times,
+                    locations=spec.locations,
+                )
+            )
+        return result_format
+
+    calculate = staticmethod(calculate_transport_saltelli)
+
+    def _generate_matrix(self, n_rows: int) -> np.ndarray:
+        matrix = np.asarray(
+            self.matrix_generator(int(n_rows), self.n_parameters),
+            dtype=float,
+        )
+        if matrix.shape != (int(n_rows), self.n_parameters):
+            raise ValueError(
+                f"Matrix generator returned shape {matrix.shape}, "
+                f"expected {(int(n_rows), self.n_parameters)}."
+            )
+        if not np.all((0.0 <= matrix) & (matrix <= 1.0)):
+            raise ValueError("Matrix generator must return values in [0, 1].")
+        return matrix
+
+    def prepare_samples(self, sample_ids: list[str]):
+        """
+        Plan one shared grouped parameter row and append the finer-level sample count.
+        """
+        n_finer_collected = self._finer_samples_collected(sample_ids)
+        sample_matrix = self._generate_matrix(len(sample_ids))
+
+        return [
+            (sample_id, *list(sample_row), n_finer_collected)
+            for sample_id, sample_row in zip(sample_ids, sample_matrix)
+        ]
+
+
 def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSimulation:
     """
     Construct the MLMC forward simulation class named by ``cfg.mlmc.sim_class``.
@@ -1038,6 +1160,36 @@ def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSim
             "from chodby_trans.transport_simulation."
         )
     return sim_class(cfg, job.scratch.dir_path)
+
+
+def make_mlmc_simulation(
+    cfg: dotdict,
+    sa_obj: ot_sa.SensitivityAnalysis,
+    seed: int,
+    finer_samples_collected: Callable[[list[str]], int],
+) -> Simulation:
+    """
+    Construct the configured MLMC sampling wrapper.
+    """
+    sample_mode = str(cfg.mlmc.get("sample_mode", "saltelli"))
+    forward_simulation = make_transport_simulation(cfg)
+    matrix_generator = make_group_matrix_generator(sa_obj, seed=seed)
+    kwargs = {
+        "cfg_levels": cfg.mlmc.levels,
+        "forward_simulation": forward_simulation,
+        "matrix_generator": matrix_generator,
+        "n_parameters": len(sa_obj.groups),
+        "finer_samples_collected": finer_samples_collected,
+    }
+    if sample_mode == "saltelli":
+        logging.info("Using MLMC sample_mode=saltelli.")
+        return TransportSaltelliSimulation(**kwargs)
+    if sample_mode == "paired":
+        logging.info("Using MLMC sample_mode=paired.")
+        return TransportPairedSimulation(**kwargs)
+    raise ValueError(
+        f"Unsupported cfg.mlmc.sample_mode={sample_mode!r}; expected 'saltelli' or 'paired'."
+    )
 
 
 def resubmit_unfinished_samples(sampler: Sampler) -> int:
@@ -1233,12 +1385,11 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
             return n_finner_samples
 
     sampler_holder: dict[str, Sampler] = {}
-    simulation = TransportSaltelliSimulation(
-        cfg.mlmc.levels,
-        forward_simulation=make_transport_simulation(cfg),
-        matrix_generator=make_group_matrix_generator(sa_obj, seed=seed),
-        n_parameters=len(sa_obj.groups),
-        finer_samples_collected=finner_samples
+    simulation = make_mlmc_simulation(
+        cfg,
+        sa_obj,
+        seed,
+        finer_samples_collected=finner_samples,
     )
 
     sampler = Sampler(
