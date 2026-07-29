@@ -5,20 +5,21 @@ import re
 from pathlib import Path
 from typing import Iterable
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-import zarr
 
 from endorse.common import dotdict
 
-import chodby_trans.job as job
 from chodby_trans import ot_sa
-from chodby_trans import transport_simulation
+from chodby_trans.mlmc_var_analysis import run_mlmc_paired_analysis
 
 from mlmc.quantity.sobol import SaltelliSchema
 from mlmc.sample_storage_hdf import SampleStorageHDF
+
+import chodby_trans.job as job
 
 
 def _safe_name(name: str) -> str:
@@ -51,23 +52,6 @@ def _stored_output_labels(result_spec) -> list[str]:
     return labels
 
 
-def _paired_output_labels(result_spec) -> list[str]:
-    """
-    Build labels for paired-mode result specs without a leading Saltelli axis.
-    """
-    tail_shape = tuple(result_spec.shape)
-    tail_size = int(np.prod(tail_shape, dtype=int)) if tail_shape else 1
-    labels = []
-    i_output = 0
-    for time in result_spec.times:
-        for location in result_spec.locations:
-            for i_tail in range(tail_size):
-                tail_label = "" if tail_size == 1 else f", component={i_tail}"
-                labels.append(f"i={i_output}, t={time}, loc={location}{tail_label}")
-                i_output += 1
-    return labels
-
-
 def _term_labels(schema: SaltelliSchema) -> list[str]:
     return (
         ["A"]
@@ -85,15 +69,45 @@ def _second_order_labels(schema: SaltelliSchema) -> list[str]:
     ]
 
 
+def _level_collected_ids(level_group) -> list[str]:
+    """
+    Read collected sample ids for one MLMC HDF level group.
+    """
+    with h5py.File(level_group.file_name, "r") as hdf_file:
+        group = hdf_file[level_group.level_group_path]
+        if "collected_ids" not in group:
+            return []
+        return [sample["sample_id"].decode() for sample in group["collected_ids"][()]]
+
+
+def _collected_level_pairs(storage: SampleStorageHDF) -> Iterable[tuple[int, np.ndarray, list[str]]]:
+    """
+    Yield collected sample-pair arrays and ids for levels that have ``collected_values``.
+    """
+    for level_id in storage.get_level_ids():
+        level_chunks = []
+        try:
+            chunk_specs = list(storage.chunks(level_id=int(level_id)))
+        except AttributeError:
+            logging.info("Skipping MLMC level %s without collected_values in HDF storage.", level_id)
+            continue
+
+        for chunk_spec in chunk_specs:
+            chunk = storage.sample_pairs_level(chunk_spec)
+            if chunk is not None and len(chunk) > 0:
+                level_chunks.append(chunk)
+
+        if level_chunks:
+            level_group = storage._level_groups[int(level_id)]
+            yield int(level_id), np.concatenate(level_chunks, axis=1), _level_collected_ids(level_group)
+
+
 def _split_level_blocks(storage: SampleStorageHDF, schema: SaltelliSchema) -> Iterable[tuple]:
     """
     Yield stored Saltelli result blocks as ``(spec, level_id, values, labels)``.
     """
     result_format = storage.load_result_format()
-    level_pairs = storage.sample_pairs()
-    for level_id, sample_pairs in enumerate(level_pairs):
-        if len(sample_pairs) == 0:
-            continue
+    for level_id, sample_pairs, _sample_ids in _collected_level_pairs(storage):
         offset = 0
         for result_spec in result_format:
             if tuple(result_spec.shape[:1]) != (schema.n_terms,):
@@ -303,185 +317,6 @@ def plot_mlmc_variance_diagnostics(df: pd.DataFrame, output_dir: Path) -> list[P
     return written_paths
 
 
-def _split_paired_level_blocks(storage: SampleStorageHDF) -> Iterable[tuple]:
-    """
-    Yield paired-mode HDF result blocks as ``(spec, level_id, values, labels)``.
-    """
-    result_format = storage.load_result_format()
-    level_pairs = storage.sample_pairs()
-    for level_id, sample_pairs in enumerate(level_pairs):
-        if len(sample_pairs) == 0:
-            continue
-        offset = 0
-        for result_spec in result_format:
-            output_labels = _paired_output_labels(result_spec)
-            block_size = len(output_labels)
-            block = sample_pairs[offset:offset + block_size]
-            if block.shape[0] != block_size:
-                raise ValueError(
-                    f"Stored paired result for {result_spec.name!r} has too few values: "
-                    f"expected {block_size}, got {block.shape[0]}."
-                )
-            values = block.reshape(block_size, block.shape[1], block.shape[2])
-            yield result_spec, level_id, values, output_labels
-            offset += block_size
-
-
-def _correlation(fine_values: np.ndarray, coarse_values: np.ndarray) -> np.ndarray:
-    """
-    Compute per-output fine/coarse sample correlation with NaN for undersampled data.
-    """
-    corr = np.full(fine_values.shape[0], np.nan, dtype=float)
-    for i_output in range(fine_values.shape[0]):
-        fine = fine_values[i_output]
-        coarse = coarse_values[i_output]
-        mask = np.isfinite(fine) & np.isfinite(coarse)
-        if np.count_nonzero(mask) < 2:
-            continue
-        if np.nanstd(fine[mask]) == 0.0 or np.nanstd(coarse[mask]) == 0.0:
-            continue
-        corr[i_output] = np.corrcoef(fine[mask], coarse[mask])[0, 1]
-    return corr
-
-
-def mlmc_paired_diagnostics(storage: SampleStorageHDF) -> pd.DataFrame:
-    """
-    Build variance, correlation, and bias diagnostics for paired MLMC samples.
-    """
-    rows: list[dict] = []
-    for result_spec, level_id, values, output_labels in _split_paired_level_blocks(storage):
-        fine_values = values[:, :, 0]
-        if values.shape[-1] > 1:
-            coarse_values = values[:, :, 1]
-        else:
-            coarse_values = np.full_like(fine_values, np.nan)
-        diff_values = fine_values - coarse_values
-
-        fine_var = _variance(fine_values)
-        coarse_var = _variance(coarse_values)
-        diff_var = _variance(diff_values)
-        corr = _correlation(fine_values, coarse_values)
-        if values.shape[-1] > 1:
-            bias = np.nanmean(diff_values, axis=1)
-        else:
-            bias = np.full(fine_values.shape[0], np.nan, dtype=float)
-
-        for i_output, output_label in enumerate(output_labels):
-            coarse = coarse_var[i_output]
-            diff = diff_var[i_output]
-            rows.append(
-                {
-                    "result": result_spec.name,
-                    "level_id": level_id,
-                    "n_samples": values.shape[1],
-                    "output_index": i_output,
-                    "output_label": output_label,
-                    "fine_variance": fine_var[i_output],
-                    "coarse_variance": coarse,
-                    "diff_variance": diff,
-                    "diff_to_coarse": diff / coarse if coarse > 0 else np.nan,
-                    "correlation": corr[i_output],
-                    "bias": bias[i_output],
-                }
-            )
-
-    if not rows:
-        raise ValueError("No collected paired MLMC samples found in the HDF storage.")
-    return pd.DataFrame(rows)
-
-
-def read_mlmc_paired_zarr_metadata() -> pd.DataFrame:
-    """
-    Read paired-mode return codes, parameters, and timings from MLMC Zarr groups.
-    """
-    store_path = job.output.zarr_store_path
-    if not store_path.exists():
-        return pd.DataFrame()
-
-    root = zarr.open_group(str(store_path), mode="r")
-    if transport_simulation.MLMC_ZARR_GROUP not in root:
-        return pd.DataFrame()
-
-    rows: list[dict] = []
-    mlmc_group = root[transport_simulation.MLMC_ZARR_GROUP]
-    for group_name in sorted(mlmc_group.group_keys()):
-        if not group_name.startswith("level_"):
-            continue
-        level_id = int(group_name.split("_", 1)[1])
-        level_group = mlmc_group[group_name]
-        param_names = [str(name) for name in np.asarray(level_group["param_name"])]
-        i_sample = np.asarray(level_group["i_sample"])
-        fine_rc = np.asarray(level_group["fine_return_code"])[:, 0]
-        coarse_rc = np.asarray(level_group["coarse_return_code"])[:, 0]
-        fine_time = np.asarray(level_group["fine_eval_time"])[:, 0]
-        coarse_time = np.asarray(level_group["coarse_eval_time"])[:, 0]
-        parameters = np.asarray(level_group["parameter"])[:, 0, :]
-        for row_id, sample_id in enumerate(i_sample):
-            row = {
-                "level_id": level_id,
-                "sample_id": int(sample_id),
-                "fine_return_code": int(fine_rc[row_id]),
-                "coarse_return_code": int(coarse_rc[row_id]),
-                "fine_eval_time": float(fine_time[row_id]),
-                "coarse_eval_time": float(coarse_time[row_id]),
-            }
-            row.update(
-                {
-                    f"param:{param_name}": float(parameters[row_id, i_param])
-                    for i_param, param_name in enumerate(param_names)
-                }
-            )
-            rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def plot_mlmc_paired_diagnostics(df: pd.DataFrame, output_dir: Path) -> list[Path]:
-    """
-    Write paired fine/coarse variance and correlation/bias diagnostic plots.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    written_paths = []
-    for result_name, result_df in df.groupby("result", sort=False):
-        pdf_path = output_dir / f"mlmc_paired_{_safe_name(result_name)}.pdf"
-        with PdfPages(pdf_path) as pdf:
-            for level_id, level_df in result_df.groupby("level_id", sort=False):
-                level_df = level_df.sort_values("output_index")
-                x_values = level_df["output_index"].to_numpy()
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-                for column, label in [
-                    ("fine_variance", "fine"),
-                    ("coarse_variance", "coarse"),
-                    ("diff_variance", "fine - coarse"),
-                ]:
-                    y_values = level_df[column].to_numpy(dtype=float)
-                    if np.any(np.isfinite(y_values)):
-                        ax.plot(x_values, y_values, marker="o", label=label)
-                if np.any(level_df[["fine_variance", "coarse_variance", "diff_variance"]].to_numpy() > 0):
-                    ax.set_yscale("log")
-                ax.set_title(f"Paired variance: {result_name}, L{level_id}")
-                ax.set_xlabel("output index")
-                ax.set_ylabel("sample variance")
-                ax.grid(True, which="both", alpha=0.3)
-                ax.legend()
-                fig.tight_layout()
-                pdf.savefig(fig)
-                plt.close(fig)
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-                ax.plot(x_values, level_df["correlation"].to_numpy(dtype=float), marker="o", label="correlation")
-                ax.plot(x_values, level_df["bias"].to_numpy(dtype=float), marker="o", label="mean(fine - coarse)")
-                ax.set_title(f"Paired correlation and bias: {result_name}, L{level_id}")
-                ax.set_xlabel("output index")
-                ax.grid(True, alpha=0.3)
-                ax.legend()
-                fig.tight_layout()
-                pdf.savefig(fig)
-                plt.close(fig)
-        written_paths.append(pdf_path)
-    return written_paths
-
-
 def run_mlmc_analysis(cfg: dotdict) -> None:
     """
     Read MLMC HDF samples and write variance diagnostic plots.
@@ -495,19 +330,7 @@ def run_mlmc_analysis(cfg: dotdict) -> None:
     sample_mode = str(cfg.mlmc.get("sample_mode", "saltelli"))
 
     if sample_mode == "paired":
-        df = mlmc_paired_diagnostics(storage)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = output_dir / "mlmc_paired_diagnostics.csv"
-        df.to_csv(csv_path, index=False)
-        metadata = read_mlmc_paired_zarr_metadata()
-        if not metadata.empty:
-            metadata_path = output_dir / "mlmc_paired_zarr_metadata.csv"
-            metadata.to_csv(metadata_path, index=False)
-            logging.info("Wrote MLMC paired Zarr metadata table: %s", metadata_path)
-        pdf_paths = plot_mlmc_paired_diagnostics(df, output_dir)
-        logging.info("Wrote MLMC paired diagnostics table: %s", csv_path)
-        for pdf_path in pdf_paths:
-            logging.info("Wrote MLMC paired diagnostic plot: %s", pdf_path)
+        run_mlmc_paired_analysis(storage, output_dir)
         return
 
     if sample_mode != "saltelli":

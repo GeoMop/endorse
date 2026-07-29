@@ -192,6 +192,10 @@ Resolved:
 - 2026-07-28: Added Goal 5 paired MLMC sample mode beside Saltelli. Paired mode schedules one grouped
   parameter row per MLMC sample, keeps singleton Zarr term metadata, exposes HDF results without a
   logical Saltelli axis, and adds paired MLMC variance/correlation/bias diagnostics.
+- 2026-07-29: Fixed paired MLMC analysis for staged HDF files by skipping levels without collected values.
+  Zarr metadata is read directly from local Zarr v3 chunks, avoiding the hanging `zarr.open_*` path, and the
+  paired plot now matches the sequential `fine_coarse_mlmc_diagnostics.pdf` layout with individual subfigures.
+  Paired variance diagnostics live in `mlmc_var_analysis.py`; `mlmc_analysis.py` only dispatches paired mode.
 - 2026-07-27: Initialized `job` paths in every Dask worker preload, propagated shared input/output paths from both
   cluster launchers, and added an expected-worker registration barrier before MLMC scheduling.
 - 2026-07-27: Added a reusable read-only PBS run inspector subagent specification, with general PBS output,
