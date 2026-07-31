@@ -122,7 +122,7 @@ Resolved:
      `TransportSaltelliSimulation` so it inherits from MLMC `Simulation`
      without depending on `mlmc.sim.saltelli_simulation.SaltelliSchemaSimulation`.
 - Goal 3:
-  1. Pass the number of avaliable fine samples to the coarser level as the 
+  1. Pass the number of avaliable fine samples to the coarser level as the
      first value in input_vec.
   2. Use a custom `LevelSimulation.prepare_samples()` wrapper on the transport
      simulation so the master can prepend the current finer-level collected
@@ -196,6 +196,8 @@ Resolved:
   Zarr metadata is read directly from local Zarr v3 chunks, avoiding the hanging `zarr.open_*` path, and the
   paired plot now matches the sequential `fine_coarse_mlmc_diagnostics.pdf` layout with individual subfigures.
   Paired variance diagnostics live in `mlmc_var_analysis.py`; `mlmc_analysis.py` only dispatches paired mode.
+- 2026-07-30: Resolved the paired variance-analysis source note to log the five samples with largest absolute
+  fine/coarse differences, including sample id, time, and signed difference value.
 - 2026-07-27: Initialized `job` paths in every Dask worker preload, propagated shared input/output paths from both
   cluster launchers, and added an expected-worker registration barrier before MLMC scheduling.
 - 2026-07-27: Added a reusable read-only PBS run inspector subagent specification, with general PBS output,

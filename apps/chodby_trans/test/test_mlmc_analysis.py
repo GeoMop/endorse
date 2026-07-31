@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 
 import numpy as np
 import pandas as pd
@@ -188,3 +189,40 @@ def test_run_mlmc_analysis_skips_empty_paired_level(tmp_path: Path, monkeypatch)
     diagnostics = pd.read_csv(csv_path)
     assert set(diagnostics["level_id"]) == {1}
     assert not diagnostics.empty
+
+
+def test_largest_sample_differences_are_logged(caplog):
+    """
+    Check that outlier paired samples are reported with id, time, and signed difference.
+    """
+    sample_ids = ["L01_S0000000", "L01_S0000001", "L01_S0000002"]
+    diff_values = np.asarray(
+        [
+            [0.1, -0.2],
+            [3.5, 0.0],
+            [0.2, -4.0],
+        ],
+        dtype=float,
+    )
+
+    with caplog.at_level(logging.INFO):
+        mlmc_var_analysis._log_largest_sample_differences(
+            result_name="value",
+            level_id=1,
+            sample_ids=sample_ids,
+            times=[10.0, 20.0],
+            diff_values=diff_values,
+        )
+
+    records = [
+        record.getMessage()
+        for record in caplog.records
+        if "Largest fine/coarse differences" in record.getMessage()
+    ]
+    assert len(records) == 1
+    assert "rank" in records[0]
+    assert "sample_id" in records[0]
+    assert "time" in records[0]
+    assert "diff" in records[0]
+    assert "1 L01_S0000002  20.0  -4.0" in records[0]
+    assert "2 L01_S0000001  10.0   3.5" in records[0]

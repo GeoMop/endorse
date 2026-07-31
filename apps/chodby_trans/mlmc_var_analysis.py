@@ -180,6 +180,54 @@ def _paired_level_metadata(metadata: pd.DataFrame, level_id: int, sample_ids: li
     return selected
 
 
+def _log_largest_sample_differences(
+    *,
+    result_name: str,
+    level_id: int,
+    sample_ids: list[str],
+    times: list[float],
+    diff_values: np.ndarray,
+    n_samples: int = 5,
+) -> None:
+    """
+    Log samples with the largest absolute fine/coarse difference.
+    """
+    if diff_values.size == 0:
+        return
+
+    assert diff_values.ndim == 2
+    assert len(sample_ids) == diff_values.shape[0]
+    assert len(times) == diff_values.shape[1]
+
+    abs_diff = np.abs(diff_values)
+    all_nan = np.all(~np.isfinite(abs_diff), axis=1)
+    if np.all(all_nan):
+        logging.info("No finite fine/coarse differences for %s level %s.", result_name, level_id)
+        return
+
+    safe_abs_diff = np.where(np.isfinite(abs_diff), abs_diff, -np.inf)
+    max_output_idx = np.argmax(safe_abs_diff, axis=1)
+    max_abs_diff = safe_abs_diff[np.arange(diff_values.shape[0]), max_output_idx]
+    max_abs_diff[all_nan] = -np.inf
+    top_sample_idx = np.argsort(max_abs_diff)[::-1][:n_samples]
+    top_sample_idx = top_sample_idx[np.isfinite(max_abs_diff[top_sample_idx])]
+    top_output_idx = max_output_idx[top_sample_idx]
+    table = pd.DataFrame(
+        {
+            "rank": np.arange(1, len(top_sample_idx) + 1, dtype=int),
+            "sample_id": np.asarray(sample_ids, dtype=object)[top_sample_idx],
+            "sim_time": np.asarray(times, dtype=float)[top_output_idx],
+            "diff": diff_values[top_sample_idx, top_output_idx],
+        }
+    )
+    logging.info(
+        "Largest fine/coarse differences for %s level %s:\n%s",
+        result_name,
+        level_id,
+        table.to_string(index=False),
+    )
+
+
 def mlmc_paired_diagnostics(storage: SampleStorageHDF) -> pd.DataFrame:
     """
     Build variance, correlation, and bias diagnostics for paired MLMC samples.
@@ -331,6 +379,7 @@ def _plot_mlmc_paired_summary(
     level_id: int,
     fine_values: np.ndarray,
     coarse_values: np.ndarray,
+    sample_ids: list[str],
     times: list[float],
     fine_times: np.ndarray,
     coarse_times: np.ndarray,
@@ -342,6 +391,16 @@ def _plot_mlmc_paired_summary(
     diff_values = fine_values - coarse_values
     n_samples = fine_values.shape[0]
     cost_reduction = np.nanmean(fine_times + coarse_times) / np.nanmean(coarse_times)
+
+    # log N samples with largest absolute fine/coarse differences, including the signed value
+    _log_largest_sample_differences(
+        result_name=result_name,
+        level_id=level_id,
+        sample_ids=sample_ids,
+        times=times,
+        diff_values=diff_values,
+        n_samples=10
+    )
 
     fine_var = np.nanvar(fine_values, axis=0, ddof=1)
     coarse_var = np.nanvar(coarse_values, axis=0, ddof=1)
