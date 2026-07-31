@@ -405,9 +405,9 @@ def _plot_mlmc_paired_summary(
     fine_var = np.nanvar(fine_values, axis=0, ddof=1)
     coarse_var = np.nanvar(coarse_values, axis=0, ddof=1)
     diff_var = np.nanvar(diff_values, axis=0, ddof=1)
-    fine_var_q25, fine_var_q75 = _bootstrap_variance_iqr(fine_values, seed=12345)
-    coarse_var_q25, coarse_var_q75 = _bootstrap_variance_iqr(coarse_values, seed=12346)
-    diff_var_q25, diff_var_q75 = _bootstrap_variance_iqr(diff_values, seed=12347)
+    fine_var_q25, fine_var_q75 = _bootstrap_variance_iqr(fine_values, n_bootstrap=n_samples, seed=12345)
+    coarse_var_q25, coarse_var_q75 = _bootstrap_variance_iqr(coarse_values, n_bootstrap=n_samples, seed=12346)
+    diff_var_q25, diff_var_q75 = _bootstrap_variance_iqr(diff_values, n_bootstrap=n_samples, seed=12347)
     ratio = np.divide(coarse_var, fine_var, out=np.full_like(fine_var, np.nan), where=fine_var > 0)
     reduction = np.divide(coarse_var, diff_var, out=np.full_like(coarse_var, np.nan), where=diff_var > 0)
     bias = np.nanmean(diff_values, axis=0)
@@ -426,6 +426,7 @@ def _plot_mlmc_paired_summary(
 
     def plot_variances(ax) -> None:
         for lower, upper, color in [
+            (fine_var_q25, fine_var_q75, "tab:blue"),
             (coarse_var_q25, coarse_var_q75, "tab:orange"),
             (diff_var_q25, diff_var_q75, "tab:green"),
         ]:
@@ -433,11 +434,13 @@ def _plot_mlmc_paired_summary(
             upper_plot = np.where(upper > 0, upper, np.nan)
             ax.fill_between(t, lower_plot, upper_plot, color=color, alpha=0.16, linewidth=0.0)
 
+        ax.plot(t, fine_var, label="Var(fine)", color="tab:blue")
         ax.plot(t, coarse_var, label="Var(coarse)", color="tab:orange")
         ax.plot(t, diff_var, label="Var(fine - coarse)", color="tab:green")
         ax.set_yscale("log")
         ax.set_ylabel("Variance")
-        ax.legend(loc="best")
+        # ax.legend(loc="best")
+        ax.legend(bbox_to_anchor=(1.04, 0.5), loc="center left")
         ax.grid(alpha=0.25)
 
     def plot_variance_reduction(ax) -> None:
@@ -566,6 +569,7 @@ def plot_mlmc_paired_diagnostics(
                 level_id=level_id,
                 fine_values=fine_values,
                 coarse_values=coarse_values,
+                sample_ids=sample_ids,
                 times=[float(time) for time in result_spec.times],
                 fine_times=fine_times,
                 coarse_times=coarse_times,
