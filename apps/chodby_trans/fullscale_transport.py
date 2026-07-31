@@ -319,7 +319,7 @@ def source_level_field(mesh,
     sigma_val = float(source_dict["sources_bentonite_diff"]) \
                 / float(source_dict["sources_buffer_thickness"]) \
                 * float(source_dict["sources_uos_surface"]) \
-                * float(source_dict["sources_container_vol"])
+                / float(source_dict["sources_container_vol"])
 
     region_id, region_dim = region
     for iel, el in enumerate(mesh.elements):
