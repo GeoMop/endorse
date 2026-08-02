@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------------------------------------------
+# Flow123d input template: linear elastic buffered cube, kinematic (displacement) boundary conditions.
+# The displacement formula u = E_q x is substituted per case
+#
+# Placeholders (each used below in angle brackets): mesh_file, cross_section_file,
+#   bc_displacement_matrix, bulk_regions, fracture_regions, boundary_regions,
+#   rock_young_modulus, rock_poisson_ratio, fracture_young_modulus, fracture_poisson_ratio,
+#   description
+#
+# The displacement BC uses the endorse micro-template idiom "<matrix> @ [x,y,z]" (bparser
+# matrix-vector product, verified identical to the componentwise formulas).
+# The per-fracture aperture is a SEPARATE field file (endorse fields_file), consumed as
+# !FieldFE with its own mesh_data_file — mesh_file (the geometry) and cross_section_file (the
+# field) are deliberately distinct, as in endorse macro_conductivity's own mesh_file /
+# input_fields_file split. The flow_equation sub-block below is Flow123d schema plumbing ONLY
+# (cross_section is a Darcy-schema field even though we use it mechanically) — postprocess
+# reads cross_section from the PRE-SOLVE field file, never from this sub-equation's own output.
+#
+# Regions (see micro_mesh.py): box (bulk), fam_<family>_<iii> — one PER FRACTURE, never joined
+#   (<fracture_regions> is the full bracket-list), .side_[xyz][01] (boundary — endorse
+#   box_with_sides names with the chodby_trans '.'+side convention).
+# ---------------------------------------------------------------------------------------------------------------
+
+flow123d_version: 4.0.3dev_e651b9
+
+problem: !Coupling_Sequential
+  description: "<description>"
+  mesh:
+    mesh_file: <mesh_file>
+
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: <bulk_regions>
+    time:
+      end_time: 1.0
+    a_tol: 1e-18
+    r_tol: 1e-18
+
+    flow_equation: !Flow_Darcy_LMH
+      gravity: [0, 0, 0]
+      input_fields:
+        - region: <fracture_regions>
+          cross_section: !FieldFE
+            mesh_data_file: <cross_section_file>
+            field_name: cross_section
+
+        - region: <bulk_regions>
+          bc_type: dirichlet
+          bc_pressure: 0
+
+      # this sub-equation is Flow123d schema plumbing ONLY (the vehicle for declaring the
+      # cross_section FieldFE above) — its own pressure "solution" is never read (no
+      # conductivity is even set); postprocess reads cross_section from the pre-solve field
+      # file directly (undeformed aperture, report sec. 3.1), so nothing needs to be output here
+      output:
+        fields: []
+
+    mechanics_equation: !Elasticity_Linear
+      # GMSH output format (as the endorse micro template): the default file name
+      # mechanics_fields.msh is what endorse FlowOutput.mechanic.spatial_file expects,
+      # and the result is read back with endorse.mesh_class.
+      output_stream:
+        format: !gmsh
+      output:
+        fields:
+          - displacement
+          - stress
+          - region_id
+          - cross_section_updated
+
+      solver: !Petsc
+        a_tol: 1e-14
+        r_tol: 1e-14
+
+      input_fields:
+        - region: <bulk_regions>
+          young_modulus: <rock_young_modulus>
+          poisson_ratio: <rock_poisson_ratio>
+
+        - region: <fracture_regions>
+          young_modulus: <fracture_young_modulus>
+          poisson_ratio: <fracture_poisson_ratio>
+
+        - region: <boundary_regions>
+          bc_type: displacement
+          bc_displacement: !FieldFormula
+            value: "<bc_displacement_matrix> @ [x,y,z]"

@@ -1,0 +1,127 @@
+# Main configuration for apps/upscale_m (loaded with endorse.common.load_config -> dotdict).
+# One file for both fracture-input modes — see fractures.mode below.
+
+machine_config:
+    # resolved automatically by socket.gethostname()
+    LAPTOP-MM6A3LRF:  # Ronald Siddall, Windows + Docker Desktop
+        flow_executable:
+        # docker wrapper around flow123d/ci-gnu:4.0.3dev_e651b9; translates CWD to container path
+        - C:/Plocha/Semestral_internship_cvut/endorse/venv/Scripts/python.exe
+        - C:/Plocha/Semestral_internship_cvut/endorse/apps/upscale_m/flow_win_wrapper.py
+
+geometry:
+    # Edge of the inner homogenization (averaging) cube [m].
+    L_inner: 1.0
+    # Outer cube edge = L_ext_factor * L_inner. Factor 2.0 => buffer shell L/2 thick on every face.
+    # Set to 1.0 to reproduce the unbuffered single-cube RVE
+    L_ext_factor: 2.0
+    # Averaging-window grid inside the inner cube: one effective tensor per window, all windows
+    # read from the SAME six solutions (mirrors macro_conductivity's per-subdomain tensors).
+    # Windows are endorse-side boxes, NOT imprinted in the mesh (elements cut by a window
+    # boundary enter with their volume fraction). [1,1,1] = one tensor.
+    subdomains: [1, 1, 1]
+    # Refinement level for the volume/area-fraction estimate of elements CUT by a window
+    # boundary (bulk via MacroCube.interact, fractures via postprocess._window_weights): each
+    # cut element is split into 8^level (bulk tets) / 4^level (fracture triangles) equal
+    # sub-elements; error ~ 2^-level. One knob for both — level 0 = plain barycenter 0/1 test.
+    window_refine_level: 2
+    # Outer-boundary region names (must match endorse mesh_tools.box_with_sides' side keys,
+    # prefixed with '.'), substituted into the Flow123d template's <boundary_regions>.
+    boundary_regions: [.side_x0, .side_x1, .side_y0, .side_y1, .side_z0, .side_z1]
+
+fractures:
+    # 'explicit' (uses explicit_list below) or 'stochastic' (uses stochastic: below, a bgem
+    # Population). Only the section matching `mode` is ever read — the other stays here ready
+    # to flip to, no other edits needed.
+    mode: stochastic
+
+    # --- mode: explicit ------------------------------------------------------------------
+    # Circular (penny-shaped) fractures: GEOMETRIC radius r, center, unit-ish normal (normalized
+    # on load). The domain cube is CENTERED AT THE ORIGIN (bgem convention): [-L_ext/2, L_ext/2]^3.
+    # Reference validation case: r = 0.2 L, XY-plane fracture at the domain center
+    explicit_list:
+        - r: 0.2
+          center: [0.0, 0.0, 0.0]
+          normal: [0.0, 0.0, 1.0]
+
+    # --- mode: stochastic ------------------------------------------------------------------
+    # Stochastic fracture network in the buffered domain: seed + families passed VERBATIM to
+    # bgem Population.from_cfg (keys: trend+plunge or strike+dip, concentration, power, r_min,
+    # r_max, p_32 or p_30). SIZE UNITS are bgem fracture sizes r = sqrt(fracture area); the
+    # reference disc (EllipseShape) has unit area, so r = rho_geometric * sqrt(pi). The example
+    # population below reproduces geometric radii [0.15, 0.3].
+    # NOTE: keep the population range equal to the sampled range, otherwise most of the
+    # intensity is spent on sizes that are never generated (power law: small sizes dominate).
+    stochastic:
+        seed: 1234  # numpy global-generator seed used by bgem sampling
+        population:
+            fam_1:
+                trend: 0.0
+                plunge: 90.0
+                concentration: 7.0
+                power: 2.5
+                r_min: 0.2659
+                r_max: 0.5317
+                p_32: 0.3
+        # optional (bgem sizes): restrict generated sizes, Population.set_sample_range
+        # sample_range: [0.2659, 0.5317]
+
+mesh:
+    # base name of the generated mesh files. NOTE: switching fractures.mode on an EXISTING
+    # run dir reuses stale mesh files under this name unless you also change mesh_name (or use
+    # a fresh RUN_NAME) — the make_mesh/make_fractures file-existence guards do not know mode
+    # changed.
+    mesh_name: micro_mesh
+    # target element size on/near fractures and global maximum. 0.1 keeps a single-fracture
+    # mesh small; a multi-fracture DFN (mode: stochastic) typically wants this finer (e.g.
+    # 0.05) and will take noticeably longer to mesh and to solve.
+    fracture_mesh_step: 0.15
+    # CharacteristicLengthMin = fracture_mesh_step / mesh_size_min_fraction
+    mesh_size_min_fraction: 10.0
+    # disc approximation: minimum number of boundary points per full circle (gmsh option
+    # Mesh.MinimumCirclePoints via bgem mesh options)
+    min_circle_points: 16
+    # minimum number of points per curved edge (gmsh option Mesh.MinimumCurvePoints); left at
+    # the code default (16) here — uncomment to override
+    # min_curve_points: 16
+    tolerance: 1e-6
+    tolerance_boolean: 1e-5
+    tolerance_initial_delaunay: 0.01
+    heal_gamma_tol: 0.01
+    # 'yes' opens the gmsh GUI after meshing (interactive runs only)
+    show_gui: 'no'
+
+materials:
+    young_modulus_rock: 1e9        # Pa
+    poisson_ratio_rock: 0.25
+    young_modulus_fracture: 1e3    # Pa
+    poisson_ratio_fracture: 0.25
+    # initial fracture thickness (cross_section): delta = aperture_per_r * r
+    aperture_per_r: 1e-3
+
+loads:
+    # 'kubc', 'subc' or 'both'  (subc pending rigid-body decision, see PLAN.md)
+    bc_type: kubc
+    # Flow123d input template, looked up in flow123d_templates/ (mirrors endorse
+    # macro_flow_model.micro_problem's cfg_micro.input_template pattern)
+    input_template: mechanics_kubc_tmpl.yaml
+    # KUBC loading parameter beta (dimensionless) and SUBC parameter alpha [Pa]
+    deformation_parameter_beta: 1e-2
+    stress_parameter_alpha: 1e6
+    # The six KUBC load cases IN THE REPORT VOIGT ORDER [11, 22, 33, 23, 13, 12] — this order
+    # is FIXED by bgem.upscale.voigt_to_tn (kubc.py: voigt_to_tn(beta * eye(6))), do not reorder
+    # without changing the code. case_dir_names are the per-case result directory names,
+    # matching R. Siddall's original result layout.
+    case_names: [E_11, E_22, E_33, E_23, E_13, E_12]
+    case_dir_names:
+        - pure_normal_E_11
+        - pure_normal_E_22
+        - pure_normal_E_33
+        - pure_shear_E_23
+        - pure_shear_E_13
+        - pure_shear_E_12
+
+output:
+    # Effective-tensor report filename, written once per averaging window (geometry.subdomains)
+    # — single file at the run root for [1,1,1], one per subdomain_<ix>_<iy>_<iz>/ otherwise.
+    report_name: effective_tensor_C_k_kinematic_bc.txt

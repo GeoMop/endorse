@@ -1,0 +1,489 @@
+=====================================================================================================
+ upscale_m CODE WALKTHROUGH  —  every class and function, step by step
+=====================================================================================================
+ Written for: Ronald Siddall                                                 generated: 2026-07-09
+ How to read line references: "src/kubc.py:44" = file src/kubc.py, line 44. Line numbers match the
+ state of the code on the date above (after the Oda removal). REPORT = your internship report.
+
+ CONTENTS
+   0.  The big picture: what one run does, start to finish
+   1.  run_upscale.py                — the driver (the only file you execute)
+   2.  src/micro_mesh.py             — geometry + mesh (buffered cube, fractures, regions)
+   3.  src/stochastic_dfn.py         — random fracture network sampling
+   4.  src/kubc.py                   — the six load cases and the solver calls
+   5.  src/postprocess.py            — volume averaging over the inner cube
+   6.  src/upscale_tensor.py         — tensor assembly and the text report
+   7.  src/macro_cube.py             — the cubic averaging window (future macro-mesh phase)
+   8.  flow_win_wrapper.py           — Windows/Docker plumbing (no physics)
+   9.  flow123d_templates/mechanics_kubc_tmpl.yaml — the solver input template
+  10.  configs/config.yaml           — what every knob means
+
+-----------------------------------------------------------------------------------------------------
+ UPDATE 2026-07-10 — subdomain grid (line numbers in sections 2, 4, 5 shifted slightly):
+ geometry.subdomains [nx, ny, nz] splits the averaging cube into a grid of cells; each cell is
+ IMPRINTED into the mesh (micro_mesh adds the cell boxes as fragment tools -> still conforming,
+ still exact), every cell gets its own tensor computed from the SAME six solutions, one report per
+ cell in subdomain_ix_iy_iz/. This mirrors macro_conductivity's per-subdomain loop. Key code:
+ MicroMesh.subdomain_boxes/subdivision (micro_mesh.py), postprocess.average_boxes (reads the VTU
+ once, selects per box by barycenter — average_inner_cube is now a single-box wrapper around it),
+ LoadCaseResult.eps_voigt/sigma_voigt are (n_subdomains, 6) arrays, assemble_matrices takes i_sub,
+ run_upscale loops the cells. Default [1, 1, 1] reproduces the old behaviour exactly.
+-----------------------------------------------------------------------------------------------------
+
+=====================================================================================================
+ 0. THE BIG PICTURE
+=====================================================================================================
+
+ One run answers one question: "if this fractured cube were a homogeneous material, what would its
+ 6x6 elastic stiffness matrix C be?" The recipe (identical in spirit to your original pipeline):
+
+   (a) Build a cube of rock with fractures in it and mesh it.        -> micro_mesh.py
+   (b) Squeeze/shear it in 6 independent ways (KUBC: prescribe       -> kubc.py + template
+       displacement u = E_q x on the whole outer boundary).
+   (c) For each load, volume-average stress and strain over the      -> postprocess.py
+       averaging volume. That gives one column of Sigma and E.
+   (d) Solve C = Sigma @ E^-1 and write the report.                  -> upscale_tensor.py
+
+ The one physics upgrade over your original code: TWO concentric cubes. The outer cube
+ [0, L_ext]^3 carries the boundary conditions; averaging happens only over the inner cube of edge
+ L centered inside it. The shell between them (thickness L/2 per face when L_ext = 2L) is a buffer:
+ by Saint-Venant's principle the artificial stress concentrations caused by the rigid boundary
+ condition decay across the buffer before they reach the volume you actually measure.
+ Setting L_ext_factor: 1.0 in the config removes the buffer and reproduces your original setup.
+
+ Data layout of one finished run (runs/<name>/):
+   micro_mesh_healed.msh2            the healed mesh (shared by all six cases)
+   pure_normal_E_11/ ... pure_shear_E_12/
+       pure_normal_E_11_tmpl.yaml    local template copy
+       pure_normal_E_11.yaml         the rendered Flow123d input (placeholders filled in)
+       output/mechanics/*.vtu        solver results
+   effective_tensor_C_k_kinematic_bc.txt   the report (Sigma, E, C_k, S_k + run metadata)
+
+=====================================================================================================
+ 1. run_upscale.py — THE DRIVER
+=====================================================================================================
+
+ One function, main(work_dir, config_file), at run_upscale.py:31. It is the replacement of your
+ original main.py + run_all.sh. Step by step:
+
+ 1. Config resolution (lines 34-37): the config name you give on the command line is looked up in
+    configs/ first, then in the app root. So "run_upscale.py mytest config_dfn.yaml" finds
+    configs/config_dfn.yaml. Loading happens via endorse's common.load_config (line 37), which
+    returns a "dotdict": nested YAML becomes attribute access, cfg.materials.young_modulus_rock.
+    This replaces your whole ConfigManager class.
+
+ 2. Run directory (lines 39-40): a non-absolute work_dir is placed under runs/, so all products of
+    "run_upscale.py mytest ..." land in runs/mytest/. runs/ is git-ignored: results never pollute
+    the repository.
+
+ 3. BC-type switch (lines 44-46): reads cfg.loads.bc_type and currently *asserts* it is "kubc" —
+    the SUBC branch is intentionally not written yet (open rigid-body question, see PLAN.md).
+    This assert is the switch point where SUBC will plug in later.
+
+ 4. The pipeline itself runs inside "with common.workdir(work_dir, ...)" (line 49) — an endorse
+    context manager that chdirs into the run directory for the duration, so every module below can
+    use simple relative paths.
+      line 51: micro = make_micro_mesh(...)        -> section 2
+      line 54: results = run_kubc(cfg, micro)      -> section 4 (this is where the 6 solves happen)
+      line 58: E, Sigma = assemble_matrices(results)  -> section 6. Both matrices are the
+               MEASURED inner-cube averages; prescribed values are only boundary conditions.
+      line 59: C_k = equivalent_tensor(E, Sigma) — your C_k = Sigma E^-1.
+
+ 5. Output (lines 61-71): a meta dict with every physical parameter of the run is embedded in the
+    text report (line 71) so a report is always self-describing. The report is the single result
+    artifact of a run (besides the raw Flow123d outputs in the case folders).
+
+=====================================================================================================
+ 2. src/micro_mesh.py — GEOMETRY AND MESH
+=====================================================================================================
+
+ This is the port of your surface.py / GeneralComputationClassSurfaceArch.py mesher, with the
+ buffer added. Three small data classes and one big function.
+
+ -- class MicroFracture (micro_mesh.py:41) --------------------------------------------------------
+ Plain record of one penny-shaped fracture: radius r, center, unit normal. Nothing else. All code
+ downstream (mesher, aperture, report) reads fractures in this form, whether they came from an
+ explicit config list or from the stochastic sampler.
+
+ -- class MicroMesh (micro_mesh.py:49) ------------------------------------------------------------
+ The "result package" that make_micro_mesh returns and run_kubc consumes:
+   mesh_file    the healed .msh2 file (as an endorse File object)
+   fractures    the MicroFracture list actually used
+   inner_box    (lo, hi) so the averaging cube is [lo, hi]^3   <- postprocess uses exactly this
+   L_ext        outer cube edge
+   has_buffer   True when a rock_outer region exists (used to render the template correctly)
+
+ -- fractures_from_config (micro_mesh.py:63) ------------------------------------------------------
+ A dispatcher on cfg.fractures.mode:
+   "explicit"   (lines 66-76): read the list from the YAML, normalize each normal vector
+                (line 75: normal / norm — so you may write [0, 0, 2] in the config and it still
+                means the z-direction).
+   "stochastic" (lines 77-79): delegate to stochastic_dfn.stochastic_fracture_set -> section 3.
+
+ -- _add_rotated_disk (micro_mesh.py:84) ----------------------------------------------------------
+ gmsh can only create a disk lying flat (normal = z). To orient it along the fracture normal:
+   line 86: create the flat disk at the fracture center;
+   line 94: rotation axis = cross product of z-axis and the target normal;
+   line 96: rotate by the angle arccos(z . normal) around that axis.
+ The two "if" branches above (lines 89-92) handle the degenerate cases: normal already = +z
+ (no rotation; cross product would be the zero vector) and normal = -z (rotate by pi around x).
+
+ -- _bbox_outside (micro_mesh.py:100) -------------------------------------------------------------
+ Tiny helper: does this geometric entity stick out of the outer cube [0, L_ext]^3? Used to throw
+ away fracture pieces that protrude outside the domain after fragmentation (same clipping your
+ original code did).
+
+ -- make_micro_mesh (micro_mesh.py:107) — the main event ------------------------------------------
+ Step by step:
+
+ 1. Sizes (lines 113-118): L = inner edge, L_ext = L_ext_factor * L. The inner cube is centered:
+    lo = (L_ext - L)/2, hi = lo + L. With the defaults L=1, factor=2: inner cube = [0.5, 1.5]^3
+    inside outer cube [0, 2]^3. Line 120: factor == 1.0 means "no buffer" and the inner box is not
+    built at all (the outer cube IS the averaging volume) — the validation mode.
+
+ 2. Geometry (lines 137-143): outer box (line 137), inner box (line 140, only if buffered),
+    one rotated disk per fracture (line 142).
+
+ 3. THE KEY GEOMETRIC OPERATION — fragment (line 147):
+        _, out_map = occ.fragment([(3, outer_tag)], tools)
+    OCC "fragment" mutually intersects everything: fractures get cut by the cubes and by each
+    other, and — crucially — the inner cube surface becomes a real internal surface of the model.
+    After this the final mesh CONFORMS to the averaging-volume boundary: no tetrahedron and no
+    fracture triangle straddles the inner-cube surface, every element is entirely inside or
+    entirely outside. That is what later makes the "is this element in the inner cube?" test EXACT
+    instead of approximate (section 5).
+    fragment also returns out_map: for each input object, the list of pieces it became. This is
+    how pieces are identified afterwards (your original code used bounding-box heuristics here;
+    the map is bulletproof, e.g. a fracture lying exactly in the inner-cube face plane cannot be
+    misclassified):
+      line 150: pieces of the outer box  = ALL volumes of the model;
+      line 152: pieces of the inner box  = the volumes INSIDE the averaging cube;
+      line 158: outer volumes = all minus inner (set difference) — the buffer shell.
+
+ 4. Fracture piece filtering (lines 161-176): for every disk, walk its pieces in the map; a piece
+    protruding outside the outer cube (checked with _bbox_outside, line 168) is deleted, the rest
+    are kept as fracture surfaces. This is the "clip fracture to the domain" step.
+
+ 5. Boundary faces (lines 179-194): faces_in_slab (line 179) grabs all 2D entities inside a thin
+    axis-aligned box; each outer cube face gets its slab, giving the six named boundary groups
+    .surface_x_minus ... .surface_z_plus (lines 185-192) — same names as your original templates,
+    so the Flow123d BC block is unchanged. Line 194 asserts none of them is empty.
+
+ 6. Physical regions (lines 197-203) — the names/tags the whole pipeline relies on:
+        rock_inner  3D  tag 1     rock inside the averaging cube
+        rock_outer  3D  tag 2     buffer rock (only if buffered)
+        fractures   2D  tag 3     all fracture surfaces
+    Tags 1 and 3 are hardcoded as constants in postprocess.py:27-28 — if you ever change them
+    here, change them there.
+
+ 7. Mesh options (lines 206-218): ported one-to-one from your proven mesher — MeshSizeMax = step,
+    MeshSizeMin = step/10, Algorithm 6 (Frontal-Delaunay), MshFileVersion 2.2 (line 218; both
+    Flow123d and bgem's reader want the legacy format). Meshing happens at line 222.
+
+ 8. Healing (lines 232-237): bgem's HealMesh removes degenerate/sliver elements that would break
+    Flow123d — exactly as in your original pipeline. The healed file (mesh_name + "_healed.msh2")
+    is the one everything downstream uses.
+
+=====================================================================================================
+ 3. src/stochastic_dfn.py — RANDOM FRACTURE NETWORK
+=====================================================================================================
+
+ Port of your GenerateFractures3D_Universal.generator_of_fracture_set (dfn_cvut_static.py) to the
+ NEW bgem API on branch JB_homo. One central subtlety and one function.
+
+ THE UNIT CONVERSION (lines 40-48). New bgem removed DiscShape; the disc reference shape is now
+ EllipseShape, which has UNIT AREA (not unit radius). Consequence: bgem's fracture size
+ Fracture.r is sqrt(area), not the geometric radius. For a disc of geometric radius rho:
+     area = pi rho^2   =>   r_bgem = sqrt(area) = rho * sqrt(pi).
+ Rule enforced by this module: config and all upscale_m code speak GEOMETRIC radii; conversion
+ happens only at the bgem boundary — _to_bgem_size (line 43) on the way in, _to_geometric_radius
+ (line 47) on the way out (used at line 84). If radii ever look wrong by a factor ~1.77 = sqrt(pi),
+ suspect this boundary.
+
+ -- stochastic_fracture_set (stochastic_dfn.py:51) ------------------------------------------------
+ 1. Family definition (lines 63-72): one fracture family from the config — Fisher orientation
+    (trend, plunge, concentration), truncated power law (exponent "power", radius range
+    population_radius_range), intensity p_32 (mean fracture area per unit volume). Line 65 is your
+    original trick preserved: for a FIXED normal, the Fisher concentration is set to 1e9 (nearly a
+    delta function) and the normals are overridden explicitly later anyway.
+ 2. Population (line 74): Population.from_cfg({...}, box, shape=EllipseShape()) — the new-API
+    equivalent of your add_family. Line 76: set_sample_range narrows which part of the population
+    is actually generated (your sample_radius_range); note it RETURNS a new Population (functional
+    style, the old one is not modified).
+ 3. Sampling (lines 78-79): np.random.seed(seed) makes the run reproducible (bgem samples through
+    the global numpy generator), then population.sample(...) draws the count, sizes, orientations.
+ 4. Placement loop (lines 83-109), ported verbatim from your original logic: bgem's centers are
+    thrown away and re-drawn uniformly WITH SAFETY PADS —
+      line 93: pad_xy = rho + boundary_distance   (fracture must fit, plus the safety margin)
+      line 95: pad_z  = boundary_distance only    (special case: fixed HORIZONTAL normal — a flat
+               disc has no vertical extent, so z needs no rho-sized pad; your original relaxation)
+      lines 101-104: if the fracture is too large to fit anywhere with its pads, it is skipped
+               and counted (warning printed at line 112).
+      lines 106-108: draw the center inside the padded box.
+    With allow_boundary_intersections: yes the pads are zero (line 99) and fractures may stick out
+    — micro_mesh then clips them at the outer boundary (section 2, step 4).
+
+=====================================================================================================
+ 4. src/kubc.py — THE SIX LOAD CASES
+=====================================================================================================
+
+ The heart of the method. Replaces your GenerateKinematicYaml + GenerateKinematicVtuFiles, using
+ the endorse machinery for templating, running and caching.
+
+ -- The Voigt bookkeeping (kubc.py:32-36) ---------------------------------------------------------
+ VOIGT_IJ = [(0,0), (1,1), (2,2), (1,2), (0,2), (0,1)] fixes the report ordering
+ [11, 22, 33, 23, 13, 12] in ONE place; every 6-vector in the pipeline follows it.
+ CASE_DIR_NAMES (line 35) are your original result-folder names (pure_normal_E_11, ...,
+ pure_shear_E_12), so runs look exactly like your old data layout.
+
+ -- kubc_load_matrices (kubc.py:39) ---------------------------------------------------------------
+ Builds the six elementary macro-strain matrices E_q (REPORT eq. 2.62): for Voigt slot q with
+ index pair (i, j), a zero 3x3 matrix with E[i,j] = E[j,i] = beta (line 44). Normal cases put beta
+ on the diagonal; shear cases put beta SYMMETRICALLY off-diagonal — which is why the engineering
+ shear of a shear case is 2*beta, not beta (see prescribed_strain_voigt below).
+
+ -- formula_from_matrix (kubc.py:49) --------------------------------------------------------------
+ Turns a load matrix into the Flow123d displacement formula u_i = E_ij x_j as a string:
+ E_11 gives "[0.01*x, 0.0, 0.0]", the E_23 shear gives "[0.0, 0.01*z, 0.01*y]". Because it works
+ for ANY symmetric matrix (loop over all nonzero entries, lines 56-58), future least-squares
+ identification can add mixed load states without touching the template. This one function
+ replaces the only line that differed between your six template files.
+
+ -- prescribed_strain_voigt (kubc.py:62) ----------------------------------------------------------
+ The prescribed load as a Voigt strain vector WITH ENGINEERING SHEAR: [e11, e22, e33, 2e23, 2e13,
+ 2e12] (line 64). Stacking the six cases column-wise gives the diagonal matrix
+ diag(b, b, b, 2b, 2b, 2b) — REPORT eq. 2.66. The factor 2 here is the single most common source
+ of Voigt bugs — if numbers ever look wrong by a factor 2 on shear entries, check here first.
+
+ -- class LoadCaseResult (kubc.py:67) -------------------------------------------------------------
+ One record per solved case: the case name, prescribed strain (Voigt), measured average strain
+ (Voigt), measured average stress (Voigt), and the path of the VTU it came from (traceability —
+ the report lists these paths).
+
+ -- _find_mechanics_vtu (kubc.py:76) --------------------------------------------------------------
+ Finds the mechanics result under output/mechanics/. Preference for the file ending "000000.vtu"
+ (line 83) — the steady solution written at the first output time — matches what your validated
+ pipeline read.
+
+ -- run_kubc (kubc.py:87) — the case loop ---------------------------------------------------------
+ 1. Aperture (lines 94-98): delta = aperture_per_r * mean(radii). For a single fracture with
+    r = 0.2 and the default 1e-3 this is your familiar 2e-4. With multiple DIFFERENT radii the
+    mean is a temporary simplification and a warning is printed (line 97) — per-fracture regions
+    are a known pending item (PLAN.md).
+ 2. bulk_regions (line 101): the template says "region: <bulk_regions>" in three places; with a
+    buffer that must be "[rock_inner, rock_outer]", without one only "rock_inner" exists. This is
+    why MicroMesh carries has_buffer.
+ 3. Per case (loop at line 103), inside "with workdir(dir_name, ...)" (line 106) so each case has
+    its own folder:
+      line 107: the healed mesh is copied in EXPLICITLY with shutil.copy2. (Deliberate: endorse's
+                workdir(inputs=[...]) copy helper drops file extensions — known bug, PLAN.md.)
+      lines 110-111: the template is copied to a local name pure_normal_E_11_tmpl.yaml, because
+                endorse renders <name>_tmpl.yaml -> <name>.yaml — this little trick makes the
+                rendered solver input carry the case name, like your original per-case yamls.
+      lines 112-122: the params dict — one entry per <placeholder> in the template. This dict IS
+                the entire difference between the six cases (only bc_displacement_formula changes).
+      line 124: call_flow(cfg.machine_config, template, params) — endorse renders the template,
+                launches Flow123d (through the Docker wrapper on your laptop, resolved from
+                machine_config by hostname), and captures stdout/stderr to files. Results of
+                finished calls are disk-cached (@memoize inside endorse): re-running the same
+                study skips completed solves.
+      lines 125-126: convergence is checked FROM THE SOLVER LOG (check_conv_reasons) — a real
+                convergence test, stronger than your original "do 6 VTU files exist".
+      lines 128-138: locate the VTU and hand it to average_inner_cube (section 5) together with
+                the inner box and material data.
+      lines 139-145: pack everything into a LoadCaseResult; note eps/sigma are converted to Voigt
+                right here (strain with the factor 2 on shears).
+
+=====================================================================================================
+ 5. src/postprocess.py — AVERAGING OVER THE INNER CUBE
+=====================================================================================================
+
+ Port of your GeneralComputationClass. Computes the two volume averages (REPORT sec. 3.4.2):
+
+     <sigma> = (1/V) [ sum_bulk sigma_e V_e  +  sum_frac sigma_f A_f delta ]
+     <eps>   = (1/V) [ sum_bulk eps_e   V_e  +  sum_frac eps_f   A_f delta ]
+
+ Stress comes straight from the solver output; strain is NOT read from the solver — it is
+ reconstructed per element from Hooke's law eps = M : sigma with the analytic isotropic compliance
+ of the element's own material. (Same choice as your original code: stress is the primary,
+ reliably exported field; fractures use the fracture compliance so their large deformability is
+ represented even though geometrically they are thin surfaces.)
+
+ -- build_compliance_matrix_voigt (postprocess.py:31) ---------------------------------------------
+ The isotropic 6x6 compliance: 1/E on the normal diagonal (line 37), -nu/E off-diagonal (line 38),
+ and 2(1+nu)/E = 1/G on the shear diagonal (line 39). The 2(1+nu)/E form is correct precisely
+ BECAUSE the strain vector carries engineering shear gamma: gamma = tau/G.
+
+ -- strain_from_stress (postprocess.py:43) --------------------------------------------------------
+ Vectorized Hooke for N elements at once: pack stress tensors to Voigt (lines 46-47), multiply by
+ the compliance (line 48), unpack to symmetric 3x3 tensors (lines 49-55). NOTE the /2 at lines
+ 53-55: the Voigt result is engineering shear gamma, but the TENSOR component is eps = gamma/2.
+ The averaging works on tensors (so no convention headaches), and the factor 2 is re-applied only
+ at the very end by strain_to_voigt.
+
+ -- parse_stress_field (postprocess.py:59) --------------------------------------------------------
+ Defensive reader: Flow123d/pyvista may deliver the stress as (N,3,3), as row-major (N,9), or as
+ Voigt (N,6); all three are normalized to (N,3,3). Anything else raises (line 74) instead of
+ silently averaging garbage.
+
+ -- average_inner_cube (postprocess.py:87) — the main function ------------------------------------
+ 1. Read the VTU with pyvista (line 97) and get region_id per element (line 99). This is why the
+    template asks Flow123d to output region_id (template line 51) — it is the element's badge
+    saying which material/zone it belongs to.
+
+ 2. BULK SELECTION (line 107):
+        bulk_idx = np.where(rid == region_rock_inner)[0]
+    "Is this tetrahedron in the inner cube?" is answered purely BY REGION TAG (rock_inner = 1).
+    No geometry test needed: the mesh conforms to the inner-cube boundary (section 2, step 3), so
+    the mesher has already decided exactly. Buffer elements (rock_outer = 2) are simply never
+    selected — that is the whole "ignore the buffer" mechanism, one line.
+    Lines 110-111: element volumes V_e from pyvista's compute_cell_sizes.
+
+ 3. FRACTURE SELECTION (lines 116-120) — the barycenter test:
+        centers = mesh.cell_centers().points                       (line 118)
+        inside  = np.all((centers > lo - tol) & (centers < hi + tol), axis=1)   (line 119)
+        frac_in_idx = np.where((rid == region_fractures) & inside)[0]           (line 120)
+    Fracture elements all share one region (tag 3) whether they lie in the buffer or in the inner
+    cube, so region alone is not enough — the element CENTER is tested against the box [lo, hi]^3
+    on all three axes at once (np.all(..., axis=1)). Normally a barycenter criterion is an
+    approximation for elements straddling the boundary; here it is EXACT, because conforming
+    elements are entirely inside or outside, so their centers are unambiguous. tol (line 104) is
+    only round-off protection, ~1e-8.
+
+ 4. Fracture weights (lines 126-128): a fracture element is a 2D triangle, so its "volume" is
+    area times aperture, V_f = A_f * delta — the thin-plate bookkeeping (REPORT sec. 3.1).
+
+ 5. The averages (lines 132-140): concatenate bulk and fracture contributions, then
+        sigma_avg = einsum("kij,k->ij", sigma_all, V_all) / V_ref
+    i.e. sum over elements k of (tensor_k * weight_k), divided by V_ref = L_inner^3 (line 138).
+    Note V_ref is the FULL cube volume, not the sum of element volumes — the tiny volume displaced
+    by fracture apertures is intentionally not subtracted (consistent with your original and with
+    the thin-fracture limit).
+
+ 6. stress_to_voigt / strain_to_voigt (lines 144-151): tensor -> report-ordered 6-vector; the
+    strain version multiplies the shear rows by 2 (engineering shear) — the counterpart of the /2
+    inside strain_from_stress.
+
+=====================================================================================================
+ 6. src/upscale_tensor.py — FROM 6 CASES TO ONE TENSOR
+=====================================================================================================
+
+ -- assemble_matrices (upscale_tensor.py:24) ------------------------------------------------------
+ Column-stacks the six LoadCaseResults into two 6x6 matrices: column q holds the Voigt vector of
+ case q. E = the MEASURED inner-cube-averaged strains, Sigma = the measured average stresses.
+ Only measured quantities are used (decision R. Siddall, 9. 7.): with fractures intersecting the
+ outer boundary, displacement jumps contribute to the boundary integral and the average strain
+ theorem <eps> = E_prescribed no longer holds — the prescribed values would be mathematically
+ inconsistent as "results". They remain what they physically are: boundary conditions.
+
+ -- equivalent_tensor (upscale_tensor.py:34) ------------------------------------------------------
+ method="exact" (line 42): C = responses @ inv(loads). With loads = E and responses = Sigma this
+ is your C_k = Sigma E^-1 (REPORT sec. 2.5.2) — six independent experiments, six unknown columns,
+ exact solve. method="ls_symmetric" (line 44) is the reserved slot for the symmetric
+ least-squares identification (21 unknowns, >= 36 equations) that J. Brezina wants later — it
+ deliberately raises NotImplementedError so nobody can call it by accident.
+
+ -- write_report (upscale_tensor.py:59) -----------------------------------------------------------
+ The formatted .txt in the layout of your ORIGINAL GenerateKinematicEffectiveElasticTensor output:
+ run metadata header, then the four classic sections — Macroscopic stress matrix Sigma,
+ Macroscopic deformation matrix E, Effective Elastic Tensor C_k, Compliance Tensor S_k = inv(C_k)
+ — followed by the list of source VTU files so every number is traceable to the simulation that
+ produced it. Report file name: effective_tensor_C_k_kinematic_bc.txt (as in your original runs).
+
+=====================================================================================================
+ 7. src/macro_cube.py — THE CUBIC AVERAGING WINDOW
+=====================================================================================================
+
+ NOT used by the single-cube pipeline above. It is the assignment item "MacroCube analogous to
+ MacroSphere": in endorse's general homogenisation machinery, every element of a coarse MACRO mesh
+ collects micro elements inside an averaging window around its barycenter. MacroSphere uses a
+ ball; MacroCube (macro_cube.py:35) uses a cube = a max-norm ball:
+
+     sphere:  np.sum(nc * nc, axis=1) < r * r     (Euclidean norm of node offsets < r)
+     cube:    np.max(np.abs(nc), axis=1) < h      (max coordinate offset < h)
+
+ _center_half_edge (line 42): window center = macro-element barycenter; half-edge h = rel_size *
+ mean vertex distance from the barycenter (so the window scales with the macro element).
+ aabb (line 48): the bounding box used by the framework to pre-filter candidate micro elements.
+
+ interact (line 52) — upgraded past MacroSphere (decision R. Siddall, 9. 7.): it returns the
+ VOLUME FRACTION of the micro element inside the window, in [0, 1], instead of MacroSphere's
+ all-or-nothing "any node inside" 1/0. Why: on a mesh that does not conform to the window (the
+ macro-mesh setting) elements straddle the boundary, and a 0/1 weight miscounts up to one element
+ layer of volume. Downstream, Subdomain.weights multiplies this weight by the element volume and
+ normalizes, so fraction * V_e = exact overlap volume — precisely the right input. Steps:
+   lines 60-61: exact shortcut — all nodes inside the (convex) cube => fraction 1.0;
+   lines 62-63: exact shortcut — node bounding box disjoint from the window => 0.0;
+   lines 66-68: element cut by the boundary => split it into 8^level EQUAL-VOLUME sub-tets with
+     endorse's own refine_barycenters (macro_flow_model.py:239) and return the fraction of
+     sub-barycenters inside. Error ~ element_size / 2^level, only for boundary-cut elements;
+     level is an attribute (default 2 = 64 sub-tets; verified against Monte-Carlo references).
+ On a CONFORMING mesh every element is entirely in or out, so the shortcuts fire and the result
+ is exactly 1.0/0.0 — the exact single-cube behaviour costs nothing. (Recorded in PLAN.md:
+ MacroSphere still uses the 0/1 indicator and stores a rel_radius its code never reads; whether
+ it should get the same volume-fraction upgrade upstream is a question for J. Brezina.)
+
+ In the future macro-mesh phase, these windows are what replaces the conforming inner cube — in
+ the current single-cube app the conforming mesh makes all of it degenerate to exact V_e / V_inner
+ weights, which is why MacroCube can sit unused without loss.
+
+=====================================================================================================
+ 8. flow_win_wrapper.py — DOCKER PLUMBING (no physics)
+=====================================================================================================
+
+ Why it exists: endorse's call_flow passes ABSOLUTE Windows paths (C:\...) to the solver; inside
+ the Linux Docker container those are meaningless, so Flow123d died with "Can not open file
+ './C:\...'". The wrapper sits between endorse and Docker:
+   to_container (line 28): regex ^([A-Za-z]):[\\/](.*) rewrites "C:\foo\bar" -> "/C/foo/bar";
+   main (line 36): translates every command-line argument AND the current working directory
+   (line 39), mounts the drive under both /C and /c (lines 44-45, case-sensitive Linux), sets the
+   container working directory with -w (line 46), and runs
+   "docker run --rm ... flow123d/ci-gnu:4.0.3dev_e651b9 flow123d <args>" (lines 42-48).
+ machine_config in the config points at [venv python.exe, this file], so to endorse it just looks
+ like a flow123d executable. Docker Desktop must be running.
+
+=====================================================================================================
+ 9. flow123d_templates/mechanics_kubc_tmpl.yaml — THE SOLVER INPUT
+=====================================================================================================
+
+ ONE template serves all six load cases (your original had six files differing in one line).
+ Everything in <angle brackets> is a placeholder filled from the params dict in kubc.py:112.
+ Structure (adapted from your kinematic template):
+   line 19  mesh_file                — the healed .msh2 copied into the case folder;
+   line 21  !Coupling_Iterative      — the flow+mechanics coupling frame Flow123d requires;
+   line 29  !Flow_Darcy_LMH          — a DUMMY zero-pressure flow problem (gravity [0,0,0],
+            bc_pressure 0, no output): mechanics-only runs still need a flow equation present;
+   line 42  !Elasticity_Linear       — the actual problem:
+     lines 48-52  output fields: displacement, stress, region_id, cross_section_updated
+                  (stress + region_id are what postprocess.py consumes);
+     lines 59-61  rock: young/poisson placeholders, applied to <bulk_regions> — rendered as
+                  "[rock_inner, rock_outer]" (buffered) or "rock_inner" (unbuffered);
+     lines 63-65  fractures: fracture material, thickness via cross_section (line 33);
+     lines 67-70  THE KUBC BOUNDARY CONDITION: bc_type displacement on all six .surface_* faces,
+                  bc_displacement = !FieldFormula "<bc_displacement_formula>" — the one line that
+                  distinguishes the six cases, generated by formula_from_matrix.
+
+=====================================================================================================
+ 10. configs/config.yaml — EVERY KNOB
+=====================================================================================================
+
+ machine_config          solver launch command per hostname (yours: LAPTOP-MM6A3LRF -> the Docker
+                         wrapper). Same config file works on another machine by adding its entry.
+ geometry.L_inner        edge of the averaging cube (the "L" of the whole method).
+ geometry.L_ext_factor   outer/inner edge ratio; 2.0 = the assigned buffer (L/2 shell per face),
+                         1.0 = no buffer (your original single-cube setup, validation mode).
+ fractures.mode          "explicit" (list r/center/normal — REMEMBER: coordinates live in the
+                         OUTER domain [0, L_ext]^3, so the domain center is L_ext/2, e.g.
+                         [1,1,1] for the default) or "stochastic" (section 3 parameters).
+ mesh.fracture_mesh_step the mesh step h of your convergence studies (MeshSizeMax; Min = step/10).
+ mesh.*tolerance*, heal_gamma_tol   the OCC/meshing/healing tolerances from your original mesher.
+ mesh.show_gui           'yes' pops up the gmsh window after meshing — visual inspection.
+ materials.*             E and nu of rock and fracture (defaults: 1e9/1e3 Pa, nu 0.25 — REPORT).
+ materials.aperture_per_r  delta = aperture_per_r * r  (default 1e-3 -> your delta = 1e-3 r).
+ loads.bc_type           kubc | subc | both — only kubc runs today (assert in the driver).
+ loads.deformation_parameter_beta   KUBC beta (1e-2); stress_parameter_alpha waits for SUBC.
+
+=====================================================================================================
+ END — companion documents: MAPPING.md (original code -> upscale_m, verification checklist),
+ PLAN.md (staged plan, design decisions, open questions, dated log), README.md (usage).
+=====================================================================================================
