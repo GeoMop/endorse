@@ -70,17 +70,40 @@ class MacroTetra(MacroShapeBase):
             np.min(macro_el.vertices(), axis=0),
             np.max(macro_el.vertices(), axis=0)])
 
-    def interact(self, macro_el:Element, micro_el: Element):
-        jac = macro_el.vertices()[1:, :] - macro_el.vertices()[0, :]  # jacobian of the macro element
-        inv_jac = np.linalg.inv(self.rel_radius * jac.T)
-        micro_b = micro_el.barycenter()
-        x_rel = micro_b - macro_el.vertices()[0, :]
-        x_loc = inv_jac @ x_rel
-        x_bary = np.array([1.0 - np.sum(x_loc), *x_loc])  # barycentric coordinates
-        micro_r = np.mean(np.linalg.norm(macro_el.vertices() - micro_b[None,:], axis=1))
-        neg_dist = (np.max(x_bary) + micro_r) / (2 * micro_r)
-        w = min(1.0, max(0.0, neg_dist))
-        return w
+    def interaction_weights(self, macro_el: Element, micro_barycenters: np.ndarray) -> np.ndarray:
+        """Return kernel weights for one or more micro-element barycentres.
+
+        The macro tetrahedron is scaled about its centroid.  The calculation keeps all
+        leading axes of ``micro_barycenters`` so callers can evaluate many candidate
+        elements using one linear solve.
+        """
+        macro_vertices = macro_el.vertices()
+        center = np.mean(macro_vertices, axis=0)
+        scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
+        jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
+        points = np.asarray(micro_barycenters, dtype=float)
+        assert points.shape[-1] == 3, f"Expected XYZ barycentres, got shape {points.shape}."
+
+        local_coordinates = np.linalg.solve(
+            jacobian, (points - scaled_origin).reshape(-1, 3).T
+        ).T.reshape(points.shape)
+        barycentric = np.concatenate(
+            [1.0 - np.sum(local_coordinates, axis=-1, keepdims=True), local_coordinates],
+            axis=-1,
+        )
+        min_barycentric = np.min(barycentric, axis=-1)
+        radial = 1.0 - 4.0 * min_barycentric
+        core_radius = 0.3
+        interior_weight = np.where(
+            radial <= core_radius,
+            1.0,
+            (1.0 - radial) / (1.0 - core_radius),
+        )
+        return np.where(min_barycentric > 0.0, interior_weight, 0.0)
+
+    def interact(self, macro_el: Element, micro_el: Element) -> float:
+        """Return the scalar kernel weight for one micro element."""
+        return float(self.interaction_weights(macro_el, micro_el.barycenter()))
 
 
 @attrs.define

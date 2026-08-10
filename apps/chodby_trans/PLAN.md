@@ -122,8 +122,24 @@ Resolved:
 -  Goal 4 (PE work):
    transport_macro: homogenization fo fixed mesh and interpolation to macro mesh
 
+Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
+
+1. Add lightweight regression coverage using a reference tetrahedron and micro-element
+   barycentres, without invoking the full transport model.
+2. Change the core implementation to compute barycentric coordinates in the tetrahedron
+   scaled about its centre, then calculate the piecewise-linear radial kernel from the
+   smallest barycentric coordinate.
+3. Keep the point-coordinate calculations array-oriented so batching micro barycentres can
+   reuse the same geometry algebra when the API is extended.
+
 
 ## AGENT Log
+- 2026-08-10: Fixed `MacroTetra.interact` to use barycentric coordinates of the
+  center-scaled tetrahedron and added `interaction_weights` for batched micro-element
+  barycentres. Added focused core-suite regression tests in
+  `tests/homogenization/test_homogenisation.py` for outside, fractional interior, and
+  batched kernel weights; all three pass. Refined the geometry implementation to scale the
+  Jacobian directly while retaining the centroid-preserving scaled reference vertex.
 - 2026-06-23: Added bootstrap IQR uncertainty bands for fine, coarse, and
   fine-coarse variance estimates to the sequential Saltelli MLMC diagnostics
   plot and CSV output.
@@ -230,6 +246,11 @@ Resolved:
   alongside the figure output.
 
 ## AGENT Questions And Remarks
+
+- 2026-08-10: Goal 5 needs an edit to `src/endorse/homogenisation.py`, but the current
+  repository instruction restricts edits to `apps/chodby_trans`. The app-level regression
+  test can be added now; explicit authorization is needed before changing the core module.
+  Resolved: The user authorized edits to `homogenisation.py` and its test on this branch.
 
 - 2026-06-22: Investigation note: the real fine `box_drilled` mesh path still
   drops boundary physical groups such as `.side_x0`, `.tunnel_head_y0`, and
