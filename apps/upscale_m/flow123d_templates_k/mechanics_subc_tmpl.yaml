@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------------------------------------
+# Flow123d input for ONE load case of the upscale_m micro problem with SUBC conditions.
+# Generated from flow123d_templates/mechanics_subc_tmpl.yaml
+#
+# Linear elastic cube. Each outer face carries a prescribed traction t_i = S_ij n_j,
+# with S the macroscopic stress of this load case and n the outward face normal.
+# ---------------------------------------------------------------------------------------------
+
+flow123d_version: 4.0.3dev_e651b9
+
+problem: !Coupling_Sequential
+  description: "<description>"
+  mesh:
+    mesh_file: <mesh_file>
+
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: <bulk_regions>
+    time:
+      end_time: 1.0
+    a_tol: 1e-18
+    r_tol: 1e-18
+
+    flow_equation: !Flow_Darcy_LMH
+      gravity: [0, 0, 0]
+      input_fields:
+        - region: <fracture_regions>
+          cross_section: !FieldFE
+            mesh_data_file: <cross_section_file>
+            field_name: cross_section
+
+        - region: <bulk_regions>
+          bc_type: dirichlet
+          bc_pressure: 0
+
+      output:
+        fields: []
+
+    mechanics_equation: !Elasticity_Linear
+      output_stream:
+        format: !gmsh
+      output:
+        fields:
+          - displacement
+          - stress
+          - region_id
+          - cross_section_updated
+
+      solver: !Petsc
+        a_tol: 1e-14
+        r_tol: 1e-14
+
+      input_fields:
+        - region: <bulk_regions>
+          young_modulus: <rock_young_modulus>
+          poisson_ratio: <rock_poisson_ratio>
+
+        - region: <fracture_regions>
+          young_modulus: <fracture_young_modulus>
+          poisson_ratio: <fracture_poisson_ratio>
+
+        # minimal "3-2-1" support — fixed, same for every SUBC load case
+        - region: [.support_origin_X, .support_origin_Y, .support_origin_Z,
+                   .support_tetra_one_norm_Y, .support_tetra_one_norm_Z, .support_tetra_two_norm_Z]
+          bc_type: displacement_n
+          bc_displacement: 0
+
+        - region: .side_x0
+          bc_type: traction
+          bc_traction: <traction_x0>
+
+        - region: .side_x1
+          bc_type: traction
+          bc_traction: <traction_x1>
+
+        - region: .side_y0
+          bc_type: traction
+          bc_traction: <traction_y0>
+
+        - region: .side_y1
+          bc_type: traction
+          bc_traction: <traction_y1>
+
+        - region: .side_z0
+          bc_type: traction
+          bc_traction: <traction_z0>
+
+        - region: .side_z1
+          bc_type: traction
+          bc_traction: <traction_z1>
