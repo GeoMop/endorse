@@ -28,7 +28,14 @@ def element_loc_mat(all_nodes: np.array, node_indices: List[int]):
 
 #@njit
 def element_compute_volume(all_nodes: np.array, node_indices: List[int]):
-    return np.linalg.det(element_loc_mat(all_nodes, node_indices)) / 6
+    # Tetrahedron volume (n = 3) or triangle area (n = 2) i.e. fractures, else 0
+    loc_mat = element_loc_mat(all_nodes, node_indices)
+    n = loc_mat.shape[1]
+    if n == 3:
+        return abs(np.linalg.det(loc_mat)) / 6
+    if n == 2:
+        return np.linalg.norm(np.cross(loc_mat[:, 0], loc_mat[:, 1])) / 2
+    return 0.0
 
 
 @attrs.define
@@ -184,9 +191,9 @@ class Mesh:
     def el_volumes(self):
         if self._el_volumes is None:
             logging.info("    element volumes reinit ...")
+            # area for 2D (fracture) elements, volume for 3D (matrice) elements; anything else 0
             self._el_volumes = np.array(
-                [e.volume() if len(e.node_indices) == 4 else 0.0 for e in self.elements],
-                dtype=float,
+                [e.volume() for e in self.elements], dtype=float
             )
         return self._el_volumes
 
