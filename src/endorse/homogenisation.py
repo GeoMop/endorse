@@ -77,10 +77,22 @@ class MacroTetra(MacroShapeBase):
         x_rel = micro_b - macro_el.vertices()[0, :]
         x_loc = inv_jac @ x_rel
         x_bary = np.array([1.0 - np.sum(x_loc), *x_loc])  # barycentric coordinates
-        micro_r = np.mean(np.linalg.norm(macro_el.vertices() - micro_b[None,:], axis=1))
-        neg_dist = (np.max(x_bary) + micro_r) / (2 * micro_r)
-        w = min(1.0, max(0.0, neg_dist))
-        return w
+        return float(np.min(x_bary) >= 0.0)
+
+
+@attrs.define
+class MacroCube(MacroShapeBase):
+    # Micro elements are now included strictly based on their barycenter (0/1)
+    # This test returns 0 for elements outside the box and 1 for the opposite
+
+    def aabb(self, macro_el: Element):
+        v = macro_el.vertices()
+        return np.array([v.min(axis=0), v.max(axis=0)])
+
+    def interact(self, macro_el: Element, micro_el: Element):
+        lo, hi = self.aabb(macro_el)
+        barycenter = micro_el.barycenter()
+        return float(np.all((barycenter >= lo) & (barycenter <= hi)))
 
 
 @attrs.define
@@ -403,11 +415,7 @@ class Subdomain:
     _weights : np.array = None
 
     @staticmethod
-    def create(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh, i_el):
-        """
-        Select elements from the micro mesh interacting with a sphere
-        approximating the macro element `id_el`.
-        """
+    def create(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh, i_el, dims=(3,)):
         macro_el = macro_mesh.elements[i_el]
         #center = macro_el.barycenter()
         #distances = np.linalg.norm(macro_el.vertices() - center[None,:], axis=1)
@@ -417,15 +425,16 @@ class Subdomain:
         aabb = shape.aabb(macro_el)
         candidates = micro_mesh.candidate_indices(aabb)
 
-        # keep volumetric elements only
-        bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
-        candidates = [ie for ie in candidates if bulk_micro_slice.start <= ie < bulk_micro_slice.stop]
+        # supports elements of 3D and 2D dimension
+        el_slices = [micro_mesh.el_dim_slice(dim=dim) for dim in dims]
+        candidates = [ie for ie in candidates
+                      if any(s.start <= ie < s.stop for s in el_slices)]
 
         assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
         subdomain_indices = [(ie, w) for ie in candidates
                          if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
         logging.info(f"[{i_el}] Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
-        assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
+        assert subdomain_indices, f"Empty subdomain {aabb} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
         micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
