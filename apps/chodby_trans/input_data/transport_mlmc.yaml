@@ -10,28 +10,28 @@ mlmc:
   levels:
     # coarsest
     - task_size: 15000  # estimated number of elements
-      min_samples: 10
-      min_finer_samples: 5  # minimal number of samples to allow coarse samples with mixing
+      min_samples: 200
+      min_finer_samples: 200  # minimal number of samples to allow coarse samples with mixing
 
       # abstract_mesh_step: 3	# [m]
-      fr_min_limit: 8.5 # [m] 5.55 # coarse
+      fr_min_limit: 0 # [m] 5.55 # coarse
       params:
         #        "geometry/include": [fractures]
         "geometry/resolution_type": box
         "boundary_mesh_step": 5
-        "fracture_mesh_step": 4
-        "main_tunnel_mesh_step": 4  # not used, tunnel not included in mesh
-        "boreholes_mesh_step": 4 # not used, boreholes not included in mesh
+        "fracture_mesh_step": 2
+        "main_tunnel_mesh_step": 1.25  # not used, tunnel not included in mesh
+        "boreholes_mesh_step": 0.5 # not used, boreholes not included in mesh
 
     # finest
     - task_size: 150000   # estimated number of elements
-      min_samples: 10
+      min_samples: 200
       min_finer_samples: 0  # minimal number of samples to allow coarse samples with mixing
 
       # abstract_mesh_step: 1	# [m]
       buffer_width: 5 # extending the box by a buffer width approximately equal to one homogenization block
       # 100 fractures, min_r=6.27
-      fr_min_limit: 0 # [m] coarse
+      fr_min_limit: 0 # [m]
       params:
         #        "geometry/include": [boreholes, fractures, drilled_volume]
         "geometry/resolution_type": box_drilled
@@ -39,8 +39,6 @@ mlmc:
         "fracture_mesh_step": 2
         "main_tunnel_mesh_step": 1.25
         "boreholes_mesh_step": 0.5
-
-
 
 
 mesh:
@@ -350,14 +348,14 @@ machine_config:
         #     pbs_name: chodby_trans
         #     walltime: "24:00:00"
         pbs:
-            n_cores: 2
-            n_nodes: 1
+            n_cores: 10
+            n_nodes: 5
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb
-            queue: charon_2h
-            pbs_name: chodby_trans
-            walltime: "02:00:00"
+            queue: default
+            pbs_name: trans_mlmc_var
+            walltime: "24:00:00"
     #__default__:  # assume flow123d available and no pbs
     #    flow_executable:
     #    - flow123d

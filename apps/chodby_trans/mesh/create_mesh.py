@@ -424,6 +424,8 @@ def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
     box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions, cfg_geom.box_center)
     bnd_dict = {**bnd_dict, **box_sides_dict}
 
+    _tunnel, tunnel_center_line, _tunnel_bottom_z = create_main_tunnel(factory, cfg_mesh)
+
     # drill the box, so later we do not have fractures in drilled volume
     vol_dict["box"] = box.deepcopy()
     vol_dict["box"].set_region("box")
@@ -468,6 +470,13 @@ def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
             .set_region(".fractures_out") \
             .mesh_step(cfg_mesh.boundary_mesh_step)
         geometry_set.append(b_fractures_out)
+    
+    # create refinement fields around drifts
+    refinement_lines = []
+    tunnel_field = line_distance_edz(factory, tunnel_center_line, cfg_mesh.main_line_refinement)
+    # common_field = field.minimum(*line_fields)
+    factory.set_mesh_step_field(tunnel_field)
+    refinement_lines = [tunnel_center_line]
 
     geometry_final = factory.group(*geometry_set)
 
@@ -475,7 +484,7 @@ def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
     print("Finalize geometry...")
     factory.synchronize()
     # need to keep tunnel lines due to refinement fields
-    factory.keep_only(geometry_final)
+    factory.keep_only(geometry_final, *refinement_lines)
     factory.synchronize()
     factory.remove_duplicate_entities()
     factory.synchronize()

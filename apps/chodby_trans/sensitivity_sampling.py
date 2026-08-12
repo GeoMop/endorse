@@ -777,10 +777,11 @@ bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 clean_scratch
 
 
-# PYEXEC="$PROJECT_DIR/venv/bin/python"
-# APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
-# "$PYEXEC" -u "$APP_PY" "$output_dir" read
+PYEXEC="$PROJECT_DIR/venv/bin/python"
+APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+"$PYEXEC" -u "$APP_PY" "$output_dir" read
 # "$PYEXEC" -u "$APP_PY" "$output_dir" plots
+"$PYEXEC" -u "$APP_PY" "$output_dir" mlmc_analysis
 
 echo "FINISHED"
 """
@@ -1438,22 +1439,23 @@ def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
         {fine_level_id: min_fine_before_coarse},
     )
     n_finner_samples = sampler.n_finished_samples[fine_level_id]
-
     logging.info("Initial fine only sampling completed.")
-    scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
-    coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
-    if coarse_to_schedule > 0:
-        logging.info("Scheduling %s new coarse-level MLMC samples.", coarse_to_schedule)
-        sampler.schedule_samples(level_id=coarse_level_id, n_samples=coarse_to_schedule)
 
-    wait_for_finished_samples(
-        sampler,
-        {
-            fine_level_id: fine_target,
-            coarse_level_id: coarse_target,
-        },
-    )
-    logging.info("Finished MLMC sampling, counts=%s", np.asarray(sampler.n_finished_samples, dtype=int).tolist())
+    if cfg.mlmc.sample_mode != "paired"
+        scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
+        coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
+        if coarse_to_schedule > 0:
+            logging.info("Scheduling %s new coarse-level MLMC samples.", coarse_to_schedule)
+            sampler.schedule_samples(level_id=coarse_level_id, n_samples=coarse_to_schedule)
+
+        wait_for_finished_samples(
+            sampler,
+            {
+                fine_level_id: fine_target,
+                coarse_level_id: coarse_target,
+            },
+        )
+        logging.info("Finished MLMC sampling, counts=%s", np.asarray(sampler.n_finished_samples, dtype=int).tolist())
 
 def main():
     # common.EndorseCache.instance().expire_all()
