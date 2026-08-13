@@ -10,10 +10,12 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xarray as xr
 from numcodecs import Zstd
 
 import chodby_trans.job as job
 from chodby_trans import transport_simulation
+from chodby_trans.plots import plot_conc_timeseries_distribution1
 
 from mlmc.sample_storage_hdf import SampleStorageHDF
 
@@ -150,6 +152,48 @@ def _time_axis(times: list[float]) -> tuple[np.ndarray, bool]:
     if t_pos.size == 0:
         return np.arange(len(times), dtype=float), False
     return np.where(t_raw > 0, t_raw, float(t_pos.min()) * 0.999), True
+
+
+def _distribution_plot_dataset(sample_ids: list[str], values: np.ndarray, times: list[float]) -> xr.Dataset:
+    """
+    Build the concentration time-series dataset expected by ``plot_conc_timeseries_distribution1``.
+    """
+    assert values.ndim == 2
+    assert values.shape[0] == len(sample_ids)
+    assert values.shape[1] == len(times)
+    return xr.Dataset(
+        data_vars={
+            "log10_conc_q99": (("QMC", "IID"), np.nanmax(values, axis=1)[:, None]),
+            "log10_conc_q99_XYZ": (("QMC", "IID", "sim_time"), values[:, None, :]),
+        },
+        coords={
+            "QMC": sample_ids,
+            "IID": [0],
+            "sim_time": np.asarray(times, dtype=float),
+        },
+    )
+
+
+def _plot_timeseries_distribution(
+    *,
+    sample_ids: list[str],
+    values: np.ndarray,
+    times: list[float],
+    output_path: Path,
+) -> Path:
+    """
+    Write one concentration time-series distribution figure.
+    """
+    ds = _distribution_plot_dataset(sample_ids, values, times)
+    fig = plot_conc_timeseries_distribution1(
+        ds,
+        n_slices=len(sample_ids),
+        max_extreme_lines=len(sample_ids),
+        plot_all_lines=False,
+    )
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
 
 
 def _sample_number(sample_id: str) -> int:
@@ -399,7 +443,7 @@ def _plot_mlmc_paired_summary(
         sample_ids=sample_ids,
         times=times,
         diff_values=diff_values,
-        n_samples=10
+        n_samples=10,
     )
 
     fine_var = np.nanvar(fine_values, axis=0, ddof=1)
@@ -495,13 +539,27 @@ def _plot_mlmc_paired_summary(
     fig.tight_layout()
 
     prefix = "" if result_name == "log10_conc_q99_xyz" else f"{result_name}_level_{level_id:02d}_"
+    written_paths = [
+        _plot_timeseries_distribution(
+            sample_ids=sample_ids,
+            values=fine_values,
+            times=times,
+            output_path=output_dir / f"{prefix}fine_timeseries_distribution.pdf",
+        ),
+        _plot_timeseries_distribution(
+            sample_ids=sample_ids,
+            values=coarse_values,
+            times=times,
+            output_path=output_dir / f"{prefix}coarse_timeseries_distribution.pdf",
+        ),
+    ]
     out_path = output_dir / f"{prefix}fine_coarse_mlmc_diagnostics.pdf"
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
 
     subfigs_dir = output_dir / "subfigs"
     subfigs_dir.mkdir(parents=True, exist_ok=True)
-    written_paths = [out_path]
+    written_paths.append(out_path)
     individual_plots = [
         ("fine_coarse_variances.pdf", "Fine/coarse variances", plot_variances),
         ("fine_coarse_variance_reduction.pdf", "Fine/coarse variance reduction", plot_variance_reduction),

@@ -151,6 +151,8 @@ def test_run_mlmc_analysis_writes_paired_diagnostics(tmp_path: Path, monkeypatch
     csv_path = analysis_dir / "mlmc_paired_diagnostics.csv"
     assert csv_path.exists()
     assert (analysis_dir / "mlmc_paired_zarr_metadata.csv").exists()
+    assert (analysis_dir / "value_level_01_fine_timeseries_distribution.pdf").exists()
+    assert (analysis_dir / "value_level_01_coarse_timeseries_distribution.pdf").exists()
     assert (analysis_dir / "value_level_01_fine_coarse_mlmc_diagnostics.pdf").exists()
     assert (analysis_dir / "subfigs" / "value_level_01_fine_coarse_variances.pdf").exists()
     assert (analysis_dir / "subfigs" / "value_level_01_fine_coarse_variance_reduction.pdf").exists()
@@ -220,9 +222,7 @@ def test_largest_sample_differences_are_logged(caplog):
         if "Largest fine/coarse differences" in record.getMessage()
     ]
     assert len(records) == 1
-    assert "rank" in records[0]
-    assert "sample_id" in records[0]
-    assert "time" in records[0]
-    assert "diff" in records[0]
-    assert "1 L01_S0000002  20.0  -4.0" in records[0]
-    assert "2 L01_S0000001  10.0   3.5" in records[0]
+    header, top_row, second_row = records[0].splitlines()[1:4]
+    assert header.split() == ["rank", "sample_id", "sim_time", "diff"]
+    assert top_row.split() == ["1", "L01_S0000002", "20.0", "-4.0"]
+    assert second_row.split() == ["2", "L01_S0000001", "10.0", "3.5"]
