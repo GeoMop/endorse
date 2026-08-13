@@ -77,23 +77,28 @@ class MacroTetra(MacroShapeBase):
         leading axes of ``micro_barycenters`` so callers can evaluate many candidate
         elements using one linear solve.
         """
-        macro_vertices = macro_el.vertices()
+        macro_vertices = macro_el.vertices()    # shape = (n_vertices, dim=3)
         center = np.mean(macro_vertices, axis=0)
         scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
         jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
-        points = np.asarray(micro_barycenters, dtype=float)
+        points = np.asarray(micro_barycenters, dtype=float)  # shape = (n_micro_els, dim=3)
         assert points.shape[-1] == 3, f"Expected XYZ barycentres, got shape {points.shape}."
 
         local_coordinates = np.linalg.solve(
             jacobian, (points - scaled_origin).reshape(-1, 3).T
-        ).T.reshape(points.shape)
+        ).T.reshape(points.shape) # Allows points to be just 1D array with shape (dim,).
         barycentric = np.concatenate(
             [1.0 - np.sum(local_coordinates, axis=-1, keepdims=True), local_coordinates],
             axis=-1,
         )
-        min_barycentric = np.min(barycentric, axis=-1)
+        min_barycentric = np.min(barycentric, axis=-1)  # maximal min_bary = 1/4
+
+        # 0 at center, 1 at the tetrahedron boundary.
         radial = 1.0 - 4.0 * min_barycentric
-        core_radius = 0.3
+
+        # TODO: could be introduced as a parameter
+        # Currently we set it to the unscaled tetrahedra
+        core_radius = 1.0 / self.rel_radius
         interior_weight = np.where(
             radial <= core_radius,
             1.0,
