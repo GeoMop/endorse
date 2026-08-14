@@ -154,7 +154,17 @@ Resolved:
      finer-level collected-sample count, and let
      `TransportSimulation.calculate()` decompose that tail before writing.
 
-- Goal 5:
+Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
+
+1. Add lightweight regression coverage using a reference tetrahedron and micro-element
+   barycentres, without invoking the full transport model.
+2. Change the core implementation to compute barycentric coordinates in the tetrahedron
+   scaled about its centre, then calculate the piecewise-linear radial kernel from the
+   smallest barycentric coordinate.
+3. Keep the point-coordinate calculations array-oriented so batching micro barycentres can
+   reuse the same geometry algebra when the API is extended.
+
+- Goal 6:
   1. Add an explicit `mlmc.sample_mode` switch with `saltelli` as the
      backward-compatible default and `paired` as the coarse-model diagnostic mode.
   2. Add a small paired simulation wrapper beside `TransportSaltelliSimulation`.
@@ -189,7 +199,13 @@ Resolved:
      per-term workspace behavior with focused tests.
 
 ## AGENT Log
-- 2026-07-28: Added Goal 5 paired MLMC sample mode beside Saltelli. Paired mode schedules one grouped
+- 2026-08-10: Fixed `MacroTetra.interact` to use barycentric coordinates of the
+  center-scaled tetrahedron and added `interaction_weights` for batched micro-element
+  barycentres. Added focused core-suite regression tests in
+  `tests/homogenization/test_homogenisation.py` for outside, fractional interior, and
+  batched kernel weights; all three pass. Refined the geometry implementation to scale the
+  Jacobian directly while retaining the centroid-preserving scaled reference vertex.
+- 2026-07-28: Added Goal 6 paired MLMC sample mode beside Saltelli. Paired mode schedules one grouped
   parameter row per MLMC sample, keeps singleton Zarr term metadata, exposes HDF results without a
   logical Saltelli axis, and adds paired MLMC variance/correlation/bias diagnostics.
 - 2026-07-29: Fixed paired MLMC analysis for staged HDF files by skipping levels without collected values.
@@ -389,8 +405,16 @@ Resolved:
   template locally, samples a large fracture cloud, clips traces to the problem
   box, and renders XY/XZ/YZ projections for a geometric progression of
   `r_limit` values.
+- 2026-06-15: Extended `plot_scripts/dfn_trace_matrix.py` to export each
+  thresholded fracture set as a full 3D Gmsh mesh named `mesh_{r_limit}.msh`
+  alongside the figure output.
 
 ## AGENT Questions And Remarks
+
+- 2026-08-10: Goal 5 needs an edit to `src/endorse/homogenisation.py`, but the current
+  repository instruction restricts edits to `apps/chodby_trans`. The app-level regression
+  test can be added now; explicit authorization is needed before changing the core module.
+  Resolved: The user authorized edits to `homogenisation.py` and its test on this branch.
 
 - 2026-07-24: `AGENTS.md` requires `python_coding.md`, but that file is not
   present in the repository workspace and could not be reviewed.
@@ -451,5 +475,5 @@ Resolved:
   authoritative.
 - 2026-07-28 local verification note: direct MLMC Zarr storage creation still
   hangs locally in `zarr.open_group(...)` during existing Zarr-backed sampling
-  tests. Goal 5 tests patch the Zarr boundary and verify singleton write
+  tests. Goal 6 tests patch the Zarr boundary and verify singleton write
   arguments instead of exercising the local Zarr backend.
