@@ -1,13 +1,13 @@
 # =================================================================================================
 # MASTER CONFIG 
-# Every other configs/*.yaml is DERIVED from this file for private use.
+# Every other configs/*.yaml is DERIVED from this file for specific use
 # =================================================================================================
 
 machine_config:
     # resolved automatically by socket.gethostname()
     LAPTOP-MM6A3LRF:  # Ronald Siddall, Windows + Docker Desktop
         flow_executable:
-        # docker wrapper around flow123d/ci-gnu:4.0.3dev_e651b9; translates CWD to container path
+        # docker wrapper around flow123d/ci-gnu:4.0.3dev_9e91fe; translates CWD to container path
         - C:/Plocha/Semestral_internship_cvut/endorse/venv/Scripts/python.exe
         - C:/Plocha/Semestral_internship_cvut/endorse/apps/upscale_m/flow_win_wrapper.py
 
@@ -31,13 +31,13 @@ fractures:
         seed: 1234  # numpy global-generator seed used by bgem sampling
         population:
             fam_1:
-                trend: 0.0
-                plunge: 90.0
-                concentration: 10
-                power: 3.2
-                r_0: 0.5
-                r_infty: 2.5
-                p_32: 2
+                strike: 28.219
+                dip: 23.856
+                concentration: 12.967
+                power: 2.7
+                r_0: 0.614
+                r_infty: 500
+                p_30: 0.1
             # fam_2:
             #     trend: 90.0
             #     plunge: 0.0
@@ -47,20 +47,20 @@ fractures:
             #     r_infty: 2.5
             #     p_32: 2
         # optional (bgem sizes): restrict generated sizes, Population.set_sample_range
-        sample_range: [0.5, 2.5]
+        sample_range: [0.625, 2.5]
 
 mesh:
     # Base name of the generated mesh files
     mesh_name: micro_mesh
-    fracture_mesh_step: 0.8
+    fracture_mesh_step: 0.625
     # CharacteristicLengthMin = fracture_mesh_step / mesh_size_min_fraction.
-    mesh_size_min_fraction: 10.0
+    mesh_size_min_fraction: 3
     # disc approximation: minimum number of boundary points per full circle (gmsh option
     # Mesh.MinimumCirclePoints via bgem mesh options)
     min_circle_points: 16
     # minimum number of points per curved edge (gmsh option Mesh.MinimumCurvePoints via bgem
     # mesh options).
-    min_curve_points: 16
+    min_curve_points: 6
     tolerance: 1e-6
     tolerance_boolean: 1e-5
     tolerance_initial_delaunay: 0.01
@@ -71,14 +71,16 @@ materials:
     poisson_ratio_rock: 0.25
     young_modulus_fracture: 1e3    # Pa
     poisson_ratio_fracture: 0.25
-    # initial fracture thickness (cross_section): delta = aperture_per_r * r, where r is the
-    # geometric disc radius (micro_mesh.make_cross_section_field), not the bgem size.
+    # initial fracture thickness (cross_section): delta = aperture_per_r * r, where r is the radius
     aperture_per_r: 1e-3
 
 loads:
     output_fields_file: output/mechanics_fields.msh
     stress_field_name: stress
     region_id_field_name: region_id
+    # Outputs of the simulations by default are .msh files within the output/ folder (export_vtu: false)
+    # If export_vtu is set to "true", then these .msh files are transformed to .vtu files instead
+    export_vtu: true
     # 'kubc', 'subc' or 'both'
     bc_type: both
 
@@ -110,29 +112,35 @@ loads:
 mechanics_macroscale:
     # file name of the generated coarse mesh, inside the run dir
     mesh_file: macro_mesh.msh
-    # P0 field carrying the 36 row-major components of each 6x6 tensor;
-    tensor_field_name: elastic_tensor_voigt
+    # Six fields <prefix>0 .. <prefix>5, each a row-major 3x3 tensor: column k of the effective
+    # 6x6 tensor in Kelvin notation
+    tensor_field_name_prefix: stiffness_tensor_
 
-    mesh_size_min_fraction: 10.0
+    # Solves the homogenized problem after building the tensor field if se to "true"
+    # If solve is set to "false", then the macro problem is not solved, but we still have
+    # the effective elastic tensor field
+    solve: true
+    # The material of the macro problem is given by the tensor field
+    # instead of young_modulus/poisson_ratio for the matrix and fractures (like in DNS or micro)
+    input_template_kubc: mechanics_macro_kubc_tmpl.yaml
+    input_template_subc: mechanics_macro_subc_tmpl.yaml
+
+    mesh_size_min_fraction: 3
 
     mesh_step: 2.5
-    # per-element tensor field file (36 Voigt components C[6x6] row-major, endorse fields_file
-    # format: msh2 + vtu preview), written under kubc/ / subc/ next to that BC type's report
+    # per-element tensor field file (six 9-component Kelvin columns, endorse fields_file
+    # format: msh2 + vtu preview)
     tensor_field_file: macro_elastic_tensor.msh2
 
-# DNS problem (dns_mechanics_model.py). It IS the micro problem, with exactly two things fixed:
-#   1. L_ext == L_inner (no buffer) -- forced to 1.0 in code, deliberately NOT a key here,
-#      because "no buffer" is the definition of the DNS, not a tunable.
+# DNS problem is the micro problem, with two things different:
+#   1. L_ext == L_inner (no buffer) - forced to 1 in code
 #   2. the product is per-element STRESS and STRAIN FIELDS (.vtu + .msh2 per load case and BC
-#      type), not effective tensors.
-# The DNS builds its OWN MESH (its own element size below) but on the SAME ROCK: the DFN is
-# sampled in the BUFFERED box, exactly as the micro problem samples it, and the smaller meshed
-# cube then CLIPS those fractures at its boundary. So the fractures inside the DNS cube ARE the
-# fractures inside the micro problem's averaging cube -- same individual discs, not another draw
-# with the same statistics. That is what lets the two be compared field against field rather than
-# only in distribution
+#      type), not effective elastic tensors
+# The DNS builds its OWN MESH (its own element size below) but on the same rock... i.e. the DFN is
+# sampled in the inner cube, exactly as the micro problem samples it.
+# So the fractures inside the DNS cube ARE the fractures inside the micro problem's averaging cube
 dns:
-    mesh_step: 0.5
-    # base name for the DNS mesh files -- MUST differ from mesh.mesh_name
+    mesh_step: 0.3
+    # base name for the DNS mesh files, must differ from mesh.mesh_name
     mesh_name: dns_mesh
 
