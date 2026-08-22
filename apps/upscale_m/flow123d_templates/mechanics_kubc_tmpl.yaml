@@ -6,7 +6,7 @@
 # u_i = E_ij x_j, with E the macroscopic strain of this load case.
 # ---------------------------------------------------------------------------------------------
 
-flow123d_version: 4.0.3dev_e651b9
+flow123d_version: 4.0.3dev_9e91fe
 
 problem: !Coupling_Sequential
   description: "<description>"
@@ -41,14 +41,13 @@ problem: !Coupling_Sequential
         format: !gmsh
       output:
         fields:
-          - displacement
           - stress
           - region_id
-          - cross_section_updated
+          - displacement
 
       solver: !Petsc
         a_tol: 1e-14
-        r_tol: 1e-14
+        r_tol: 1e-10
 
       input_fields:
         - region: <bulk_regions>

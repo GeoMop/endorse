@@ -6,7 +6,7 @@
 # with S the macroscopic stress of this load case and n the outward face normal.
 # ---------------------------------------------------------------------------------------------
 
-flow123d_version: 4.0.3dev_e651b9
+flow123d_version: 4.0.3dev_9e91fe
 
 problem: !Coupling_Sequential
   description: "<description>"
@@ -41,14 +41,13 @@ problem: !Coupling_Sequential
         format: !gmsh
       output:
         fields:
-          - displacement
           - stress
           - region_id
-          - cross_section_updated
+          - displacement
 
       solver: !Petsc
         a_tol: 1e-14
-        r_tol: 1e-14
+        r_tol: 1e-10
 
       input_fields:
         - region: <bulk_regions>
@@ -59,7 +58,7 @@ problem: !Coupling_Sequential
           young_modulus: <fracture_young_modulus>
           poisson_ratio: <fracture_poisson_ratio>
 
-        # minimal "3-2-1" support — fixed, same for every SUBC load case
+        # To prevent rigid body motions
         - region: [.support_origin_X, .support_origin_Y, .support_origin_Z,
                    .support_tetra_one_norm_Y, .support_tetra_one_norm_Z, .support_tetra_two_norm_Z]
           bc_type: displacement_n
