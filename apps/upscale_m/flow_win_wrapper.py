@@ -4,7 +4,12 @@ import subprocess
 import sys
 
 DOCKER = r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"
-IMAGE = "flow123d/ci-gnu:4.0.3dev_e651b9"
+# now using branch JS_constraints, commit 9e91fe8, which adds support for full anisotropic Cauchy tensor
+# i.e. adds elasticity_type: general with stiffness_tensor_0..5
+# (6 columns of the 6x6 tensor, each a symmetric 3x3 in Kelvin notation, readable via !FieldFE).
+IMAGE = "flow123d/ci-gnu:4.0.3dev_9e91fe"
+
+ENV = {"MALLOC_PERTURB_": "255"}
 
 _WIN_PATH = re.compile(r"^([A-Za-z]):[\\/](.*)$")
 
@@ -23,8 +28,10 @@ def main() -> int:
     container_cwd = to_container(cwd)
     args = [to_container(a) for a in sys.argv[1:]]
 
+    env_args = [a for k, v in ENV.items() for a in ("-e", f"{k}={v}")]
     cmd = [
         DOCKER, "run", "--rm",
+        *env_args,
         "-v", f"{drive.upper()}:\\:/{drive.upper()}/",
         "-v", f"{drive.lower()}:\\:/{drive.lower()}/",
         "-w", container_cwd,
