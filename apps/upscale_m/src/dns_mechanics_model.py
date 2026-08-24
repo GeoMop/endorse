@@ -18,6 +18,7 @@ from endorse.macro_flow_model import fields_file
 from endorse.mesh_class import load_mesh
 
 from bc import run_bc
+from export_vtu import export_dns_case
 from micro_mesh import MicroMesh, make_micro_mesh
 from postprocess import strain_stress_fields
 
@@ -87,6 +88,7 @@ def run_dns(cfg: dotdict, micro: MicroMesh, bc_type: str) -> List[File]:
         case_dir = os.path.dirname(os.path.dirname(os.path.abspath(r.spatial_file)))
         print(f"[upscale_m dns/{bc_type}] fields for case {r.name}: {case_dir}")
         written.append(write_dns_fields(cfg, micro, r.spatial_file, case_dir))
+        export_dns_case(cfg, micro, r.spatial_file, case_dir)
     return written
 
 
