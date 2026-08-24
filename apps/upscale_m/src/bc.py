@@ -44,7 +44,7 @@ def load_cases(cfg: dotdict, bc_type: str) -> List[Tuple[str, str, np.ndarray]]:
     return list(zip(case_names, case_dir_names, voigt_to_tn(scale * np.eye(6))))
 
 
-def _bc_params(cfg: dotdict, bc_type: str, load_matrix: np.ndarray, micro: MicroMesh
+def bc_params(cfg: dotdict, bc_type: str, load_matrix: np.ndarray, micro: MicroMesh
               ) -> Tuple[str, str, Dict[str, str]]:
 
     if bc_type == "kubc":
@@ -78,7 +78,7 @@ def micro_problem(cfg: dotdict, tag: str, load_matrix: np.ndarray,
     mats = cfg.materials
     mesh_abs_path = os.path.abspath(micro.mesh_file.path)
     cross_section_abs_path = os.path.abspath(micro.cross_section_file.path)
-    template_name, bulk_regions, bc_extra_params = _bc_params(cfg, bc_type, load_matrix, micro)
+    template_name, bulk_regions, bc_extra_params = bc_params(cfg, bc_type, load_matrix, micro)
     template_path = _app_dir / "flow123d_templates" / template_name
     case_name = os.path.basename(tag)
 
