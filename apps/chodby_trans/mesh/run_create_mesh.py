@@ -3,10 +3,54 @@ from pathlib import Path
 import logging
 
 from endorse import common
+from endorse.mesh import fracture_tools
 from chodby_trans import job
-from chodby_trans.mesh.create_mesh import main
+from chodby_trans.mesh.create_mesh import make_fractures, make_mesh
 
 script_path = Path(__file__).absolute()
+
+
+def update_mesh_cfg(cfg_mesh, level_dict):
+
+    mcfg = common.apply_variant(cfg_mesh, level_dict.params)
+    # assert mcfg == cfg_mesh
+    mcfg.mesh_name = mcfg.mesh_name + f"_L{level_dict.id}"
+    return mcfg
+
+
+def main(cfg, workdir, dfn_seed, mesh_seed):
+    with common.workdir(workdir, clean=False):
+        fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, dfn_seed)
+        fr_stats = fracture_tools.fracture_set_stats(fracture_set)
+        print(f"N fracture set: {len(fracture_set)}")
+        print(f"Fracture stats:\n"
+              f"min: {fr_stats['min_radius']},\n"
+              f"max: {fr_stats['max_radius']},\n"
+              f"avg: {fr_stats['avg_radius']},\n"
+              f"med: {fr_stats['med_radius']}")
+
+        # L0 fine
+        level = cfg.mlmc.levels[0]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        cfg_mesh.mesh_name += "_fine"
+        make_mesh(cfg_mesh, fracture_set, mesh_seed)
+
+        # L0 fine with buffer
+        level = cfg.mlmc.levels[0]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        cfg_mesh.geometry.box_dimensions = [v + 2*level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
+        cfg_mesh.geometry.main_tunnel.length += 2*level.buffer_width
+        cfg_mesh.mesh_name += "_fine_buffer"
+        make_mesh(cfg_mesh, fracture_set, mesh_seed)
+
+        # L0 coarse
+        level = cfg.mlmc.levels[1]
+        cfg_mesh = update_mesh_cfg(cfg.mesh, level)
+        cfg_mesh.mesh_name += "_coarse"
+        coarse_fracture_set = [fr for fr in fracture_set if fr.r > level.fr_min_limit]
+        print(f"N coarse fracture set: {len(coarse_fracture_set)}")
+        make_mesh(cfg_mesh, coarse_fracture_set, mesh_seed)
+
 
 if __name__ == '__main__':
 

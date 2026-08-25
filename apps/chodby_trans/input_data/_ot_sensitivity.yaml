@@ -99,7 +99,11 @@ parameters:
     args: { mean_log10: -11, std_log10: 0.666666666666666 }
     group: mat_bulk
     # group: mat_BB
-    path: transport_fullscale/bulk_field_params/cond_min
+    path:
+      - transport_common/bulk_field_params/cond_min # not necessary - only yaml reference
+      - transport_fullscale/bulk_field_params/cond_min
+      - transport_microscale/bulk_field_params/cond_min
+      - transport_macroscale/bulk_field_params/cond_min
   # edz_cond_max:
   # # TODO: make it multiple of edz_cond_min
   #   distr: LogNormal
@@ -110,12 +114,16 @@ parameters:
     distr: LogNormal
     args: { mean_log10: 0.5, std_log10: 0.5 } # range 0.1-100: mean_log10: (log10(0.1)+log10(100))/2
     group: mat_edz
-    path: transport_fullscale/bulk_field_params/cond_mult
+    path:
+      - transport_common/bulk_field_params/cond_mult # not necessary - only yaml reference
+      - transport_fullscale/bulk_field_params/cond_mult
+      - transport_microscale/bulk_field_params/cond_mult
+      - transport_macroscale/bulk_field_params/cond_mult
   edz_r:
     distr: TruncatedNormal
     args: [2, 0.15, 1.5, 3]
     group: mat_edz
-    path: geometry/edz_radius
+    path: [mesh/geometry/edz_radius]
 
   por_min:
     distr: TruncatedNormal
@@ -123,13 +131,21 @@ parameters:
     args: [0.008, 0.002, 0.001, 0.014]  # mu, std, a, b
     group: mat_bulk
     # group: mat_BB
-    path: transport_fullscale/bulk_field_params/por_min
+    path:
+      - transport_common/bulk_field_params/por_min # not necessary - only yaml reference
+      - transport_fullscale/bulk_field_params/por_min
+      - transport_microscale/bulk_field_params/por_min
+      - transport_macroscale/bulk_field_params/por_min
   por_mult:
     distr: TruncatedNormal
     # for other distributions create flag for using ot_sa.TruncatedDistribution
     args: [1.25, 0.3, 0.35, 2.15]  # mu, std, a, b
     group: mat_edz
-    path: transport_fullscale/bulk_field_params/por_mult
+    path:
+      - transport_common/bulk_field_params/por_mult # not necessary - only yaml reference
+      - transport_fullscale/bulk_field_params/por_mult
+      - transport_microscale/bulk_field_params/por_mult
+      - transport_macroscale/bulk_field_params/por_mult
 
 
   backfill_por:
@@ -157,8 +173,8 @@ parameters:
   dfn_seed: 
     # seed for small fractures
     distr: Seed
-    path: fractures/dfn_seed
+    path: [mesh/fractures/dfn_seed]
   meshing_seed: 
     # seed for gmsh fractures
     distr: Seed
-    path: mesh/meshing_seed
+    path: [mesh/meshing_seed]

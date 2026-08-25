@@ -1,13 +1,64 @@
 
 test_random_data: False
 
-# base of the mesh file name
-mesh_name: trans_mesh
-
-geometry: !include _geometry.yaml
 ot_sensitivity: !include _ot_sensitivity.yaml
 
+mlmc:
+  sim_class: TransportSimulation
+  levels:
+    - id: 0 # finest  # TODO: eliminate ids or number from the coarsest to the finest.
+      task_size: 150000   # estimated number of elements
+      min_samples: 10
+      min_finer_samples: 0  # minimal number of samples to allow coarse samples with mixing
+      
+      # abstract_mesh_step: 1	# [m]
+      buffer_width: 5 # extending the box by a buffer width approximately equal to one homogenization block
+      # 100 fractures, min_r=6.27
+      fr_min_limit: 0 # [m] coarse
+      params:
+#        "geometry/include": [boreholes, fractures, drilled_volume]
+        "geometry/resolution_type": box_drilled
+        "boundary_mesh_step": 5
+        "fracture_mesh_step": 2
+        "main_tunnel_mesh_step": 1.25
+        "boreholes_mesh_step": 0.5
+
+    - id: 1 # coarse
+      task_size: 15000  # estimated number of elements
+      min_samples: 10
+      min_finer_samples: 5  # minimal number of samples to allow coarse samples with mixing
+      
+      # abstract_mesh_step: 3	# [m]
+      fr_min_limit: 8.5 # [m] 5.55 # coarse
+      params:
+#        "geometry/include": [fractures]
+        "geometry/resolution_type": box
+        "boundary_mesh_step": 5
+        "fracture_mesh_step": 4
+        "main_tunnel_mesh_step": 4  # not used, tunnel not included in mesh
+        "boreholes_mesh_step": 4 # not used, boreholes not included in mesh
+
+
+
 mesh:
+    geometry: !include _geometry.yaml
+    fractures:
+      # SKB fracture population for repository domain
+#      population: !include _fr_Forsmark_repo.yaml
+      #    population: {}
+      population_template:  _fr_Bukov_repo.yaml
+      # population_template:  _fr_fixed.yaml
+
+      # upper limit on the number of (small) fractures
+      n_frac_limit: 100
+      #  fixed_seed: 202
+      dfn_seed: 1
+      clip_box_ratio: 0.9 # *100 % of the box dimension
+  #  large_min_r: 100
+
+    # base of the mesh file name
+    mesh_name: trans_mesh
+
     meshing_seed: 1
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 5
@@ -34,138 +85,97 @@ mesh:
       r_inf: 30
       h_inf: *boundary_mesh_step
 
-fractures:
-    # SKB fracture population for repository domain
-#    population:  !include _fr_Forsmark_repo.yaml
-    population: {}
-    population_template:  _fr_Bukov_repo.yaml
-    # population_template:  _fr_fixed.yaml
-    # upper limit on the number of (small) fractures
-    n_frac_limit: 100
 
-    # Experiments for large fr range [50, 200] and large_box: [20,20,20]
-    # most seeds have no large fracture at all
-    # probability of  50 m fracture near borehole is about,
-    #  1 fracture per 1km of borehole
-    #  crossing borehole: 3 fracture per 10 km
-    fixed_seed: 202  # in the middle, acute angle , not reaching boundary
-    dfn_seed: 1
+transport_common:
+  bulk_field_params: &bulk_field_params
+    cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
+    cond_mult: 3.3
+    # porosity only due to function apply_fields.bulk_fields_mockup_tunnel()
+    por_min: 0.002
+    por_mult: 1.25
 
-    clip_box_ratio: 0.9 # *100 % of the box dimension
-    large_min_r: 100
-#    large_box:  [60, 60, 60]
-    # Would be better to have separate domains for known large fractures close to tunnel and
-    # uncertain large fractures, need support in Population
-    # main box : [100, 80, 60]
+    # values with respect to EDZ radius
+    # h_axis: 2.0
+    # v_axis: 3.35 # 6.7/2
+    # radius for c_min
+    inner_radius: 1.0
 
-# parameters substituted into the TH model template
-transport_fullscale:
+  fr_field_params: &fr_field_params
+    # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
+    #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
+    permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
+    #sigma_bulk_conductivity: 1e-7
+    #min_fr_cross_section: 5e-5
+    #max_fr_cross_section: 5e-3
 
-    # templates are part of the endorse sources
-    input_template: transport_fullscale_tmpl.yaml
+  # The total simulation time as well as the output times are ese are quite dependent on the
+  output_times: &output_times
+    - [ 0, 'y' ]
+    - [ 100, 'y' ]
+    - [ 200, 'y' ]
+    - [ 400, 'y' ]
+    - [ 800, 'y' ]
+    - [ 2000, 'y' ]
+    - [ 4000, 'y' ]
+    - [ 8000, 'y' ]
+    - [ 20000, 'y' ]
+    - [ 40000, 'y' ]
+    - begin: [ 80000, 'y' ]
+      step: [ 40000, 'y' ]
+    - begin: [ 160000, 'y' ]
+      step: [ 80000, 'y' ]
+    - begin: [ 320000, 'y' ]
+      step: [ 160000, 'y' ]
+  end_time: &end_time 640000
+  dt_limits: &dt_limits
+    - time: [ 0, 'y' ]             # 4
+      max_dt: [ 25, 'y' ]
+    - time: [ 100, 'y' ]           # 2
+      max_dt: [ 50, 'y' ]
+    - time: [ 200, 'y' ]           # 2
+      max_dt: [ 100, 'y' ]
+    - time: [ 400, 'y' ]           # 2
+      max_dt: [ 200, 'y' ]
+    - time: [ 800, 'y' ]           # 3
+      max_dt: [ 400, 'y' ]
+    - time: [ 2000, 'y' ]          # 2
+      max_dt: [ 1000, 'y' ]
+    - time: [ 4000, 'y' ]          # 2
+      max_dt: [ 2000, 'y' ]
+    - time: [ 8000, 'y' ]          # 3
+      max_dt: [ 4000, 'y' ]
+    - time: [ 20000, 'y' ]         # 2
+      max_dt: [ 10000, 'y' ]
+    - time: [ 40000, 'y' ]         # 2
+      max_dt: [ 20000, 'y' ]
+    - time: [ 80000, 'y' ]         # 2
+      max_dt: [ 40000, 'y' ]
+    - time: [ 160000, 'y' ]        # 2
+      max_dt: [ 80000, 'y' ]
+    - time: [ 320000, 'y' ]        # 2
+      max_dt: [ 160000, 'y' ]
 
-    # relative to main config
-    piezo_head_input_file: "large_model_local.msh2"
-#    conc_flux_file: "conc_flux_UOS_kg_y.csv"
-    conc_flux_file: "conc_flux_UOS.csv"
-    conc_name: I
+  flow_solver__a_tol: &flow_solver__a_tol 1e-15
+  flow_solver__r_tol: &flow_solver__r_tol 1e-15
+  flow_solver__options: &flow_solver__options -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
 
-    bulk_field_params:
-        cond_min: 3e-13  # 3x higher than TSX (1e-13), mean transport time should be about 100 ky   to fracture conductivities,
-        cond_mult: 3.3
-        # cond_max: 1e-8  # increased edz 10 times higher then for TSX (try to make EDZ significant)#
-        # cond_max = cond_min*cond_mult
+transport_microscale:
+    input_template: transport_microscale_tmpl.yaml
 
-        por_min: 0.002
-        por_mult: 1.25
-        # por_max: 0.0025
-        # por_max = por_min*por_mult
+    pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ] #, [0,1,1], [1,0,1], [1,1,0]]
+    load_field_indirect_conductivity: "conductivity"
+    response_field_p0: "velocity_p0"
 
-        # values with respect to EDZ radius
-        # h_axis: 2.0
-        # v_axis: 3.35 # 6.7/2
-        # radius for c_min
-        inner_radius: 1.0
-    fr_field_params:
-        # apperture_per_size: 1e-5  # 1e-4 = 1mm na 10m
-        #fr_conductivity: 2.5e-3     # k = 1/12 * cs^2 * rho*g/visc = 1/12 1e-8 * 1000*10*1e3 =approx. 1e-2 ; cs=1e-4
-        permeability_factor: 1e-2      # relative permeability with respect to ideal case given by cubic law
-        #sigma_bulk_conductivity: 1e-7
-        #min_fr_cross_section: 5e-5
-        #max_fr_cross_section: 5e-3
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
 
-    #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
-    #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
-    # diffusivity_effective: 1e-13    # should be smaller then advection
-    # dispersivity_L: 0.5    # [m]
-    # dispersivity_T: 0.05     # [m]
-    dg_penalty: 1
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
 
-    # backfill_cond: 1e-13
-    # backfill_diff_m: 1e-15
-    # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
-    # backfill_por: 0.003
-
-    # setup for source term
-    sources_params:
-        # UOS geometry
-        diameter: 0.914
-        length: 3.790
-        buffer_thickness: 0.368
-
-
-    # The total simulation time as well as the output times are ese are quite dependent on the
-    output_times:
-      - [0, 'y']
-      - [100, 'y']
-      - [200, 'y']
-      - [400, 'y']
-      - [800, 'y']
-      - [2000, 'y']
-      - [4000, 'y']
-      - [8000, 'y']
-      - [20000, 'y']
-      - [40000, 'y']
-      - begin: [80000, 'y']
-        step: [40000, 'y']
-      - begin: [160000, 'y']
-        step: [80000, 'y']
-      - begin: [320000, 'y']
-        step: [160000, 'y']
-    end_time: 640000
-    dt_limits:
-        - time: [0, 'y']             # 4
-          max_dt: [25, 'y']
-        - time: [100, 'y']           # 2
-          max_dt: [50, 'y']
-        - time: [200, 'y']           # 2
-          max_dt: [100, 'y']
-        - time: [400, 'y']           # 2
-          max_dt: [200, 'y']
-        - time: [800, 'y']           # 3
-          max_dt: [400, 'y']
-        - time: [2000, 'y']          # 2
-          max_dt: [1000, 'y']
-        - time: [4000, 'y']          # 2
-          max_dt: [2000, 'y']
-        - time: [8000, 'y']          # 3
-          max_dt: [4000, 'y']
-        - time: [20000, 'y']         # 2
-          max_dt: [10000, 'y']
-        - time: [40000, 'y']         # 2
-          max_dt: [20000, 'y']
-        - time: [80000, 'y']         # 2
-          max_dt: [40000, 'y']
-        - time: [160000, 'y']        # 2
-          max_dt: [80000, 'y']
-        - time: [320000, 'y']        # 2
-          max_dt: [160000, 'y']
-
-    flow_solver__a_tol: 1e-15
-    flow_solver__r_tol: 1e-15
-
-    trans_solver__a_tol: 1e-15
-    trans_solver__r_tol: 1e-8
         # -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
 #        # Boomeramg options:
 #        # -ksp_type richardson              - recomended usage when solving just by multigrid
@@ -223,10 +233,90 @@ transport_fullscale:
   # edz_phys_group: 77
 
 
+# parameters substituted into the TH model template
+transport_fullscale:
+    input_template: transport_fullscale_tmpl.yaml
+
+    # relative to main config
+    piezo_head_input_file: "large_model_local.msh2"
+#    conc_flux_file: "conc_flux_UOS_kg_y.csv"
+    conc_flux_file: "conc_flux_UOS.csv"
+    conc_name: I
+
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
+
+    #diffusivity_effective: 1e-13     # 2e-12 for I, according to SKB 97-20
+    #diffusivity_effective: 3e-14     # řádově spodní mez pro Cs a Sr, horní pro I podle SURAO TZ334
+    # diffusivity_effective: 1e-13    # should be smaller then advection
+    # dispersivity_L: 0.5    # [m]
+    # dispersivity_T: 0.05     # [m]
+    dg_penalty: 1
+
+    # backfill_cond: 1e-13
+    # backfill_diff_m: 1e-15
+    # https://surao.gov.cz/wp-content/uploads/2023/02/TZ420_2019.pdf
+    # backfill_por: 0.003
+
+    # setup for source term
+    sources_params:
+        # UOS geometry
+        diameter: 0.914
+        length: 3.790
+        buffer_thickness: 0.368
+        # max. apparent diffusion of I in bentonite: D = 2e-10 [m2.s-1]
+        bentonite_diff: 2e-10
+
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
+
+    trans_solver__a_tol: 1e-15
+    trans_solver__r_tol: 1e-8
+
+transport_macroscale:
+    input_template: transport_macroscale_tmpl.yaml
+    conc_name: I
+    default_conductivity: 1e-16
+    input_fields_file: "input_fields.msh2"
+
+    bulk_field_params: *bulk_field_params
+    fr_field_params: *fr_field_params
+    output_times: *output_times
+    end_time: *end_time
+    dt_limits: *dt_limits
+
+    dg_penalty: 1
+
+    flow_solver__a_tol: *flow_solver__a_tol
+    flow_solver__r_tol: *flow_solver__r_tol
+    flow_solver__options: *flow_solver__options
+
+    trans_solver__a_tol: 1e-15
+    trans_solver__r_tol: 1e-8
+
+  
+
 machine_config:
     # automatic resolution according to the socket.gethostname()
     # content of the 'machine_config' dict is filled by the particular
     # machine configuration dict
+    makovnik:
+        flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
     paulie-MSI:  #JB
         flow_executable:
         # release
@@ -257,8 +347,8 @@ machine_config:
         #     pbs_name: chodby_trans
         #     walltime: "24:00:00"
         pbs:
-            n_cores: 18
-            n_nodes: 3
+            n_cores: 2
+            n_nodes: 1
             #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
             scratch: 100gb
             mem: 80Gb

@@ -56,7 +56,7 @@ def time_tuple(item : Union[float, Tuple[float, float]]):
 
 def output_times(cfg_fine):
     cfg_times, end_time = cfg_fine.output_times, cfg_fine.end_time
-    cfg_times.append(end_time)
+    cfg_times = [*cfg_times, end_time]
     times = []
     for item, next in zip(cfg_times[:-1], cfg_times[1:]):
         start, step = time_tuple(item)
@@ -98,8 +98,10 @@ def transport_2d(cfg, seed):
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
 
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
+    fields, est_velocity = compute_fields(cfg.mesh, cfg_fine, full_mesh, apply_fields.bulk_fields_mockup,
                                                      el_to_ifr, fractures, dim=2)
+    input_fields_file = full_mesh.write_fields("input_fields.msh2", fields)
+
     return parametrized_run(cfg, large_model, input_fields_file)
 
 
@@ -116,8 +118,9 @@ def transport_run(cfg, seed):
     el_to_ifr = fracture_map(full_mesh, fractures, n_large, dim=3)
     # mesh_modified_file = full_mesh.write_fields("mesh_modified.msh2")
     # mesh_modified = Mesh.load_mesh(mesh_modified_file)
-    input_fields_file, est_velocity = compute_fields(cfg, full_mesh, apply_fields.bulk_fields_mockup,
-                                                     el_to_ifr, fractures, dim=3)
+    fields, est_velocity = compute_fields(cfg.mesh, cfg_fine, full_mesh, apply_fields.bulk_fields_mockup,
+                                          el_to_ifr, fractures, dim=3)
+    input_fields_file = full_mesh.write_fields("input_fields.msh2", fields)
     return parametrized_run(cfg, large_model, input_fields_file)
 
 def parametrized_run(cfg, large_model, input_fields_file):
@@ -232,7 +235,7 @@ def set_source_limits(cfg):
 
 @report
 @memoize
-def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
+def compute_fields(cfg_mesh:dotdict, cfg_trans:dotdict, mesh:Mesh, bulk_field_func:Callable,
                    fr_map: Dict[int, Fracture], fractures:List[Fracture], dim):
     """
     :param params: transport parameters dictionary
@@ -240,9 +243,8 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     :param fr_map: map ele id to the fracture (only for fracture 2d elements
     :return: el_ids:List[int], cond:List[float], cross:List[float]
     """
-    cfg_geom = cfg.geometry
-    cfg_trans = cfg.transport_fullscale
-
+    cfg_geom = cfg_mesh.geometry
+    cfg_fr = cfg_mesh.fractures
 
     cfg_bulk_fields = cfg_trans.bulk_field_params
 
@@ -264,8 +266,7 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
     # plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
-    if "fractures" in cfg.geometry.include and fractures is not None:
-        cfg_fr = cfg.fractures
+    if "fractures" in cfg_geom.include and fractures is not None:
         cfg_fr_fields = cfg_trans.fr_field_params
         el_slice_fr = mesh.el_dim_slice(dim - 1)
         logging.info(f"fr slice: {el_slice_fr}")
@@ -292,9 +293,8 @@ def compute_fields(cfg:dotdict, mesh:Mesh, bulk_field_func:Callable,
         cross_section=cross_section,
         porosity=porosity
     )
-    cond_file = mesh.write_fields("input_fields.msh2", fields)
 
-    return cond_file, est_velocity
+    return fields, est_velocity
 
 def compute_hm_bulk_fields(cfg, cfg_basedir, points):
     cfg_geom = cfg.geometry

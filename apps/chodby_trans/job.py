@@ -27,6 +27,8 @@ input = None
 scratch = None
 output = None
 
+INPUT_DIR_ENV = "ENDORSE_INPUT_DIR"
+
 
 
 @attrs.define
@@ -45,7 +47,7 @@ class DotDir:
 class Input(DotDir):
     _data_schema_yaml = "data_schema.yaml"
     _data_schema_empty_yaml = "data_schema_empty.yaml"
-    _transport_cfg_path = "trans_mesh_config.yaml"
+    _transport_cfg_path = "transport_mlmc.yaml"
 
 class Scratch(DotDir):
     _zarr_store_path = "transport_sampling"
@@ -61,11 +63,11 @@ class Output(DotDir):
     _plots = "plots"
     _pbs_script = "sensitivity_sampling.pbs"
     _zarr_store_path = "transport_sampling"
+    _mlmc_hdf_path = "transport_mlmc.hdf"
 
-
-def set_workdir(workdir: Path, ):
-    """_summary_
-    ?? zarr_store dir in project dir on meta ?
+def set_workdir(workdir: Path, input_dir:Path = None):
+    """
+    Set workdir ?? zarr_store dir in project dir on meta ?
     Args:
         workdir (Path): _description_
     """
@@ -78,8 +80,18 @@ def set_workdir(workdir: Path, ):
     else:
         scratchdir = workdir
 
+    if input_dir is None:
+        input_dir_env = os.environ.get(INPUT_DIR_ENV)
+        if input_dir_env:
+            input_dir = Path(input_dir_env)
+        else:
+            input_dir = workdir / "input_data"
+    else:
+        os.environ[INPUT_DIR_ENV] = str(input_dir)
+
     global input, scratch, output
-    input = Input(workdir / "input_data")
+
+    input = Input(input_dir)
     scratch = Scratch(scratchdir)
     output = Output(workdir)
 

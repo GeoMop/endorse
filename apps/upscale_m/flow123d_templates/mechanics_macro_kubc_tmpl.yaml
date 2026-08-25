@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------------------------
+# Flow123d input for ONE load case of the upscale_m macro problem, KUBC conditions
+# Generated from flow123d_templates/mechanics_macro_kubc_tmpl.yaml
+#
+# The homogenized counterpart of the micro problem: the coarse mesh without any fractures of
+# the inner cube, one effective elastic tensor per macro element.
+#
+# The tensor comes in as six 3x3 fields, named: stiffness_tensor_0 .. stiffness_tensor_5
+# ---------------------------------------------------------------------------------------------
+
+# This Flow123d version supports Cauchy tensor as an input
+flow123d_version: 4.0.3dev_9e91fe
+
+problem: !Coupling_Sequential
+  description: "<description>"
+  mesh:
+    mesh_file: <mesh_file>
+
+  flow_equation: !Coupling_Iterative
+    input_fields:
+      - region: <bulk_regions>
+    time:
+      end_time: 1.0
+    a_tol: 1e-18
+    r_tol: 1e-18
+
+    flow_equation: !Flow_Darcy_LMH
+      gravity: [0, 0, 0]
+      input_fields:
+        - region: <bulk_regions>
+          bc_type: dirichlet
+          bc_pressure: 0
+
+      output:
+        fields: []
+
+    mechanics_equation: !Elasticity_Linear
+      output_stream:
+        format: !gmsh
+      output:
+        fields:
+          - stress
+          - displacement
+          - region_id
+
+      solver: !Petsc
+        a_tol: 1e-14
+        # matches the micro template: r_tol 1e-14 sits at machine precision for the relative
+        # residual, far past what the comparison needs and prone to stagnation
+        r_tol: 1e-10
+
+      input_fields:
+        - region: <bulk_regions>
+          elasticity_type: general
+          stiffness_tensor_0: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_0>
+          stiffness_tensor_1: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_1>
+          stiffness_tensor_2: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_2>
+          stiffness_tensor_3: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_3>
+          stiffness_tensor_4: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_4>
+          stiffness_tensor_5: !FieldFE
+            mesh_data_file: <tensor_field_file>
+            field_name: <stiffness_field_5>
+
+        - region: <boundary_regions>
+          bc_type: displacement
+          bc_displacement: !FieldFormula
+            value: "<bc_displacement_matrix> @ [x,y,z]"
