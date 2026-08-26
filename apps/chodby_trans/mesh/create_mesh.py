@@ -131,7 +131,7 @@ def create_main_tunnel(factory, cfg_mesh:'dotdict'):
                       .translate([cfg_geom.box_center[0], cfg_geom.box_center[1], 0]))
     # compute center of polygon
     cfg_mt.center = np.average(main_tunnel_points_clustered, axis=0)
-    cfg_mt.center[:1] = cfg_mt.center[:1] + cfg_geom.box_center[:1]
+    cfg_mt.center[:2] = cfg_mt.center[:2] + cfg_geom.box_center[:2]
 
     tunnel_center = factory.point(cfg_mt.center)
     tunnel_polygon = factory.group(tunnel_polygon, tunnel_center)
