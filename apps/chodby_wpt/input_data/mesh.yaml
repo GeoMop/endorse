@@ -6,7 +6,7 @@ borehole_section:
   section: 1
 
 # It is possible to specify which fractures to include.
-# E.g. [1, 3] or [fracture_1, fracture_3].
+# E.g. [1, 3] or [fracture_1, fracture_3] ... index of fracture local to borehole (see boreholes.yaml).
 fractures: all
 
 geometry:

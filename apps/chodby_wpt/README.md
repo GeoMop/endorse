@@ -16,7 +16,7 @@ Geometry and mesh preprocessing.
 Input data.
 
 ### model 
-Hydro-mechanical model of chamber pore pressures affected by the excavation.
+Hydro-mechanical model of chamber pore pressures.
 
 
 
