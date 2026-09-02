@@ -20,8 +20,18 @@ mlmc:
         "geometry/resolution_type": box
         "boundary_mesh_step": 5
         "fracture_mesh_step": 2
-        "main_tunnel_mesh_step": 1.25  # not used, tunnel not included in mesh
-        "boreholes_mesh_step": 0.5 # not used, boreholes not included in mesh
+        # "main_tunnel_mesh_step": 1.25 # no tunnel => no effect
+        # tunnel circumference is 17,06
+        # n main tunnel polygon nodes is 22
+        # => "orig step on tunnel wall" is 17,06/21 = 0.81
+        "main_line_refinement/h_inner": 0.81 # 1.25
+        "main_line_refinement/h_outer": 2.00 # 2.00
+      homo_params:
+        "geometry/resolution_type": box
+        "boundary_mesh_step": 5
+        "fracture_mesh_step": 2
+        "main_line_refinement/h_inner": 0.81 # 1.25
+        "main_line_refinement/h_outer": 2.00 # 3
 
     # finest
     - task_size: 150000   # estimated number of elements
@@ -38,7 +48,7 @@ mlmc:
         "boundary_mesh_step": 5
         "fracture_mesh_step": 2
         "main_tunnel_mesh_step": 1.25
-        "boreholes_mesh_step": 0.5
+        "main_line_refinement/h_inner": 1.25
 
 
 mesh:
@@ -64,13 +74,13 @@ mesh:
     # mesh step on outer boundary
     boundary_mesh_step: &boundary_mesh_step 5
     fracture_mesh_step: 2
-    main_tunnel_mesh_step: &main_tunnel_mesh_step 1.25 # 1
-    boreholes_mesh_step: &boreholes_mesh_step 0.5 # 0.25
+    main_tunnel_mesh_step: 1.25
+    boreholes_mesh_step: 0.5
 
     # refinement around central line of main tunnel
     main_line_refinement:
       r_inner: 2
-      h_inner: *main_tunnel_mesh_step
+      h_inner: 1.25
       r_outer: 10
       h_outer: 3 # 1.5
       q_outer: 1
@@ -79,9 +89,9 @@ mesh:
 
     storage_borehole_refinement:
       r_inner: 0.1
-      h_inner: *boreholes_mesh_step
+      h_inner: 0.5
       r_outer: 0.825 # half of sbh diameter
-      h_outer: *boreholes_mesh_step
+      h_outer: 0.5
       q_outer: 1
       r_inf: 30
       h_inf: *boundary_mesh_step

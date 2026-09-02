@@ -125,6 +125,7 @@ def create_main_tunnel(factory, cfg_mesh:'dotdict'):
 
     cluster_tol = (cfg_mt.width+cfg_mt.height)/2 / 15
     main_tunnel_points_clustered = merge_along_sequence(main_tunnel_points, cluster_tol)
+    logging.info(f"main tunnel N clustered points: {len(main_tunnel_points_clustered)}")
 
     # create polygon
     tunnel_polygon = (factory.make_polygon(points=main_tunnel_points_clustered)

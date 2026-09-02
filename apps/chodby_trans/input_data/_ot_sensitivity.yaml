@@ -1,4 +1,4 @@
-n_samples: 256 # must be power of 2 due to salib
+n_samples: 200 # must be power of 2 due to salib
 limit_samples: 1000
 recompute_failed: False
 recompute_done: False
