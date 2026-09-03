@@ -75,6 +75,7 @@ problem: !Coupling_Sequential
         - velocity_p0
         - region_id
         - conductivity
+        - anisotropy
         - cross_section
     balance:
       cumulative: true

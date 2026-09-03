@@ -26,11 +26,15 @@ problem: !Coupling_Sequential
     output:
       fields:
         - piezo_head_p0
-        #- pressure_p0
-        #- pressure_p1
+        - pressure_p0
+        - #- pressure_p1
         - velocity_p0
         - region_id
         - conductivity
-    balance: { }
+        - anisotropy
+        - cross_section
+
+    balance:
+      cumulative: true
     output_stream:
       format: !gmsh

@@ -198,7 +198,25 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   4. Seed the OpenTURNS matrix generator explicitly and cover repeatability and
      per-term workspace behavior with focused tests.
 
+- Standalone conductivity histogram postprocess:
+  1. Reproduce the ParaView state pipeline in plain Python for one
+     `flow_fields.pvd`: threshold `region_id`, compute `log10(conductivity)`,
+     evaluate cell volume weights, and build the weighted histogram table.
+  2. Reuse the existing matplotlib styling and region-color annotations from
+     `cond_histogram.pvsm`, but move them into a standalone CLI script that
+     writes a PDF/PNG and logs the extracted histogram values for later
+     automation.
+  3. Keep the implementation local to `apps/chodby_trans` and parameterize the
+     data path, total-volume normalization constant, region thresholds, and rock
+     markers so later sample postprocess can call the same code without
+     depending on ParaView state files.
+
 ## AGENT Log
+- 2026-09-03: Added `flow123d_conductivity_histogram.py` as a standalone
+  Python replacement for `workdir_41e_test_ot_2/cond_histogram.pvsm`.
+  The script reproduces the ParaView pipeline for `flow_fields.pvd`,
+  exports the conductivity histogram as a figure plus CSV table, and includes
+  a focused synthetic test in `test/test_flow123d_conductivity_histogram.py`.
 - 2026-08-10: Fixed `MacroTetra.interact` to use barycentric coordinates of the
   center-scaled tetrahedron and added `interaction_weights` for batched micro-element
   barycentres. Added focused core-suite regression tests in
