@@ -157,8 +157,6 @@ def get_flow_time_series(borehole: input_data.Borehole, section: input_data.Sect
     # by dividing flow by volume
     volume = compute_water_volume(borehole, section)
     assert volume != -1, "Unable to calculate volume"
-    # volume is in m^3, convert to mm^3 to match units of flow (?)
-    volume = volume * 1e6
     filtered[flow_column] = filtered[flow_column] / volume
 
     return filtered.values.tolist()
