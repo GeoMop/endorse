@@ -48,29 +48,29 @@ problem: !Coupling_Sequential
           - region: fracture_1
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_0>**2) + <rock_conductivity>
+              value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius>**2) + <rock_conductivity>
             storativity: <fracture_storativity> #1
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_0>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_0>**2) + 1e-4
+              value: diff = (x-<fracture_center_0>); <fracture_cross_section_0>*exp(-diff @ diff / <fracture_radius>**2) + 1e-4
 
           - region: fracture_2
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_1>**2) + <rock_conductivity>
+              value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius>**2) + <rock_conductivity>
             storativity: <fracture_storativity> #1
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_1>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_1>**2) + 1e-4
+              value: diff = (x-<fracture_center_1>); <fracture_cross_section_1>*exp(-diff @ diff / <fracture_radius>**2) + 1e-4
 
           - region: fracture_3
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_2>**2) + <rock_conductivity>
+              value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius>**2) + <rock_conductivity>
             storativity: <fracture_storativity> #1
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_2>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_2>**2) + 1e-4
+              value: diff = (x-<fracture_center_2>); <fracture_cross_section_2>*exp(-diff @ diff / <fracture_radius>**2) + 1e-4
 
           - region: [ .rock, .fractures ]
             bc_type: dirichlet
@@ -83,12 +83,16 @@ problem: !Coupling_Sequential
                 <flow_series>
           
           - region: water
-            time: 1200
+            time: <flow_series_end>
             water_source_density: 0
 
         output:
           times: &output_times
-            - step: 1e5
+            # full timeseries with slow evaluation
+            - {'begin': 0, 'step': 300, 'end': <flow_series_end>} # pressurization
+            - {'begin': <flow_series_end>, 'step': 7200, 'end': 604800} # relaxation, 1 week for now
+            # dummy timeseries for fast evaluations
+            #- step: 1e5
           fields:
             - piezo_head_p0
             - pressure_p0
@@ -125,7 +129,11 @@ problem: !Coupling_Sequential
           - region: [ rock, packer_near, packer_far ]
             young_modulus: <rock_young> #60e9
             poisson_ratio: <rock_poisson> #0.25
-            initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            #initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            initial_stress: !FieldFE
+              mesh_data_file: "3d_model_mechanics.vtu"
+              field_name: stress
+              interpolation: P0_gauss
 
           - region: [ fractures, water ]
             young_modulus: <fracture_young> #1e7

@@ -150,10 +150,10 @@ def get_flow_time_series(borehole: input_data.Borehole, section: input_data.Sect
     filtered["Time"] = filtered.apply(lambda row: (pd.to_datetime(row["Date"], format="%Y-%m-%d %H:%M:%S") - time_zero).total_seconds(), axis=1)
     # remove redundant column
     filtered.drop(columns="Date", inplace=True)
-    # swap column order
+    # swap column order to match expected format in template
     filtered = filtered[filtered.columns[::-1]]
 
-    # adjust values to water density
+    # adjust values to water source density
     # by dividing flow by volume
     volume = compute_water_volume(borehole, section)
     assert volume != -1, "Unable to calculate volume"
@@ -206,6 +206,10 @@ if __name__ == "__main__":
 
     flow_series = get_flow_time_series(borehole, section)
 
+    # time point where to set flow=0 onward
+    # 1 minute after last specified flow rate
+    flow_series_end = flow_series[-1][0] + 1 * 60
+
     # calculate observe point
     # used point is in the middle of the section on the axis
     _, _, section_start, section_end = geometry_points(mesh_cfg)
@@ -227,21 +231,26 @@ if __name__ == "__main__":
         if bh["name"] == borehole:
             bh_data = bh
             break
-    fracture_radii = [fracture["width"] for fracture in bh_data["fractures"]]
-    print(fracture_centers, fracture_radii)
+    fracture_cross_sections = [fracture["width"] for fracture in bh_data["fractures"]]
+    print(fracture_centers, fracture_cross_sections)
 
     # compile all replacements
     replacements = {
         "flow_series": flow_series,
+        "flow_series_end": flow_series_end,
         "init_pressure": initial_pressure,
         "observe_point": section_middle.tolist(),
         # figure out a way to pass this without duplicating code
         "fracture_center_0": fracture_centers[0],
         "fracture_center_1": fracture_centers[1],
         "fracture_center_2": fracture_centers[2],
-        "fracture_radius_0": fracture_radii[0],
-        "fracture_radius_1": fracture_radii[1],
-        "fracture_radius_2": fracture_radii[2],
+        "fracture_cross_section_0": fracture_cross_sections[0],
+        "fracture_cross_section_1": fracture_cross_sections[1],
+        "fracture_cross_section_2": fracture_cross_sections[2],
+        "fracture_radius": 2,
+        #"fracture_storativity": 4.5e-10 / 1000 / 9.81,
+        "rock_conductivity" : 1e-11,
+        "rock_storativity": 0
     }
 
     print(replacements)
