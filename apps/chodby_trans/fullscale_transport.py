@@ -149,7 +149,7 @@ def create_mesh(workdir, input_dir, cfg_mesh, fr_set, n_large):
     # full_mesh = load_mesh(mesh_file, heal_tol=1e-4)
     full_mesh = load_mesh(mesh_file, heal_tol=None)  # already healed
 
-    el_to_ifr = None
+    el_to_ifr = {}
     if "fractures" in cfg_mesh.geometry.include and fr_set is not None and len(fr_set)>0:
         # modifies the regions: fr_large, fr_small
         el_to_ifr = fracture_map(full_mesh, fr_set, n_large, dim=3)
@@ -342,15 +342,22 @@ def average_micro_field_to_macro(micro_mesh, macro_mesh, micro_field):
 @run_in_subprocess
 def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, level_id):
     job.set_workdir(output_dir, input_dir)
+
+    level = cfg.mlmc.levels[level_id]
+    macro_level_id = level_id - 1
+    macro_level = cfg.mlmc.levels[macro_level_id]
+
     # micro: fine mesh of buffer domain
     variant = "micro"
-    level = cfg.mlmc.levels[level_id]
     cfg_mesh = update_mesh_cfg(cfg.mesh, level_id, level.params)
     cfg_mesh.geometry.box_dimensions = [v + 2 * level.buffer_width for v in cfg_mesh.geometry.box_dimensions]
     cfg_mesh.geometry.main_tunnel.length += 2 * level.buffer_width
     cfg_mesh.mesh_name += f"_{variant}"
     input_dir = job.input.dir_path if job.input is not None else None
-    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, fracture_set, n_large)
+    fine_fracture_set = [fr for fr in fracture_set if fr.r <= macro_level.fr_min_limit]
+    logging.info(f"N micro fracture set: {len(fine_fracture_set)} / {len(fracture_set)}")
+    fine_n_large = len(fine_fracture_set) if n_large > len(fine_fracture_set) else n_large
+    micro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, fine_fracture_set, fine_n_large)
 
     # load common homogenization mesh
     homogenization_mesh = load_mesh(
@@ -381,8 +388,6 @@ def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, leve
 
     # macro: target coarse mesh
     variant = "macro"
-    macro_level_id = level_id - 1
-    macro_level = cfg.mlmc.levels[macro_level_id]
     cfg_mesh = update_mesh_cfg(cfg.mesh, macro_level_id, macro_level.params)
     coarse_fracture_set = [fr for fr in fracture_set if fr.r > macro_level.fr_min_limit]
     logging.info(f"N macro fracture set: {len(coarse_fracture_set)} / {len(fracture_set)}")

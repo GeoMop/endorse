@@ -266,7 +266,7 @@ def compute_fields(cfg_mesh:dotdict, cfg_trans:dotdict, mesh:Mesh, bulk_field_fu
     # plots.plot_field(mesh.el_barycenters()[el_slice_bulk], bulk_por, cut=(0,2), file="porosity_yz.pdf")
 
     # Fracture
-    if "fractures" in cfg_geom.include and fractures is not None:
+    if "fractures" in cfg_geom.include and fractures and fr_map:
         cfg_fr_fields = cfg_trans.fr_field_params
         el_slice_fr = mesh.el_dim_slice(dim - 1)
         logging.info(f"fr slice: {el_slice_fr}")
