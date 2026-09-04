@@ -140,6 +140,8 @@ def get_flow_time_series(borehole: input_data.Borehole, section: input_data.Sect
     data = pd.read_csv(input_data.data_2025, usecols=["Date", flow_column])
     # filter only nonzero values in flow column
     filtered = data[data[flow_column] > 0]
+    # convert flow from mm^3/s to m^3/s (SI units)
+    filtered[flow_column] = filtered[flow_column] * 1e-9
 
     # offset the data so that it starts on time 0
     # precompute time=0
