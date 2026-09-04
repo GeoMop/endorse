@@ -5,9 +5,14 @@
 
 set -euo pipefail
 
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 # ======= EDIT THESE PATHS =======
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR=${1}
+EXPECTED_WORKERS_FILE="$SCRATCHDIR/DASK_EXPECTED_WORKERS.txt"
 #WORK_DIRNAME="workdir"
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
@@ -17,6 +22,7 @@ APP_CMD_DEFAULT="meta"
 
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
 NCPUS=$(wc -l < "$PBS_NODEFILE")
+HEAD_WORKER_RESERVE=${DASK_HEAD_WORKER_RESERVE:-2}
 
 PYEXEC="$VENV/bin/python"
 DASK_BIN="$VENV/bin/dask"
@@ -55,13 +61,17 @@ compute_host_counts() {
 
 start_scheduler() {
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
-  HEAD_IP=$(getent hosts "$HEAD_NODE" | awk '{print $1}')
-  SCHED_ADDR="tcp://${HEAD_IP}:8786"
+  SCHED_ADDR="tcp://${HEAD_NODE}:8786"
   DASH_ADDR=":8787"
 
   echo "[sched] Starting scheduler on $HEAD_NODE ($SCHED_ADDR)..."
-  nohup "$DASK_BIN" scheduler --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
-  # nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
+  nohup "$DASK_BIN" scheduler \
+      --host "$HEAD_NODE" \
+      --port 8786 \
+      --dashboard-address "$DASH_ADDR" \
+      --preload chodby_trans.dask_scheduler_preload \
+      >"$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
+  # nohup "$DASK_SCHED" --host "$HEAD_NODE" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # pbsdsh -vh "$HEAD_NODE" -- bash -lc `nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &`
   # pbsdsh -vh "$HEAD_NODE" -- cat "$SCRATCHDIR/logs/scheduler.log"
   echo $! > "$SCRATCHDIR/scheduler.pid"
@@ -71,22 +81,41 @@ start_scheduler() {
   # cat "pid: $SCRATCHDIR/scheduler.pid"
   # cat "$SCRATCHDIR/logs/scheduler.log"
   echo "$SCHED_ADDR" > "$SCRATCHDIR/SCHED_ADDR.txt"
-  echo "[sched] Scheduler: $SCHED_ADDR (dashboard on $HEAD_IP$DASH_ADDR)"
+  echo "[sched] Scheduler: $SCHED_ADDR (dashboard on $HEAD_NODE$DASH_ADDR)"
 }
 
 start_workers() {
-  echo "[worker] Launching workers on each node (one process per PBS slot, 1 thread each)..."
+  echo "[worker] Launching workers on each node (one process per worker slot, 1 thread each)..."
+  echo "[worker] Reserving $HEAD_WORKER_RESERVE slot(s) on scheduler node $HEAD_NODE."
   echo "$SCHED_ADDR"
   echo "$HOST_COUNTS"
+  EXPECTED_WORKERS=0
   while read -r COUNT HOST; do
     [[ -z "${HOST:-}" ]] && continue
+    WORKER_COUNT=$COUNT
+    if [[ "$HOST" == "$HEAD_NODE" ]]; then
+      WORKER_COUNT=$((COUNT - HEAD_WORKER_RESERVE))
+      if (( WORKER_COUNT < 0 )); then
+        WORKER_COUNT=0
+      fi
+    fi
+    if (( WORKER_COUNT == 0 )); then
+      echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers; scheduler reserved) ---"
+      continue
+    fi
+    EXPECTED_WORKERS=$((EXPECTED_WORKERS + WORKER_COUNT))
     # echo "--- $HOST --- "
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
-    echo "--- $HOST ($COUNT slots) ---"
-    pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
+    echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
+    pbsdsh -vh "$HOST" -- env \
+      ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}" \
+      ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data" \
+      ENDORSE_OUTPUT_DIR="$OUTPUT_DIR" \
+      bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
   done <<< "$HOST_COUNTS"
-  echo "[worker] Workers started."
+  printf '%s\n' "$EXPECTED_WORKERS" > "$EXPECTED_WORKERS_FILE"
+  echo "[worker] Workers started; expecting $EXPECTED_WORKERS registrations."
 }
 
 stop_cluster() {
@@ -98,8 +127,7 @@ stop_cluster() {
 
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
     # pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/workdir_$node" &
-    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/" &
-    pbsdsh -vh "$node" -- rm -r "$SCRATCHDIR/*"
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/"
   done
   wait
   
@@ -128,9 +156,12 @@ run_example() {
   echo "[run] Running driver against $SCHED ..."
 
   local app_cmd=${1}
+  local expected_workers
+  expected_workers=$(<"$EXPECTED_WORKERS_FILE")
   echo "app_cmd = $app_cmd"
 
-  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR $app_cmd "$SCHED" \
+  DASK_EXPECTED_WORKERS="$expected_workers" \
+  "$PYEXEC" -u "$APP_PY" "$OUTPUT_DIR" "$app_cmd" "$SCHED" \
       2>&1 | tee "$SCRATCHDIR/logs/driver_$(date +%H%M%S).log"
 }
 

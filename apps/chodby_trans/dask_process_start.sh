@@ -9,9 +9,16 @@ WORKER_COUNT=$3
 
 : "${SCRATCHDIR:?SCRATCHDIR not set}"
 
+export ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}"
+export DASK_DISTRIBUTED__WORKER__DAEMON=False
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 CMD=( "$DASK_BIN" worker "$SCHED_ADDR"
       --nworkers 1 --nthreads 1
       --no-nanny
+      --preload chodby_trans.dask_worker_preload
       --local-directory "$SCRATCHDIR/dask"
       --memory-limit auto )
 
@@ -19,8 +26,14 @@ exec </dev/null
 
 for ((WORKER_IDX=0; WORKER_IDX<WORKER_COUNT; WORKER_IDX++)); do
   LOG="$SCRATCHDIR/logs/worker_${HOSTNAME}_${WORKER_IDX}.log"
+  printf 'ENDORSE_DISABLE_MEMOIZE=%s\n' "$ENDORSE_DISABLE_MEMOIZE" > "$LOG"
+  printf 'DASK_DISTRIBUTED__WORKER__DAEMON=%s\n' \
+    "$DASK_DISTRIBUTED__WORKER__DAEMON" >> "$LOG"
+  printf 'OMP_NUM_THREADS=%s\n' "$OMP_NUM_THREADS" >> "$LOG"
+  printf 'OPENBLAS_NUM_THREADS=%s\n' "$OPENBLAS_NUM_THREADS" >> "$LOG"
+  printf 'MKL_NUM_THREADS=%s\n' "$MKL_NUM_THREADS" >> "$LOG"
   # nohup setsid "${CMD[@]}" >"$LOG" 2>&1 < /dev/null &
-  nohup setsid "${CMD[@]}" >"$LOG" 2>&1 &
+  nohup setsid "${CMD[@]}" >>"$LOG" 2>&1 &
   echo $! > "$SCRATCHDIR/worker_${HOSTNAME}_${WORKER_IDX}.pid"
   echo "Started Dask worker on $HOSTNAME, idx=$WORKER_IDX, pid=$(cat "$SCRATCHDIR/worker_${HOSTNAME}_${WORKER_IDX}.pid")"
 done

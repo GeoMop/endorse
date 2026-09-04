@@ -70,17 +70,45 @@ class MacroTetra(MacroShapeBase):
             np.min(macro_el.vertices(), axis=0),
             np.max(macro_el.vertices(), axis=0)])
 
-    def interact(self, macro_el:Element, micro_el: Element):
-        jac = macro_el.vertices()[1:, :] - macro_el.vertices()[0, :]  # jacobian of the macro element
-        inv_jac = np.linalg.inv(self.rel_radius * jac.T)
-        micro_b = micro_el.barycenter()
-        x_rel = micro_b - macro_el.vertices()[0, :]
-        x_loc = inv_jac @ x_rel
-        x_bary = np.array([1.0 - np.sum(x_loc), *x_loc])  # barycentric coordinates
-        micro_r = np.mean(np.linalg.norm(macro_el.vertices() - micro_b[None,:], axis=1))
-        neg_dist = (np.max(x_bary) + micro_r) / (2 * micro_r)
-        w = min(1.0, max(0.0, neg_dist))
-        return w
+    def interaction_weights(self, macro_el: Element, micro_barycenters: np.ndarray) -> np.ndarray:
+        """Return kernel weights for one or more micro-element barycentres.
+
+        The macro tetrahedron is scaled about its centroid.  The calculation keeps all
+        leading axes of ``micro_barycenters`` so callers can evaluate many candidate
+        elements using one linear solve.
+        """
+        macro_vertices = macro_el.vertices()    # shape = (n_vertices, dim=3)
+        center = np.mean(macro_vertices, axis=0)
+        scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
+        jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
+        points = np.asarray(micro_barycenters, dtype=float)  # shape = (n_micro_els, dim=3)
+        assert points.shape[-1] == 3, f"Expected XYZ barycentres, got shape {points.shape}."
+
+        local_coordinates = np.linalg.solve(
+            jacobian, (points - scaled_origin).reshape(-1, 3).T
+        ).T.reshape(points.shape) # Allows points to be just 1D array with shape (dim,).
+        barycentric = np.concatenate(
+            [1.0 - np.sum(local_coordinates, axis=-1, keepdims=True), local_coordinates],
+            axis=-1,
+        )
+        min_barycentric = np.min(barycentric, axis=-1)  # maximal min_bary = 1/4
+
+        # 0 at center, 1 at the tetrahedron boundary.
+        radial = 1.0 - 4.0 * min_barycentric
+
+        # TODO: could be introduced as a parameter
+        # Currently we set it to the unscaled tetrahedra
+        core_radius = 1.0 / self.rel_radius
+        interior_weight = np.where(
+            radial <= core_radius,
+            1.0,
+            (1.0 - radial) / (1.0 - core_radius),
+        )
+        return np.where(min_barycentric > 0.0, interior_weight, 0.0)
+
+    def interact(self, macro_el: Element, micro_el: Element) -> float:
+        """Return the scalar kernel weight for one micro element."""
+        return float(self.interaction_weights(macro_el, micro_el.barycenter()))
 
 
 @attrs.define
@@ -119,6 +147,7 @@ class SubMeshSubproblem:
         return self._submesh
 
 
+    @memoize
     def subdomains(self, output_mesh):
         """Create subproblem mesh."""
         if self._subdomains is None:
@@ -169,12 +198,19 @@ def bin_intervals(intervals, n_bins):
     bins = np.linspace(np.min(intervals[:, 0]), np.max(intervals[:, 1]), n_bins + 1)
     return np.digitize(centers, bins[1:-1])
 
-def assign_to_subproblems(boxes, subdivision):
+def assign_to_subproblems(boxes: np.ndarray, subdivision: List[float]) -> List[int]:
     """
     Split the AABB of the macro_mesh macro elements to the subdomains according to the subdivision
     vector providing number of subdomains [n_x, n_y, n_z] in every direction. The n_x * n_y * n_z subdomains will be used.
     Assign every macro element aabb to single subproblem according to the AABB center.
-    Return array of subproblem index for every macro element.
+
+    boxes: shape: (n_macro_elements, 2, 3)
+        2 ... minimal and maximal AABB corner
+        3 ... XYZ coords.
+
+    Return:
+         List[int] .. length = n_macro_elements,
+         array of subproblem index for every macro element.
     TODO: improve covering for irregular shapes and/or refined meshes, could possibly use a Metis or so.
     """
     i_bin_axis = [ bin_intervals(boxes[:, :, axis], subdivision[axis]) for axis in range(3)]
@@ -183,6 +219,9 @@ def assign_to_subproblems(boxes, subdivision):
 
 
 def subproblem_boxes(macro_boxes, subdivision):
+    """
+
+    """
     i_subproblems = assign_to_subproblems(macro_boxes, subdivision)
     perm = np.argsort(i_subproblems)
     i_subp_sorted = i_subproblems[perm]
@@ -201,12 +240,15 @@ def subproblem_boxes(macro_boxes, subdivision):
 
     return sub_boxes, i_subproblems
 
-def make_subproblems(macro_mesh, macro_els, micro_mesh:Mesh, macro_shape:MacroShapeBase, subdivision:np.array) -> List[SubMeshSubproblem]:
+def make_subproblems(
+        macro_mesh, macro_els, micro_mesh:Mesh, macro_shape:MacroShapeBase,
+        subdivision:np.array) -> List[SubMeshSubproblem]:
     """
     Could be modified
     :param micro_mesh:
     :param macro_mesh:
     :return:
+    List[SubMeshSubproblem]
     """
     macro_boxes = np.array([macro_shape.aabb(macro_mesh.elements[iel]) for iel in macro_els])
 
@@ -402,10 +444,15 @@ class Subdomain:
         #aabb = bih.AABB([center - r, center + r])
         aabb = shape.aabb(macro_el)
         candidates = micro_mesh.candidate_indices(aabb)
+
+        # keep volumetric elements only
+        bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
+        candidates = [ie for ie in candidates if bulk_micro_slice.start <= ie < bulk_micro_slice.stop]
+
         assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
         subdomain_indices = [(ie, w) for ie in candidates
                          if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
-        logging.info(f"Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
+        logging.info(f"[{i_el}] Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
         assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
         micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.

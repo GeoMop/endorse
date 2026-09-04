@@ -35,7 +35,17 @@ machine_config:
         - --
         - --profiler_path
         - profile
-
+    paulie-MSI: #JB
+        flow_executable:
+        # release
+        - /home/paulie/Workspace/endorse/bin/mini_fterm.sh    # installed with endorse
+        - -x
+        - -i
+        - ci-gnu:4.0.3dev_11c2ea       # master 28.5.2025
+        - --no-term
+        - --
+        - --profiler_path
+        - profile
 
     #     pbs: null
     # __default__: # Assums running on charon

@@ -1,4 +1,5 @@
 import shutil
+import multiprocessing
 from typing import *
 import csv
 import os, sys, socket
@@ -11,11 +12,13 @@ import subprocess
 import json
 import tarfile
 import traceback
+from functools import partial
 
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
 import yaml
+import openturns as ot
 # from scoop import futures
 # from mpi4py.futures import MPIPoolExecutor
 
@@ -40,8 +43,25 @@ import chodby_trans.transport_wrapper as transport_wrapper
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
+from chodby_trans.mlmc_analysis import run_mlmc_analysis
+from chodby_trans.mlmc_worker import (
+    TransportLevelSimulation,
+    calculate_transport_saltelli,
+    return_result_format,
+    scheduler_preload_status,
+    transport_preload_status,
+)
 from chodby_trans.exception_wrapper import ReturnCode
+import chodby_trans.transport_simulation as transport_simulation
+from chodby_trans.fullscale_transport import prepare_common_homogenization_mesh
 
+from mlmc.sample_storage_hdf import SampleStorageHDF
+from mlmc.sampler import Sampler
+from mlmc.sampling_pool_dask import SamplingPoolDask
+from mlmc.level_simulation import LevelSimulation
+from mlmc.quantity.quantity_spec import QuantitySpec
+from mlmc.quantity.sobol import SaltelliSchema
+from mlmc.sim.simulation import Simulation
 
 import logging
 def setup_logging(name="driver"):
@@ -148,6 +168,10 @@ def prepare_sampling(cfg: dotdict, seed):
 
 def single_sample(args):
     # sample_dir, data_schema_key, tags, parameters = args
+    """
+    - tags: i_sample, i_saltelli
+    - group_parameters
+    """
     workdir, data_schema_key, tags, parameters = args
     job.set_workdir(workdir)
     setup_logging(name=f"T{tags[0]}")
@@ -160,6 +184,7 @@ def single_sample(args):
     if tags[1] >= cfg.ot_sensitivity.limit_samples:
         return ReturnCode.SKIP
 
+    # AGENT: remove creation of own sample dir use what is passed by local simulation
     sensitivity_dir = job.scratch.sensitivity_dir
     sample_subdir = sensitivity_dir / "samples"
 
@@ -205,7 +230,8 @@ def single_sample(args):
         variant_patch = dict()
         for k, v in cfg.ot_sensitivity.parameters.items():
             if "path" in v:
-                variant_patch[v.path] = param_dict[k]
+                for p in v.path:
+                    variant_patch[p] = param_dict[k]
         new_cfg = common.apply_variant(cfg, variant_patch)
 
         wrap = transport_wrapper.Wrapper(cfg=new_cfg)
@@ -331,6 +357,23 @@ def initialize_data_schema():
     return data_schema_key, data_schema[data_schema_key]
 
 
+def validate_result_grid_size(cfg: dotdict, data_schema: dict) -> tuple[int, int, int]:
+    """
+    Validate that model and storage configurations use the same result grid.
+    """
+    config_grid_size = tuple(int(size) for size in cfg.grid_size)
+    schema_grid_size = tuple(int(size) for size in data_schema["ATTRS"]["grid_step"])
+    if len(config_grid_size) != 3:
+        raise ValueError(f"Configured grid_size must have three dimensions, got {config_grid_size}.")
+    if config_grid_size != schema_grid_size:
+        raise ValueError(
+            f"Configured grid_size {config_grid_size} does not match "
+            f"data schema grid_step {schema_grid_size}."
+        )
+    logging.info("Validated result grid size against data schema: %s", config_grid_size)
+    return config_grid_size
+
+
 def setup_data_storage(cfg: dotdict,
                        store_path: str,
                        data_schema: dict,                       
@@ -446,42 +489,118 @@ def setup_data_storage(cfg: dotdict,
     tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
+
+def _mlmc_level_ids(store_path: Path) -> list[int]:
+    root = zarr.open_group(str(store_path), mode="r")
+    if transport_simulation.MLMC_ZARR_GROUP not in root:
+        return []
+    mlmc_group = root[transport_simulation.MLMC_ZARR_GROUP]
+    level_ids = []
+    for key in mlmc_group.group_keys():
+        if key.startswith("level_"):
+            level_ids.append(int(key.split("_", 1)[1]))
+    return sorted(level_ids)
+
+
+def _merge_mlmc_side_selection(
+    selected: dict[tuple[int, int, int, int], np.ndarray],
+    *,
+    level_id: int,
+    i_eval: np.ndarray,
+    i_sample: np.ndarray,
+    i_saltelli: np.ndarray,
+    parameters: np.ndarray,
+) -> None:
+    for idx in range(len(i_eval)):
+        key = (
+            int(level_id),
+            int(i_eval[idx]),
+            int(i_sample[idx]),
+            int(i_saltelli[idx]),
+        )
+        selected.setdefault(key, np.asarray(parameters[idx], dtype=float))
+
+
 def read_parameters_by_rc(rc_select: list[int]):
-    print("=========== READ ZARR ==============")
-    ds = xr.open_zarr(str(job.output.zarr_store_path))
-    print(ds)
-    # print(read_ds['A_sample'].to_numpy())
-    # print("sample_id:\n", ds['sample_id'].to_numpy())
-    # print(ds['parameter'].to_numpy())
-    # print("return_code:\n", ds['return_code'].to_numpy())
-    print("=========== END READ ZARR ==============")
     logging.info(f"getting samples by RC: {rc_select}")
-    v_param = ds['parameter'].to_numpy()
-    v_ieval = ds['i_eval'].to_numpy()
-    v_rc = ds['return_code'].to_numpy()
-    plot_failed_return_codes(v_rc, v_ieval)
+    store_path = job.output.zarr_store_path
+    level_ids = _mlmc_level_ids(store_path)
+    if not level_ids:
+        raise ValueError(f"No MLMC level groups found in Zarr store: {store_path}")
 
-    mask = np.isin(v_rc, rc_select)
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy()[mask].ravel())
-    f_param = v_param[mask]
-    f_ieval = v_ieval[mask]
-    f_rc = v_rc[mask]
-    logging.info(f"found n_evals: {len(f_ieval)}")
+    root = zarr.open_group(str(store_path), mode="r")
+    mlmc_group = root[transport_simulation.MLMC_ZARR_GROUP]
+    selected: dict[tuple[int, int, int, int], np.ndarray] = {}
+    for level_id in level_ids:
+        group_name = f"level_{level_id:02d}"
+        level_group = mlmc_group[group_name]
+        print("=========== READ ZARR ==============")
+        print(f"group=mlmc/{group_name}")
+        print(f"arrays={list(level_group.array_keys())}")
+        print("=========== END READ ZARR ==============")
 
-    # just print a summary of found RC
-    codes = np.unique(f_rc)
-    rc_dict = {code: f_ieval[f_rc == code] for code in codes}
-    for code, ids in rc_dict.items():
-        print(f"{code}: {ids}")
+        for side in ("fine", "coarse"):
+            v_param = np.asarray(level_group["parameter"])
+            v_ieval = np.asarray(level_group["i_eval"])
+            v_rc = np.asarray(level_group[f"{side}_return_code"])
+            v_eval_time = np.asarray(level_group[f"{side}_eval_time"])
 
-    i_idx, q_idx = np.where(mask)  # integer indices
-    f_isample = ds['i_sample'].isel(i_sample=i_idx).to_numpy()  # coordinate values of i_sample
-    f_isaltelli = ds['i_saltelli'].isel(i_saltelli=q_idx).to_numpy()  # coordinate values of i_saltelli
+            label = f"level_{level_id:02d}_{side}"
+            plot_failed_return_codes(
+                v_rc,
+                v_ieval,
+                title=f"Return Code Distribution {label}",
+                output_name=f"return_code_{label}.pdf",
+            )
 
-    tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
-    logging.info(f"first 20 tags:\n{tags[:20]}")
-    return tags, f_param
+            mask = np.isin(v_rc, rc_select)
+            logging.info(
+                "plotting eval time histogram for %s, selected=%s",
+                label,
+                int(np.count_nonzero(mask)),
+            )
+            plot_sample_time_hist(
+                v_eval_time[mask].ravel(),
+                title=f"Sample time histogram {label}",
+                output_name=f"sample_time_hist_{label}.pdf",
+            )
+
+            f_param = v_param[mask]
+            f_ieval = v_ieval[mask]
+            f_rc = v_rc[mask]
+            logging.info("found n_evals for %s: %s", label, len(f_ieval))
+
+            codes = np.unique(f_rc)
+            rc_dict = {code: f_ieval[f_rc == code] for code in codes}
+            print(f"Summary for {label}:")
+            for code, ids in rc_dict.items():
+                print(f"{code}: {ids}")
+
+            i_idx, q_idx = np.where(mask)
+            sample_coords = np.asarray(level_group["i_sample"])
+            saltelli_coords = np.asarray(level_group["i_saltelli"])
+            f_isample = sample_coords[i_idx]
+            f_isaltelli = saltelli_coords[q_idx]
+            _merge_mlmc_side_selection(
+                selected,
+                level_id=level_id,
+                i_eval=f_ieval,
+                i_sample=f_isample,
+                i_saltelli=f_isaltelli,
+                parameters=f_param,
+            )
+
+    if not selected:
+        tags = np.empty((0, 4), dtype=int)
+        params = np.empty((0, 0), dtype=float)
+    else:
+        sorted_items = sorted(selected.items())
+        tags = np.asarray([item[0] for item in sorted_items], dtype=int)
+        params = np.asarray([item[1] for item in sorted_items], dtype=float)
+
+    logging.info(f"first 20 MLMC tags:\n{tags[:20]}")
+    return tags, params
+
 
 def select_single(i_eval: int):
 
@@ -510,7 +629,7 @@ def run_single_sample(tags, parameters):
     assert len(sample_args) == 1
     single_sample(sample_args[0])
 
-def plot_failed_return_codes(v_rc, v_ieval):
+def plot_failed_return_codes(v_rc, v_ieval, title: str = None, output_name: str = "return_code.pdf"):
     # Flatten the matrix and count occurrences
     unique_vals, counts = np.unique(v_rc, return_counts=True)
 
@@ -528,7 +647,9 @@ def plot_failed_return_codes(v_rc, v_ieval):
     counts_plot = counts[mask]
     labels_plot = [k for k, v in labels_map.items() if v in unique_vals[mask]]
     ax.bar(labels_plot, counts_plot)
-    ax.set_title(f"Return Code Distribution (n={np.sum(counts)})")
+    if title is None:
+        title = f"Return Code Distribution (n={np.sum(counts)})"
+    ax.set_title(title)
     ax.set_xlabel("Return Code")
     ax.set_ylabel("Count")
     ax.grid(axis="y", linestyle="--", alpha=0.7)
@@ -554,15 +675,22 @@ def plot_failed_return_codes(v_rc, v_ieval):
     ax.set_ylim(0, ymax * 1.5)
 
     fig.tight_layout()
-    fig.savefig(job.output.plots / 'return_code.pdf', format='pdf')
+    fig.savefig(job.output.plots / output_name, format='pdf')
     # plt.show()
 
 
-def plot_sample_time_hist(st):
+def plot_sample_time_hist(st, title: str = "Sample time histogram", output_name: str = "sample_time_hist.pdf"):
+    st = np.asarray(st, dtype=float)
+    if st.size == 0:
+        logging.info("Skipping sample time histogram for empty selection: %s", output_name)
+        return
     upper_limit = 2000
     n_removed = np.sum(st > upper_limit)
     print(f"count st > {upper_limit}: {n_removed}")
     cst = st[st <= upper_limit]
+    if cst.size == 0:
+        logging.info("Skipping sample time histogram with all values above upper limit: %s", output_name)
+        return
 
     cst_std = cst.std()
     cst_mean = cst.mean()
@@ -583,11 +711,11 @@ def plot_sample_time_hist(st):
             transform=plt.gca().transAxes,
             ha="left", va="top",
             fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
-    ax.set_title('Sample time histogram')
+    ax.set_title(title)
     ax.set_ylabel('count')
     ax.legend()
     fig.tight_layout()
-    fig.savefig(job.output.plots / 'sample_time_hist.pdf', format='pdf')
+    fig.savefig(job.output.plots / output_name, format='pdf')
 
 
 pbs_script_template = """
@@ -606,6 +734,7 @@ pbs_script_template = """
 set -x
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
+export ENDORSE_DISABLE_MEMOIZE=1
 
 output_dir={outputdir}
 # work_dir={workdir}
@@ -651,13 +780,15 @@ clean_scratch
 PYEXEC="$PROJECT_DIR/venv/bin/python"
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 "$PYEXEC" -u "$APP_PY" "$output_dir" read
-"$PYEXEC" -u "$APP_PY" "$output_dir" plots
+# "$PYEXEC" -u "$APP_PY" "$output_dir" plots
+"$PYEXEC" -u "$APP_PY" "$output_dir" mlmc_analysis
 
 echo "FINISHED"
 """
 
-def submit_pbs(cfg, cmd='meta'):
-    cfg_pbs = cfg.machine_config.pbs
+def submit_pbs(cfg_machine, cmd='meta'):
+    cfg_machine = cfg_machine.get("__resolved__", cfg_machine)
+    cfg_pbs = cfg_machine.pbs
     # n_workers = min(n_boreholes + 1, cfg.pbs.n_workers)
     pbs_path = job.output.pbs_script
     n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores-1)-2)# Not sure if we need reserve for the master scoop process
@@ -733,9 +864,602 @@ def set_threadsafe_environ():
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
     os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
+
+def mlmc_level_parameters(cfg: dotdict) -> list[list[float]]:
+    """
+    Map config levels ordered coarsest->finest to geometric MLMC selectors.
+    REVIEWED.
+    """
+    return [[float(10 ** level_id)] for level_id, _level in enumerate(cfg.mlmc.levels)]
+
+
+def make_group_matrix_generator(
+    sa_obj: ot_sa.SensitivityAnalysis,
+    seed: int | None = None,
+) -> Callable[[int, int], np.ndarray]:
+    """Build a reproducibly seeded OpenTURNS unit-cube matrix generator."""
+    seeded = False
+
+    def generate(n_rows: int, n_parameters: int) -> np.ndarray:
+        nonlocal seeded
+        if seed is not None and not seeded:
+            ot.RandomGenerator.SetSeed(int(seed))
+            seeded = True
+            logging.info("Seeded OpenTURNS Saltelli matrix generator with seed=%s.", seed)
+        if n_parameters != len(sa_obj.groups):
+            raise ValueError(
+                f"Saltelli requested {n_parameters} group dimensions, expected {len(sa_obj.groups)}."
+            )
+
+        group_distr = ot.JointDistribution([ot.Uniform(0.0, 1.0)] * n_parameters)
+        experiment = sa_obj._experiment_design(group_distr, int(n_rows))
+        return np.asarray(experiment.generate(), dtype=float)
+
+    return generate
+
+
+def parse_sample_level_id(sample_id: str) -> int:
+    """
+    Extract MLMC level id from sample ids like ``L00_S0000001``.
+    """
+    level_tag = sample_id.split("_", 1)[0]
+    if len(level_tag) < 3 or not level_tag.startswith("L"):
+        raise ValueError(f"Unexpected MLMC sample id format: {sample_id}")
+    return int(level_tag[1:])
+
+
+class TransportSaltelliSimulation(Simulation):
+    """
+    Saltelli MLMC wrapper that evaluates one full Saltelli row per MLMC sample.
+
+    This variant is local to chodby_trans and does not depend on
+    ``mlmc.sim.saltelli_simulation.SaltelliSchemaSimulation``.
+    """
+
+    def __init__(
+        self,
+        cfg_levels,
+        forward_simulation: transport_simulation.TransportSimulation,
+        matrix_generator: Callable[[int, int], np.ndarray],
+        n_parameters: int,
+        finer_samples_collected: Callable[[list[str]], int]
+    ):
+        self.forward_simulation = forward_simulation
+        self.matrix_generator = matrix_generator
+        self.schema = SaltelliSchema.make(n_parameters=n_parameters)
+        self.need_workspace = getattr(forward_simulation, "need_workspace", False)
+        self._finer_samples_collected = finer_samples_collected
+
+    def level_instance(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+    ) -> LevelSimulation:
+        """
+        Wrap the forward level simulation and install Saltelli sample planning.
+        """
+        forward_level_sim = self.forward_simulation.level_instance(
+            fine_level_params,
+            coarse_level_params,
+        )
+        level_sim = TransportLevelSimulation(
+            config_dict={
+                "forward_config": {
+                    **forward_level_sim.config_dict,
+                    "n_saltelli": int(self.schema.n_terms),
+                },
+                "forward_simulation_class": type(self.forward_simulation).__name__,
+                "n_saltelli_terms": int(self.schema.n_terms),
+                "n_parameters": int(self.schema.n_parameters),
+            },
+            common_files=forward_level_sim.common_files,
+            need_sample_workspace=forward_level_sim.need_sample_workspace,
+            task_size=forward_level_sim.task_size,
+        )
+        transport_level_id = int(forward_level_sim.config_dict["level_id"])
+        transport_simulation.ensure_mlmc_level_zarr_storage(
+            self.forward_simulation.cfg,
+            transport_level_id,
+            int(self.schema.n_terms),
+        )
+        level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
+        return level_sim
+
+    def make_level_simulation(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+        level_id: int,
+    ) -> LevelSimulation:
+        """
+        Bind only lightweight importable worker callables to the level object.
+        """
+        level_sim = self.level_instance(fine_level_params, coarse_level_params)
+        level_sim._calculate = calculate_transport_saltelli
+        level_sim._result_format = partial(return_result_format, self.result_format())
+        level_sim._level_id = level_id
+        return level_sim
+
+    def result_format(self) -> list[QuantitySpec]:
+        """
+        Expose the wrapped result format with a leading Saltelli-term axis.
+        """
+        result_format = []
+        for spec in self.forward_simulation.result_format():
+            result_format.append(
+                QuantitySpec(
+                    name=spec.name,
+                    unit=spec.unit,
+                    shape=(self.schema.n_terms, *tuple(spec.shape)),
+                    times=spec.times,
+                    locations=spec.locations,
+                )
+            )
+        return result_format
+
+    calculate = staticmethod(calculate_transport_saltelli)
+
+    def _generate_matrix(self, n_rows: int) -> np.ndarray:
+        matrix = np.asarray(
+            self.matrix_generator(int(n_rows), self.schema.n_parameters),
+            dtype=float,
+        )
+        if matrix.shape != (int(n_rows), self.schema.n_parameters):
+            raise ValueError(
+                f"Matrix generator returned shape {matrix.shape}, "
+                f"expected {(int(n_rows), self.schema.n_parameters)}."
+            )
+        if not np.all((0.0 <= matrix) & (matrix <= 1.0)):
+            raise ValueError("Matrix generator must return values in [0, 1].")
+        return matrix
+
+    def prepare_samples(self, sample_ids: list[str]):
+        """
+        Plan Saltelli terms and append the finer-level sample count.
+        """
+        n_finer_collected = self._finer_samples_collected(sample_ids)
+        a_matrix = self._generate_matrix(len(sample_ids))
+        b_matrix = self._generate_matrix(len(sample_ids))
+
+        return [
+            (sample_id, *list(self.schema.terms(a_row, b_row)), n_finer_collected)
+            for sample_id, a_row, b_row in zip(sample_ids, a_matrix, b_matrix)
+        ]
+
+
+class TransportPairedSimulation(Simulation):
+    """
+    Paired MLMC wrapper that evaluates one shared parameter vector per sample.
+
+    This mode is intended for fine/coarse variance diagnostics. It deliberately
+    avoids Saltelli A/B/cross construction while keeping the same forward worker
+    and per-level Zarr storage path.
+    """
+
+    def __init__(
+        self,
+        cfg_levels,
+        forward_simulation: transport_simulation.TransportSimulation,
+        matrix_generator: Callable[[int, int], np.ndarray],
+        n_parameters: int,
+        finer_samples_collected: Callable[[list[str]], int],
+    ):
+        self.forward_simulation = forward_simulation
+        self.matrix_generator = matrix_generator
+        self.n_parameters = int(n_parameters)
+        self.need_workspace = getattr(forward_simulation, "need_workspace", False)
+        self._finer_samples_collected = finer_samples_collected
+
+    def level_instance(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+    ) -> LevelSimulation:
+        """
+        Wrap the forward level simulation and install paired sample planning.
+        """
+        forward_level_sim = self.forward_simulation.level_instance(
+            fine_level_params,
+            coarse_level_params,
+        )
+        level_sim = TransportLevelSimulation(
+            config_dict={
+                "forward_config": {
+                    **forward_level_sim.config_dict,
+                    "n_saltelli": 1,
+                },
+                "forward_simulation_class": type(self.forward_simulation).__name__,
+                "n_saltelli_terms": 1,
+                "n_parameters": self.n_parameters,
+            },
+            common_files=forward_level_sim.common_files,
+            need_sample_workspace=forward_level_sim.need_sample_workspace,
+            task_size=forward_level_sim.task_size,
+        )
+        transport_level_id = int(forward_level_sim.config_dict["level_id"])
+        transport_simulation.ensure_mlmc_level_zarr_storage(
+            self.forward_simulation.cfg,
+            transport_level_id,
+            1,
+        )
+        level_sim.prepare_samples = lambda sample_ids: self.prepare_samples(sample_ids)
+        return level_sim
+
+    def make_level_simulation(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+        level_id: int,
+    ) -> LevelSimulation:
+        """
+        Bind only lightweight importable worker callables to the level object.
+        """
+        level_sim = self.level_instance(fine_level_params, coarse_level_params)
+        level_sim._calculate = calculate_transport_saltelli
+        level_sim._result_format = partial(return_result_format, self.result_format())
+        level_sim._level_id = level_id
+        return level_sim
+
+    def result_format(self) -> list[QuantitySpec]:
+        """
+        Expose compact fine/coarse time series without a logical Saltelli axis.
+        """
+        result_format = []
+        for spec in self.forward_simulation.result_format():
+            shape = tuple(spec.shape)
+            if shape == ():
+                shape = (1,)
+            result_format.append(
+                QuantitySpec(
+                    name=spec.name,
+                    unit=spec.unit,
+                    shape=shape,
+                    times=spec.times,
+                    locations=spec.locations,
+                )
+            )
+        return result_format
+
+    calculate = staticmethod(calculate_transport_saltelli)
+
+    def _generate_matrix(self, n_rows: int) -> np.ndarray:
+        matrix = np.asarray(
+            self.matrix_generator(int(n_rows), self.n_parameters),
+            dtype=float,
+        )
+        if matrix.shape != (int(n_rows), self.n_parameters):
+            raise ValueError(
+                f"Matrix generator returned shape {matrix.shape}, "
+                f"expected {(int(n_rows), self.n_parameters)}."
+            )
+        if not np.all((0.0 <= matrix) & (matrix <= 1.0)):
+            raise ValueError("Matrix generator must return values in [0, 1].")
+        return matrix
+
+    def prepare_samples(self, sample_ids: list[str]):
+        """
+        Plan one shared grouped parameter row and append the finer-level sample count.
+        """
+        n_finer_collected = self._finer_samples_collected(sample_ids)
+        sample_matrix = self._generate_matrix(len(sample_ids))
+
+        return [
+            (sample_id, *list(sample_row), n_finer_collected)
+            for sample_id, sample_row in zip(sample_ids, sample_matrix)
+        ]
+
+
+def make_transport_simulation(cfg: dotdict) -> transport_simulation.TransportSimulation:
+    """
+    Construct the MLMC forward simulation class named by ``cfg.mlmc.sim_class``.
+    """
+    sim_class_name = cfg.mlmc.sim_class
+    sim_class = getattr(transport_simulation, sim_class_name)
+    if not isinstance(sim_class, type) or not issubclass(sim_class, transport_simulation.TransportSimulation):
+        raise TypeError(
+            f"cfg.mlmc.sim_class={sim_class_name!r} is not a TransportSimulation class "
+            "from chodby_trans.transport_simulation."
+        )
+    return sim_class(cfg, job.scratch.dir_path)
+
+
+def make_mlmc_simulation(
+    cfg: dotdict,
+    sa_obj: ot_sa.SensitivityAnalysis,
+    seed: int,
+    finer_samples_collected: Callable[[list[str]], int],
+) -> Simulation:
+    """
+    Construct the configured MLMC sampling wrapper.
+    """
+    sample_mode = str(cfg.mlmc.get("sample_mode", "saltelli"))
+    forward_simulation = make_transport_simulation(cfg)
+    matrix_generator = make_group_matrix_generator(sa_obj, seed=seed)
+    kwargs = {
+        "cfg_levels": cfg.mlmc.levels,
+        "forward_simulation": forward_simulation,
+        "matrix_generator": matrix_generator,
+        "n_parameters": len(sa_obj.groups),
+        "finer_samples_collected": finer_samples_collected,
+    }
+    if sample_mode == "saltelli":
+        logging.info("Using MLMC sample_mode=saltelli.")
+        return TransportSaltelliSimulation(**kwargs)
+    if sample_mode == "paired":
+        logging.info("Using MLMC sample_mode=paired.")
+        return TransportPairedSimulation(**kwargs)
+    raise ValueError(
+        f"Unsupported cfg.mlmc.sample_mode={sample_mode!r}; expected 'saltelli' or 'paired'."
+    )
+
+
+def resubmit_unfinished_samples(sampler: Sampler) -> int:
+    """
+    Re-submit unfinished scheduled samples from HDF storage into a fresh Dask pool.
+    """
+    unfinished_samples = sampler.sample_storage.unfinished_ids()
+    for sample in unfinished_samples:
+        sample_id, _sample_input = sample
+        level_id = parse_sample_level_id(sample_id)
+        sampler._sampling_pool.schedule_sample(sample, sampler._level_sim_objects[level_id])
+
+    if unfinished_samples:
+        logging.info("Re-submitted %s unfinished MLMC samples from HDF storage.", len(unfinished_samples))
+    return len(unfinished_samples)
+
+
+def wait_for_finished_samples(sampler: Sampler, target_counts: dict[int, int],
+                              poll_timeout: float = 5.0) -> None:
+    """
+    Wait until selected levels reach the requested number of finished samples.
+    """
+    while True:
+        sampler.ask_sampling_pool_for_samples(sleep=1.0, timeout=poll_timeout)
+        finished = np.asarray(sampler.n_finished_samples, dtype=int)
+        if all(finished[level_id] >= target for level_id, target in target_counts.items()):
+            return
+        logging.info(
+            "Waiting for MLMC samples, finished=%s, targets=%s",
+            finished.tolist(),
+            target_counts,
+        )
+
+
+def init_mlmc_worker_job(output_dir: str, input_dir: str) -> str:
+    """
+    Initialize `job` globals on one Dask worker to match the master process.
+    """
+    job.set_workdir(Path(output_dir), Path(input_dir))
+    setup_logging(name=f"T{os.getpid()}")
+    process = multiprocessing.current_process()
+    logging.info(
+        "Initialized MLMC process context: name=%s pid=%s ppid=%s daemon=%s",
+        process.name,
+        os.getpid(),
+        os.getppid(),
+        process.daemon,
+    )
+    return job.to_str()
+
+
+def wait_for_expected_mlmc_workers(client: Client) -> int | None:
+    """
+    Wait for the worker count recorded by the Dask cluster launcher.
+    """
+    expected_raw = os.environ.get("DASK_EXPECTED_WORKERS")
+    if expected_raw is None:
+        logging.warning(
+            "DASK_EXPECTED_WORKERS is not set; skipping the MLMC worker registration barrier."
+        )
+        return None
+
+    expected_workers = int(expected_raw)
+    timeout = float(os.environ.get("DASK_WORKER_STARTUP_TIMEOUT", "600"))
+    if expected_workers < 1:
+        raise ValueError(
+            f"DASK_EXPECTED_WORKERS must be positive, got {expected_workers}."
+        )
+
+    logging.info(
+        "Waiting up to %.1fs for %s Dask workers before MLMC initialization.",
+        timeout,
+        expected_workers,
+    )
+    client.wait_for_workers(expected_workers, timeout=timeout)
+    connected_workers = len(client.scheduler_info(n_workers=-1)["workers"])
+    logging.info(
+        "MLMC worker registration barrier complete: expected=%s connected=%s.",
+        expected_workers,
+        connected_workers,
+    )
+    return connected_workers
+
+
+def validate_mlmc_worker_preloads(worker_states: dict[str, dict]) -> None:
+    """
+    Require every connected Dask worker to complete transport preloading.
+    """
+    if not worker_states:
+        raise RuntimeError("No Dask workers are connected for MLMC sampling.")
+
+    incomplete = [
+        worker_addr
+        for worker_addr, state in worker_states.items()
+        if not state.get("completed", False)
+    ]
+    if incomplete:
+        raise RuntimeError(
+            "MLMC transport preload did not complete on workers: "
+            + ", ".join(sorted(incomplete))
+        )
+
+    for worker_addr, state in worker_states.items():
+        logging.info(
+            "Verified MLMC transport preload on %s: pid=%s, elapsed=%.2fs, peak_rss=%.1f MiB.",
+            worker_addr,
+            state["pid"],
+            state["seconds"],
+            state["peak_rss_mib"],
+        )
+
+
+def validate_mlmc_scheduler_preload(scheduler_state: dict) -> None:
+    """
+    Require the Dask scheduler to complete MLMC task-module preloading.
+    """
+    if not scheduler_state.get("completed", False):
+        raise RuntimeError("MLMC task-module preload did not complete on the Dask scheduler.")
+
+    logging.info(
+        "Verified MLMC scheduler preload: pid=%s, elapsed=%.2fs, peak_rss=%.1f MiB.",
+        scheduler_state["pid"],
+        scheduler_state["seconds"],
+        scheduler_state["peak_rss_mib"],
+    )
+
+
+def run_mlmc_sampling(cfg: dotdict, client: Client, seed: int) -> None:
+    """
+    Goal 2/3 MLMC sampling path using HDF storage and Dask-backed Saltelli rows.
+    """
+    wait_for_expected_mlmc_workers(client)
+
+    scheduler_state = client.run_on_scheduler(scheduler_preload_status)
+    validate_mlmc_scheduler_preload(scheduler_state)
+
+    worker_preload_states = client.run(transport_preload_status)
+    validate_mlmc_worker_preloads(worker_preload_states)
+
+    # initialize job dir also on scheduler
+    client.run_on_scheduler(
+        init_mlmc_worker_job,
+        str(job.output.dir_path),
+        str(job.input.dir_path),
+    )
+
+    worker_job_state = client.run(
+        init_mlmc_worker_job,
+        str(job.output.dir_path),
+        str(job.input.dir_path),
+    )
+
+    for worker_addr, state in worker_job_state.items():
+        logging.info("Initialized MLMC worker %s job dirs:\n%s", worker_addr, state)
+
+    _data_schema_key, data_schema = initialize_data_schema()
+    validate_result_grid_size(cfg, data_schema)
+    with common.workdir(str(job.scratch.dir_path), clean=False):
+      prepare_common_homogenization_mesh(cfg)
+
+    sa_obj = ot_sa.SensitivityAnalysis.from_cfg(cfg.ot_sensitivity)
+    level_parameters = mlmc_level_parameters(cfg)
+
+    # fine_samples = int(cfg.get("fine_samples", cfg.ot_sensitivity.limit_samples))
+    # coarse_samples = int(gcfg.get("coarse_samples", cfg.ot_sensitivity.limit_samples))
+    # min_fine_before_coarse = int(cfg.get("min_fine_before_coarse", min(10, fine_samples)))
+
+
+    coarse_level_id = 0
+    fine_level_id = len(level_parameters) - 1
+    fine_target = cfg.mlmc.levels[fine_level_id].min_samples
+    coarse_target = cfg.mlmc.levels[coarse_level_id].min_samples
+    min_fine_before_coarse = cfg.mlmc.levels[coarse_level_id].min_finer_samples
+
+    storage_path = job.output.mlmc_hdf_path
+    storage = SampleStorageHDF(str(storage_path))
+    pool = SamplingPoolDask(
+        client,
+        work_dir=str(job.scratch.dir_path),
+        debug=not cfg.ot_sensitivity.clean_sample_dir,
+        clean=bool(cfg.ot_sensitivity.clean_sample_dir),
+    )
+
+
+    n_finner_samples = 0
+    def finner_samples(sample_ids):
+        level_tag, _sample_tag = sample_ids[0].split('_', 1)
+        if level_tag != f"L{fine_level_id:02d}" and n_finner_samples < min_fine_before_coarse:
+            raise ValueError(f"Can not plan samples {sample_ids[:5]} ... "
+                             f"until number of samples on finer level"
+                         f"{n_finner_samples} >= {min_fine_before_coarse}")
+        else:
+            return n_finner_samples
+
+    sampler_holder: dict[str, Sampler] = {}
+    simulation = make_mlmc_simulation(
+        cfg,
+        sa_obj,
+        seed,
+        finer_samples_collected=finner_samples,
+    )
+
+    sampler = Sampler(
+        sample_storage=storage,
+        sampling_pool=pool,
+        sim_factory=simulation,
+        level_parameters=level_parameters,
+        seed=seed,
+    )
+    sampler_holder["sampler"] = sampler
+
+
+    logging.info("MLMC HDF storage: %s", storage_path)
+    logging.info("MLMC level parameters: %s", level_parameters)
+    logging.info(
+        "Goal 3 targets: fine=%s coarse=%s min_fine_before_coarse=%s",
+        fine_target,
+        coarse_target,
+        min_fine_before_coarse,
+    )
+
+    if cfg.ot_sensitivity.recompute_failed:
+        sampler.renew_failed_samples()
+    resubmit_unfinished_samples(sampler)
+
+    scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
+    finished = np.asarray(sampler.n_finished_samples, dtype=int)
+    logging.info("MLMC counts at start, scheduled=%s finished=%s", scheduled.tolist(), finished.tolist())
+
+    # Initial fine level
+    fine_to_schedule = max(0, fine_target - int(scheduled[fine_level_id]))
+    if fine_to_schedule > 0:
+        logging.info("Scheduling %s new finest-level MLMC samples.", fine_to_schedule)
+        sampler.schedule_samples(level_id=fine_level_id, n_samples=fine_to_schedule)
+
+    # AGENT:
+    # The parameter 'min_finer_samples' is currently fixed by the config, but
+    # later we want to do the full MLMC loop iterating to the target esstimation error.
+    # Then we want to update the TransportSaltelliSimulation istance by new value of the parameter.
+    # So initialize TransportSaltelliSimulation level simulation cfg with value 0,
+    # implement here update of that config by accessing the level simulation instance through sampler
+    # and test in prepare_samples that the value from cfg >= min_number_of_samples, so the update works.
+    # Raise error if trying to plan without cfg
+    wait_for_finished_samples(
+        sampler,
+        {fine_level_id: min_fine_before_coarse},
+    )
+    n_finner_samples = sampler.n_finished_samples[fine_level_id]
+    logging.info("Initial fine only sampling completed.")
+
+    if cfg.mlmc.sample_mode != "paired":
+        scheduled = np.asarray(sampler.l_scheduled_samples(), dtype=int)
+        coarse_to_schedule = max(0, coarse_target - int(scheduled[coarse_level_id]))
+        if coarse_to_schedule > 0:
+            logging.info("Scheduling %s new coarse-level MLMC samples.", coarse_to_schedule)
+            sampler.schedule_samples(level_id=coarse_level_id, n_samples=coarse_to_schedule)
+
+        wait_for_finished_samples(
+            sampler,
+            {
+                fine_level_id: fine_target,
+                coarse_level_id: coarse_target,
+            },
+        )
+        logging.info("Finished MLMC sampling, counts=%s", np.asarray(sampler.n_finished_samples, dtype=int).tolist())
+
 def main():
     # common.EndorseCache.instance().expire_all()
-
+    scheduler = None
     if len(sys.argv) == 3:
         work_dir = Path(sys.argv[1]).absolute()
         cmd = sys.argv[2]
@@ -744,30 +1468,33 @@ def main():
         cmd = sys.argv[2]
         scheduler = sys.argv[3]
     else:
-      sys.exit("Provide <workdir> <command: (submit|local|meta|plots|read)> <command_args>.")
+      sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|mlmc_analysis|plots|read)> <command_args>.")
 
 
     # resolve job dirs
     job.set_workdir(work_dir)
-    if cmd == 'submit' or cmd == 'local':
-        copy_flag = False
-        if job.input.dir_path.exists():
-            while True:
-                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
-                if user_input.lower() in ["yes", "y"]:
-                    print("Continuing...")
-                    copy_flag = True
-                    break
-                elif user_input.lower() in ["no", "n"]:
-                    print("Exiting...")
-                    break
-                else:
-                    print("Invalid input. Please enter yes/no.")
-        else:
-            copy_flag = True
-        
-        if copy_flag:
-            shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
+    resolve_subcmd(cmd, work_dir, scheduler)
+
+def resolve_subcmd(cmd, work_dir, scheduler, copy_flag=True):
+    # if cmd == 'submit' or cmd == 'local':
+    #     copy_flag = False
+    #     if job.input.dir_path.exists():
+    #         while True:
+    #             user_input = input(f"Do you want to overwrite {job.input.dir_path}? (yes/no): ")
+    #             if user_input.lower() in ["yes", "y"]:
+    #                 print("Continuing...")
+    #                 copy_flag = True
+    #                 break
+    #             elif user_input.lower() in ["no", "n"]:
+    #                 print("Exiting...")
+    #                 break
+    #             else:
+    #                 print("Invalid input. Please enter yes/no.")
+    #     else:
+    #         copy_flag = True
+    #
+    if copy_flag:
+        shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
     if not job.input.dir_path.exists():
@@ -784,10 +1511,10 @@ def main():
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "plots"]
-            submit_pbs(cfg, cmd=app_cmd) # given app command
+            assert app_cmd in ["read", "continue", "meta", "mlmc", "mlmc_analysis", "plots"]
+            submit_pbs(cfg.machine_config, cmd=app_cmd) # given app command
         else:   # default app command
-            submit_pbs(cfg)
+            submit_pbs(cfg.machine_config)
     elif cmd == 'read':
         # zarr_path = sys.argv[2]
         # read_parameters_by_rc([ReturnCode.NONE])
@@ -797,6 +1524,8 @@ def main():
     elif cmd == 'select':
         # zarr_path = sys.argv[2]
         # read_failed_parameters()
+        with common.workdir(str(work_dir), clean=False):
+            prepare_common_homogenization_mesh(cfg)
         assert len(sys.argv) == 4
         i_eval = int(sys.argv[3])
         tags, params = select_single(i_eval)
@@ -819,8 +1548,19 @@ def main():
         logging.info(f"Connected to: {client}")
         
         with common.workdir(str(work_dir), clean=False):
+            prepare_common_homogenization_mesh(cfg)
             sample_args = prepare_sample_args(cfg, seed)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
+    elif cmd == 'mlmc':
+        set_threadsafe_environ()
+        client = Client(scheduler)
+        logging.info(f"Connected to: {client}")
+
+        with common.workdir(str(work_dir), clean=False):
+            run_mlmc_sampling(cfg, client, seed)
+    elif cmd == 'mlmc_analysis':
+        with common.workdir(str(work_dir), clean=False):
+            run_mlmc_analysis(cfg)
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)
