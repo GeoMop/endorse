@@ -175,7 +175,7 @@ def get_initial_pressure(borehole: input_data.Borehole, section: input_data.Sect
     assert target_event != {}, f"Could not find target event for borehole {borehole}, section {section}"
 
     # load data from appropriate .csv column
-    pressure_column = flow_column = borehole.value + "_" + str(section.value) + "_pressure"
+    pressure_column = borehole.value + "_" + str(section.value) + "_pressure"
     pressure_data = pd.read_csv(input_data.data_2025, usecols=["Date", pressure_column])
 
     # transform datetime to distance from target event's datetime
