@@ -179,7 +179,7 @@ def get_initial_pressure(borehole: input_data.Borehole, section: input_data.Sect
     pressure_data = pd.read_csv(input_data.data_2025, usecols=["Date", pressure_column])
 
     # transform datetime to distance from target event's datetime
-    target_datetime = pd.to_datetime(event["start"], format="%y/%m/%d %H:%M:%S")
+    target_datetime = pd.to_datetime(target_event["start"], format="%y/%m/%d %H:%M:%S")
     pressure_data["Time"] = pressure_data.apply(lambda row: abs(pd.to_datetime(row["Date"], format="%Y-%m-%d %H:%M:%S") - target_datetime).total_seconds(), axis=1)
     target_idx = pressure_data["Time"].argmin()
     target_pressure = pressure_data.iloc[target_idx][pressure_column]
