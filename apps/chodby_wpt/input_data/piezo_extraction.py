@@ -173,7 +173,7 @@ def get_multipacker_flowrate_series(
 
     # flowrate and time offset both in wrong units (mm^3/min and min respectively)
     # -> conversion to SI units
-    flow_rate_df["Flowrate"] = flow_rate_df["Flowrate"] * FLOW_RATE_NORMALIZATION_FACTOR
+    flow_rate_df["Flowrate"] = flow_rate_df["Flowrate"] / FLOW_RATE_NORMALIZATION_FACTOR
     flow_rate_df["Offset"] = flow_rate_df["Offset"] * FLOW_RATE_NORMALIZATION_FACTOR
 
     # construct final dataframe with absolute time values instead of offsets
