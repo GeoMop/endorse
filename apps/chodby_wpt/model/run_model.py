@@ -4,10 +4,8 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
-import yaml
 import traceback
 import math
-import traceback
 import pandas as pd
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -16,11 +14,7 @@ if str(APP_DIR) not in sys.path:
 
 import input_data
 from endorse import common
-from mesh.create_mesh import geometry_points, borehole_fractures
-
-module_dir = Path(__file__).resolve().parent
-work_dir = input_data.work_dir
-
+from mesh.create_mesh import borehole_fractures, geometry_points, make_mesh
 
 DEFAULT_REPLACEMENTS = {
     "rock_conductivity": "1e-13",
@@ -46,21 +40,26 @@ def machine_config(config_path: Path | None, flow_executable: str) -> common.dot
     return common.dotdict({"flow_executable": [flow_executable]})
 
 
-def prepare_mesh_file() -> None:
-    """Make the mesh filename expected by the YAML template available."""
+def prepare_mesh_file(work_dir: Path) -> None:
+    """Generate the mesh and make it available to the Flow123d work directory."""
+    make_mesh(common.config.load_config(input_data.mesh_cfg_yaml), work_dir)
     expected_mesh = work_dir / "wpt_section.msh"
     generated_mesh = work_dir / "wpt_section.msh2"
-    if not expected_mesh.exists() and generated_mesh.exists():
-        shutil.copy2(generated_mesh, expected_mesh)
+    shutil.copy2(generated_mesh, expected_mesh)
 
 
-def run_model(cfg: common.dotdict, replacements: dict[str, str] | None = None) -> common.FlowOutput:
+def run_model(
+    cfg: common.dotdict,
+    work_dir: Path,
+    replacements: dict[str, str] | None = None,
+) -> common.FlowOutput:
     """Substitute YAML template placeholders and run Flow123d."""
     yaml_replacements = DEFAULT_REPLACEMENTS.copy()
     if replacements is not None:
         yaml_replacements.update(replacements)
 
-    prepare_mesh_file()
+    work_dir.mkdir(parents=True, exist_ok=True)
+    prepare_mesh_file(work_dir)
     with common.workdir(work_dir):
         return common.call_flow(cfg, input_data.hm_sim_tmpl_yaml, yaml_replacements)
 
@@ -70,8 +69,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=Path,
-        default=module_dir / "config.yaml",
+        default=APP_DIR / "input_data" / "config.yaml",
         help="Optional config file with machine_config.",
+    )
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=APP_DIR / "runs" / "workdir",
+        help="Directory for generated Flow123d inputs and outputs.",
     )
     parser.add_argument(
         "--flow-executable",
@@ -179,7 +184,7 @@ def get_initial_pressure(borehole: input_data.Borehole, section: input_data.Sect
     pressure_data = pd.read_csv(input_data.data_2025, usecols=["Date", pressure_column])
 
     # transform datetime to distance from target event's datetime
-    target_datetime = pd.to_datetime(event["start"], format="%y/%m/%d %H:%M:%S")
+    target_datetime = pd.to_datetime(target_event["start"], format="%y/%m/%d %H:%M:%S")
     pressure_data["Time"] = pressure_data.apply(lambda row: abs(pd.to_datetime(row["Date"], format="%Y-%m-%d %H:%M:%S") - target_datetime).total_seconds(), axis=1)
     target_idx = pressure_data["Time"].argmin()
     target_pressure = pressure_data.iloc[target_idx][pressure_column]
@@ -246,4 +251,4 @@ if __name__ == "__main__":
 
     print(replacements)
 
-    run_model(cfg, replacements=replacements)
+    run_model(cfg, args.work_dir, replacements=replacements)

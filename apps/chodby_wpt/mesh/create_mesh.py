@@ -38,9 +38,6 @@ from bgem.gmsh import field, gmsh, options
 from endorse import common
 
 
-output_dir = input_data.work_dir
-
-
 def borehole_by_name(boreholes, name):
     """Return the borehole configuration with the requested name."""
     return next(bh for bh in boreholes if bh.name == name)
@@ -284,7 +281,8 @@ def make_geometry(factory, cfg):
     water = borehole_cylinder(factory, cfg, section_start, section_end)
     packer_near = borehole_cylinder(factory, cfg, packer_near_start, packer_near_end)
     packer_far = borehole_cylinder(factory, cfg, packer_far_start, packer_far_end)
-    borehole_group = factory.group(water, packer_near, packer_far)
+    packer_group = factory.group(packer_near, packer_far)
+    # borehole_group = factory.group(water, packer_near, packer_far)
     fracture_surfaces = {
         name: factory.disc_discrete(
             fracture_disc_radius(center, domain_start, domain_end, cfg),
@@ -299,7 +297,7 @@ def make_geometry(factory, cfg):
 
     # Fractures split only the rock. Borehole water and packer materials stay uncut.
     fracture_surfaces = {
-        name: fracture.intersect(domain.copy()).cut(borehole_group.copy())
+        name: fracture.intersect(domain.copy()).cut(packer_group.copy())
         for name, fracture in fracture_surfaces.items()
     }
     domain_fr, water_fr, packer_near_fr, packer_far_fr, *fractures_fr = factory.fragment(
@@ -421,14 +419,14 @@ def strip_physical_regions(mesh_file, names):
     mesh_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def mesh_geometry(factory, geometry, cfg):
-    """Mesh the geometry and write output files into ``workdir``."""
+def mesh_geometry(factory, geometry, cfg, work_dir):
+    """Mesh the geometry and write output files into ``work_dir``."""
     factory.mesh_options.MinimumCirclePoints = 12
     factory.mesh_options.MinimumCurvePoints = 3
     factory.mesh_options.Algorithm = options.Algorithm3d.Delaunay
 
-    brep_stem = output_dir / cfg.mesh_name
-    mesh_file = output_dir / f"{cfg.mesh_name}.msh2"
+    brep_stem = work_dir / cfg.mesh_name
+    mesh_file = work_dir / f"{cfg.mesh_name}.msh2"
 
     factory.write_brep(str(brep_stem))
     factory.make_mesh([geometry], dim=3)
@@ -437,13 +435,13 @@ def mesh_geometry(factory, geometry, cfg):
     return mesh_file
 
 
-def make_mesh(cfg):
+def make_mesh(cfg, work_dir: Path):
     """Create geometry, generate the mesh and return the output mesh file."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
     geometry = make_geometry(factory, cfg)
-    mesh_file = mesh_geometry(factory, geometry, cfg)
+    mesh_file = mesh_geometry(factory, geometry, cfg, work_dir)
     del factory
     return common.File(mesh_file)
 
@@ -452,4 +450,4 @@ def make_mesh(cfg):
 
 if __name__ == "__main__":
     cfg = common.config.load_config(input_data.mesh_cfg_yaml)
-    make_mesh(cfg)
+    make_mesh(cfg, APP_DIR / "runs" / "workdir")

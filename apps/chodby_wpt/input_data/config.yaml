@@ -24,3 +24,16 @@ machine_config:
       - "@4.0.3"
       - exec
       - /home/stebel/dev/git/flow123d/build-JS_flow_source_sigma/bin/flow123d
+
+  makovnik:  #JB
+    flow_executable:
+      # release
+      - /home/jb/workspace/flow123d/bin/fterm
+#      - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+      - rel
+      - run
+      - --profiler_path
+      - profile

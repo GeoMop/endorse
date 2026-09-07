@@ -34,6 +34,15 @@ problem: !Coupling_Sequential
             storativity: <rock_storativity> #1
             #init_pressure: 0
 
+            #storativity: !FieldFormula #2.999e-07
+            #    value: 9.81e3 * (3*(1-2*0.215)/72.5e9 + 0.007*5.1e-10)
+            
+            # S = rho * g * (beta_s + nu * beta_w)
+            # 9.81e3 * (3*(1-2*0.23)/60e9 + 0.007*5.1e-10)
+            # bulk compressibility beta_s=1/K = (3(1-2pr)/E)
+            # porosity nu=0.007
+            # water compressibility beta_w=5.1 1/Pa
+            
           - region: [ packer_near, packer_far ]
             conductivity: <packer_conductivity> #1e-13
             storativity: <packer_storativity> #1
@@ -130,6 +139,7 @@ problem: !Coupling_Sequential
           - region: [ fractures, water ]
             young_modulus: <fracture_young> #1e7
             poisson_ratio: <fracture_poisson> #0.25
+            # cross_section_min: 1e-5
 
           - region: [ .packer_near, .packer_far ]
             bc_type: displacement
@@ -138,3 +148,4 @@ problem: !Coupling_Sequential
           - region: .rock
             bc_type: displacement_n
             bc_displacement: 0
+            
