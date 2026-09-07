@@ -78,7 +78,7 @@ class MacroTetra(MacroShapeBase):
         elements using one linear solve.
         """
         macro_vertices = macro_el.vertices()    # shape = (n_vertices, dim=3)
-        center = np.mean(macro_vertices, axis=0)
+        center = macro_el.barycenter()
         scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
         jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
         points = np.asarray(micro_barycenters, dtype=float)  # shape = (n_micro_els, dim=3)
@@ -453,7 +453,7 @@ class Subdomain:
         subdomain_indices = [(ie, w) for ie in candidates
                          if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
         logging.info(f"[{i_el}] Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
-        assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
+        assert subdomain_indices, f"Empty subdomain {aabb}, {macro_el.barycenter()} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
         micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
