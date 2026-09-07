@@ -17,10 +17,11 @@ borehole section. Bulk physical regions are:
 * ``fracture_<index>`` - selected fracture surfaces, conformingly embedded in
   the rock mesh.
 
-Boundary physical regions start with a dot. Only true external boundaries are
-marked: ``.rock``, ``.packer_near``, ``.packer_far`` and ``.fracture_<index>``.
-Internal rock-water, rock-packer and fracture-rock interfaces are left without
-final boundary labels.
+Boundary physical regions start with a dot. External boundaries are marked as
+``.rock``, ``.packer_near``, ``.packer_far`` and ``.fracture_<index>``. The
+water-near-packer disc is split into the internal ``.pocket_water`` and
+``.pocket_packer_near`` boundary regions. Other internal interfaces are left
+without final boundary labels.
 """
 
 import math
@@ -324,9 +325,18 @@ def make_geometry(factory, cfg):
     _, _, bh_start, direction = borehole_section(cfg)
     packer_near_start_distance, _ = packer_distances(bh, section_index)
     _, packer_far_end_distance = packer_distances(bh, section_index + 1)
+    section_start_distance, _ = section_distances(bh, section_index)
 
     water_rock_wall = rock_boundary.dt_intersection(borehole_boundary)
     water_rock_wall.set_region("__internal_water_rock").mesh_step(cfg.mesh.borehole_mesh_step)
+
+    pocket_water = select_boundary_at_distance(
+        borehole_boundary,
+        bh_start,
+        direction,
+        section_start_distance,
+    )
+    pocket_water.set_region(".pocket_water").mesh_step(cfg.mesh.borehole_mesh_step)
 
     packer_near_rock_wall = rock_boundary.dt_intersection(packer_near_boundary)
     packer_near_external = select_boundary_at_distance(
@@ -376,6 +386,7 @@ def make_geometry(factory, cfg):
         water_rock_wall,
         packer_near_external,
         packer_far_external,
+        pocket_water,
         domain_boundary,
         *fractures_fr,
         *fracture_external_boundaries,
@@ -419,6 +430,116 @@ def strip_physical_regions(mesh_file, names):
     mesh_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def msh_elements(lines):
+    """Return the MSH2 element records together with their line indices."""
+    start = lines.index("$Elements")
+    end = lines.index("$EndElements")
+    return [
+        (index, line.split())
+        for index, line in enumerate(lines[start + 2:end], start + 2)
+    ]
+
+
+def pocket_rim_nodes(elements):
+    """Return nodes on the outer rim of a triangulated disc."""
+    edges = {}
+    for element in elements:
+        nodes = [int(node) for node in element[-3:]]
+        for edge in zip(nodes, nodes[1:] + nodes[:1]):
+            edge = tuple(sorted(edge))
+            edges[edge] = edges.get(edge, 0) + 1
+    return {node for edge, count in edges.items() if count == 1 for node in edge}
+
+
+def split_pocket_interface(mesh_file, water_region, packer_region, packer_bulk_region):
+    """Split a shared disc into water and near-packer boundary meshes.
+
+    Gmsh creates one conforming face for touching volumes. The water face is
+    retained and its interior nodes are copied for the near-packer tetrahedra
+    and boundary triangles. The two faces therefore meet only on their common
+    circular rim.
+    """
+    lines = mesh_file.read_text(encoding="utf-8").splitlines()
+    physical_start = lines.index("$PhysicalNames")
+    physical_end = lines.index("$EndPhysicalNames")
+    physical_regions = {
+        line.split(maxsplit=2)[2].strip('"'): int(line.split(maxsplit=2)[1])
+        for line in lines[physical_start + 2:physical_end]
+    }
+    water_region_id = physical_regions[water_region]
+    packer_bulk_id = physical_regions[packer_bulk_region]
+    packer_region_id = max(physical_regions.values()) + 1
+    lines[physical_start + 1] = str(len(physical_regions) + 1)
+    lines.insert(physical_end, f'2 {packer_region_id} "{packer_region}"')
+
+    elements = msh_elements(lines)
+    water_triangles = [
+        element
+        for _, element in elements
+        if element[1] == "2" and element[3] == str(water_region_id)
+    ]
+    rim_nodes = pocket_rim_nodes(water_triangles)
+    interior_nodes = {
+        int(node)
+        for element in water_triangles
+        for node in element[-3:]
+        if int(node) not in rim_nodes
+    }
+
+    nodes_start = lines.index("$Nodes")
+    nodes_end = lines.index("$EndNodes")
+    node_lines = lines[nodes_start + 2:nodes_end]
+    node_ids = [int(line.split()[0]) for line in node_lines]
+    copied_nodes = {
+        node_id: new_id
+        for new_id, node_id in enumerate(interior_nodes, start=max(node_ids) + 1)
+    }
+    node_coordinates = {
+        int(line.split()[0]): " ".join(line.split()[1:])
+        for line in node_lines
+    }
+    lines[nodes_start + 1] = str(len(node_ids) + len(copied_nodes))
+    lines[nodes_end:nodes_end] = [
+        f"{new_id} {node_coordinates[node_id]}"
+        for node_id, new_id in copied_nodes.items()
+    ]
+
+    elements = msh_elements(lines)
+    for index, element in elements:
+        if element[1] != "4" or element[3] != str(packer_bulk_id):
+            continue
+        n_tags = int(element[2])
+        nodes = element[3 + n_tags:]
+        lines[index] = " ".join(element[:3 + n_tags] + [
+            str(copied_nodes.get(int(node), int(node)))
+            for node in nodes
+        ])
+
+    elements_start = lines.index("$Elements")
+    elements_end = lines.index("$EndElements")
+    element_ids = [int(line.split()[0]) for line in lines[elements_start + 2:elements_end]]
+    packer_triangles = [
+        " ".join([
+            str(element_id),
+            "2",
+            "2",
+            str(packer_region_id),
+            element[4],
+            *[
+                str(copied_nodes.get(int(node), int(node)))
+                for node in reversed(element[-3:])
+            ],
+        ])
+        for element_id, element in zip(
+            range(max(element_ids) + 1, max(element_ids) + len(water_triangles) + 1),
+            water_triangles,
+        )
+    ]
+    lines[elements_start + 1] = str(len(element_ids) + len(packer_triangles))
+    lines[elements_end:elements_end] = packer_triangles
+    mesh_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def mesh_geometry(factory, geometry, cfg, work_dir):
     """Mesh the geometry and write output files into ``work_dir``."""
     factory.mesh_options.MinimumCirclePoints = 12
@@ -432,6 +553,7 @@ def mesh_geometry(factory, geometry, cfg, work_dir):
     factory.make_mesh([geometry], dim=3)
     factory.write_mesh(filename=str(mesh_file), format=gmsh.MeshFormat.msh2)
     strip_physical_regions(mesh_file, {"__internal_water_rock"})
+    split_pocket_interface(mesh_file, ".pocket_water", ".pocket_packer_near", "packer_near")
     return mesh_file
 
 

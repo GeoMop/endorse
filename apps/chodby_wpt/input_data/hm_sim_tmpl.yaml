@@ -16,6 +16,7 @@ problem: !Coupling_Sequential
         biot_alpha: 0.2
         fluid_density: 1000
     time:
+      init_dt: 60
       end_time: 5e5
     a_tol: 0
     r_tol: 1e-6
@@ -50,7 +51,7 @@ problem: !Coupling_Sequential
 
           - region: water
             conductivity: <water_conductivity> #1e-6
-            storativity: <watyer_storativity> #1
+            storativity: <water_storativity> #1
             #init_pressure: 1e6
 
           # figure out a way to pass this withou duplicating code
@@ -85,11 +86,15 @@ problem: !Coupling_Sequential
             bc_type: dirichlet
             bc_pressure: 0
 
-          - region: water
+          - region: .pocket_water
             time: 0.0
-            water_source_density: !FieldTimeFunction
-              time_function:
-                <flow_series>
+            bc_pressure: 300.0
+            #water_source_density: !FieldTimeFunction
+            #  time_function:
+            #    <flow_series>
+          
+          - region: .pocket_packer_near
+            bc_flux: 0.0
           
           - region: water
             time: 1200
@@ -128,7 +133,7 @@ problem: !Coupling_Sequential
           observe_fields: [cross_section_updated]
         solver:
           a_tol: 1e-50
-          r_tol: 1e-9
+          r_tol: 1e-8
         contact: true
         input_fields:
           - region: [ rock, packer_near, packer_far ]

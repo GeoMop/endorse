@@ -18,13 +18,13 @@ from mesh.create_mesh import borehole_fractures, geometry_points, make_mesh
 
 DEFAULT_REPLACEMENTS = {
     "rock_conductivity": "1e-13",
-    "rock_storativity": "1",
+    "rock_storativity": "1e-10",
     "packer_conductivity": "1e-13",
-    "packer_storativity": "1",
+    "packer_storativity": "1e-10",
     "water_conductivity": "1e-5",
-    "watyer_storativity": "1",
+    "water_storativity": "1e-9",
     "fracture_conductivity": "1e-6",
-    "fracture_storativity": "1",
+    "fracture_storativity": "1e-10",
     "fracture_cross_section": "1e-3",
     "rock_young": "60e9",
     "rock_poisson": "0.25",
