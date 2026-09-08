@@ -29,7 +29,7 @@ machine_config:
     flow_executable:
       # release
       - /home/jb/workspace/flow123d/bin/fterm
-#      - --no-term
+      - --no-term
 #        - own
 #        - flow123d/endorse_ci:a785dd
 #        - flow123d/ci-gnu:4.0.0a_d61969

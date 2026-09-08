@@ -162,10 +162,13 @@ class File:
         self._set_hash()
 
     def __getstate__(self):
-        return (self.path, self.referenced_files)
+        return self.path, self.referenced_files, self.hash
 
     def __setstate__(self, args):
-        self.path, self.referenced_files = args
+        self.path, self.referenced_files, *hash = args
+        if hash:
+            self.hash = hash[0]
+            return
         self._set_hash()
 
     def _set_hash(self):

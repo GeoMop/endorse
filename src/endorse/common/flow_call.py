@@ -90,14 +90,14 @@ class FlowOutput:
         return True
 
 @memoize
-def _prepare_inputs(file_in, params):
-    in_dir, template = os.path.split(file_in)
+def _prepare_inputs(file_in: File, params):
+    in_dir, template = os.path.split(file_in.path)
     suffix = "_tmpl.yaml"
     assert template[-len(suffix):] == suffix, f"Template file name must end by '{suffix}'!"
     filebase = template[:-len(suffix)]
     main_input = filebase + ".yaml"
-    main_input, used_params =  substitute_placeholders(file_in, main_input, params)
-    return main_input
+    main_input, used_params = substitute_placeholders(file_in.path, main_input, params)
+    return File(main_input.path, files=[file_in])
 
 #@memoize
 def _flow_subprocess(arguments, main_input):
@@ -112,9 +112,8 @@ def _flow_subprocess(arguments, main_input):
             completed = subprocess.run(arguments, stdout=stdout, stderr=stderr)
     return File(stdout_path), File(stderr_path), completed
 
-@report
 @memoize
-def call_flow(cfg:'dotdict', file_in:File, params: Dict[str,str]) -> FlowOutput:
+def _call_flow(cfg:'dotdict', file_in:File, params: Dict[str,str]) -> FlowOutput:
     """
     Run Flow123d in actual work dir with main input given be given template and dictionary of parameters.
 
@@ -136,7 +135,13 @@ def call_flow(cfg:'dotdict', file_in:File, params: Dict[str,str]) -> FlowOutput:
     logging.info(f"converged: {conv_check}")
     return fo
 
+
+@report
+def call_flow(cfg:'dotdict', file_in, params: Dict[str,str]) -> FlowOutput:
+    """Run Flow123d, tracking the template content in the cache key."""
+    file_in = file_in if isinstance(file_in, File) else File(file_in)
+    return _call_flow(cfg, file_in, params)
+
 # TODO:
 # - call_flow variant with creating dir, copy,
-
 

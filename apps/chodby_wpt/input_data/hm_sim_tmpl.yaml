@@ -32,26 +32,23 @@ problem: !Coupling_Sequential
 
           - region: rock
             conductivity: <rock_conductivity> #1e-13
-            storativity: <rock_storativity> #1
+            # 2.8e-7 m^-1 from rho*g*(3*(1-2*nu)/E + n*beta_w), with
+            # E=60 GPa, nu=0.25, n=0.007, and beta_w=4.6e-10 Pa^-1.
+            storativity: <rock_storativity>
             #init_pressure: 0
 
-            #storativity: !FieldFormula #2.999e-07
-            #    value: 9.81e3 * (3*(1-2*0.215)/72.5e9 + 0.007*5.1e-10)
-            
-            # S = rho * g * (beta_s + nu * beta_w)
-            # 9.81e3 * (3*(1-2*0.23)/60e9 + 0.007*5.1e-10)
-            # bulk compressibility beta_s=1/K = (3(1-2pr)/E)
-            # porosity nu=0.007
-            # water compressibility beta_w=5.1 1/Pa
-            
           - region: [ packer_near, packer_far ]
             conductivity: <packer_conductivity> #1e-13
-            storativity: <packer_storativity> #1
+            # Same 2.8e-7 m^-1 estimate as rock: packers use the rock
+            # mechanical material here and have no separate hydraulic calibration.
+            storativity: <packer_storativity>
             #init_pressure: 0
 
           - region: water
             conductivity: <water_conductivity> #1e-6
-            storativity: <water_storativity> #1
+            # 4.5e-6 m^-1 = rho_w*g*beta_w for liquid water at about 20 degC
+            # (rho_w=1000 kg/m3, beta_w=4.6e-10 Pa^-1).
+            storativity: <water_storativity>
             #init_pressure: 1e6
 
           # figure out a way to pass this withou duplicating code
@@ -59,7 +56,8 @@ problem: !Coupling_Sequential
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
               value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_0>**2) + <rock_conductivity>
-            storativity: <fracture_storativity> #1
+            # Water compressibility; fracture cross_section scales its stored volume.
+            storativity: <fracture_storativity>
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
               value: diff = (x-<fracture_center_0>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_0>**2) + 1e-4
@@ -68,7 +66,8 @@ problem: !Coupling_Sequential
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
               value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_1>**2) + <rock_conductivity>
-            storativity: <fracture_storativity> #1
+            # Water compressibility; fracture cross_section scales its stored volume.
+            storativity: <fracture_storativity>
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
               value: diff = (x-<fracture_center_1>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_1>**2) + 1e-4
@@ -77,7 +76,8 @@ problem: !Coupling_Sequential
             #conductivity: <fracture_conductivity> #1e-6
             conductivity: !FieldFormula
               value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_2>**2) + <rock_conductivity>
-            storativity: <fracture_storativity> #1
+            # Water compressibility; fracture cross_section scales its stored volume.
+            storativity: <fracture_storativity>
             #cross_section: <fracture_cross_section> #1e-3
             cross_section: !FieldFormula
               value: diff = (x-<fracture_center_2>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_2>**2) + 1e-4
@@ -136,15 +136,20 @@ problem: !Coupling_Sequential
           r_tol: 1e-8
         contact: true
         input_fields:
-          - region: [ rock, packer_near, packer_far ]
+          - region: [ rock ]
             young_modulus: <rock_young> #60e9
             poisson_ratio: <rock_poisson> #0.25
+            initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+
+          - region: [ packer_near, packer_far ]
+            young_modulus: <packer_young> #30e9
+            poisson_ratio: <packer_poisson> #0.3
             initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
 
           - region: [ fractures, water ]
             young_modulus: <fracture_young> #1e7
             poisson_ratio: <fracture_poisson> #0.25
-            # cross_section_min: 1e-5
+            cross_section_min: 1e-5
 
           - region: [ .packer_near, .packer_far ]
             bc_type: displacement

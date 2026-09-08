@@ -18,16 +18,31 @@ from mesh.create_mesh import borehole_fractures, geometry_points, make_mesh
 
 DEFAULT_REPLACEMENTS = {
     "rock_conductivity": "1e-13",
-    "rock_storativity": "1e-10",
-    "packer_conductivity": "1e-13",
-    "packer_storativity": "1e-10",
+    # Flow123d storativity is pressure-head storage [m^-1]:
+    # S = rho_w*g*(beta_d + n*beta_w).  For the model's E=60 GPa,
+    # nu=0.25 rock, beta_d=3*(1-2*nu)/E; with n=0.007 and
+    # beta_w=4.6e-10 Pa^-1 (liquid water near 20 degC), S=2.77e-7 m^-1.
+    "rock_storativity": "2.8e-7",
+    "packer_conductivity": "1e-14",
+    # Packers use the same mechanical material as rock in this model, so
+    # their uncalibrated hydraulic storage uses the same estimate.
+    "packer_storativity": "2.8e-7",
     "water_conductivity": "1e-5",
-    "water_storativity": "1e-9",
+    # Water-filled chamber storage: rho_w*g*beta_w = 4.51e-6 m^-1.
+    "water_storativity": "4.5e-6",
     "fracture_conductivity": "1e-6",
-    "fracture_storativity": "1e-10",
+    # The lower-dimensional fracture is water-filled; its cross-section
+    # scales the stored volume, while its material storage is that of water.
+    "fracture_storativity": "4.5e-6",
     "fracture_cross_section": "1e-3",
     "rock_young": "60e9",
     "rock_poisson": "0.25",
+    "packer_young": "30e9",
+    # A conceptual model gives E_eff 6 - 30 GPa for 0.5 long packer
+    # and 15 - 90GPa for 1m packer, taking into account lot of uncertainties in the packer design.
+    "packer_poisson": "0.3",
+    # taking into account 0.5 poisson ration of the rubber, but just in thin layer and
+    # steel reinforced.
     "fracture_young": "1e7",
     "fracture_poisson": "0.25",
 }
@@ -57,7 +72,6 @@ def run_model(
     yaml_replacements = DEFAULT_REPLACEMENTS.copy()
     if replacements is not None:
         yaml_replacements.update(replacements)
-
     work_dir.mkdir(parents=True, exist_ok=True)
     prepare_mesh_file(work_dir)
     with common.workdir(work_dir):
