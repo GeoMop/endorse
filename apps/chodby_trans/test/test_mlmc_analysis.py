@@ -54,6 +54,7 @@ def _write_paired_test_hdf(
     path: Path,
     n_outputs: int = 2,
     collected_levels: tuple[int, ...] = (0, 1),
+    coarse_offset: float = 10.0,
 ) -> None:
     result_format = [
         QuantitySpec(
@@ -70,7 +71,7 @@ def _write_paired_test_hdf(
     successful = {level_id: [] for level_id in collected_levels}
     for i_sample in range(4):
         outputs = np.arange(n_outputs, dtype=float)
-        coarse = 10.0 + outputs + float(i_sample)
+        coarse = coarse_offset + outputs + float(i_sample)
         fine = coarse + 0.05 * float(i_sample)
         for level_id in collected_levels:
             successful[level_id].append((f"L{level_id:02d}_S{i_sample:07d}", (fine, coarse)))
@@ -138,7 +139,7 @@ def test_run_mlmc_analysis_writes_paired_diagnostics(tmp_path: Path, monkeypatch
     cfg.mlmc["sample_mode"] = "paired"
     job.set_workdir(workdir, input_dir)
 
-    _write_paired_test_hdf(job.output.mlmc_hdf_path)
+    _write_paired_test_hdf(job.output.mlmc_hdf_path, coarse_offset=-9.0)
     monkeypatch.setattr(
         mlmc_var_analysis,
         "read_mlmc_paired_zarr_metadata",
@@ -149,7 +150,9 @@ def test_run_mlmc_analysis_writes_paired_diagnostics(tmp_path: Path, monkeypatch
 
     analysis_dir = job.output.plots / "mlmc_analysis"
     csv_path = analysis_dir / "mlmc_paired_diagnostics.csv"
+    shortlist_path = analysis_dir / "mlmc_paired_samples_final_coarse_between_-8_and_-5.csv"
     assert csv_path.exists()
+    assert shortlist_path.exists()
     assert (analysis_dir / "mlmc_paired_zarr_metadata.csv").exists()
     assert (analysis_dir / "value_level_01_fine_timeseries_distribution.pdf").exists()
     assert (analysis_dir / "value_level_01_coarse_timeseries_distribution.pdf").exists()
@@ -160,10 +163,13 @@ def test_run_mlmc_analysis_writes_paired_diagnostics(tmp_path: Path, monkeypatch
     assert (analysis_dir / "subfigs" / "value_level_01_fine_coarse_difference.pdf").exists()
 
     diagnostics = pd.read_csv(csv_path)
+    shortlist = pd.read_csv(shortlist_path)
     assert set(["correlation", "bias", "diff_variance"]).issubset(diagnostics.columns)
     paired_level = diagnostics[diagnostics["level_id"] == 1]
     assert not paired_level.empty
     assert np.all(paired_level["diff_variance"] < paired_level["coarse_variance"])
+    assert shortlist["sample_id"].tolist() == ["L01_S0000000", "L01_S0000001", "L01_S0000002", "L01_S0000003"]
+    assert shortlist["coarse_value"].tolist() == [-8.0, -7.0, -6.0, -5.0]
 
 
 def test_run_mlmc_analysis_skips_empty_paired_level(tmp_path: Path, monkeypatch):
@@ -226,3 +232,32 @@ def test_largest_sample_differences_are_logged(caplog):
     assert header.split() == ["rank", "sample_id", "sim_time", "diff"]
     assert top_row.split() == ["1", "L01_S0000002", "20.0", "-4.0"]
     assert second_row.split() == ["2", "L01_S0000001", "10.0", "3.5"]
+
+
+def test_find_paired_samples_filters_final_coarse_range(tmp_path: Path):
+    """
+    Check that paired sample selection can filter by final-time coarse values.
+    """
+    workdir = tmp_path / "workdir"
+    input_dir = workdir / "input_data"
+    input_dir.mkdir(parents=True)
+    job.set_workdir(workdir, input_dir)
+
+    _write_paired_test_hdf(job.output.mlmc_hdf_path)
+    storage = SampleStorageHDF(str(job.output.mlmc_hdf_path))
+
+    selected = mlmc_var_analysis.find_paired_samples(
+        storage,
+        _paired_metadata(),
+        criterion=lambda table: (
+            table["is_final_time"] & table["coarse_value"].between(11.5, 12.5, inclusive="both")
+        ),
+        result_name="value",
+        level_id=1,
+    )
+
+    assert selected["sample_id"].tolist() == ["L01_S0000001"]
+    assert selected["sample_number"].tolist() == [1]
+    assert selected["sim_time"].tolist() == [1.0]
+    assert selected["coarse_value"].tolist() == [12.0]
+    assert selected["fine_value"].tolist() == [12.05]

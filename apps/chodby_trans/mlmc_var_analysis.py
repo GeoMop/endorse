@@ -4,7 +4,7 @@ import json
 import logging
 from itertools import product
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 
 import h5py
 import matplotlib.pyplot as plt
@@ -33,17 +33,32 @@ def _paired_output_labels(result_spec) -> list[str]:
     """
     Build labels for paired-mode result specs without a leading Saltelli axis.
     """
+    return [entry["output_label"] for entry in _paired_output_axis(result_spec)]
+
+
+def _paired_output_axis(result_spec) -> list[dict[str, float | int | str | None]]:
+    """
+    Describe each paired output by its flattened index, time, and location metadata.
+    """
     tail_shape = tuple(result_spec.shape)
     tail_size = int(np.prod(tail_shape, dtype=int)) if tail_shape else 1
-    labels = []
+    axis = []
     i_output = 0
     for time in result_spec.times:
         for location in result_spec.locations:
             for i_tail in range(tail_size):
                 tail_label = "" if tail_size == 1 else f", component={i_tail}"
-                labels.append(f"i={i_output}, t={time}, loc={location}{tail_label}")
+                axis.append(
+                    {
+                        "output_index": i_output,
+                        "output_label": f"i={i_output}, t={time}, loc={location}{tail_label}",
+                        "sim_time": float(time),
+                        "location": str(location),
+                        "component": None if tail_size == 1 else i_tail,
+                    }
+                )
                 i_output += 1
-    return labels
+    return axis
 
 
 def _level_collected_ids(level_group) -> list[str]:
@@ -270,6 +285,104 @@ def _log_largest_sample_differences(
         level_id,
         table.to_string(index=False),
     )
+
+
+def paired_sample_value_table(
+    storage: SampleStorageHDF,
+    metadata: pd.DataFrame,
+    *,
+    result_name: str | None = None,
+    level_id: int | None = None,
+) -> pd.DataFrame:
+    """
+    Build a per-sample, per-output table that combines paired HDF values with Zarr metadata.
+    """
+    rows: list[pd.DataFrame] = []
+    for result_spec, current_level_id, values, _output_labels, sample_ids in _split_paired_level_blocks(storage):
+        if result_name is not None and result_spec.name != result_name:
+            continue
+        if level_id is not None and current_level_id != level_id:
+            continue
+        if values.shape[-1] < 2:
+            continue
+
+        level_metadata = _paired_level_metadata(metadata, current_level_id, sample_ids)
+        sample_frame = level_metadata.rename(columns={"sample_id": "sample_number"}).copy()
+        sample_frame.insert(0, "sample_id", sample_ids)
+
+        fine_values = values[:, :, 0].T
+        coarse_values = values[:, :, 1].T
+        output_axis = pd.DataFrame(_paired_output_axis(result_spec))
+        output_axis["is_final_time"] = np.isclose(output_axis["sim_time"], output_axis["sim_time"].max())
+
+        for output in output_axis.to_dict(orient="records"):
+            output_index = int(output["output_index"])
+            rows.append(
+                sample_frame.assign(
+                    result=result_spec.name,
+                    output_index=output_index,
+                    output_label=str(output["output_label"]),
+                    sim_time=float(output["sim_time"]),
+                    location=str(output["location"]),
+                    component=output["component"],
+                    is_final_time=bool(output["is_final_time"]),
+                    fine_value=fine_values[:, output_index],
+                    coarse_value=coarse_values[:, output_index],
+                    diff=fine_values[:, output_index] - coarse_values[:, output_index],
+                )
+            )
+
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "sample_id",
+                "sample_number",
+                "level_id",
+                "result",
+                "output_index",
+                "output_label",
+                "sim_time",
+                "location",
+                "component",
+                "is_final_time",
+                "fine_value",
+                "coarse_value",
+                "diff",
+            ]
+        )
+
+    return pd.concat(rows, ignore_index=True).sort_values(
+        ["level_id", "result", "output_index", "sample_number"]
+    )
+
+
+def find_paired_samples(
+    storage: SampleStorageHDF,
+    metadata: pd.DataFrame,
+    *,
+    criterion: Callable[[pd.DataFrame], pd.Series | np.ndarray],
+    result_name: str | None = None,
+    level_id: int | None = None,
+) -> pd.DataFrame:
+    """
+    Return paired sample rows matching a caller-provided criterion.
+    """
+    sample_table = paired_sample_value_table(
+        storage,
+        metadata,
+        result_name=result_name,
+        level_id=level_id,
+    )
+    if sample_table.empty:
+        return sample_table
+
+    selected = criterion(sample_table)
+    mask = pd.Series(selected, index=sample_table.index, dtype=bool)
+    if len(mask) != len(sample_table):
+        raise ValueError(
+            f"Paired sample criterion returned {len(mask)} rows for a table with {len(sample_table)} rows."
+        )
+    return sample_table.loc[mask].copy()
 
 
 def mlmc_paired_diagnostics(storage: SampleStorageHDF) -> pd.DataFrame:
@@ -652,6 +765,47 @@ def run_mlmc_paired_analysis(storage: SampleStorageHDF, output_dir: Path) -> Non
     metadata_path = output_dir / "mlmc_paired_zarr_metadata.csv"
     metadata.to_csv(metadata_path, index=False)
     logging.info("Wrote MLMC paired Zarr metadata table: %s", metadata_path)
+
+    # AGENT TODO:
+    # goal: we need to inspect (compare in paraview) why in some samples the coarse and fine values diverge
+    # at the end of the simulation time (we see the correlation drops at some point),
+    # we need to indentify such samples
+    # 1. create a function that will find sample_id of samples according to a given criterion
+    # 2. current criterion: log10(conc) of coarse values at the end simulation time is in range (-5,-8)
+    # Resolved: `find_paired_samples()` now writes a shortlist CSV for the final-time coarse-value criterion.
+    coarse_lower, coarse_upper = sorted((-5.5, -20.0))
+    shortlisted_samples = find_paired_samples(
+        storage,
+        metadata,
+        criterion=lambda table: (
+            table["is_final_time"]
+            & table["coarse_value"].between(coarse_lower, coarse_upper, inclusive="both")
+        ),
+        result_name="log10_conc_q99_xyz",
+    )
+    if shortlisted_samples.empty:
+        shortlisted_samples = find_paired_samples(
+            storage,
+            metadata,
+            criterion=lambda table: (
+                table["is_final_time"]
+                & table["coarse_value"].between(coarse_lower, coarse_upper, inclusive="both")
+            ),
+        )
+    shortlist_path = output_dir / "mlmc_paired_samples_inspect.csv"
+    shortlisted_samples.to_csv(shortlist_path, index=False)
+    logging.info(
+        "Wrote MLMC paired sample shortlist: %s (%s rows)",
+        shortlist_path,
+        len(shortlisted_samples),
+    )
+    if not shortlisted_samples.empty:
+        logging.info(
+            f"Samples with final coarse log10(conc) in [{coarse_lower}, {coarse_upper}]:\n%s",
+            shortlisted_samples[
+                ["sample_id", "level_id", "sim_time", "coarse_value", "fine_value", "diff"]
+            ].to_string(index=False),
+        )
 
     pdf_paths = plot_mlmc_paired_diagnostics(storage, metadata, output_dir)
     logging.info("Wrote MLMC paired diagnostics table: %s", csv_path)

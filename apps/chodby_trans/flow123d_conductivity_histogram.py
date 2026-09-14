@@ -125,6 +125,20 @@ def read_flow_fields_dataset(pvd_path: Path, time_index: int = 0):
     return dataset, dataset_path, time_value
 
 
+def compute_effective_conductivity(thresholded) -> tuple[object, bool]:
+    """Return scalar conductivity or conductivity scaled by anisotropy magnitude."""
+    np = require_numpy()
+    conductivity = np.asarray(thresholded.cell_data["conductivity"], dtype=float)
+    anisotropy = thresholded.cell_data.get("anisotropy")
+    if anisotropy is None:
+        return conductivity, False
+
+    anisotropy_array = np.asarray(anisotropy, dtype=float)
+    flat_components = anisotropy_array.reshape(anisotropy_array.shape[0], -1)
+    anisotropy_magnitude = np.linalg.norm(flat_components, axis=1)
+    return conductivity * anisotropy_magnitude, True
+
+
 def compute_histogram(
     dataset,
     *,
@@ -145,7 +159,16 @@ def compute_histogram(
     if selected_cell_count == 0:
         raise ValueError("The selected region_id interval produced an empty dataset.")
 
-    conductivity = np.asarray(thresholded.cell_data["conductivity"], dtype=float)
+    # AGENT TODO:
+    # there are two data fields:
+    # 1. conductivity - is scalar, always present
+    # 2. anisotropy - is tensor, sometimes is present
+    # If anisotropy is present, the resulting hydraulic conductivity is a product conductivity*anisotropy
+    # and it is necessary to compute magnitude of the tensor instead of simple scalar conductivity.
+    # Suggest and make this change, I will provide test data later.
+    # Resolved: Effective conductivity now uses scalar `conductivity` alone unless cell-data
+    # `anisotropy` is present, in which case it multiplies by the Frobenius norm of the tensor.
+    conductivity, used_anisotropy = compute_effective_conductivity(thresholded)
     if np.any(conductivity <= 0.0):
         raise ValueError("Conductivity contains non-positive values, log10 is undefined.")
 
@@ -166,10 +189,11 @@ def compute_histogram(
     bin_centers = 0.5 * (bin_left + bin_right)
 
     LOGGER.info(
-        "Histogram computed from %s selected cells, conductivity range [%g, %g].",
+        "Histogram computed from %s selected cells, conductivity range [%g, %g], anisotropy=%s.",
         selected_cell_count,
         conductivity.min(),
         conductivity.max(),
+        used_anisotropy,
     )
     return HistogramResult(
         dataset_path=dataset_path,

@@ -217,6 +217,11 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   The script reproduces the ParaView pipeline for `flow_fields.pvd`,
   exports the conductivity histogram as a figure plus CSV table, and includes
   a focused synthetic test in `test/test_flow123d_conductivity_histogram.py`.
+- 2026-08-25: Resolved the paired-analysis shortlist TODO in `mlmc_var_analysis.py`.
+  Added a reusable paired sample-value table plus criterion-based selector, and
+  now write `mlmc_paired_samples_final_coarse_between_-8_and_-5.csv` so
+  final-time coarse outliers can be inspected by sample id. Added focused tests
+  for the selector and shortlist artifact.
 - 2026-08-10: Fixed `MacroTetra.interact` to use barycentric coordinates of the
   center-scaled tetrahedron and added `interaction_weights` for batched micro-element
   barycentres. Added focused core-suite regression tests in
