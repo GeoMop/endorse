@@ -66,10 +66,55 @@ class _MacroElement:
     """Minimal macro element stand-in exposing tetrahedron vertices."""
 
     nodes: np.ndarray
+    tags: tuple[int, int] = (1, 3)
 
     def vertices(self) -> np.ndarray:
         """Return tetrahedron vertices in the same order as a mesh element."""
         return self.nodes
+
+    def barycenter(self) -> np.ndarray:
+        """Return the tetrahedron centroid."""
+        return np.mean(self.nodes, axis=0)
+
+    def volume(self) -> float:
+        """Return the signed tetrahedron volume."""
+        return float(np.linalg.det((self.nodes[1:] - self.nodes[0]).T) / 6.0)
+
+
+@dataclass
+class _Mesh:
+    """Small mesh stand-in supporting subdomain selection and diagnostics."""
+
+    elements: list[_MacroElement]
+    el_ids: list[int]
+
+    def candidate_indices(self, _aabb: np.ndarray) -> list[int]:
+        """Return every synthetic element as an AABB candidate."""
+        return list(range(len(self.elements)))
+
+    def el_dim_slice(self, dim: int) -> slice:
+        """Expose all synthetic tetrahedra as bulk elements."""
+        assert dim == 3
+        return slice(0, len(self.elements))
+
+    def el_barycenters(self) -> np.ndarray:
+        """Return synthetic element barycentres."""
+        return np.asarray([element.barycenter() for element in self.elements])
+
+    @property
+    def el_volumes(self) -> np.ndarray:
+        """Return synthetic element volumes."""
+        return np.asarray([element.volume() for element in self.elements])
+
+
+@dataclass(frozen=True)
+class _Subproblem:
+    """Subproblem stand-in whose input submesh is already available."""
+
+    macro_mesh: _Mesh
+    macro_el_shape: homogenisation.MacroTetra
+    macro_elements: np.ndarray
+    submesh: _Mesh
 
 
 def test_macro_tetra() -> None:
@@ -99,3 +144,59 @@ def test_macro_tetra() -> None:
 
     assert 0.0 < taper_weight < 1.0
     np.testing.assert_allclose(taper_weight, 0.2)
+
+
+def _coverage_case(micro_nodes: np.ndarray) -> homogenisation.Subproblems:
+    """Construct one macro element and one candidate micro element."""
+    macro_mesh = _Mesh([_MacroElement(np.vstack([np.zeros(3), np.eye(3)]))], [10])
+    micro_mesh = _Mesh([_MacroElement(micro_nodes)], [20])
+    shape = homogenisation.MacroTetra(rel_radius=1.0)
+    subproblem = _Subproblem(macro_mesh, shape, np.asarray([0]), micro_mesh)
+    return homogenisation.Subproblems(macro_mesh, np.asarray([0]), [subproblem])
+
+
+def test_validate_subdomain_coverage_accepts_selected_micro_element(caplog) -> None:
+    """Accept a macro element containing a candidate micro-element barycentre."""
+    center = np.full(3, 0.25)
+    offsets = 0.02 * np.vstack([np.zeros(3), np.eye(3)])
+    subproblems = _coverage_case(center + offsets - np.mean(offsets, axis=0))
+
+    with caplog.at_level(logging.INFO):
+        homogenisation.validate_subdomain_coverage(subproblems)
+
+    assert "macro_elements=1 empty=0" in caplog.text
+
+
+def test_validate_subdomain_coverage_reports_geometric_overlap(caplog) -> None:
+    """Report a candidate containing the macro centroid when its own barycentre lies outside."""
+    macro_center = np.full(3, 0.25)
+    micro_nodes = np.vstack([macro_center, 2.0 * np.eye(3)])
+    subproblems = _coverage_case(micro_nodes)
+
+    with caplog.at_level(logging.ERROR), pytest.raises(
+            homogenisation.SubdomainCoverageError,
+            match=r"1 empty macro elements: \[0\]",
+    ):
+        homogenisation.validate_subdomain_coverage(subproblems)
+
+    assert "bulk_candidates=1" in caplog.text
+    assert "gmsh_id=20" in caplog.text
+    assert "macro_center_containers=[0]" in caplog.text
+
+
+def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None:
+    """Run the coverage preflight before dispatching a microscale load."""
+    sentinel = object()
+    monkeypatch.setenv("ENDORSE_DISABLE_MEMOIZE", "1")
+
+    def fail_preflight(subproblems) -> None:
+        assert subproblems is sentinel
+        raise homogenisation.SubdomainCoverageError("preflight called")
+
+    monkeypatch.setattr(macro_flow_model.Subproblems, "create", lambda *args: sentinel)
+    monkeypatch.setattr(macro_flow_model, "validate_subdomain_coverage", fail_preflight)
+    cfg = common.dotdict.create({"homogenization": {"coverage_preflight": True}})
+
+    with pytest.raises(homogenisation.SubdomainCoverageError, match="preflight called"):
+        macro_flow_model.macro_conductivity(cfg, None, None, [], {})
+

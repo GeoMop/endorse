@@ -8,7 +8,7 @@ from . import common
 from .apply_fields import conductivity_mockup_eval
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
-from .homogenisation import MacroSphere, Subproblems, MacroTetra
+from .homogenisation import MacroSphere, Subproblems, MacroTetra, validate_subdomain_coverage
 from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
@@ -140,6 +140,9 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
 
     #subdomains = [Subdomain.for_element(micro_mesh, macro_mesh.elements[ie]) for ie in homogenized_els]
     subproblems = Subproblems.create(macro_mesh, homogenized_els, micro_mesh, macro_shape, subdivision)
+    homogenization_cfg = cfg.get("homogenization", {})
+    if homogenization_cfg.get("coverage_preflight", False):
+        validate_subdomain_coverage(subproblems)
     # debugging output of the subdomains
     #subdomains_mesh(subdomains)
 

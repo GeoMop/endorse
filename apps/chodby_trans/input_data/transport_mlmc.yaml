@@ -2,6 +2,10 @@
 test_random_data: False
 grid_size: [20, 20, 2]
 
+homogenization:
+  # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
+  coverage_preflight: true
+
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mlmc:

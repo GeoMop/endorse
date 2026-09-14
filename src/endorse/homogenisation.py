@@ -70,6 +70,24 @@ class MacroTetra(MacroShapeBase):
             np.min(macro_el.vertices(), axis=0),
             np.max(macro_el.vertices(), axis=0)])
 
+    def barycentric_coordinates(self, macro_el: Element, points: np.ndarray) -> np.ndarray:
+        """Return coordinates relative to the tetrahedron scaled about its centroid."""
+        macro_vertices = macro_el.vertices()
+        center = macro_el.barycenter()
+        scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
+        jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
+        points = np.asarray(points, dtype=float) # shape = (n_micro_els, dim=3)
+        assert self.rel_radius > 0.0
+        assert points.shape[-1] == 3, f"Expected XYZ points, got shape {points.shape}."
+
+        local_coordinates = np.linalg.solve(
+            jacobian, (points - scaled_origin).reshape(-1, 3).T
+        ).T.reshape(points.shape)
+        return np.concatenate(
+            [1.0 - np.sum(local_coordinates, axis=-1, keepdims=True), local_coordinates],
+            axis=-1,
+        )
+
     def interaction_weights(self, macro_el: Element, micro_barycenters: np.ndarray) -> np.ndarray:
         """Return kernel weights for one or more micro-element barycentres.
 
@@ -77,21 +95,11 @@ class MacroTetra(MacroShapeBase):
         leading axes of ``micro_barycenters`` so callers can evaluate many candidate
         elements using one linear solve.
         """
-        macro_vertices = macro_el.vertices()    # shape = (n_vertices, dim=3)
-        center = macro_el.barycenter()
-        scaled_origin = center + self.rel_radius * (macro_vertices[0] - center)
-        jacobian = self.rel_radius * (macro_vertices[1:] - macro_vertices[0]).T
-        points = np.asarray(micro_barycenters, dtype=float)  # shape = (n_micro_els, dim=3)
-        assert points.shape[-1] == 3, f"Expected XYZ barycentres, got shape {points.shape}."
-
-        local_coordinates = np.linalg.solve(
-            jacobian, (points - scaled_origin).reshape(-1, 3).T
-        ).T.reshape(points.shape) # Allows points to be just 1D array with shape (dim,).
-        barycentric = np.concatenate(
-            [1.0 - np.sum(local_coordinates, axis=-1, keepdims=True), local_coordinates],
-            axis=-1,
-        )
+        barycentric = self.barycentric_coordinates(macro_el, micro_barycenters)
         min_barycentric = np.min(barycentric, axis=-1)  # maximal min_bary = 1/4
+
+        if self.rel_radius <= 1.0:
+            return np.asarray(min_barycentric > 0.0, dtype=float)
 
         # 0 at center, 1 at the tetrahedron boundary.
         radial = 1.0 - 4.0 * min_barycentric
@@ -422,6 +430,26 @@ def repr_aabb(aabb):
     return f"AABB({aabb.min()}, {aabb.max()})"
 
 
+@attrs.define(frozen=True)
+class SubdomainSelection:
+    """Micro elements considered and selected for one macro element."""
+
+    candidate_indices: np.ndarray
+    element_indices: np.ndarray
+    interaction_weights: np.ndarray
+
+
+@attrs.define(frozen=True)
+class _EmptySubdomain:
+    """Geometry retained for an empty-subdomain preflight diagnostic."""
+
+    shape: MacroShapeBase
+    macro_mesh: Mesh
+    micro_mesh: Mesh
+    macro_el_idx: int
+    selection: SubdomainSelection
+
+
 @attrs.define
 class Subdomain:
     mesh: Mesh
@@ -431,34 +459,63 @@ class Subdomain:
     _weights : np.array = None
 
     @staticmethod
-    def create(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh, i_el):
-        """
-        Select elements from the micro mesh interacting with a sphere
-        approximating the macro element `id_el`.
-        """
+    def select(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh: Mesh, i_el: int) -> SubdomainSelection:
+        """Select contributing bulk micro elements without requiring a nonempty result."""
         macro_el = macro_mesh.elements[i_el]
         #center = macro_el.barycenter()
         #distances = np.linalg.norm(macro_el.vertices() - center[None,:], axis=1)
         #r = np.mean(distances)
         #logging.info(f"{center}, {distances}, {r}")
         #aabb = bih.AABB([center - r, center + r])
-        aabb = shape.aabb(macro_el)
-        candidates = micro_mesh.candidate_indices(aabb)
+        candidates = np.asarray(micro_mesh.candidate_indices(shape.aabb(macro_el)), dtype=int)
 
         # keep volumetric elements only
         bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
-        candidates = [ie for ie in candidates if bulk_micro_slice.start <= ie < bulk_micro_slice.stop]
+        candidates = candidates[
+            (bulk_micro_slice.start <= candidates) & (candidates < bulk_micro_slice.stop)
+        ]
 
-        assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
-        subdomain_indices = [(ie, w) for ie in candidates
-                         if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
-        logging.info(f"[{i_el}] Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
-        assert subdomain_indices, f"Empty subdomain {aabb}, {macro_el.barycenter()} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
-        micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
+        if isinstance(shape, MacroTetra):
+            candidate_centers = micro_mesh.el_barycenters()[candidates]
+            candidate_weights = shape.interaction_weights(macro_el, candidate_centers)
+        else:
+            candidate_weights = np.asarray([
+                shape.interact(macro_el, micro_mesh.elements[ie]) for ie in candidates
+            ])
+        selected = candidate_weights > 0.0
+        return SubdomainSelection(candidates, candidates[selected], candidate_weights[selected])
+
+    @staticmethod
+    def create(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh: Mesh, i_el: int) -> 'Subdomain':
+        """
+        Select micro-mesh elements interacting with macro element ``i_el``.
+        """
+        macro_el = macro_mesh.elements[i_el]
+        aabb = shape.aabb(macro_el)
+        selection = Subdomain.select(shape, micro_mesh, macro_mesh, i_el)
+        assert selection.candidate_indices.size, (
+            f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: "
+            f"{repr_aabb(micro_mesh.bih.aabb())}"
+        )
+        logging.info(
+            "[%s] Subdomain candidates: %s, elements: %s",
+            i_el,
+            selection.candidate_indices.size,
+            selection.element_indices.size,
+        )
+        assert selection.element_indices.size, (
+            f"Empty subdomain {aabb}, {macro_el.barycenter()} . "
+            f"{micro_mesh.el_barycenters()[selection.candidate_indices]}"
+        )
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
         #print(macro_el.barycenter(), "macro: ", i_el, "\n subdomain:", subdomain_indices, "AABB:", repr_aabb(aabb))
-        return Subdomain(micro_mesh, i_el, list(micro_el_indices), list(intersect_weights))
+        return Subdomain(
+            micro_mesh,
+            i_el,
+            selection.element_indices.tolist(),
+            selection.interaction_weights.tolist(),
+        )
 
     @property
     #@report
@@ -483,6 +540,121 @@ class Subdomain:
         #    return avg[0]
         #else:
         return avg
+
+
+class SubdomainCoverageError(AssertionError):
+    """One or more macro elements have no contributing micro-element barycentre."""
+
+
+def _log_empty_subdomain(
+        empty: _EmptySubdomain,
+) -> None:
+    """Log focused geometry for one empty subdomain."""
+    shape = empty.shape
+    macro_mesh = empty.macro_mesh
+    macro_el = macro_mesh.elements[empty.macro_el_idx]
+    micro_mesh = empty.micro_mesh
+    candidates = empty.selection.candidate_indices
+    macro_gmsh_id = macro_mesh.el_ids[empty.macro_el_idx]
+    logging.error(
+        "Empty subdomain: macro_idx=%s gmsh_id=%s tags=%s volume=%g center=%s aabb=%s vertices=%s "
+        "bulk_candidates=%s",
+        empty.macro_el_idx,
+        macro_gmsh_id,
+        macro_el.tags,
+        abs(macro_el.volume()),
+        macro_el.barycenter(),
+        shape.aabb(macro_el),
+        macro_el.vertices(),
+        candidates.size,
+    )
+    if not candidates.size:
+        return
+
+    candidate_volumes = np.abs(micro_mesh.el_volumes[candidates])
+    logging.error(
+        "Candidate volumes: min=%g median=%g max=%g",
+        np.min(candidate_volumes),
+        np.median(candidate_volumes),
+        np.max(candidate_volumes),
+    )
+    if not isinstance(shape, MacroTetra):
+        return
+
+    candidate_centers = micro_mesh.el_barycenters()[candidates]
+    barycentric = shape.barycentric_coordinates(macro_el, candidate_centers)
+    min_barycentric = np.min(barycentric, axis=1)
+    best_position = int(np.argmax(min_barycentric))
+    best_idx = int(candidates[best_position])
+    unit_tetra = MacroTetra(rel_radius=1.0)
+    macro_center = macro_el.barycenter()
+    center_containers = [
+        int(ie)
+        for ie in candidates
+        if np.all(unit_tetra.barycentric_coordinates(micro_mesh.elements[ie], macro_center) >= -1.0e-12)
+    ]
+    logging.error(
+        "Best candidate: micro_idx=%s gmsh_id=%s volume=%g center=%s barycentric=%s "
+        "min_barycentric=%g macro_center_containers=%s",
+        best_idx,
+        micro_mesh.el_ids[best_idx],
+        candidate_volumes[best_position],
+        candidate_centers[best_position],
+        barycentric[best_position],
+        min_barycentric[best_position],
+        center_containers,
+    )
+
+
+def validate_subdomain_coverage(subproblems: Subproblems) -> None:
+    """Check all input submeshes for empty macro-element averaging domains."""
+    selected_counts = []
+    empty_subdomains = []
+    for subproblem in subproblems.subproblems:
+        micro_mesh = subproblem.submesh
+        for macro_el_idx in subproblem.macro_elements:
+            macro_el_idx = int(macro_el_idx)
+            selection = Subdomain.select(
+                subproblem.macro_el_shape,
+                micro_mesh,
+                subproblem.macro_mesh,
+                macro_el_idx,
+            )
+            selected_counts.append(selection.element_indices.size)
+            if not selection.element_indices.size:
+                empty_subdomains.append(_EmptySubdomain(
+                    subproblem.macro_el_shape,
+                    subproblem.macro_mesh,
+                    micro_mesh,
+                    macro_el_idx,
+                    selection,
+                ))
+
+    selected_counts = np.asarray(selected_counts, dtype=int)
+    assert selected_counts.size, "Subdomain coverage preflight received no macro elements."
+    quantiles = np.quantile(selected_counts, [0.0, 0.01, 0.5])
+    logging.info(
+        "Subdomain coverage preflight: macro_elements=%s empty=%s "
+        "selected_count[min,p01,median]=%s",
+        selected_counts.size,
+        len(empty_subdomains),
+        quantiles,
+    )
+    if not empty_subdomains:
+        return
+
+    max_detailed_failures = 20
+    for empty in empty_subdomains[:max_detailed_failures]:
+        _log_empty_subdomain(empty)
+    if len(empty_subdomains) > max_detailed_failures:
+        logging.error(
+            "Omitted detailed geometry for %s additional empty subdomains.",
+            len(empty_subdomains) - max_detailed_failures,
+        )
+    empty_indices = [empty.macro_el_idx for empty in empty_subdomains]
+    raise SubdomainCoverageError(
+        f"Subdomain coverage preflight found {len(empty_indices)} empty macro elements: {empty_indices}"
+    )
 
 # def micro_response(subdomains):
 #     mesh = GmshIO("output/flow_fields.msh")

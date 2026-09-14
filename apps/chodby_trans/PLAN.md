@@ -198,6 +198,14 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   4. Seed the OpenTURNS matrix generator explicitly and cover repeatability and
      per-term workspace behavior with focused tests.
 
+- Homogenization coverage preflight:
+  1. Reuse one subdomain-selection routine for the preflight and postprocessing so both apply
+     identical AABB, bulk-element, and interaction-weight criteria.
+  2. Optionally validate all macro elements against the prepared microscale input submesh before
+     starting Flow123d, logging aggregate coverage and focused geometry for empty subdomains.
+  3. Enable the preflight explicitly in the Chodby MLMC configuration and cover passing, failing,
+     and disabled behavior with lightweight geometry tests.
+
 - Standalone conductivity histogram postprocess:
   1. Reproduce the ParaView state pipeline in plain Python for one
      `flow_fields.pvd`: threshold `region_id`, compute `log10(conductivity)`,
@@ -212,6 +220,10 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
      depending on ParaView state files.
 
 ## AGENT Log
+- 2026-09-14: Added a configurable homogenization coverage preflight before microscale Flow123d loads.
+  Subdomain selection is now shared with postprocessing, empty elements are reported together with focused
+  geometry diagnostics, and the Chodby MLMC configuration enables the check. The retained failed sample
+  detects 237 empty macro elements out of 6,351 before entering Flow123d.
 - 2026-09-03: Added `flow123d_conductivity_histogram.py` as a standalone
   Python replacement for `workdir_41e_test_ot_2/cond_histogram.pvsm`.
   The script reproduces the ParaView pipeline for `flow_fields.pvd`,
