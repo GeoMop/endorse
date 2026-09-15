@@ -134,13 +134,14 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     if isinstance(homogenized_els, slice):
         homogenized_els = range(homogenized_els.start, homogenized_els.stop, homogenized_els.step or 1)
 
-    macro_shape = MacroTetra(rel_radius=1.0)
+    homogenization_cfg = cfg["homogenization"]
+    macro_element_scale = float(homogenization_cfg["macro_element_scale"])
+    macro_shape = MacroTetra(rel_radius=macro_element_scale)
     subdivision = np.array([1, 1, 1]) # N subdomains in each axis
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
     #subdomains = [Subdomain.for_element(micro_mesh, macro_mesh.elements[ie]) for ie in homogenized_els]
     subproblems = Subproblems.create(macro_mesh, homogenized_els, micro_mesh, macro_shape, subdivision)
-    homogenization_cfg = cfg.get("homogenization", {})
     if homogenization_cfg.get("coverage_preflight", False):
         validate_subdomain_coverage(subproblems)
     # debugging output of the subdomains

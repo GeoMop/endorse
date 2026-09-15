@@ -220,6 +220,10 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
      depending on ParaView state files.
 
 ## AGENT Log
+
+- 2026-09-15: Made the tetrahedral averaging-domain size configurable as
+  `homogenization.macro_element_scale`, logged its effective value, and extended empty-subdomain diagnostics
+  with the scale required to include the best available micro-element barycentre.
 - 2026-09-14: Added a configurable homogenization coverage preflight before microscale Flow123d loads.
   Subdomain selection is now shared with postprocessing, empty elements are reported together with focused
   geometry diagnostics, and the Chodby MLMC configuration enables the check. The retained failed sample

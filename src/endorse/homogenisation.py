@@ -586,6 +586,10 @@ def _log_empty_subdomain(
     min_barycentric = np.min(barycentric, axis=1)
     best_position = int(np.argmax(min_barycentric))
     best_idx = int(candidates[best_position])
+    best_min_barycentric = float(min_barycentric[best_position])
+    # Undo the current centroid scaling and find the scale at which this candidate
+    # reaches the tetrahedron boundary (minimum barycentric coordinate equal to zero).
+    required_macro_element_scale = shape.rel_radius * (1.0 - 4.0 * best_min_barycentric)
     unit_tetra = MacroTetra(rel_radius=1.0)
     macro_center = macro_el.barycenter()
     center_containers = [
@@ -595,13 +599,16 @@ def _log_empty_subdomain(
     ]
     logging.error(
         "Best candidate: micro_idx=%s gmsh_id=%s volume=%g center=%s barycentric=%s "
-        "min_barycentric=%g macro_center_containers=%s",
+        "min_barycentric=%g macro_element_scale=%g required_macro_element_scale=%g "
+        "macro_center_containers=%s",
         best_idx,
         micro_mesh.el_ids[best_idx],
         candidate_volumes[best_position],
         candidate_centers[best_position],
         barycentric[best_position],
-        min_barycentric[best_position],
+        best_min_barycentric,
+        shape.rel_radius,
+        required_macro_element_scale,
         center_containers,
     )
 
@@ -634,8 +641,9 @@ def validate_subdomain_coverage(subproblems: Subproblems) -> None:
     assert selected_counts.size, "Subdomain coverage preflight received no macro elements."
     quantiles = np.quantile(selected_counts, [0.0, 0.01, 0.5])
     logging.info(
-        "Subdomain coverage preflight: macro_elements=%s empty=%s "
+        "Subdomain coverage preflight: macro_element_scale=%g macro_elements=%s empty=%s "
         "selected_count[min,p01,median]=%s",
+        subproblems.subproblems[0].macro_el_shape.rel_radius,
         selected_counts.size,
         len(empty_subdomains),
         quantiles,

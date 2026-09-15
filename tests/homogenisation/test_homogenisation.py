@@ -146,11 +146,11 @@ def test_macro_tetra() -> None:
     np.testing.assert_allclose(taper_weight, 0.2)
 
 
-def _coverage_case(micro_nodes: np.ndarray) -> homogenisation.Subproblems:
+def _coverage_case(micro_nodes: np.ndarray, rel_radius: float = 1.0) -> homogenisation.Subproblems:
     """Construct one macro element and one candidate micro element."""
     macro_mesh = _Mesh([_MacroElement(np.vstack([np.zeros(3), np.eye(3)]))], [10])
     micro_mesh = _Mesh([_MacroElement(micro_nodes)], [20])
-    shape = homogenisation.MacroTetra(rel_radius=1.0)
+    shape = homogenisation.MacroTetra(rel_radius=rel_radius)
     subproblem = _Subproblem(macro_mesh, shape, np.asarray([0]), micro_mesh)
     return homogenisation.Subproblems(macro_mesh, np.asarray([0]), [subproblem])
 
@@ -171,7 +171,7 @@ def test_validate_subdomain_coverage_reports_geometric_overlap(caplog) -> None:
     """Report a candidate containing the macro centroid when its own barycentre lies outside."""
     macro_center = np.full(3, 0.25)
     micro_nodes = np.vstack([macro_center, 2.0 * np.eye(3)])
-    subproblems = _coverage_case(micro_nodes)
+    subproblems = _coverage_case(micro_nodes, rel_radius=1.5)
 
     with caplog.at_level(logging.ERROR), pytest.raises(
             homogenisation.SubdomainCoverageError,
@@ -181,6 +181,8 @@ def test_validate_subdomain_coverage_reports_geometric_overlap(caplog) -> None:
 
     assert "bulk_candidates=1" in caplog.text
     assert "gmsh_id=20" in caplog.text
+    assert "macro_element_scale=1.5" in caplog.text
+    assert "required_macro_element_scale=3.75" in caplog.text
     assert "macro_center_containers=[0]" in caplog.text
 
 
@@ -193,10 +195,18 @@ def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None
         assert subproblems is sentinel
         raise homogenisation.SubdomainCoverageError("preflight called")
 
-    monkeypatch.setattr(macro_flow_model.Subproblems, "create", lambda *args: sentinel)
+    def create_subproblems(_macro_mesh, _homogenized_els, _micro_mesh, macro_shape, _subdivision):
+        assert macro_shape.rel_radius == 2.25
+        return sentinel
+
+    monkeypatch.setattr(macro_flow_model.Subproblems, "create", create_subproblems)
     monkeypatch.setattr(macro_flow_model, "validate_subdomain_coverage", fail_preflight)
-    cfg = common.dotdict.create({"homogenization": {"coverage_preflight": True}})
+    cfg = common.dotdict.create({
+        "homogenization": {
+            "coverage_preflight": True,
+            "macro_element_scale": 2.25,
+        },
+    })
 
     with pytest.raises(homogenisation.SubdomainCoverageError, match="preflight called"):
         macro_flow_model.macro_conductivity(cfg, None, None, [], {})
-

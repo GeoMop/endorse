@@ -5,6 +5,8 @@ grid_size: [20, 20, 2]
 homogenization:
   # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
   coverage_preflight: true
+  # Linear scale of the averaging tetrahedron relative to its macro mesh element.
+  macro_element_scale: 2.0
 
 ot_sensitivity: !include _ot_sensitivity.yaml
 
