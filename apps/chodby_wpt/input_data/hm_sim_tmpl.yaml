@@ -16,15 +16,15 @@ problem: !Coupling_Sequential
         biot_alpha: 0.2
         fluid_density: 1000
     time:
-      init_dt: 60
-      end_time: 5e5
+      init_dt: 1
+      end_time: 10
     a_tol: 0
-    r_tol: 1e-6
+    r_tol: 1e-3
     flow_equation: !Flow_Darcy_LMH
         nonlinear_solver:
           linear_solver: !Petsc
             a_tol: 1e-50
-            r_tol: 1e-12
+            r_tol: 1e-5
             options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
         input_fields:
           - region: ALL
@@ -53,52 +53,52 @@ problem: !Coupling_Sequential
 
           # figure out a way to pass this withou duplicating code
           - region: fracture_1
-            #conductivity: <fracture_conductivity> #1e-6
-            conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_0>**2) + <rock_conductivity>
+            conductivity: <fracture_conductivity> #1e-6
+            #conductivity: !FieldFormula
+            #  value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_0>**2) + <rock_conductivity>
             # Water compressibility; fracture cross_section scales its stored volume.
             storativity: <fracture_storativity>
-            #cross_section: <fracture_cross_section> #1e-3
-            cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_0>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_0>**2) + 1e-4
+            cross_section: <fracture_cross_section> #1e-3
+            #cross_section: !FieldFormula
+            #  value: diff = (x-<fracture_center_0>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_0>**2) + 1e-4
 
           - region: fracture_2
-            #conductivity: <fracture_conductivity> #1e-6
-            conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_1>**2) + <rock_conductivity>
+            conductivity: <fracture_conductivity> #1e-6
+            #conductivity: !FieldFormula
+            #  value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_1>**2) + <rock_conductivity>
             # Water compressibility; fracture cross_section scales its stored volume.
             storativity: <fracture_storativity>
-            #cross_section: <fracture_cross_section> #1e-3
-            cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_1>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_1>**2) + 1e-4
+            cross_section: <fracture_cross_section> #1e-3
+            #cross_section: !FieldFormula
+            #  value: diff = (x-<fracture_center_1>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_1>**2) + 1e-4
 
           - region: fracture_3
-            #conductivity: <fracture_conductivity> #1e-6
-            conductivity: !FieldFormula
-              value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_2>**2) + <rock_conductivity>
+            conductivity: <fracture_conductivity> #1e-6
+            #conductivity: !FieldFormula
+            #  value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_2>**2) + <rock_conductivity>
             # Water compressibility; fracture cross_section scales its stored volume.
             storativity: <fracture_storativity>
-            #cross_section: <fracture_cross_section> #1e-3
-            cross_section: !FieldFormula
-              value: diff = (x-<fracture_center_2>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_2>**2) + 1e-4
+            cross_section: <fracture_cross_section> #1e-3
+            #cross_section: !FieldFormula
+            #  value: diff = (x-<fracture_center_2>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_2>**2) + 1e-4
 
           - region: [ .rock, .fractures ]
             bc_type: dirichlet
-            bc_pressure: 0
+            bc_pressure: <init_pressure>
 
-          - region: .pocket_water
-            time: 0.0
-            bc_pressure: 300.0
-            #water_source_density: !FieldTimeFunction
-            #  time_function:
-            #    <flow_series>
-          
-          - region: .pocket_packer_near
-            bc_flux: 0.0
+#           - region: .pocket_water
+#             time: 0.0
+#             bc_pressure: 300.0
+#             #water_source_density: !FieldTimeFunction
+#             #  time_function:
+#             #    <flow_series>
+#           
+#           - region: .pocket_packer_near
+#             bc_flux: 0.0
           
           - region: water
-            time: 1200
-            water_source_density: 0
+            time: 1
+            water_source_density: 1e-9
 
         output:
           times: &output_times
@@ -133,7 +133,8 @@ problem: !Coupling_Sequential
           observe_fields: [cross_section_updated]
         solver:
           a_tol: 1e-50
-          r_tol: 1e-8
+          r_tol: 1e-5
+          # options: -ksp_type pc_only
         contact: true
         input_fields:
           - region: [ rock ]

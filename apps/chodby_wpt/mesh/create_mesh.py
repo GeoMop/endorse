@@ -330,13 +330,13 @@ def make_geometry(factory, cfg):
     water_rock_wall = rock_boundary.dt_intersection(borehole_boundary)
     water_rock_wall.set_region("__internal_water_rock").mesh_step(cfg.mesh.borehole_mesh_step)
 
-    pocket_water = select_boundary_at_distance(
-        borehole_boundary,
-        bh_start,
-        direction,
-        section_start_distance,
-    )
-    pocket_water.set_region(".pocket_water").mesh_step(cfg.mesh.borehole_mesh_step)
+    # pocket_water = select_boundary_at_distance(
+    #     borehole_boundary,
+    #     bh_start,
+    #     direction,
+    #     section_start_distance,
+    # )
+    # pocket_water.set_region(".pocket_water").mesh_step(cfg.mesh.borehole_mesh_step)
 
     packer_near_rock_wall = rock_boundary.dt_intersection(packer_near_boundary)
     packer_near_external = select_boundary_at_distance(
@@ -386,7 +386,7 @@ def make_geometry(factory, cfg):
         water_rock_wall,
         packer_near_external,
         packer_far_external,
-        pocket_water,
+        # pocket_water,
         domain_boundary,
         *fractures_fr,
         *fracture_external_boundaries,
@@ -540,7 +540,7 @@ def split_pocket_interface(mesh_file, water_region, packer_region, packer_bulk_r
     mesh_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def mesh_geometry(factory, geometry, cfg, work_dir):
+def mesh_geometry(factory, geometry, cfg, work_dir, split_pocket=False):
     """Mesh the geometry and write output files into ``work_dir``."""
     factory.mesh_options.MinimumCirclePoints = 12
     factory.mesh_options.MinimumCurvePoints = 3
@@ -553,17 +553,18 @@ def mesh_geometry(factory, geometry, cfg, work_dir):
     factory.make_mesh([geometry], dim=3)
     factory.write_mesh(filename=str(mesh_file), format=gmsh.MeshFormat.msh2)
     strip_physical_regions(mesh_file, {"__internal_water_rock"})
-    split_pocket_interface(mesh_file, ".pocket_water", ".pocket_packer_near", "packer_near")
+    if split_pocket:
+        split_pocket_interface(mesh_file, ".pocket_water", ".pocket_packer_near", "packer_near")
     return mesh_file
 
 
-def make_mesh(cfg, work_dir: Path):
+def make_mesh(cfg, work_dir: Path, split_pocket=False):
     """Create geometry, generate the mesh and return the output mesh file."""
     work_dir.mkdir(parents=True, exist_ok=True)
     factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=True)
     factory.get_logger().start()
     geometry = make_geometry(factory, cfg)
-    mesh_file = mesh_geometry(factory, geometry, cfg, work_dir)
+    mesh_file = mesh_geometry(factory, geometry, cfg, work_dir, split_pocket)
     del factory
     return common.File(mesh_file)
 

@@ -57,7 +57,8 @@ def machine_config(config_path: Path | None, flow_executable: str) -> common.dot
 
 def prepare_mesh_file(work_dir: Path) -> None:
     """Generate the mesh and make it available to the Flow123d work directory."""
-    make_mesh(common.config.load_config(input_data.mesh_cfg_yaml), work_dir)
+    cfg = common.config.load_config(input_data.mesh_cfg_yaml)
+    make_mesh(cfg, work_dir, split_pocket=False)
     expected_mesh = work_dir / "wpt_section.msh"
     generated_mesh = work_dir / "wpt_section.msh2"
     shutil.copy2(generated_mesh, expected_mesh)
