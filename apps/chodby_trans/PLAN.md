@@ -221,6 +221,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-09-16: Applied `homogenization.macro_element_scale` to the `source_sigma` micro-to-macro field transfer;
+  this removes the separate hardcoded unit-scale tetrahedron that remained after conductivity homogenization.
 - 2026-09-15: Made the tetrahedral averaging-domain size configurable as
   `homogenization.macro_element_scale`, logged its effective value, and extended empty-subdomain diagnostics
   with the scale required to include the best available micro-element barycentre.

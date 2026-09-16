@@ -114,6 +114,12 @@ def make_micro_mesh(cfg):
     return load_mesh(mesh_file)
 
 
+def configured_macro_tetra(cfg: dotdict) -> MacroTetra:
+    """Construct the averaging tetrahedron from the mandatory homogenization configuration."""
+    macro_element_scale = float(cfg["homogenization"]["macro_element_scale"])
+    return MacroTetra(rel_radius=macro_element_scale)
+
+
 
 @memoize
 def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogenized_els: List[int],
@@ -135,8 +141,7 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
         homogenized_els = range(homogenized_els.start, homogenized_els.stop, homogenized_els.step or 1)
 
     homogenization_cfg = cfg["homogenization"]
-    macro_element_scale = float(homogenization_cfg["macro_element_scale"])
-    macro_shape = MacroTetra(rel_radius=macro_element_scale)
+    macro_shape = configured_macro_tetra(cfg)
     subdivision = np.array([1, 1, 1]) # N subdomains in each axis
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
