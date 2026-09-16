@@ -67,8 +67,8 @@ class Wrapper:
                 return exp.ReturnCode.SKIP, np.array([])
             else:
                 rc, slice_array = transport.transport_run(
-                    self._config, 
-                    tags, param_dict)
+                    self._config, level_id=0,
+                    tags=tags, param_dict=param_dict)
 
         except Exception as e:
             print_exp(e, tags)

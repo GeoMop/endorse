@@ -52,14 +52,22 @@ def population_from_cfg(families, box):
     return Population.from_cfg(families, box, RectangleShape)
 
 
-def fixed_fractures(cfg):
+def fracture_set_stats(fractures):
+    radii = np.array([fr.r for fr in fractures], dtype=float)
+    return dict(min_radius=float(np.min(radii)),
+                max_radius=float(np.max(radii)),
+                avg_radius=float(np.average(radii)),
+                med_radius=float(np.median(radii)))
+
+
+def fixed_fractures(box_dimensions):
     """
     Fixed artificial fractures.
     :param cfg: main config
     :return: list of fracture list[Fracture]
     """
-    diameter = np.linalg.norm(cfg.geometry.box_dimensions[1:])   # diagonal of y-z plane
-    center = np.array([0, 0.75 * cfg.geometry.box_dimensions[1]/2, 0])
+    diameter = np.linalg.norm(box_dimensions[1:])   # diagonal of y-z plane
+    center = np.array([0, 0.75 * box_dimensions[1]/2, 0])
     normal = np.array([0, 1, 0])
     region_id = 0
     region = gmsh.Region.get(f"fr_{region_id}")
@@ -68,21 +76,24 @@ def fixed_fractures(cfg):
     return [fr]
 
 
-def fracture_set(cfg, fr_population:Population, seed:int):
-    main_box_dimensions = cfg.geometry.box_dimensions
+def fracture_set(cfg_mesh, fr_population:Population, seed:int):
+    main_box_dimensions = cfg_mesh.geometry.box_dimensions
+    cfg_fr = cfg_mesh.fractures
 
     # Fixed large fractures
-    fractures = fixed_fractures(cfg)
+    fractures = fixed_fractures(main_box_dimensions)
 
-    fix_seed = cfg.fractures.fixed_seed
-    large_min_r = cfg.fractures.large_min_r
-    # large_box_dimensions = cfg.fractures.large_box
+    # Large random fractures with fixed seed
+    # fix_seed = cfg_fr.fixed_seed
+    # large_min_r = cfg_fr.large_min_r
+    # large_box_dimensions = cfg_fr.large_box
     # logging.info(f"Large fracture seed: {fix_seed}")
     # max_large_size = max([fam.size.diam_range[1] for fam in fr_population.families])
     # random large fracture with fixed seed
     # fractures = mesh_tools.generate_fractures(fr_population, (large_min_r, max_large_size), fr_limit, large_box_dimensions, fix_seed)
 
-    large_fr_dict=dict(seed=fix_seed, fr_set=[fr_dict_repr(fr) for fr in fractures])
+    large_fr_dict=dict(#seed=fix_seed,
+        fr_set=[fr_dict_repr(fr) for fr in fractures])
     with open(f"large_Fr_set.yaml", "w") as f:
         yaml.dump(large_fr_dict, f, sort_keys=False)
     n_large = len(fractures)
@@ -91,11 +102,12 @@ def fracture_set(cfg, fr_population:Population, seed:int):
     #    raise ValueError()
     # random small scale fractures
 
-    fr_limit = cfg.fractures.n_frac_limit
+    fr_limit = cfg_fr.n_frac_limit
     if fr_limit > 0:
         logging.info(f"Small fracture seed: {seed}")
-        small_fr = mesh_tools.generate_fractures(fr_population, (None, large_min_r),
-                                                 fr_limit, main_box_dimensions, seed, id_offset=n_large)
+        small_fr = mesh_tools.generate_fractures(fr_population, range=(None, None),
+                                                 fr_limit=fr_limit, box=main_box_dimensions,
+                                                 seed=seed, id_offset=n_large)
         fractures.extend(small_fr)
         logging.info(f"Generated fractures: {n_large} large, {len(small_fr)} small.")
 

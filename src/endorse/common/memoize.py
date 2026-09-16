@@ -42,6 +42,21 @@ TODO:
 """
 
 
+DISABLE_MEMOIZE_ENV = "ENDORSE_DISABLE_MEMOIZE"
+DISABLE_MEMOIZE_VALUES = {"1", "true", "yes", "on"}
+
+
+def memoize_disabled() -> bool:
+    """
+    Return True when function-call memoization should be bypassed.
+
+    This is intended for cluster runs where joblib metadata for large mesh and
+    homogenization objects can dominate runtime and destabilize Dask workers.
+    """
+    value = os.environ.get(DISABLE_MEMOIZE_ENV, "")
+    return value.strip().lower() in DISABLE_MEMOIZE_VALUES
+
+
 class CallCache:
     """
     Global singleton for the function call cache.
@@ -93,6 +108,8 @@ def memoize(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         nonlocal decorated_fn
+        if memoize_disabled():
+            return fn(*args, **kwargs)
         if decorated_fn is None:
             mem: joblib.Memory = CallCache.__instance__().mem_cache
             decorated_fn = mem.cache(fn)

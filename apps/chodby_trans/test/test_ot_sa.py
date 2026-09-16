@@ -1,4 +1,6 @@
 # test_sensitivity.py
+import pickle
+
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -430,6 +432,40 @@ def test_sa_from_cfg_and_sampling():
     assert (Xg >= 0.0).all() and (Xg < 1.0).all()
     # mapped parameters finite
     assert np.isfinite(Xp).all()
+
+
+def test_sa_pickles_via_cfg_roundtrip():
+    """
+    SensitivityAnalysis should serialize through its source config and rebuild
+    the derived OpenTURNS objects on unpickle.
+    """
+    sa_cfg = {
+        "n_samples": 64,
+        "sampler": "QMC",
+        "second_order": True,
+        "confidence_level": 0.95,
+        "parameters": {
+            "k1": {"distr": "LogNormal", "args": [0.0, 0.25], "group": "g1"},
+            "k2": {"distr": "Uniform", "args": [0.1, 0.5], "group": "g1"},
+            "S": {"distr": "Normal", "args": [0.0, 1.0]},
+            "dfn_seed": {"distr": "Seed", "group": "seed"},
+        },
+    }
+
+    sa_obj = sa.SensitivityAnalysis.from_cfg(sa_cfg)
+    sa_roundtrip = pickle.loads(pickle.dumps(sa_obj))
+
+    assert isinstance(sa_roundtrip, sa.SensitivityAnalysis)
+    assert sa_roundtrip.cfg == sa_obj.cfg
+    assert sa_roundtrip.n_samples == sa_obj.n_samples
+    assert sa_roundtrip.sampler == sa_obj.sampler
+    assert sa_roundtrip.groups == sa_obj.groups
+    assert isinstance(sa_roundtrip.parameters["dfn_seed"].distribution, sa.Seed)
+
+    sample_a = sa_obj.sample(seed=123, n_samples=8)
+    sample_b = sa_roundtrip.sample(seed=123, n_samples=8)
+    assert np.allclose(sample_a.group_mat, sample_b.group_mat)
+    assert np.allclose(sample_a.param_mat, sample_b.param_mat)
 
 
 def test_sa_end_to_end_3params_2outputs():

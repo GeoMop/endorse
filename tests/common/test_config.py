@@ -61,3 +61,48 @@ def test_load_config():
     assert len(cfg._file_refs) == 5 #other_file1, other_file2, _cfg_a, cfg_b, cfg_main
     for f in ['other_file1.any', 'other_file2.any', '_cfg_a.yaml', '_cfg_b.yaml']:
         assert Path(script_dir) / f in cfg._file_refs
+
+
+def test_dump_config_reloads_machine_config_with_resolution(tmp_path):
+    """
+    Verify that dump/load keeps the host map and exposes the resolved host config.
+    """
+    cfg = common.dotdict.create({
+        "machine_config": {
+            "__default__": {
+                "flow_executable": ["default-flow123d"],
+            },
+            "cluster": {
+                "flow_executable": ["cluster-flow123d"],
+                "pbs": {
+                    "queue": "debug",
+                },
+            },
+        },
+        "mlmc": {
+            "sim_class": "RandomTransportSimulation",
+            "levels": [
+                {"params": {"mesh_step": 10.0}},
+            ],
+        },
+    })
+    cfg_path = tmp_path / "dumped_config.yaml"
+
+    common.dump_config(cfg, cfg_path)
+    dumped_text = cfg_path.read_text(encoding="utf-8")
+    loaded_cfg = common.load_config(cfg_path, hostname="cluster")
+    reloaded_path = tmp_path / "reloaded_config.yaml"
+
+    common.dump_config(loaded_cfg, reloaded_path)
+    reloaded_text = reloaded_path.read_text(encoding="utf-8")
+    reloaded_cfg = common.load_config(reloaded_path, hostname="cluster")
+
+    assert "python/object" not in dumped_text
+    assert "python/object" not in reloaded_text
+    assert loaded_cfg.machine_config.cluster.flow_executable == ["cluster-flow123d"]
+    assert loaded_cfg.machine_config.__resolved__.flow_executable == ["cluster-flow123d"]
+    assert reloaded_cfg.machine_config.__default__.flow_executable == ["default-flow123d"]
+    assert reloaded_cfg.machine_config.cluster.pbs.queue == "debug"
+    assert reloaded_cfg.machine_config.__resolved__.flow_executable == ["cluster-flow123d"]
+    assert loaded_cfg.mlmc.sim_class == "RandomTransportSimulation"
+    assert loaded_cfg.mlmc.levels[0].params.mesh_step == 10.0
