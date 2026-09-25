@@ -41,7 +41,7 @@ class MacroSphere(MacroShapeBase):
     def _center_radius(self, macro_el:Element):
         center = macro_el.barycenter()
         distances = np.linalg.norm(macro_el.vertices() - center[None,:], axis=1)
-        r = np.mean(distances)
+        r = self.rel_radius * np.mean(distances)
         return center, r
 
     # could possibly calculate actual center and radius, but in fact we only needs aabb and interaction indicator for micro mesh elements
@@ -98,9 +98,6 @@ class MacroTetra(MacroShapeBase):
         barycentric = self.barycentric_coordinates(macro_el, micro_barycenters)
         min_barycentric = np.min(barycentric, axis=-1)  # maximal min_bary = 1/4
 
-        if self.rel_radius <= 1.0:
-            return np.asarray(min_barycentric > 0.0, dtype=float)
-
         # 0 at center, 1 at the tetrahedron boundary.
         radial = 1.0 - 4.0 * min_barycentric
 
@@ -109,7 +106,7 @@ class MacroTetra(MacroShapeBase):
         core_radius = 1.0 / self.rel_radius
         interior_weight = np.where(
             radial <= core_radius,
-            1.0,
+            1.0,    # point is inside the original tetrahedra
             (1.0 - radial) / (1.0 - core_radius),
         )
         return np.where(min_barycentric > 0.0, interior_weight, 0.0)
