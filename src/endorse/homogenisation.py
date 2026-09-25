@@ -28,7 +28,9 @@ from . import common
 from .common import dotdict, memoize, File, report
 
 class MacroShapeBase:
-    pass
+    """Base interface for macro averaging shapes scaled by ``rel_radius``."""
+
+    rel_radius: float
 
 # Macro element shapes, currently just the sphere.
 # Shape works as a factory for actual macro elements
@@ -44,8 +46,8 @@ class MacroSphere(MacroShapeBase):
         r = self.rel_radius * np.mean(distances)
         return center, r
 
-    # could possibly calculate actual center and radius, but in fact we only needs aabb and interaction indicator for micro mesh elements
-    def aabb(self, macro_el:Element):
+    def aabb(self, macro_el: Element) -> np.ndarray:
+        """Return the AABB of the sphere scaled about its centroid."""
         center, r = self._center_radius(macro_el)
         return np.array([center - r, center + r])
 
@@ -64,11 +66,15 @@ class MacroTetra(MacroShapeBase):
     # More nuances could be done about actual placing of the ball of given size to best match the tetrahedral element.
     rel_radius: float
 
-    # could possibly calculate actual center and radius, but in fact we only needs aabb and interaction indicator for micro mesh elements
-    def aabb(self, macro_el:Element):
+    def aabb(self, macro_el: Element) -> np.ndarray:
+        """Return the AABB of the tetrahedron scaled about its centroid."""
+        assert self.rel_radius > 0.0
+        center = macro_el.barycenter()
+        scaled_vertices = center + self.rel_radius * (macro_el.vertices() - center)
         return np.array([
-            np.min(macro_el.vertices(), axis=0),
-            np.max(macro_el.vertices(), axis=0)])
+            np.min(scaled_vertices, axis=0),
+            np.max(scaled_vertices, axis=0),
+        ])
 
     def barycentric_coordinates(self, macro_el: Element, points: np.ndarray) -> np.ndarray:
         """Return coordinates relative to the tetrahedron scaled about its centroid."""

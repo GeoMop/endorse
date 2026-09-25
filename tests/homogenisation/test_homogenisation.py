@@ -88,9 +88,11 @@ class _Mesh:
     elements: list[_MacroElement]
     el_ids: list[int]
 
-    def candidate_indices(self, _aabb: np.ndarray) -> list[int]:
-        """Return every synthetic element as an AABB candidate."""
-        return list(range(len(self.elements)))
+    def candidate_indices(self, aabb: np.ndarray) -> list[int]:
+        """Return synthetic elements whose barycentres lie inside the AABB."""
+        barycenters = self.el_barycenters()
+        inside = np.all((aabb[0] <= barycenters) & (barycenters <= aabb[1]), axis=1)
+        return np.flatnonzero(inside).tolist()
 
     def el_dim_slice(self, dim: int) -> slice:
         """Expose all synthetic tetrahedra as bulk elements."""
@@ -144,6 +146,36 @@ def test_macro_tetra() -> None:
 
     assert 0.0 < taper_weight < 1.0
     np.testing.assert_allclose(taper_weight, 0.2)
+
+
+def test_macro_tetra_aabb_uses_scaled_vertices() -> None:
+    """Scale the candidate-search AABB consistently with the interaction tetrahedron."""
+    macro = _MacroElement(np.vstack([np.zeros(3), np.eye(3)]))
+    center = macro.barycenter()
+    shape = homogenisation.MacroTetra(rel_radius=1.5)
+    scaled_vertices = center + shape.rel_radius * (macro.vertices() - center)
+
+    np.testing.assert_allclose(
+        shape.aabb(macro),
+        [np.min(scaled_vertices, axis=0), np.max(scaled_vertices, axis=0)],
+    )
+
+
+def test_subdomain_selection_uses_scaled_macro_tetra_aabb() -> None:
+    """Include a micro barycentre outside the original AABB but inside the scaled tetrahedron."""
+    macro = _MacroElement(np.vstack([np.zeros(3), np.eye(3)]))
+    macro_mesh = _Mesh([macro], [10])
+    micro_center = np.asarray([-0.05, 0.25, 0.25])
+    offsets = 0.02 * np.vstack([np.zeros(3), np.eye(3)])
+    micro_element = _MacroElement(micro_center + offsets - np.mean(offsets, axis=0))
+    micro_mesh = _Mesh([micro_element], [20])
+
+    selection = homogenisation.Subdomain.select(
+        homogenisation.MacroTetra(rel_radius=1.5), micro_mesh, macro_mesh, 0
+    )
+
+    np.testing.assert_array_equal(selection.candidate_indices, [0])
+    np.testing.assert_array_equal(selection.element_indices, [0])
 
 
 def _coverage_case(micro_nodes: np.ndarray, rel_radius: float = 1.0) -> homogenisation.Subproblems:
