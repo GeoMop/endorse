@@ -221,6 +221,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-09-25: Replaced `source_sigma` subdomain averaging with nearest-neighbor `griddata` interpolation between
+  micro- and macro-mesh bulk-element barycentres, retaining zero source values on lower-dimensional elements.
 - 2026-09-16: Applied `homogenization.macro_element_scale` to the `source_sigma` micro-to-macro field transfer;
   this removes the separate hardcoded unit-scale tetrahedron that remained after conductivity homogenization.
 - 2026-09-15: Made the tetrahedral averaging-domain size configurable as

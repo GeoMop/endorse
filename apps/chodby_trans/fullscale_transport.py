@@ -30,8 +30,7 @@ from scipy.spatial import cKDTree
 from scipy.interpolate import griddata
 
 from endorse.fullscale_transport import compute_fields, fracture_map, apply_fields, output_times
-from endorse.macro_flow_model import configured_macro_tetra, macro_conductivity
-from endorse.homogenisation import Subdomain
+from endorse.macro_flow_model import macro_conductivity
 
 import chodby_trans.job as job
 import chodby_trans.input_data as input_data
@@ -328,19 +327,21 @@ def source_level_field(mesh,
     return source_level
 
 
-def average_micro_field_to_macro(
-        cfg: dotdict,
+def interpolate_micro_field_to_macro(
         micro_mesh: Mesh,
         macro_mesh: Mesh,
         micro_field: np.ndarray,
 ) -> np.ndarray:
-    """Average a micro-mesh field onto the macro mesh using the configured support size."""
+    """Interpolate a scalar field between bulk-element barycentres using nearest neighbors."""
+    micro_bulk = micro_mesh.el_dim_slice(dim=3)
     macro_field = np.zeros(len(macro_mesh.elements), dtype=float)
     macro_bulk = macro_mesh.el_dim_slice(dim=3)
-    shape = configured_macro_tetra(cfg)
-    for iel in range(macro_bulk.start, macro_bulk.stop):
-        subdomain = Subdomain.create(shape, micro_mesh, macro_mesh, iel)
-        macro_field[iel] = float(subdomain.average(micro_field)[0])
+    macro_field[macro_bulk] = griddata(
+        micro_mesh.el_barycenters()[micro_bulk],
+        micro_field[micro_bulk],
+        macro_mesh.el_barycenters()[macro_bulk],
+        method="nearest",
+    )
     return macro_field
 
 
@@ -414,8 +415,8 @@ def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, leve
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
-    macro_fields["source_sigma"] = average_micro_field_to_macro(
-        cfg, micro_mesh, macro_mesh, micro_fields["source_sigma"]
+    macro_fields["source_sigma"] = interpolate_micro_field_to_macro(
+        micro_mesh, macro_mesh, micro_fields["source_sigma"]
     )
 
     input_fields_path = Path(f"input_fields.msh2")
