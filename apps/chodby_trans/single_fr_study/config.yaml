@@ -1,0 +1,56 @@
+zarr_write_timeout_seconds: 20
+
+domain:
+  basic_box:
+    min: [0.0, 0.0, 0.0]
+    max: [16.0, 16.0, 16.0]
+  extended_box:
+    min: [-8.0, -8.0, -8.0]
+    max: [24.0, 24.0, 24.0]
+
+macro_grid:
+  centers_1d: [0.0, 4.0, 8.0, 12.0, 16.0]
+  block_size: 8.0
+
+materials:
+  bulk_conductivity: 1.0e-10
+  fracture_conductivity: 1.0e-3
+  aperture: 1.0e-4
+
+fracture:
+  center: [8.0, 8.0, 8.0]
+  square_side_lengths: [4.0, 6.0, 8.0]
+  normals:
+    - [0.0, 0.0, 1.0]
+    - [0.0, 1.0, 1.0]
+    - [0.0, 1.0, 2.0]
+    - [1.0, 1.0, 1.0]
+  shape_rotations_deg: [0.0, 45.0]
+
+method1:
+  clipping_resolution: 48
+  convergence_resolution: 24
+
+method2:
+  micro_grid_1d_count: 7
+  pressure_loads:
+    - [1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, 1.0]
+
+vtk:
+  enabled: true
+  micro_grid_1d_count: 9
+
+surrogate:
+  model_root: ../MLMC-DFM/optuna_runs
+  conductivity_ratio: 1.0e7
+
+environment:
+  flow_call:
+      flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+        - run
+  flow_probe_timeout_seconds: 30

@@ -9,6 +9,9 @@ class ReturnCode():
     BGEM_HEAL_ERROR = -1003
     FLOW123_ERROR = -1010
     SAMPLE_ERROR = -1020
+    FINE_TRANSPORT_ERROR = -1021
+    COARSE_TRANSPORT_ERROR = -1022
+    HOMOGENIZATION_ERROR = -1030
     ZARR_ERROR = -1100
     SKIP = -1999
     NONE = -2000
@@ -19,7 +22,7 @@ class ReturnCode():
         return sorted([
             value
             for name, value in vars(cls).items()
-            if isinstance(value, int) and name is not '__firstlineno__'
+            if isinstance(value, int) and name != '__firstlineno__'
         ])
 
     @classmethod
@@ -28,7 +31,7 @@ class ReturnCode():
         items = [
             (name, value)
             for name, value in vars(cls).items()
-            if isinstance(value, int) and name is not '__firstlineno__'
+            if isinstance(value, int) and name != '__firstlineno__'
         ]
         # Sort by the integer value
         items_sorted = sorted(items, key=lambda x: x[1])
@@ -46,9 +49,9 @@ class ReturnCode():
 
 class WrapperException(Exception):
     """Common wrapper Exception."""
-    code: ReturnCode = ReturnCode.UNKNOWN_ERROR  # default for the class
+    code: int = ReturnCode.UNKNOWN_ERROR
 
-    def __init__(self, msg: str | None = None, *, code: ReturnCode | None = None):
+    def __init__(self, msg: str | None = None, *, code: int | None = None):
         if msg is None:
             # fall back to the docstring or a generic message
             msg = self.__class__.__doc__ or "Error"
@@ -74,6 +77,38 @@ class HealException(WrapperException):
 class Flow123dException(WrapperException):
     """Errors originating from running Flow123d."""
     code=ReturnCode.FLOW123_ERROR
+
+
+class FineTransportException(WrapperException):
+    """Failure in the fine-model stage of a transport pair."""
+
+    code = ReturnCode.FINE_TRANSPORT_ERROR
+
+
+class CoarseTransportException(WrapperException):
+    """Failure in the coarse-model stage after a completed fine stage."""
+
+    code = ReturnCode.COARSE_TRANSPORT_ERROR
+
+    def __init__(
+        self,
+        msg: str | None = None,
+        *,
+        code: int | None = None,
+        fine_return_code: int = ReturnCode.NONE,
+        fine_values: object | None = None,
+        fine_eval_time: float = -1.0,
+    ):
+        super().__init__(msg, code=code)
+        self.fine_return_code = int(fine_return_code)
+        self.fine_values = fine_values
+        self.fine_eval_time = float(fine_eval_time)
+
+
+class HomogenizationException(WrapperException):
+    """Failure while constructing the homogenized coarse conductivity."""
+
+    code = ReturnCode.HOMOGENIZATION_ERROR
 
 
 

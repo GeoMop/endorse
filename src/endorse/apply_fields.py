@@ -192,7 +192,7 @@ def fr_fields_repo(cfg_fr, cfg_fr_fields, fr_elements,  fr_map, fractures):
     fr_r = np.array(fr_r)
     fr_a = np.zeros_like(fr_r)
     fr_b = np.zeros_like(fr_r)
-    fr_ifamily = [fr.i_family for fr in fractures]
+    fr_ifamily = [fr.family for fr in fractures]
 
     #fr_r = np.zeros(len(fr_elements))
     #fr_a = np.zeros_like(fr_r)

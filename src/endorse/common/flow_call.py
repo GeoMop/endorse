@@ -123,6 +123,10 @@ def call_flow(cfg:'dotdict', file_in:File, params: Dict[str,str]) -> FlowOutput:
 
     TODO: pass only flow configuration
     """
+    # New machine_config resolution keeps the full dict of configs, but
+    # adds the __resolved__ key with content for the resolved hostname.
+    cfg = cfg.get("__resolved__", cfg)
+
     main_input = _prepare_inputs(file_in, params)
     stdout, stderr, completed = _flow_subprocess(cfg.flow_executable.copy(), main_input)
     logging.info(f"Exit status: {completed.returncode}")

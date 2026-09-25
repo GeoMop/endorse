@@ -112,6 +112,6 @@ Use auxiliary script in several steps to run the application:
 - implement Moris sampling + processing => faster, good for overview 
 implement additive Sobol indices
 implement PCE (for avarages over mere fracture samples)	
-LKJCholeskyCov; variance na diagonále + correlační matice nějaké rozdělení s jedním parameterm ovlivňující prior korelace
-
+LKJCholeskyCov; variance na diagonále + correlační matice nějaké rozdělení s jedním
+parameterm ovlivňující prior korelace
 

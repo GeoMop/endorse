@@ -1,0 +1,4 @@
+interface:
+  display_name: "Inspect MLMC Run"
+  short_description: "Diagnose MLMC PBS runs from saved artifacts"
+  default_prompt: "Use $inspect-mlmc-run to inspect this MLMC work directory and report sample status, primary failures, and shutdown noise."

@@ -5,9 +5,16 @@
 
 set -euo pipefail
 
+export DASK_DISTRIBUTED__WORKER__DAEMON=False
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
 # ======= EDIT THESE PATHS =======
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR=${1}
+export ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data"
+export ENDORSE_OUTPUT_DIR="$OUTPUT_DIR"
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
@@ -23,6 +30,7 @@ mkdir -p "$LOG_DIR" "$RUNTIME_DIR"
 
 SCHED_ADDR_FILE="$RUNTIME_DIR/SCHED_ADDR.txt"
 SCHED_PID_FILE="$RUNTIME_DIR/scheduler.pid"
+EXPECTED_WORKERS_FILE="$RUNTIME_DIR/DASK_EXPECTED_WORKERS.txt"
 DASH_PORT="${DASH_PORT:-8787}"
 SCHED_PORT="${SCHED_PORT:-8786}"
 
@@ -45,6 +53,7 @@ start_scheduler() {
       --host "$host_ip" \
       --port "$SCHED_PORT" \
       --dashboard-address ":${DASH_PORT}" \
+      --preload chodby_trans.dask_scheduler_preload \
       >"$LOG_DIR/scheduler.log" 2>&1 < /dev/null &
 
   echo $! > "$SCHED_PID_FILE"
@@ -71,6 +80,7 @@ start_workers() {
   CMD=( "$DASK_BIN" worker "$addr"
       --nworkers 1 --nthreads 1
       --no-nanny
+      --preload chodby_trans.dask_worker_preload
       --local-directory "$RUNTIME_DIR"
       --memory-limit auto )
 
@@ -81,7 +91,8 @@ start_workers() {
     echo "Started Dask worker on $HOSTNAME, idx=$WORKER_IDX, pid=$(cat "$RUNTIME_DIR/worker_${WORKER_IDX}.pid")"
   done
 
-  echo "[worker] Workers started."
+  printf '%s\n' "$procs" > "$EXPECTED_WORKERS_FILE"
+  echo "[worker] Workers started; expecting $procs registrations."
 }
 
 stop_cluster() {
@@ -131,10 +142,14 @@ run_example() {
     exit 1
   fi
   local app_cmd=${1}
+  local expected_workers
+  expected_workers=$(<"$EXPECTED_WORKERS_FILE")
   echo "app_cmd = $app_cmd"
   local sched="$(cat "$SCHED_ADDR_FILE")"
   echo "[run] $APP_PY -> $sched"
-  "$PYEXEC" -u "$APP_PY" $OUTPUT_DIR $app_cmd "$sched" 2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
+  DASK_EXPECTED_WORKERS="$expected_workers" \
+  "$PYEXEC" -u "$APP_PY" "$OUTPUT_DIR" "$app_cmd" "$sched" \
+    2>&1 | tee "$LOG_DIR/driver_$(date +%H%M%S).log"
 }
 
 cmd=${2:-help}
