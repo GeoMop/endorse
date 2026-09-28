@@ -163,11 +163,20 @@ def get_flow_time_series(borehole: input_data.Borehole, section: input_data.Sect
 
 # TODO: adjust this to work with any WPT, not just 2025 ones
 def get_initial_pressure(borehole: input_data.Borehole, section: input_data.Section) -> float:
+    """ Read initial pressure from data file. Uses events.yaml (field "start" in borehole) to determine datetime to read.
+
+    Arguments:
+        borehole -- Borehole to read pressure of.
+        section -- Section to read pressure of.
+
+    Returns:
+        Value of initial pressure in pascals.
+    """
     # get start datetime
     events = common.config.load_config(input_data.events)["water_pressure_tests"]
     target_event = {}
     for event in events:
-        # probably should use better way to identify year
+        # TODO: better way to identify year
         if event["borehole"] == borehole.value and event["section"] == section.value and event["start"][:2] == "25":
             target_event = event
             break
@@ -178,7 +187,7 @@ def get_initial_pressure(borehole: input_data.Borehole, section: input_data.Sect
     pressure_column = borehole.value + "_" + str(section.value) + "_pressure"
     pressure_data = pd.read_csv(input_data.data_2025, usecols=["Date", pressure_column])
 
-    # transform datetime to distance from target event's datetime
+    # transform datetime to timedelta from target event's datetime
     target_datetime = pd.to_datetime(target_event["start"], format="%y/%m/%d %H:%M:%S")
     pressure_data["Time"] = pressure_data.apply(lambda row: abs(pd.to_datetime(row["Date"], format="%Y-%m-%d %H:%M:%S") - target_datetime).total_seconds(), axis=1)
     target_idx = pressure_data["Time"].argmin()
@@ -210,6 +219,10 @@ if __name__ == "__main__":
     # 1 minute after last specified flow rate
     flow_series_end = flow_series[-1][0] + 1 * 60
 
+    # end of entire simulation, for now hardcoded
+    # could probably be included in some config
+    simulation_end = 3600 * 24 * 7
+
     # calculate observe point
     # used point is in the middle of the section on the axis
     _, _, section_start, section_end = geometry_points(mesh_cfg)
@@ -221,10 +234,14 @@ if __name__ == "__main__":
     # TODO: vefify that all starts are before pressure rise, aka at borehole's steady state
     initial_pressure = get_initial_pressure(borehole, section)
 
-    # fracture center
+    # fracture setup
+    # fracture centers, in mesh coordinates
     fractures = borehole_fractures(mesh_cfg)
     fracture_centers = [fracture[1].tolist() for fracture in fractures]
-    # fractures should be in same order as in config
+    # TODO: fix cross section loading
+    # current one reads fractures from config, which is wrong
+    # because it doesn't consider intersects of borehole and fracture
+    # probably have to use some mesh function to get correct data
     fracture_config = common.config.load_config(input_data.bh_cfg_yaml)["boreholes"]
     bh_data = {}
     for bh in fracture_config:
@@ -250,7 +267,8 @@ if __name__ == "__main__":
         "fracture_radius": 2,
         #"fracture_storativity": 4.5e-10 / 1000 / 9.81,
         "rock_conductivity" : 1e-11,
-        "rock_storativity": 0
+        #"rock_storativity": 0,
+        "end_time": simulation_end
     }
 
     print(replacements)
