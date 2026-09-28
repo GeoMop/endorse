@@ -10,6 +10,7 @@ pytest
 #tox
 #tox-gh-actions
 #importlib-resources
+git+https://github.com/bagr-sus/tinyDA.git@shared-archive-proposals-additional
 
 
 
