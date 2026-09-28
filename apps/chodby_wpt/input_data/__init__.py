@@ -1,10 +1,7 @@
 from pathlib import Path
 from enum import Enum
 
-# common output directory
 __script_dir__ = Path(__file__).parent
-work_dir = __script_dir__.parent / "workdir"
-work_dir.mkdir(parents=True, exist_ok=True)
 
 # Following is public
 input_dir = __script_dir__.parent / "input_data"
