@@ -72,6 +72,11 @@ machine_config:
 #  quantiles: [0.005, 0.002, 0.001, 0.0005]
 #  plots: 0, 2
 
+homogenization:
+    # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
+    coverage_preflight: true
+    # Linear scale of the averaging tetrahedron relative to its macro mesh element.
+    macro_element_scale: 1.0
 
 geometry: &one_borehole_geometry !include _geometry.yaml
 #fractures: &fractures

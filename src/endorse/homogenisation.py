@@ -159,10 +159,13 @@ class SubMeshSubproblem:
 
 
     @memoize
-    def subdomains(self, output_mesh):
-        """Create subproblem mesh."""
+    def subdomains(self, output_mesh: Mesh) -> List['Subdomain']:
+        """Create averaging subdomains for the subproblem output mesh."""
         if self._subdomains is None:
-            self._subdomains = [Subdomain.create(self.macro_el_shape, output_mesh, self.macro_mesh, iel) for iel in self.macro_elements]
+            self._subdomains = [
+                Subdomain.create(self.macro_el_shape, output_mesh, self.macro_mesh, iel)
+                for iel in self.macro_elements
+            ]
         #ii = 13
         #sd = self._subdomains[ii]
         #print(self.macro_mesh.elements[sd.macro_el_idx].barycenter(), "macro:", {sd.macro_el_idx}, "N:", len(sd.el_indices))
@@ -172,7 +175,7 @@ class SubMeshSubproblem:
         return self._subdomains
 
     @report
-    def assembly_average_matrix(self, output_mesh):
+    def assembly_average_matrix(self, output_mesh: Mesh) -> sparse.csr_matrix:
         """
         Create sparse matrix for averaging over subdomains, shape (n_macro_el_subdomains, n_subproblem_elements).
         """
@@ -181,14 +184,30 @@ class SubMeshSubproblem:
         vals = []
         subdomains = self.subdomains(output_mesh)
         for i_sub, sub in enumerate(subdomains):
+            if sub.is_empty:
+                continue
             sub_col = sub.el_indices
             sub_val = sub.weights
-            rows.append(np.full_like(sub_col, i_sub))
+            rows.append(np.full(len(sub_col), i_sub, dtype=int))
             cols.append(sub_col)
             vals.append(sub_val)
         n_micro_els = len(output_mesh.elements)
-        return sparse.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
-                                 shape=(len(subdomains), n_micro_els)).tocsr()
+        if vals:
+            matrix_data = np.concatenate(vals)
+            matrix_rows = np.concatenate(rows)
+            matrix_cols = np.concatenate(cols)
+        else:
+            matrix_data = np.empty(0, dtype=float)
+            matrix_rows = np.empty(0, dtype=int)
+            matrix_cols = np.empty(0, dtype=int)
+        return sparse.coo_matrix(
+            (matrix_data, (matrix_rows, matrix_cols)),
+            shape=(len(subdomains), n_micro_els),
+        ).tocsr()
+
+    def empty_subdomain_indices(self, output_mesh: Mesh) -> np.ndarray:
+        """Return local row indices whose averaging domains contain no micro barycentres."""
+        return np.flatnonzero([subdomain.is_empty for subdomain in self.subdomains(output_mesh)])
 
 
     @property
@@ -496,20 +515,21 @@ class Subdomain:
         macro_el = macro_mesh.elements[i_el]
         aabb = shape.aabb(macro_el)
         selection = Subdomain.select(shape, micro_mesh, macro_mesh, i_el)
-        assert selection.candidate_indices.size, (
-            f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: "
-            f"{repr_aabb(micro_mesh.bih.aabb())}"
-        )
         logging.info(
             "[%s] Subdomain candidates: %s, elements: %s",
             i_el,
             selection.candidate_indices.size,
             selection.element_indices.size,
         )
-        assert selection.element_indices.size, (
-            f"Empty subdomain {aabb}, {macro_el.barycenter()} . "
-            f"{micro_mesh.el_barycenters()[selection.candidate_indices]}"
-        )
+        if not selection.element_indices.size:
+            logging.warning(
+                "[%s] Empty subdomain at %s with AABB %s and %s candidates; "
+                "macro field values will be interpolated from the micro mesh.",
+                i_el,
+                macro_el.barycenter(),
+                aabb,
+                selection.candidate_indices.size,
+            )
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
         #print(macro_el.barycenter(), "macro: ", i_el, "\n subdomain:", subdomain_indices, "AABB:", repr_aabb(aabb))
@@ -519,6 +539,11 @@ class Subdomain:
             selection.element_indices.tolist(),
             selection.interaction_weights.tolist(),
         )
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether no micro-element barycentre contributes to this subdomain."""
+        return not self.el_indices
 
     @property
     #@report
@@ -559,7 +584,7 @@ def _log_empty_subdomain(
     micro_mesh = empty.micro_mesh
     candidates = empty.selection.candidate_indices
     macro_gmsh_id = macro_mesh.el_ids[empty.macro_el_idx]
-    logging.error(
+    logging.warning(
         "Empty subdomain: macro_idx=%s gmsh_id=%s tags=%s volume=%g center=%s aabb=%s vertices=%s "
         "bulk_candidates=%s",
         empty.macro_el_idx,
@@ -575,7 +600,7 @@ def _log_empty_subdomain(
         return
 
     candidate_volumes = np.abs(micro_mesh.el_volumes[candidates])
-    logging.error(
+    logging.warning(
         "Candidate volumes: min=%g median=%g max=%g",
         np.min(candidate_volumes),
         np.median(candidate_volumes),
@@ -600,7 +625,7 @@ def _log_empty_subdomain(
         for ie in candidates
         if np.all(unit_tetra.barycentric_coordinates(micro_mesh.elements[ie], macro_center) >= -1.0e-12)
     ]
-    logging.error(
+    logging.warning(
         "Best candidate: micro_idx=%s gmsh_id=%s volume=%g center=%s barycentric=%s "
         "min_barycentric=%g macro_element_scale=%g required_macro_element_scale=%g "
         "macro_center_containers=%s",
@@ -616,8 +641,8 @@ def _log_empty_subdomain(
     )
 
 
-def validate_subdomain_coverage(subproblems: Subproblems) -> None:
-    """Check all input submeshes for empty macro-element averaging domains."""
+def validate_subdomain_coverage(subproblems: Subproblems) -> np.ndarray:
+    """Log empty macro-element averaging domains and return their global indices."""
     selected_counts = []
     empty_subdomains = []
     for subproblem in subproblems.subproblems:
@@ -652,20 +677,23 @@ def validate_subdomain_coverage(subproblems: Subproblems) -> None:
         quantiles,
     )
     if not empty_subdomains:
-        return
+        return np.empty(0, dtype=int)
 
     max_detailed_failures = 20
     for empty in empty_subdomains[:max_detailed_failures]:
         _log_empty_subdomain(empty)
     if len(empty_subdomains) > max_detailed_failures:
-        logging.error(
+        logging.warning(
             "Omitted detailed geometry for %s additional empty subdomains.",
             len(empty_subdomains) - max_detailed_failures,
         )
-    empty_indices = [empty.macro_el_idx for empty in empty_subdomains]
-    raise SubdomainCoverageError(
-        f"Subdomain coverage preflight found {len(empty_indices)} empty macro elements: {empty_indices}"
+    empty_indices = np.asarray([empty.macro_el_idx for empty in empty_subdomains], dtype=int)
+    logging.warning(
+        "Subdomain coverage preflight found %s empty macro elements; their values will be interpolated: %s",
+        len(empty_indices),
+        empty_indices.tolist(),
     )
+    return empty_indices
 
 # def micro_response(subdomains):
 #     mesh = GmshIO("output/flow_fields.msh")

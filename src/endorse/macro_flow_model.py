@@ -1,14 +1,21 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from pathlib import Path
 import logging
 import numpy as np
+from scipy.interpolate import griddata
 
 from . import common
 from .apply_fields import conductivity_mockup_eval
 from .common import dotdict, memoize, File, call_flow, workdir, report, FlowOutput
 from .mesh import container_position_mesh
-from .homogenisation import MacroSphere, Subproblems, MacroTetra, validate_subdomain_coverage
+from .homogenisation import (
+    MacroSphere,
+    MacroTetra,
+    SubMeshSubproblem,
+    Subproblems,
+    validate_subdomain_coverage,
+)
 from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
 from . import flow123d_inputs_path
@@ -333,12 +340,33 @@ def subproblem_input(subproblem, fields):
     }
     return fields_file(mesh, sub_fields)
 
+
+def _interpolate_empty_subdomains(
+        subproblem: SubMeshSubproblem,
+        output_mesh: Mesh,
+        empty_subdomain_indices: np.ndarray,
+        element_values: np.ndarray,
+) -> np.ndarray:
+    """Interpolate micro-element values at macro barycentres without averaging support."""
+    micro_bulk = output_mesh.el_dim_slice(dim=3)
+    micro_points = output_mesh.el_barycenters()[micro_bulk]
+    macro_element_indices = np.asarray(subproblem.macro_elements, dtype=int)[empty_subdomain_indices]
+    macro_points = subproblem.macro_mesh.el_barycenters()[macro_element_indices]
+    return griddata(
+        micro_points,
+        np.asarray(element_values)[micro_bulk],
+        macro_points,
+        method="nearest",
+    )
+
+
 @report
-def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
-    """
-    return (load_avg, response_avg) for the subproblem
-    both provides averaged values over macro element subdomains
-    """
+def micro_postprocess(
+        cfg_micro: dotdict,
+        subproblem: SubMeshSubproblem,
+        micro_model: FlowOutput,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Average load and response fields, interpolating rows without averaging support."""
     print("loading mesh:", micro_model.hydro.spatial_file)
     output_mesh = load_mesh(micro_model.hydro.spatial_file)
     avg_matrix = subproblem.assembly_average_matrix(output_mesh)
@@ -347,8 +375,20 @@ def micro_postprocess(cfg_micro, subproblem, micro_model: FlowOutput):
     response_el_values = output_mesh.get_static_p0_values(response_field)
     load_el_values = get_load_data(cfg_micro, output_mesh, response_el_values)
 
-    return (avg_matrix @ load_el_values,
-            avg_matrix @ response_el_values)
+    load_averages = avg_matrix @ load_el_values
+    response_averages = avg_matrix @ response_el_values
+
+    empty_subdomains = subproblem.empty_subdomain_indices(output_mesh)
+    if empty_subdomains.size:
+        load_averages[empty_subdomains] = _interpolate_empty_subdomains(
+            subproblem, output_mesh, empty_subdomains, load_el_values
+        )
+        response_averages[empty_subdomains] = _interpolate_empty_subdomains(
+            subproblem, output_mesh, empty_subdomains, response_el_values
+        )
+
+    return load_averages, response_averages
+
 
 def micro_problem(cfg, tag, subproblem, load, fields):
     cfg_micro = cfg.transport_microscale

@@ -219,8 +219,16 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
      markers so later sample postprocess can call the same code without
      depending on ParaView state files.
 
+- Empty homogenization subdomains:
+  1. Retain empty subdomains during construction and omit their rows from sparse averaging assembly.
+  2. Average non-empty subdomains normally, then fill empty result rows by nearest-neighbor interpolation from
+     bulk micro-element barycentres to the corresponding macro-element barycentres.
+  3. Add focused tests for empty-subdomain construction, sparse assembly, and scalar/vector interpolation.
+
 ## AGENT Log
 
+- 2026-09-29: Allowed empty homogenization subdomains, omitted their sparse averaging rows, and filled their
+  load and response values by nearest-neighbor interpolation from bulk micro-element barycentres.
 - 2026-09-25: Scaled `MacroTetra` candidate-search AABBs about their centroids by `rel_radius`, matching the
   tetrahedral interaction kernel so enlarged averaging domains include all possible micro-element barycentres.
 - 2026-09-25: Replaced `source_sigma` subdomain averaging with nearest-neighbor `griddata` interpolation between
@@ -455,6 +463,12 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   alongside the figure output.
 
 ## AGENT Questions And Remarks
+
+- 2026-09-16: The coarse level uses `main_line_refinement/h_inner=0.81`, while the fine level uses `1.25`.
+  This makes parts of the target coarse mesh substantially finer than the source micro mesh. Is this local resolution
+  inversion intentional, or should the level-specific refinement values be exchanged?
+  Resolved: Fine-mesh elements may intentionally be larger near remote boundaries. Empty averaging domains there
+  should use nearest-neighbor interpolation from the micro mesh instead of stopping homogenization.
 
 - 2026-08-10: Goal 5 needs an edit to `src/endorse/homogenisation.py`, but the current
   repository instruction restricts edits to `apps/chodby_trans`. The app-level regression

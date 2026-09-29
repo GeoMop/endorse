@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 
 # Configure the root logger to print INFO+ messages to stderr
@@ -205,17 +206,130 @@ def test_validate_subdomain_coverage_reports_geometric_overlap(caplog) -> None:
     micro_nodes = np.vstack([macro_center, 2.0 * np.eye(3)])
     subproblems = _coverage_case(micro_nodes, rel_radius=1.5)
 
-    with caplog.at_level(logging.ERROR), pytest.raises(
-            homogenisation.SubdomainCoverageError,
-            match=r"1 empty macro elements: \[0\]",
-    ):
-        homogenisation.validate_subdomain_coverage(subproblems)
+    with caplog.at_level(logging.WARNING):
+        empty_indices = homogenisation.validate_subdomain_coverage(subproblems)
 
+    np.testing.assert_array_equal(empty_indices, [0])
     assert "bulk_candidates=1" in caplog.text
     assert "gmsh_id=20" in caplog.text
     assert "macro_element_scale=1.5" in caplog.text
     assert "required_macro_element_scale=3.75" in caplog.text
     assert "macro_center_containers=[0]" in caplog.text
+    assert "their values will be interpolated" in caplog.text
+
+
+def test_subdomain_create_retains_empty_selection(monkeypatch) -> None:
+    """Represent an empty averaging domain instead of stopping homogenization."""
+    macro_mesh = _Mesh([_MacroElement(np.vstack([np.zeros(3), np.eye(3)]))], [10])
+    micro_mesh = _Mesh([_MacroElement(10.0 + np.vstack([np.zeros(3), np.eye(3)]))], [20])
+    empty_selection = homogenisation.SubdomainSelection(
+        candidate_indices=np.asarray([], dtype=int),
+        element_indices=np.asarray([], dtype=int),
+        interaction_weights=np.asarray([], dtype=float),
+    )
+    monkeypatch.setattr(homogenisation.Subdomain, "select", lambda *_args: empty_selection)
+
+    subdomain = homogenisation.Subdomain.create(
+        homogenisation.MacroTetra(rel_radius=1.0), micro_mesh, macro_mesh, 0
+    )
+
+    assert subdomain.is_empty
+    assert subdomain.el_indices == []
+
+
+def test_assembly_average_matrix_skips_empty_subdomains() -> None:
+    """Keep empty rows in the matrix while assembling weights only for supported rows."""
+    element = _MacroElement(np.vstack([np.zeros(3), np.eye(3)]))
+    mesh = _Mesh([element, element], [20, 21])
+    subproblem = homogenisation.SubMeshSubproblem(
+        macro_mesh=mesh,
+        micro_mesh=mesh,
+        macro_el_shape=homogenisation.MacroTetra(rel_radius=1.0),
+        aabb=np.asarray([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+        macro_elements=np.asarray([0, 1]),
+        i_subdomains=np.asarray([0, 1]),
+    )
+    subproblem._subdomains = [
+        homogenisation.Subdomain(mesh, 0, [0, 1], [1.0, 1.0]),
+        homogenisation.Subdomain(mesh, 1, [], []),
+    ]
+
+    average_matrix = subproblem.assembly_average_matrix(mesh)
+
+    np.testing.assert_allclose(average_matrix.toarray(), [[0.5, 0.5], [0.0, 0.0]])
+    np.testing.assert_array_equal(subproblem.empty_subdomain_indices(mesh), [1])
+
+
+def test_assembly_average_matrix_accepts_all_empty_subdomains() -> None:
+    """Build a correctly shaped sparse matrix when every averaging domain is empty."""
+    element = _MacroElement(np.vstack([np.zeros(3), np.eye(3)]))
+    mesh = _Mesh([element], [20])
+    subproblem = homogenisation.SubMeshSubproblem(
+        macro_mesh=mesh,
+        micro_mesh=mesh,
+        macro_el_shape=homogenisation.MacroTetra(rel_radius=1.0),
+        aabb=np.asarray([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+        macro_elements=np.asarray([0]),
+        i_subdomains=np.asarray([0]),
+    )
+    subproblem._subdomains = [homogenisation.Subdomain(mesh, 0, [], [])]
+
+    average_matrix = subproblem.assembly_average_matrix(mesh)
+
+    assert average_matrix.shape == (1, 1)
+    assert average_matrix.nnz == 0
+
+
+def test_micro_postprocess_interpolates_empty_subdomains(monkeypatch) -> None:
+    """Average supported rows and nearest-interpolate scalar and vector values for empty rows."""
+    offsets = 0.02 * np.vstack([np.zeros(3), np.eye(3)])
+    micro_centers = np.asarray([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]])
+    micro_elements = [
+        _MacroElement(center + offsets - np.mean(offsets, axis=0))
+        for center in micro_centers
+    ]
+
+    class _OutputMesh(_Mesh):
+        def get_static_p0_values(self, field_name: str) -> np.ndarray:
+            assert field_name == "response"
+            return np.asarray([10.0, 20.0])
+
+    output_mesh = _OutputMesh(micro_elements, [20, 21])
+    macro_centers = np.asarray([[5.0, 0.0, 0.0], [9.9, 0.0, 0.0]])
+    macro_mesh = _Mesh([
+        _MacroElement(center + offsets - np.mean(offsets, axis=0))
+        for center in macro_centers
+    ], [10, 11])
+
+    class _AveragingSubproblem:
+        macro_elements = np.asarray([0, 1])
+
+        def __init__(self) -> None:
+            self.macro_mesh = macro_mesh
+
+        def assembly_average_matrix(self, _output_mesh: _OutputMesh) -> np.ndarray:
+            return np.asarray([[0.5, 0.5], [0.0, 0.0]])
+
+        def empty_subdomain_indices(self, _output_mesh: _OutputMesh) -> np.ndarray:
+            return np.asarray([1])
+
+    load_values = np.asarray([[2.0, 0.0, 0.0], [4.0, 2.0, 0.0]])
+    monkeypatch.setattr(macro_flow_model, "load_mesh", lambda _path: output_mesh)
+    monkeypatch.setattr(
+        macro_flow_model,
+        "get_load_data",
+        lambda _cfg, _mesh, _response: load_values,
+    )
+    micro_model = SimpleNamespace(hydro=SimpleNamespace(spatial_file="flow_fields.msh"))
+
+    load_averages, response_averages = macro_flow_model.micro_postprocess(
+        SimpleNamespace(response_field_p0="response"),
+        _AveragingSubproblem(),
+        micro_model,
+    )
+
+    np.testing.assert_allclose(load_averages, [[3.0, 1.0, 0.0], [4.0, 2.0, 0.0]])
+    np.testing.assert_allclose(response_averages, [15.0, 20.0])
 
 
 def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None:
