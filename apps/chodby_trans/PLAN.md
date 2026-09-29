@@ -221,6 +221,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-09-25: Scaled `MacroTetra` candidate-search AABBs about their centroids by `rel_radius`, matching the
+  tetrahedral interaction kernel so enlarged averaging domains include all possible micro-element barycentres.
 - 2026-09-25: Replaced `source_sigma` subdomain averaging with nearest-neighbor `griddata` interpolation between
   micro- and macro-mesh bulk-element barycentres, retaining zero source values on lower-dimensional elements.
 - 2026-09-16: Applied `homogenization.macro_element_scale` to the `source_sigma` micro-to-macro field transfer;

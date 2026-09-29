@@ -347,8 +347,21 @@ def interpolate_micro_field_to_macro(
 
 @memoize
 @run_in_subprocess
-def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, level_id):
+def prepare_coarse_input(
+        output_dir: Path,
+        input_dir: Path,
+        cfg: dotdict,
+        fracture_set: Sequence[Fracture],
+        n_large: int,
+        level_id: int,
+) -> File:
+    """Prepare microscale diagnostics and the homogenized coarse-model input fields."""
     job.set_workdir(output_dir, input_dir)
+
+    def physical_region_ids(mesh: Mesh) -> np.ndarray:
+        """Return each element's Gmsh physical-group ID in mesh-element order."""
+        element_tags = (element.tags for element in mesh.elements)
+        return np.asarray([region_id for region_id, _entity_id in element_tags], dtype=int)
 
     level = cfg.mlmc.levels[level_id]
     macro_level_id = level_id - 1
@@ -377,6 +390,7 @@ def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, leve
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
     micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
+    micro_fields["region_id"] = physical_region_ids(micro_mesh)
     # test VTK output
     micro_mesh.write_fields_vtu(Path(f"micro_fields.vtu"), micro_fields)
 
@@ -418,6 +432,7 @@ def prepare_coarse_input(output_dir, input_dir, cfg, fracture_set, n_large, leve
     macro_fields["source_sigma"] = interpolate_micro_field_to_macro(
         micro_mesh, macro_mesh, micro_fields["source_sigma"]
     )
+    macro_fields["region_id"] = physical_region_ids(macro_mesh)
 
     input_fields_path = Path(f"input_fields.msh2")
     input_fields_file = macro_mesh.write_fields(input_fields_path, macro_fields)
