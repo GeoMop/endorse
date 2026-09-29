@@ -276,6 +276,11 @@ class Mesh:
         values_mesh[value_to_node_idx[:]] = values
         return values_mesh
 
+    def get_physical_ids(self) -> np.ndarray:
+        """Return each element's Gmsh physical-group ID in mesh-element order."""
+        element_tags = (element.tags for element in self.elements)
+        return np.asarray([region_id for region_id, _entity_id in element_tags], dtype=int)
+
     def _pv_celltypes(self):
         vtk_cell_types = {
             1: pv.CellType.LINE,
