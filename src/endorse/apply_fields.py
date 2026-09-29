@@ -139,6 +139,7 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
 
     cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
 
+    Y = Y + cfg_geom.main_tunnel.center[1]  # move it back - we want sbh to be around Y=0
     def cond_boreholes(bid):
         csb = cfg_geom.storage_borehole
         r = csb.diameter/2
