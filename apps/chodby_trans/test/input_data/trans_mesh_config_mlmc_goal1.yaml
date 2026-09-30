@@ -1,0 +1,32 @@
+test_random_data: True
+result_grid_step: [4, 3, 2]
+
+ot_sensitivity:
+  n_samples: 8
+  second_order: False
+  sampler: QMC
+  err_est_confidence_level: 0.9
+  parameters:
+    cond_scale:
+      distr: Uniform
+      args: [0.1, 0.9]
+    porosity_shift:
+      distr: Normal
+      args: [0.0, 0.25]
+
+mlmc:
+  sim_class: RandomTransportSimulation
+  levels:
+    - fr_min_limit: 5.0
+      task_size: 1
+      params: {}
+    - fr_min_limit: 0
+      task_size: 10
+      params: {}
+
+transport_fullscale:
+  output_times:
+    - [0, 'y']
+    - [5, 'y']
+    - [10, 'y']
+  end_time: 10

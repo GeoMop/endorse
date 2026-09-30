@@ -16,6 +16,8 @@ include: #[]
   - fractures
   - drilled_volume
 
+resolution_type: box_drilled # [box, box_drilled]
+
 # Main tunnel - main access tunnel L5
 main_tunnel:
   csv_points: main_tunnel_points.csv
