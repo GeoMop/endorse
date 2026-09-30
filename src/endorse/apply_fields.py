@@ -140,7 +140,8 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
     cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
 
     Y = Y + cfg_geom.main_tunnel.center[1]  # move it back - we want sbh to be around Y=0
-    def cond_boreholes(bid):
+    def cond_boreholes(bid: int) -> np.ndarray:
+        """Return the borehole EDZ with a flat cylindrical extension below its bottom tip."""
         csb = cfg_geom.storage_borehole
         r = csb.diameter/2
         d = cfg_geom.storage_borehole_distance
@@ -156,7 +157,13 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
         bore_end = bore_begin - csb.length
         z_scaling = np.where( np.logical_and(Z >= bore_end, Z <= bore_begin), 1.0, 0.0)
         bore_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * z_scaling
-        return bore_field
+
+        tip_height = (edz_r - in_r) * r
+        tip_z_scaling = np.where(np.logical_and(Z >= bore_end - tip_height, Z <= bore_end), 1.0, 0.0)
+        tip_axial_theta = (bore_end - Z) / tip_height
+        tip_theta = np.maximum(theta, tip_axial_theta)
+        tip_field = np.exp((1-tip_theta) * np.log(cond_max) + tip_theta * np.log(cond_min)) * tip_z_scaling
+        return np.maximum(bore_field, tip_field)
 
     for i in range(cfg_geom.n_storage_boreholes):
         cond_field = np.maximum(cond_field, cond_boreholes(i))

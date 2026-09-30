@@ -227,6 +227,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-09-30: Extended the shared storage-borehole conductivity field below each bottom tip with a flat cylindrical
+  EDZ whose depth equals the side EDZ thickness. Conductivity now decays both radially and axially to the flat edge.
 - 2026-09-29: Allowed empty homogenization subdomains, omitted their sparse averaging rows, and filled their
   load and response values by nearest-neighbor interpolation from bulk micro-element barycentres.
 - 2026-09-25: Scaled `MacroTetra` candidate-search AABBs about their centroids by `rel_radius`, matching the
