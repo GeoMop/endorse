@@ -115,6 +115,15 @@ def compute_water_volume(borehole: input_data.Borehole, section: input_data.Sect
     config = common.config.load_config(input_data.mesh_cfg_yaml)
     borehole_radius = float(config["geometry"]["borehole_radius"])
 
+    # now length is just the difference of correct section end and start
+    section_start, section_end = section_coordinates(borehole, section)
+    section_length = section_end - section_start
+
+    # compute water volume
+    return math.pi * section_length * borehole_radius**2
+
+
+def section_coordinates(borehole: input_data.Borehole, section: input_data.Section) -> tuple[float, float]:
     # try to get borehole length
     config = common.config.load_config(input_data.bh_cfg_yaml)["boreholes"]
     bh_data = {}
@@ -133,12 +142,8 @@ def compute_water_volume(borehole: input_data.Borehole, section: input_data.Sect
     # last section ends at the depth of the borehole
     section_ends = [sec - packer_width for sec in section_starts[1:]] + [bh_data["length"]]
     assert len(section_starts) == len(section_ends), "Number of section starts and ends doesn't match"
-    # now length is just the difference of correct section end and start
-    borehole_length = section_ends[section.value] - section_starts[section.value]
 
-    # compute water volume
-    return math.pi * borehole_length * borehole_radius**2
-
+    return section_starts[section.value], section_ends[section.value]
 
 def get_flow_time_series(borehole: input_data.Borehole, section: input_data.Section) -> list:
     """Reads time series for a specific borehole and section.
@@ -245,8 +250,8 @@ if __name__ == "__main__":
 
     # calculate observe point
     # used point is in the middle of the section on the axis
-    _, _, section_start, section_end = geometry_points(mesh_cfg)
-    section_middle = (section_start + section_end) / 2
+    _, _, section_start_mesh, section_end_mesh = geometry_points(mesh_cfg)
+    section_middle_mesh = (section_start_mesh + section_end_mesh) / 2
 
     # initial pressure
     # will be used for all regions, including outer pressure
@@ -254,41 +259,51 @@ if __name__ == "__main__":
     # TODO: vefify that all starts are before pressure rise, aka at borehole's steady state
     initial_pressure = get_initial_pressure(borehole, section)
 
-    # fracture setup
-    # fracture centers, in mesh coordinates
-    fractures = borehole_fractures(mesh_cfg)
-    fracture_centers = [fracture[1].tolist() for fracture in fractures]
-    # TODO: fix cross section loading
-    # current one reads fractures from config, which is wrong
-    # because it doesn't consider intersects of borehole and fracture
-    # probably have to use some mesh function to get correct data
     fracture_config = common.config.load_config(input_data.bh_cfg_yaml)["boreholes"]
-    bh_data = {}
+    fractures = []
     for bh in fracture_config:
         if bh["name"] == borehole:
-            bh_data = bh
+            fractures = bh["fractures"]
             break
-    fracture_cross_sections = [fracture["width"] for fracture in bh_data["fractures"]]
-    print(fracture_centers, fracture_cross_sections)
+    
+    # filter fractures to only ones interesecting the section
+    # they have to be in ascending distance from section start
+    # which boreholes.yaml already does
+    section_start, section_end = section_coordinates(borehole, section)
+    fractures_interesecting = []
+    for fracture in fractures:
+        if fracture["position"] <= section_end and fracture["position"] >= section_start:
+            fractures_interesecting.append(fracture)
+
+    # fracture config doesn't contain mesh-coordinate centers
+    # borehole_fractures() returns mesh coordinates
+    # but in the same order, so that can be used to append data
+    fracture_centers = [fracture[1].tolist() for fracture in borehole_fractures(mesh_cfg)]
+    for idx, _ in enumerate(fractures_interesecting):
+        fractures_interesecting[idx]["mesh_center"] = fracture_centers[idx]
+
+    # template file always expects 3 fractures
+    # => fill out the fractures array to always have 3 elements
+    fractures_interesecting += [{
+        "mesh_center": [0, 0, 0],
+        "width": 1
+    }] * (3 - len(fractures_interesecting))
 
     # compile all replacements
     replacements = {
         "flow_series": flow_series,
-        "flow_series_end": flow_series_end,
         "init_pressure": initial_pressure,
-        "observe_point": section_middle.tolist(),
+        "observe_point": section_middle_mesh.tolist(),
         # figure out a way to pass this without duplicating code
-        "fracture_center_0": fracture_centers[0],
-        "fracture_center_1": fracture_centers[1],
-        "fracture_center_2": fracture_centers[2],
-        "fracture_cross_section_0": fracture_cross_sections[0],
-        "fracture_cross_section_1": fracture_cross_sections[1],
-        "fracture_cross_section_2": fracture_cross_sections[2],
-        "fracture_radius": 2,
-        #"fracture_storativity": 4.5e-10 / 1000 / 9.81,
-        "rock_conductivity" : 1e-11,
-        #"rock_storativity": 0,
-        "end_time": simulation_end
+        "fracture_center_0": fractures_interesecting[0]["mesh_center"],
+        "fracture_center_1": fractures_interesecting[1]["mesh_center"],
+        "fracture_center_2": fractures_interesecting[2]["mesh_center"],
+        "fracture_radius_0": fractures_interesecting[0]["width"],
+        "fracture_radius_1": fractures_interesecting[1]["width"],
+        "fracture_radius_2": fractures_interesecting[2]["width"],
+        "end_time": simulation_end,
+        "flow_series_end": flow_series_end,
+        "fracture_conductivity": 1e-14
     }
 
     print(replacements)
