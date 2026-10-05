@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 from dask.distributed import Lock, get_client
@@ -664,6 +664,26 @@ class TransportSimulation(Simulation):
         return sample_array[:-2], saltelli_index, finer_level_sample_size
 
     @staticmethod
+    def _dump_yaml(data: Any, path: Path) -> None:
+        """Write data as human-readable YAML after converting NumPy values to plain values."""
+
+        def plain_value(value: Any) -> Any:
+            if isinstance(value, np.generic):
+                return value.item()
+            if isinstance(value, np.ndarray):
+                return plain_value(value.tolist())
+            if isinstance(value, Path):
+                return str(value)
+            if isinstance(value, dict):
+                return {key: plain_value(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [plain_value(item) for item in value]
+            return value
+
+        with path.open("w", encoding="utf-8") as file:
+            yaml.safe_dump(plain_value(dotdict.serialize(data)), file, sort_keys=False)
+
+    @staticmethod
     def calculate(config_dict, sample_input):
         """
         Calculate one MLMC sample in the current sample workspace.
@@ -686,6 +706,8 @@ class TransportSimulation(Simulation):
 
         cfg, full_param_dict = apply_sample_parameters(root_cfg, parameters)
         # cfg["data_schema_key"] = MLMC_ZARR_GROUP
+        TransportSimulation._dump_yaml(cfg, Path("sample_cfg.yaml"))
+        TransportSimulation._dump_yaml(full_param_dict, Path("sa_parameters.yaml"))
 
         sample_dir = Path(os.getcwd())
         logging.info("Running MLMC transport sample in %s, level %s.", sample_dir, level)

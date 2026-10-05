@@ -5,12 +5,14 @@ import shutil
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 from mlmc.sampling_pool import SamplingPool
 from endorse import common
 
 from chodby_trans.transport_simulation import (
     RandomTransportSimulation,
+    TransportSimulation,
     compact_concentration_series,
 )
 
@@ -31,6 +33,29 @@ def test_compact_concentration_series():
     reduced = compact_concentration_series(conc, quantile=0.5)
     assert reduced.shape == (2,)
     assert np.all(np.isfinite(reduced))
+
+
+def test_dump_yaml_converts_numpy_values_to_plain_yaml(tmp_path: Path) -> None:
+    """Store sampled NumPy values without Python-specific YAML tags or binary data."""
+    config = common.dotdict.create(
+        {
+            "cond_min": np.float64(3.0e-13),
+            "sample_ids": np.asarray([1, 2], dtype=np.int64),
+            "input_path": tmp_path / "input.yaml",
+        }
+    )
+    output_path = tmp_path / "sample_cfg.yaml"
+
+    TransportSimulation._dump_yaml(config, output_path)
+
+    output_text = output_path.read_text(encoding="utf-8")
+    assert "!!python" not in output_text
+    assert "!!binary" not in output_text
+    assert yaml.safe_load(output_text) == {
+        "cond_min": 3.0e-13,
+        "sample_ids": [1, 2],
+        "input_path": str(tmp_path / "input.yaml"),
+    }
 
 
 def test_transport_simulation_result_format_uses_time_axis(tmp_path: Path):

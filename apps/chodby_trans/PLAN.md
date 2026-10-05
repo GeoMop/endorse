@@ -463,6 +463,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 - 2026-06-15: Extended `plot_scripts/dfn_trace_matrix.py` to export each
   thresholded fracture set as a full 3D Gmsh mesh named `mesh_{r_limit}.msh`
   alongside the figure output.
+- 2026-10-05: Added a local YAML helper in `transport_simulation.py` that converts NumPy values and paths to plain
+  values before dumping the resolved sample config and sensitivity-analysis parameters. Added focused coverage.
 
 ## AGENT Questions And Remarks
 
@@ -538,3 +540,6 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   hangs locally in `zarr.open_group(...)` during existing Zarr-backed sampling
   tests. Goal 6 tests patch the Zarr boundary and verify singleton write
   arguments instead of exercising the local Zarr backend.
+- 2026-10-05 local verification note: `test_transport_simulation_runs_one_pair_with_sample_workspace` supplies one
+  sampled parameter while its current config defines two parameters and two groups. The new serialization test passes,
+  but the full test file currently reports three passes and this unrelated failure.
