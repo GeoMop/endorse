@@ -356,7 +356,7 @@ def _interpolate_empty_subdomains(
         micro_points,
         np.asarray(element_values)[micro_bulk],
         macro_points,
-        method="nearest",
+        method="linear",
     )
 
 

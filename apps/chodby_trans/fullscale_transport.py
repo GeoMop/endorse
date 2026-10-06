@@ -301,7 +301,7 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
         # linear = griddata(source_points, values, target_points, method="linear")
         # nearest = griddata(source_points, values, target_points, method="nearest")
         # interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
-        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="nearest")
+        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="linear")
 
     conductivity_target[target_bulk, :] = interpolated_bulk
     return conductivity_target
@@ -391,7 +391,7 @@ def interpolate_micro_field_to_macro(
         micro_mesh.el_barycenters()[micro_bulk],
         micro_field[micro_bulk],
         macro_mesh.el_barycenters()[macro_bulk],
-        method="nearest",
+        method="linear",
     )
     return macro_field
 
