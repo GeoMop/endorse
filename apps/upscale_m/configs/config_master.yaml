@@ -8,8 +8,8 @@ machine_config:
     LAPTOP-MM6A3LRF:  # Ronald Siddall, Windows + Docker Desktop
         flow_executable:
         # docker wrapper around flow123d/ci-gnu:4.0.3dev_9e91fe; translates CWD to container path
-        - C:/Plocha/Semestral_internship_cvut/endorse/venv/Scripts/python.exe
-        - C:/Plocha/Semestral_internship_cvut/endorse/apps/upscale_m/flow_win_wrapper.py
+        - C:/Plocha/Masters_thesis/.venv/Scripts/python.exe
+        - C:/Plocha/Masters_thesis/code/endorse/apps/upscale_m/flow_win_wrapper.py
 
 geometry:
     # Edge of the inner homogenization (averaging) cube [m].
