@@ -17,6 +17,7 @@ setup(
         "joblib",
         "loky",
         "matplotlib",
+        "bokeh>=3.7,<4",
         "zarr_fuse @ git+https://github.com/GeoMop/zarr_fuse.git@main"],
     packages=["chodby_trans"],
     package_dir={"chodby_trans": "."},  # Map the package name to the current directory

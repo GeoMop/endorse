@@ -232,6 +232,12 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-10-06: Added a standalone Bokeh HTML viewer for native Flow123d `water_balance.yaml` and
+  `mass_balance.yaml` files. Each available file gets its own tab with a balance-column selector, multi-region
+  selector, time-series plot, discrete point markers with hover values, and hideable legend. One or two sample
+  directories can be plotted together; sample colors and region line/marker styles distinguish their curves.
+  Focused tests cover both supplied comparison samples and the case where only one balance file exists.
+
 - 2026-09-30: Extended the shared storage-borehole conductivity field below each bottom tip with a flat cylindrical
   EDZ whose depth equals the side EDZ thickness. Conductivity now decays both radially and axially to the flat edge.
 - 2026-09-29: Allowed empty homogenization subdomains, omitted their sparse averaging rows, and filled their
