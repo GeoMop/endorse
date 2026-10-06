@@ -332,6 +332,52 @@ def source_level_field(mesh,
     return source_level
 
 
+def set_field_value_on_regions(
+        mesh: Mesh,
+        field: np.ndarray,
+        value: float,
+        region_names: Sequence[str],
+) -> np.ndarray:
+    """Return a field copy with the given value assigned on the selected mesh regions."""
+    if len(field) != len(mesh.elements):
+        raise ValueError(f"Field has {len(field)} values for a mesh with {len(mesh.elements)} elements.")
+
+    grouped_region_prefixes = {
+        "storages": "storage_",
+        "plug": "plug_",
+        "container": "container_",
+        "fractures": "fr_",
+    }
+
+    def region_selected(physical_name: str) -> bool:
+        return any(
+            physical_name == region_name
+            or physical_name.startswith(grouped_region_prefixes.get(region_name, f"{region_name}_"))
+            for region_name in region_names
+        )
+
+    selected_regions = {
+        (region_id, region_dim)
+        for physical_name, (region_id, region_dim) in mesh.gmsh_io.physical.items()
+        if region_selected(physical_name)
+    }
+    selected_elements = np.asarray([
+        (element.tags[0], len(element.node_indices) - 1) in selected_regions
+        for element in mesh.elements
+    ], dtype=bool)
+    logging.info(
+        "Assigning field value %s to regions %s: matched_regions=%s matched_elements=%s.",
+        value,
+        list(region_names),
+        len(selected_regions),
+        int(np.count_nonzero(selected_elements)),
+    )
+
+    updated_field = np.array(field, dtype=float, copy=True)
+    updated_field[selected_elements] = float(value)
+    return updated_field
+
+
 def interpolate_micro_field_to_macro(
         micro_mesh: Mesh,
         macro_mesh: Mesh,
@@ -359,6 +405,7 @@ def prepare_coarse_input(
         fracture_set: Sequence[Fracture],
         n_large: int,
         level_id: int,
+        param_dict: dotdict,
 ) -> File:
     """Prepare microscale diagnostics and the homogenized coarse-model input fields."""
     job.set_workdir(output_dir, input_dir)
@@ -389,6 +436,30 @@ def prepare_coarse_input(
     micro_fields, est_velocity = compute_fields(cfg_mesh, cfg.transport_microscale, micro_mesh,
                                                 apply_fields.bulk_fields_mockup_tunnel,
                                                 el_to_ifr, fracture_set, dim=3)
+    backfill_regions = ["main_tunnel", "storages", "plug", "container"]
+    bulk_regions = ["box", "fractures"]
+    micro_fields["conductivity"] = set_field_value_on_regions(
+        micro_mesh,
+        micro_fields["conductivity"],
+        param_dict["backfill_cond"],
+        backfill_regions,
+    )
+    micro_fields["porosity"] = set_field_value_on_regions(
+        micro_mesh,
+        micro_fields["porosity"],
+        param_dict["backfill_por"],
+        backfill_regions,
+    )
+
+    for field_name, backfill_param, bulk_param in (
+            ("diff_m", "backfill_diff_m", "bulk_diff_m"),
+            ("disp_l", "backfill_disp_L", "bulk_disp_L"),
+    ):
+        field = np.zeros(len(micro_mesh.elements), dtype=float)
+        field = set_field_value_on_regions(micro_mesh, field, param_dict[backfill_param], backfill_regions)
+        field = set_field_value_on_regions(micro_mesh, field, param_dict[bulk_param], bulk_regions)
+        micro_fields[field_name] = field
+
     micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
     micro_fields["region_id"] = micro_mesh.get_physical_ids()
     # test VTK output
@@ -429,9 +500,10 @@ def prepare_coarse_input(
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
-    macro_fields["source_sigma"] = interpolate_micro_field_to_macro(
-        micro_mesh, macro_mesh, micro_fields["source_sigma"]
-    )
+    for field_name in ["source_sigma", "porosity", "diff_m", "disp_l"]:
+        macro_fields[field_name] = interpolate_micro_field_to_macro(
+            micro_mesh, macro_mesh, micro_fields[field_name]
+        )
     macro_fields["region_id"] = macro_mesh.get_physical_ids()
 
     input_fields_path = Path(f"input_fields.msh2")
@@ -445,7 +517,7 @@ def prepare_coarse_input(
 def transport_macro(cfg, fracture_set, n_large, level_id, param_dict):
 
     input_fields_file = prepare_coarse_input(job.output.dir_path, job.input.dir_path,
-                                             cfg, fracture_set, n_large, level_id)
+                                             cfg, fracture_set, n_large, level_id, param_dict)
     res, fo = parametrized_run(cfg, "transport_macroscale",
                                input_fields_file=input_fields_file, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
@@ -473,7 +545,7 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     else:
         input_msh = prepare_fine_input(job.scratch.dir_path, job.input.dir_path,
                                        cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
-
+    exit(0)
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)

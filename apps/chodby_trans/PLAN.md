@@ -206,6 +206,11 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   3. Enable the preflight explicitly in the Chodby MLMC configuration and cover passing, failing,
      and disabled behavior with lightweight geometry tests.
 
+- Coarse transport material fields:
+  1. Overlay sampled backfill values on the existing microscale conductivity and porosity fields.
+  2. Construct shared `diff_m` and `disp_l` fields from the backfill and bulk parameter values by region.
+  3. Preserve values outside each selected region group and cover grouped physical names with a lightweight test.
+
 - Standalone conductivity histogram postprocess:
   1. Reproduce the ParaView state pipeline in plain Python for one
      `flow_fields.pvd`: threshold `region_id`, compute `log10(conductivity)`,
@@ -465,6 +470,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   alongside the figure output.
 - 2026-10-05: Added a local YAML helper in `transport_simulation.py` that converts NumPy values and paths to plain
   values before dumping the resolved sample config and sensitivity-analysis parameters. Added focused coverage.
+- 2026-10-05: Corrected microscale material field construction to overlay backfill values on conductivity and
+  porosity, and to combine the sampled backfill and bulk values into shared `diff_m` and `disp_l` fields.
 
 ## AGENT Questions And Remarks
 
