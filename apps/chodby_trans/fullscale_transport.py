@@ -459,6 +459,7 @@ def prepare_coarse_input(
         field = set_field_value_on_regions(micro_mesh, field, param_dict[backfill_param], backfill_regions)
         field = set_field_value_on_regions(micro_mesh, field, param_dict[bulk_param], bulk_regions)
         micro_fields[field_name] = field
+    micro_fields["disp_t"] = micro_fields["disp_l"]/10
 
     micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
     micro_fields["region_id"] = micro_mesh.get_physical_ids()

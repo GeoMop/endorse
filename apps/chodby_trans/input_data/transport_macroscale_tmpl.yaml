@@ -44,12 +44,12 @@ problem: !Coupling_Sequential
         options: <flow_solver__options>
 
     input_fields:
-      - region: [ .box ]
+      - region: [ .box, .fracture_box]
         bc_type: dirichlet
         bc_piezo_head: !FieldFormula
           # Kravi hora (local model) pressure gradient estimate: 20 m / 400 m = 0.05 [m/m]
           value: 0.05*(-y+0.1*z)
-      - region: BULK
+      - region: box
         conductivity: 1
         anisotropy: !FieldFE
           mesh_data_file: <input_fields_file>
@@ -95,33 +95,29 @@ problem: !Coupling_Sequential
 #            mesh_data_file: <input_fields_file>
 #            field_name: source_level
       input_fields:
-        - region: [ALL]
+        - region: [BULK]
           # dg_penalty: 1       # mass: 80, error: 4.5, default value, solution highly oscilates
           # dg_penalty: 10      # mass: 40, error: 4.0,  high error, hard to converge
           # dg_penalty: 100     # mass: 27, error: 16,  high error, hard to converge
           dg_penalty: <dg_penalty>
 
         # ROCK and DFN
-        - region: [box, fractures]
           porosity: !FieldFE
             mesh_data_file: <input_fields_file>
             field_name: porosity
 
-          diff_m: <bulk_diff_m>
-          disp_l: <bulk_disp_L>
-          disp_t: !FieldFormula
-            value: <bulk_disp_L>/10
-
-        # # BACKFILL
-        # - region: [ main_tunnel, storages, plug, container ]
-        #   porosity: <backfill_por>
-        #   diff_m: <backfill_diff_m>
-        #   disp_l: <backfill_disp_L>
-        #   disp_t: !FieldFormula
-        #     value: <backfill_disp_L>/10
+          diff_m: !FieldFE
+            mesh_data_file: <input_fields_file>
+            field_name: diff_m
+          disp_l: !FieldFE
+            mesh_data_file: <input_fields_file>
+            field_name: disp_l
+          disp_t: !FieldFE
+            mesh_data_file: <input_fields_file>
+            field_name: disp_t
 
         # SOURCE - conc pulse
-        - region: [ ALL ]
+        - region: [ BULK ]
           time: 0
           sources_conc: 1
 #          sources_sigma: !FieldFormula
@@ -135,7 +131,7 @@ problem: !Coupling_Sequential
             mesh_data_file: <input_fields_file>
             field_name: source_sigma
 
-        - region: [ ALL ]
+        - region: [ BULK ]
           time: [50, 'y']
 #          sources_conc: 0
           sources_sigma: 0
