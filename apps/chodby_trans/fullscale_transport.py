@@ -545,7 +545,6 @@ def transport_fine_run(cfg, fracture_set, level_id, n_large, param_dict):
     else:
         input_msh = prepare_fine_input(job.scratch.dir_path, job.input.dir_path,
                                        cfg_mesh, cfg.transport_fullscale, fracture_set, n_large)
-    exit(0)
     res, fo = parametrized_run(cfg, "transport_fullscale", input_fields_file=input_msh, param_dict=param_dict)
     time.sleep(0.5)  # give the FS a moment (tune as needed)
     values = process_results(cfg, fo)
