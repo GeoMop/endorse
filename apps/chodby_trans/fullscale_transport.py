@@ -301,7 +301,7 @@ def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_
         # linear = griddata(source_points, values, target_points, method="linear")
         # nearest = griddata(source_points, values, target_points, method="nearest")
         # interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
-        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="linear")
+        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="nearest")
 
     conductivity_target[target_bulk, :] = interpolated_bulk
     return conductivity_target
