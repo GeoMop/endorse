@@ -1,0 +1,112 @@
+flow123d_version: 4.0.0a01
+problem: !Coupling_Sequential
+  description:
+  mesh:
+    mesh_file: wpt_section.msh
+    regions:
+      - !Union
+        name: fractures
+        regions: [fracture_1, fracture_2, fracture_3]
+      - !Union
+        name: .fractures
+        regions: [.fracture_1, .fracture_2, .fracture_3]
+  flow_equation: !Flow_Darcy_LMH
+    time:
+      end_time: <end_time>
+      dt_limits: 
+        - [0, 60, 60]
+        - [<flow_series_end>, 7200, 7200]
+    nonlinear_solver:
+      linear_solver: !Petsc
+        a_tol: 1e-50
+        r_tol: 1e-5
+        options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg
+    input_fields:
+      - region: ALL
+        init_pressure: <init_pressure>
+
+      - region: rock
+        conductivity: <rock_conductivity> #1e-13
+        # 2.8e-7 m^-1 from rho*g*(3*(1-2*nu)/E + n*beta_w), with
+        # E=60 GPa, nu=0.25, n=0.007, and beta_w=4.6e-10 Pa^-1.
+        storativity: <rock_storativity>
+        #init_pressure: 0
+
+      - region: [ packer_near, packer_far ]
+        conductivity: <packer_conductivity> #1e-13
+        # Same 2.8e-7 m^-1 estimate as rock: packers use the rock
+        # mechanical material here and have no separate hydraulic calibration.
+        storativity: <packer_storativity>
+        #init_pressure: 0
+
+      - region: water
+        conductivity: <water_conductivity> #1e-6
+        # 4.5e-6 m^-1 = rho_w*g*beta_w for liquid water at about 20 degC
+        # (rho_w=1000 kg/m3, beta_w=4.6e-10 Pa^-1).
+        storativity: <water_storativity>
+        #init_pressure: 1e6
+
+      # figure out a way to pass this withou duplicating code
+      - region: fracture_1
+        #conductivity: <fracture_conductivity> #1e-6
+        conductivity: !FieldFormula
+          value: diff = (x-<fracture_center_0>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_0>**2) + <rock_conductivity>
+        # Water compressibility; fracture cross_section scales its stored volume.
+        storativity: <fracture_storativity>
+        #cross_section: <fracture_cross_section> #1e-3
+        cross_section: !FieldFormula
+          value: diff = (x-<fracture_center_0>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_0>**2) + 1e-4
+
+      - region: fracture_2
+        #conductivity: <fracture_conductivity> #1e-6
+        conductivity: !FieldFormula
+          value: diff = (x-<fracture_center_1>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_1>**2) + <rock_conductivity>
+        # Water compressibility; fracture cross_section scales its stored volume.
+        storativity: <fracture_storativity>
+        #cross_section: <fracture_cross_section> #1e-3
+        cross_section: !FieldFormula
+          value: diff = (x-<fracture_center_1>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_1>**2) + 1e-4
+
+      - region: fracture_3
+        #conductivity: <fracture_conductivity> #1e-6
+        conductivity: !FieldFormula
+          value: diff = (x-<fracture_center_2>); <fracture_conductivity>*exp(-diff @ diff / <fracture_radius_2>**2) + <rock_conductivity>
+        # Water compressibility; fracture cross_section scales its stored volume.
+        storativity: <fracture_storativity>
+        #cross_section: <fracture_cross_section> #1e-3
+        cross_section: !FieldFormula
+          value: diff = (x-<fracture_center_2>); <fracture_cross_section>*exp(-diff @ diff / <fracture_radius_2>**2) + 1e-4
+
+      - region: [ .rock, .fractures ]
+        bc_type: dirichlet
+        bc_pressure: <init_pressure>
+
+      - region: water
+        water_source_density: !FieldTimeFunction
+          time_function:
+            <flow_series>
+      
+      - region: water
+        time: <flow_series_end>
+        water_source_density: 0
+
+    output:
+      times: &output_times
+        # full timeseries with slow evaluation
+        - {'begin': 0, 'step': 60, 'end': <flow_series_end>} # pressurization
+        - {'begin': <flow_series_end>, 'step': 7200, 'end': 604800} # relaxation, 1 week for now
+        # dummy timeseries for fast evaluations
+        #- step: 1e5
+      fields: 
+        # - piezo_head_p0
+          - pressure_p0
+        # - velocity_p0
+        # - region_id
+        # - conductivity
+        # - storativity
+      observe_fields: [pressure_p0]
+    output_stream:
+      file: flow.pvd
+      format: !vtk
+      observe_points: &observe_points
+        - {point: <observe_point>, snap_region: water}
