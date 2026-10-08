@@ -151,7 +151,8 @@ problem: !Coupling_Sequential
           - region: [ rock ]
             young_modulus: <rock_young> #60e9
             poisson_ratio: <rock_poisson> #0.25
-            initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            #initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            initial_stress: 0
             #initial_stress: !FieldFE
             #  mesh_data_file: "3d_model_mechanics.vtu"
             #  field_name: stress
@@ -160,12 +161,14 @@ problem: !Coupling_Sequential
           - region: [ packer_near, packer_far ]
             young_modulus: <packer_young> #30e9
             poisson_ratio: <packer_poisson> #0.3
-            initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            #initial_stress: [ [ -40e6, 0, 0], [0, -20e6, 0], [0, 0, -10e6] ]
+            initial_stress: 0
 
           - region: [ fractures, water ]
             young_modulus: <fracture_young> #1e7
             poisson_ratio: <fracture_poisson> #0.25
             cross_section_min: 1e-5
+            initial_stress: 0
 
           - region: [ .packer_near, .packer_far ]
             bc_type: displacement
