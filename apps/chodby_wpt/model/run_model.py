@@ -303,7 +303,7 @@ if __name__ == "__main__":
         "fracture_radius_2": fractures_interesecting[2]["width"],
         "end_time": simulation_end,
         "flow_series_end": flow_series_end,
-        "fracture_conductivity": 1e-14
+        "fracture_conductivity": 1e-6
     }
 
     print(replacements)
