@@ -501,7 +501,7 @@ def prepare_coarse_input(
                                                 el_to_ifr, coarse_fracture_set, dim=3)
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
-    for field_name in ["source_sigma", "porosity", "diff_m", "disp_l"]:
+    for field_name in ["source_sigma", "porosity", "diff_m", "disp_l", "disp_t"]:
         macro_fields[field_name] = interpolate_micro_field_to_macro(
             micro_mesh, macro_mesh, micro_fields[field_name]
         )
