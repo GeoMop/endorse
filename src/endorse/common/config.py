@@ -231,7 +231,7 @@ def resolve_machine_configuration(cfg:dotdict, hostname) -> dotdict:
         machine_cfg = cfg.machine_config.get('__default__', None)
     if machine_cfg is None:    
         raise KeyError(f"Missing hostname: {hostname} in 'cfg.machine_config'.")
-    cfg.machine_config = machine_cfg
+    cfg.machine_config.__resolved__ = machine_cfg
     return cfg
 
 def load_config(path, collect_files=False, hostname=None):
@@ -266,9 +266,18 @@ def load_config(path, collect_files=False, hostname=None):
         dd['_file_refs'] = referenced
     return dd
 
-def dump_config(config):
-    with open("__config_resolved.yaml", "w") as f:
-        yaml.dump(config, f)
+def _serialize_config_for_yaml(config: Any) -> Any:
+    """Convert config data to plain YAML values without Python object tags."""
+    serialized = dotdict.serialize(config)
+    return serialized
+
+
+def dump_config(config: Any, path: Path | None = None) -> None:
+    """Dump configuration as plain YAML reloadable by `load_config`."""
+    if path is None:
+        path = Path("__config_resolved.yaml")
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(_serialize_config_for_yaml(config), f, sort_keys=False)
 
 def path_search(filename, path):
     if not isinstance(filename, str):
@@ -295,6 +304,3 @@ def collect_referenced_files(cfg:dotdict, search_path:List[str]) -> List[FilePat
         return path_search(cfg, search_path)
     # flatten
     return [i for l in referenced for i in l]
-
-
-

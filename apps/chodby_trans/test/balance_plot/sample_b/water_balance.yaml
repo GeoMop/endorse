@@ -1,0 +1,50 @@
+column_names: [ flux,  flux_in,  flux_out,  mass,  source,  source_in,  source_out,  flux_increment,  source_increment,  flux_cumulative,  source_cumulative,  error ]
+data:
+  - time: 0
+    region: fr_small_temp
+    quantity: water_volume
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: fr_large_temp
+    quantity: water_volume
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: box
+    quantity: water_volume
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .fractures_box
+    quantity: water_volume
+    data: [ 2.55521e-15, 8.32035e-15, -5.76513e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_z0
+    quantity: water_volume
+    data: [ -1.17747e-10, 3.13684e-11, -1.49115e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_z1
+    quantity: water_volume
+    data: [ 1.32132e-10, 2.22589e-10, -9.04575e-11, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_y0
+    quantity: water_volume
+    data: [ 4.81075e-10, 4.81075e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_y1
+    quantity: water_volume
+    data: [ -4.88068e-10, 0, -4.88068e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_x0
+    quantity: water_volume
+    data: [ 1.38067e-11, 1.79854e-10, -1.66047e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_x1
+    quantity: water_volume
+    data: [ -2.11362e-11, 8.40449e-11, -1.05181e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .IMPLICIT_BOUNDARY
+    quantity: water_volume
+    data: [ -1.76142e-16, 3.94397e-15, -4.12012e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: ALL
+    quantity: water_volume
+    data: [ 6.49091e-14, 9.98944e-10, -9.98879e-10, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
