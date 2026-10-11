@@ -2,9 +2,8 @@
 Per-macro-element effective elastic tensor field used for the homogenized half of the macro vs DNS
 comparison.
 
-Runs against an completed micro_mechanics_model.py run: it re-reads the six cached Flow123d
-solutions per BC type and needs no Docker. Output is a field file with one 6x6 Voigt tensor per
-macro element, written via endorse fields_file (msh2 + vtu).
+Input are the six solved load cases of the micro problem per BC type (bc.run_bc). Output is a field
+file with one 6x6 Voigt tensor per macro element, written via endorse fields_file (msh2 + vtu).
 
 The averaging window for each macro element is the element itself (endorse MacroTetra): a micro
 element belongs to it iff its barycenter lies inside the tetrahedron. That makes the field a true
@@ -16,7 +15,6 @@ The macro mesh carries NO fractures; their influence enters only through the ten
 """
 import os
 import shutil
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Tuple
@@ -34,7 +32,7 @@ from endorse.mesh_class import Mesh, _load_mesh, load_mesh
 
 from bc import bc_params, load_cases
 from export_vtu import export_macro_case
-from micro_mesh import MicroMesh, make_geometry, make_micro_mesh, meshing
+from micro_mesh import MicroMesh, make_geometry, meshing
 from postprocess import strain_stress_fields, subdomain_measures, weighted_sum
 
 _app_dir = Path(__file__).parents[1]
@@ -289,41 +287,3 @@ def run_macro(cfg: dotdict, macro_mesh: Mesh, mesh_path: str, tensor_file: File,
         case_dir = os.path.dirname(os.path.dirname(os.path.abspath(spatial_file)))
         export_macro_case(cfg, spatial_file, case_dir)
     return results
-
-
-def main(run_name="default", config_file="config_master.yaml"):
-    app_dir = Path(__file__).parents[1]
-    cfg = common.load_config(app_dir / "configs" / config_file)
-    run_dir = app_dir / "runs" / run_name
-    assert run_dir.is_dir(), \
-        f"{run_dir} does not exist -- run `python src/micro_mechanics_model.py {run_name}` first"
-
-    bc_type_cfg = str(cfg.loads.bc_type).strip().lower()
-    subc_wanted = bc_type_cfg in ("subc", "both")
-    # solving the macro problem is optional: without it the run just produces the tensor fields
-    solve_macro = bool(cfg.mechanics_macroscale.get("solve", True))
-    with common.workdir(run_dir, inputs=[]):
-        micro = make_micro_mesh(cfg.geometry, cfg.mesh, cfg.fractures,
-                                cfg.materials.aperture_per_r, work_dir=".",
-                                subc_support=subc_wanted)
-        macro_mesh = make_macro_mesh(cfg.geometry, cfg.mechanics_macroscale, cfg.mesh,
-                                     work_dir=".", subc_support=subc_wanted)
-        macro_mesh_path = str(cfg.mechanics_macroscale.mesh_file)
-
-        tensor_files, macro_results = {}, {}
-        for bc_type in [t for t in ("kubc", "subc") if bc_type_cfg in (t, "both")]:
-            results = []
-            for name, dir_name, _load in load_cases(cfg, bc_type):
-                spatial_file = os.path.abspath(os.path.join(bc_type, dir_name, str(cfg.loads.output_fields_file)))
-                assert os.path.isfile(spatial_file), f"missing cached output: {spatial_file}"
-                results.append(SimpleNamespace(name=name, spatial_file=spatial_file))
-            tensor_files[bc_type] = macro_elastic_tensor(cfg, micro, macro_mesh, results, bc_type)
-            if solve_macro:
-                print(f"=== upscale_m: MACRO {bc_type.upper()} load cases ===", flush=True)
-                macro_results[bc_type] = run_macro(cfg, macro_mesh, macro_mesh_path,
-                                                   tensor_files[bc_type], bc_type)
-        return tensor_files, macro_results
-
-
-if __name__ == "__main__":
-    main(*sys.argv[1:])
