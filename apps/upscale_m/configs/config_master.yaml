@@ -47,12 +47,12 @@ fractures:
             #     r_infty: 2.5
             #     p_32: 2
         # optional (bgem sizes): restrict generated sizes, Population.set_sample_range
-        sample_range: [0.625, 2.5]
+        sample_range: [1.2, 2.5]  # TEST (orig [0.625, 2.5])
 
 mesh:
     # Base name of the generated mesh files
     mesh_name: micro_mesh
-    fracture_mesh_step: 0.625
+    fracture_mesh_step: 1.5  # TEST (orig 0.625)
     # CharacteristicLengthMin = fracture_mesh_step / mesh_size_min_fraction.
     mesh_size_min_fraction: 3
     # disc approximation: minimum number of boundary points per full circle (gmsh option
@@ -78,8 +78,9 @@ loads:
     output_fields_file: output/mechanics_fields.msh
     stress_field_name: stress
     region_id_field_name: region_id
-    # Outputs of the simulations by default are .msh files within the output/ folder (export_vtu: false)
-    # If export_vtu is set to "true", then these .msh files are transformed to .vtu files instead
+    # Outputs of the simulations are .msh files within the output/ folder (export_vtu: false)
+    # If export_vtu is set to "true", the DNS and macro outputs are ALSO converted to plain .vtu files
+    # (stress, region_id as cell data, displacement as point data, no derived fields)
     export_vtu: true
     # 'kubc', 'subc' or 'both'
     bc_type: both
@@ -127,20 +128,20 @@ mechanics_macroscale:
 
     mesh_size_min_fraction: 3
 
-    mesh_step: 2.5
+    mesh_step: 5.0  # TEST (orig 2.5)
     # per-element tensor field file (six 9-component Kelvin columns, endorse fields_file
     # format: msh2 + vtu preview)
     tensor_field_file: macro_elastic_tensor.msh2
 
 # DNS problem is the micro problem, with two things different:
 #   1. L_ext == L_inner (no buffer) - forced to 1 in code
-#   2. the product is per-element STRESS and STRAIN FIELDS (.vtu + .msh2 per load case and BC
-#      type), not effective elastic tensors
+#   2. the product is the solved fields themselves (Flow123d .msh + plain .vtu per load case and
+#      BC type), not effective elastic tensors
 # The DNS builds its OWN MESH (its own element size below) but on the same rock... i.e. the DFN is
 # sampled in the inner cube, exactly as the micro problem samples it.
 # So the fractures inside the DNS cube ARE the fractures inside the micro problem's averaging cube
 dns:
-    mesh_step: 0.3
+    mesh_step: 1.0  # TEST (orig 0.3)
     # base name for the DNS mesh files, must differ from mesh.mesh_name
     mesh_name: dns_mesh
 
