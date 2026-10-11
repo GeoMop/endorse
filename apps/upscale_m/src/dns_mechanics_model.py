@@ -6,11 +6,8 @@ reproduce. Its product is the solved fields themselves (Flow123d .msh + a plain 
 one per load case and BC type, not effective tensors.
 """
 import os
-import sys
-from pathlib import Path
 from typing import List
 
-from endorse import common
 from endorse.common import dotdict
 
 from bc import run_bc
@@ -58,39 +55,3 @@ def run_dns(cfg: dotdict, micro: MicroMesh, bc_type: str) -> List[str]:
         written.append(r.spatial_file)
         export_dns_case(cfg, r.spatial_file, case_dir)
     return written
-
-
-def main(run_name="dns", config_file="config_master.yaml"):
-    # Build the bare cube, solve every BC type loads.bc_type asks for, write the fields
-    app_dir = Path(__file__).parents[1]
-    cfg_path = app_dir / "configs" / config_file
-    if not cfg_path.is_file():
-        cfg_path = app_dir / config_file
-    cfg = common.load_config(cfg_path)
-
-    run_dir = Path(run_name) if os.path.isabs(run_name) else app_dir / "runs" / run_name
-    bc_type_cfg = str(cfg.loads.bc_type).strip().lower()
-    assert bc_type_cfg in ("kubc", "subc", "both"), \
-        f"loads.bc_type must be 'kubc', 'subc' or 'both' (got {bc_type_cfg!r})"
-    bc_types = [t for t in ("kubc", "subc") if bc_type_cfg in (t, "both")]
-
-    print(f"[upscale_m dns] config: {cfg_path}")
-    print(f"[upscale_m dns] run dir: {run_dir}")
-    print(f"[upscale_m dns] cube edge {cfg.geometry.L_inner} m, NO buffer (L_ext_factor = 1.0)")
-
-    os.makedirs(run_dir, exist_ok=True)
-    written = {}
-    with common.workdir(run_dir, inputs=[]):
-        print("=== upscale_m dns: mesh ===", flush=True)
-        micro = make_dns_mesh(cfg, work_dir=".", subc_support="subc" in bc_types)
-        for bc_type in bc_types:
-            print(f"=== upscale_m dns: {bc_type.upper()} load cases ===", flush=True)
-            written[bc_type] = run_dns(cfg, micro, bc_type)
-    print("\n=== upscale_m dns: DONE ===")
-    for bc_type, files in written.items():
-        print(f"  {bc_type}: {len(files)} field file(s), dns_full.vtu next to each output/")
-    return written
-
-
-if __name__ == "__main__":
-    main(*sys.argv[1:])
