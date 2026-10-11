@@ -287,7 +287,7 @@ def run_macro(cfg: dotdict, macro_mesh: Mesh, mesh_path: str, tensor_file: File,
         spatial_file = macro_problem(cfg, tag, load, macro_mesh, mesh_path, tensor_file, bc_type)
         results.append(SimpleNamespace(name=name, spatial_file=spatial_file))
         case_dir = os.path.dirname(os.path.dirname(os.path.abspath(spatial_file)))
-        export_macro_case(cfg, macro_mesh, spatial_file, case_dir)
+        export_macro_case(cfg, spatial_file, case_dir)
     return results
 
 

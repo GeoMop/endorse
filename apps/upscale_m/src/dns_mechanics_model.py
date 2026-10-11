@@ -2,25 +2,20 @@
 DNS: the cube solved directly on the explicitly fractured mesh, with no buffer zone
 
 This is the reference solution the homogenized model of macro_mechanics_model is meant to
-reproduce. Its product is the per-element stress and strain FIELDS as .vtu, one file per load
-case and BC type, not effective tensors.
+reproduce. Its product is the solved fields themselves (Flow123d .msh + a plain .vtu conversion),
+one per load case and BC type, not effective tensors.
 """
 import os
 import sys
 from pathlib import Path
 from typing import List
 
-import numpy as np
-
 from endorse import common
-from endorse.common import dotdict, File
-from endorse.macro_flow_model import fields_file
-from endorse.mesh_class import load_mesh
+from endorse.common import dotdict
 
 from bc import run_bc
 from export_vtu import export_dns_case
 from micro_mesh import MicroMesh, make_micro_mesh
-from postprocess import strain_stress_fields
 
 
 def dns_geometry(cfg_geometry: dotdict) -> dotdict:
@@ -53,42 +48,15 @@ def make_dns_mesh(cfg: dotdict, work_dir: str = ".", subc_support: bool = False)
         fracture_box=fracture_sampling_box(cfg.geometry))
 
 
-def write_dns_fields(cfg: dotdict, micro: MicroMesh, spatial_file: str, out_dir: str,
-                     basename: str = "dns_fields") -> File:
-    # One solved load case -> per-element stress and strain over the whole mesh, as .vtu / .msh2.
-    mats = cfg.materials
-    output_mesh = load_mesh(File(spatial_file))
-    rid, eps9, stress9 = strain_stress_fields(
-        output_mesh, micro.bulk_region_id, micro.fracture_region_ids,
-        float(mats.young_modulus_rock), float(mats.poisson_ratio_rock),
-        float(mats.young_modulus_fracture), float(mats.poisson_ratio_fracture),
-        stress_field=str(cfg.loads.stress_field_name),
-        region_id_field=str(cfg.loads.region_id_field_name))
-
-    fields = {
-        "stress": np.asarray(stress9, dtype=float),
-        "strain": np.asarray(eps9, dtype=float),
-        # write_fields wants an (N, 1) column here, not a flat vector
-        "region_id": np.asarray(rid, dtype=float).reshape(-1, 1),
-    }
-
-    output_mesh.gmsh_io.node_data.clear()
-    output_mesh.gmsh_io.element_data.clear()
-    output_mesh.gmsh_io.element_node_data.clear()
-
-    os.makedirs(out_dir, exist_ok=True)
-    return fields_file(output_mesh, fields, file_name=os.path.join(out_dir, basename + ".msh2"))
-
-
-def run_dns(cfg: dotdict, micro: MicroMesh, bc_type: str) -> List[File]:
-    # Solves the six load cases of one BC type on the DNS mesh, one field file per case
+def run_dns(cfg: dotdict, micro: MicroMesh, bc_type: str) -> List[str]:
+    # Solves the six load cases of one BC type on the DNS mesh, one Flow123d output per case
     results = run_bc(cfg, micro, bc_type)
     written = []
     for r in results:
         case_dir = os.path.dirname(os.path.dirname(os.path.abspath(r.spatial_file)))
         print(f"[upscale_m dns/{bc_type}] fields for case {r.name}: {case_dir}")
-        written.append(write_dns_fields(cfg, micro, r.spatial_file, case_dir))
-        export_dns_case(cfg, micro, r.spatial_file, case_dir)
+        written.append(r.spatial_file)
+        export_dns_case(cfg, r.spatial_file, case_dir)
     return written
 
 
@@ -120,7 +88,7 @@ def main(run_name="dns", config_file="config_master.yaml"):
             written[bc_type] = run_dns(cfg, micro, bc_type)
     print("\n=== upscale_m dns: DONE ===")
     for bc_type, files in written.items():
-        print(f"  {bc_type}: {len(files)} field file(s), *.vtu next to each *.msh2")
+        print(f"  {bc_type}: {len(files)} field file(s), dns_full.vtu next to each output/")
     return written
 
 
