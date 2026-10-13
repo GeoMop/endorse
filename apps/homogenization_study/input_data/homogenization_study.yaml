@@ -1,0 +1,62 @@
+
+homogenization:
+  # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
+  coverage_preflight: true
+  # Linear scale of the averaging tetrahedron relative to its macro mesh element.
+  macro_element_scale: 2.0
+  pressure_loads:
+    - [ 1.0, 0.0, 0.0 ]
+    - [ 0.0, 1.0, 0.0 ]
+    - [ 0.0, 0.0, 1.0 ]
+
+ot_sensitivity: !include _ot_sensitivity.yaml
+
+mlmc:
+  sim_class: TransportSimulation
+  sample_mode: paired # saltelli
+  levels:
+    # coarsest
+    - task_size: 15000  # estimated number of elements
+      min_samples: 1
+      min_finer_samples: 1  # minimal number of samples to allow coarse samples with mixing
+
+      # abstract_mesh_step: 3	# [m]
+      fr_min_limit: 0 # [m] 5.55 # coarse
+      params:
+        #        "geometry/include": [fractures]
+#        "geometry/resolution_type": box
+#        "boundary_mesh_step": 5
+#        "fracture_mesh_step": 2
+        # "main_tunnel_mesh_step": 1.25 # no tunnel => no effect
+        # tunnel circumference is 17,06
+        # n main tunnel polygon nodes is 22
+        # => "orig step on tunnel wall" is 17,06/21 = 0.81
+#        "main_line_refinement/h_inner": 0.81 # 1.25
+#        "main_line_refinement/h_outer": 2.00 # 2.00
+      homo_params:
+        "geometry/resolution_type": box
+        "boundary_mesh_step": 0.1
+
+mesh:
+    geometry:
+      # x,y,z dimension
+      box_dimensions: [ 100, 100, 100 ]
+      box_center: [ 0, 0, 0 ]
+      include: [fractures]
+    fractures:
+      #    population: {}
+      population_template:  _fr_Bukov_repo.yaml
+      # population_template:  _fr_fixed.yaml
+
+      # upper limit on the number of (small) fractures
+      n_frac_limit: 100
+      dfn_seed: 1
+      clip_box_ratio: 0.9 # *100 % of the box dimension
+
+    # base of the mesh file name
+    mesh_name: micro_mesh
+
+    meshing_seed: 1
+    # mesh step on outer boundary
+    boundary_mesh_step: 10
+    fracture_mesh_step: 5

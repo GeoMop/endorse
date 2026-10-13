@@ -81,7 +81,8 @@ def fracture_set(cfg_mesh, fr_population:Population, seed:int):
     cfg_fr = cfg_mesh.fractures
 
     # Fixed large fractures
-    fractures = fixed_fractures(main_box_dimensions)
+    # fractures = fixed_fractures(main_box_dimensions)
+    fractures = []
 
     # Large random fractures with fixed seed
     # fix_seed = cfg_fr.fixed_seed

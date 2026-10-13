@@ -40,6 +40,12 @@ Goal 5: Add a low-impact paired-sampling mode for coarse-model setup and varianc
         MLMC, remove `sequential_saltelli_samples.py` and
         `collect_sequential_saltelli_results.py`.
 
+Goal 6: Preparation for a study of the homogenized conductivity tensor field.
+        This work has moved to the independent sibling application `apps/homogenization_study`; its canonical plan is
+        `apps/homogenization_study/PLAN.md`. Keep the existing Chodby transport homogenization path unchanged. Future
+        comparison of the two applications should identify stable common parts suitable for `src/endorse`.
+
+
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
 details of the goals that you need to specify better or my specification is ambiguous.
 Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`,
@@ -164,7 +170,7 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 3. Keep the point-coordinate calculations array-oriented so batching micro barycentres can
    reuse the same geometry algebra when the API is extended.
 
-- Goal 6:
+- Goal 5:
   1. Add an explicit `mlmc.sample_mode` switch with `saltelli` as the
      backward-compatible default and `paired` as the coarse-model diagnostic mode.
   2. Add a small paired simulation wrapper beside `TransportSaltelliSimulation`.
@@ -232,6 +238,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-10-09: Moved Goal 6 into the independent sibling package `apps/homogenization_study`. Removed the temporary
+  nested `conductivity_study` package and restored transport-only ownership of `chodby_trans/job.py` and `setup.py`.
 - 2026-10-06: Added a standalone Bokeh HTML viewer for native Flow123d `water_balance.yaml` and
   `mass_balance.yaml` files. Each available file gets its own tab with a balance-column selector, multi-region
   selector, time-series plot, discrete point markers with hover values, and hideable legend. One or two sample
