@@ -23,19 +23,10 @@ mlmc:
       # abstract_mesh_step: 3	# [m]
       fr_min_limit: 0 # [m] 5.55 # coarse
       params:
-        #        "geometry/include": [fractures]
-#        "geometry/resolution_type": box
-#        "boundary_mesh_step": 5
-#        "fracture_mesh_step": 2
-        # "main_tunnel_mesh_step": 1.25 # no tunnel => no effect
-        # tunnel circumference is 17,06
-        # n main tunnel polygon nodes is 22
-        # => "orig step on tunnel wall" is 17,06/21 = 0.81
-#        "main_line_refinement/h_inner": 0.81 # 1.25
-#        "main_line_refinement/h_outer": 2.00 # 2.00
+        "boundary_mesh_step": 10
+        "fracture_mesh_step": 5
       homo_params:
-        "geometry/resolution_type": box
-        "boundary_mesh_step": 0.1
+        "boundary_mesh_step": 10
 
 mesh:
     geometry:
@@ -58,5 +49,5 @@ mesh:
 
     meshing_seed: 1
     # mesh step on outer boundary
-    boundary_mesh_step: 10
-    fracture_mesh_step: 5
+    boundary_mesh_step: 100
+    fracture_mesh_step: 100

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import logging
+from typing import Callable
 
 import homogenization_study.job as job
 from bgem.gmsh.gmsh import ObjectSet
@@ -72,10 +73,42 @@ def safe_list(source_dict: dict[str, ObjectSet], keys: list[str]) -> list[Object
     new_list = [source_dict[k] for k in keys if source_dict[k] is not None]
     return new_list
 
+def geometry_finalize(factory, geometry_set):
+    print("Finalize geometry...")
+    geometry_final = factory.group(*geometry_set)
+    factory.synchronize()
+    # need to keep tunnel lines due to refinement fields
+    factory.keep_only(geometry_final)
+    factory.synchronize()
+    factory.remove_duplicate_entities()
+    factory.synchronize()
+    print("Geometry finished...")
+    return geometry_final
 
 
 @exp.rethrow_as(exp.GeomException, "Geometry exception")
-def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
+def make_geometry_homo(factory, cfg_mesh:'dotdict', fracture_set):
+    cfg_geom = cfg_mesh.geometry
+
+    # Prepare objects
+    vol_dict = {
+        "box": None,
+    }
+    bnd_dict = {}
+
+    box, box_sides_dict = mesh_tools.box_with_sides(factory, cfg_geom.box_dimensions, cfg_geom.box_center)
+    # bnd_dict = {**bnd_dict, **box_sides_dict}
+
+    vol_dict["box"] = box.set_region("box").mesh_step(cfg_mesh.boundary_mesh_step)
+
+    # include all volumetric fragments
+    geometry_set = list(vol_dict.values())
+
+    return geometry_finalize(factory, geometry_set)
+
+
+@exp.rethrow_as(exp.GeomException, "Geometry exception")
+def make_geometry_micro(factory, cfg_mesh:'dotdict', fracture_set):
     cfg_geom = cfg_mesh.geometry
 
     # Prepare objects
@@ -131,7 +164,7 @@ def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
         fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, cfg_geom.box_center, factory.rectangle())
         # vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box"])
         vol_dict["fractures_group"] = factory.group(*fractures).intersect(box)
-        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step)
+        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step).set_region("fractures")
         # determine fracture outer boundary
         # b_fractures_outer = vol_dict["fractures_group"].get_boundary()[1]
         # bnd_dict["b_fractures_outer"] = b_fractures_outer \
@@ -169,19 +202,7 @@ def make_geometry_box(factory, cfg_mesh:'dotdict', fracture_set):
             .mesh_step(cfg_mesh.boundary_mesh_step)
         geometry_set.append(b_fractures_out)
 
-    geometry_final = factory.group(*geometry_set)
-
-    # exit(0)
-    print("Finalize geometry...")
-    factory.synchronize()
-    # need to keep tunnel lines due to refinement fields
-    factory.keep_only(geometry_final)
-    factory.synchronize()
-    factory.remove_duplicate_entities()
-    factory.synchronize()
-
-    print("Geometry finished...")
-    return geometry_final
+    return geometry_finalize(factory, geometry_set)
 
 
 @exp.rethrow_as(exp.MeshException, "Meshing exception")
@@ -222,7 +243,7 @@ def meshing(factory, objects, mesh_filename):
     factory.write_mesh(filename=mesh_filename, format=gmsh.MeshFormat.msh2)
     print("Mesh written.", flush=True)
 
-def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
+def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed, geometry_func:Callable):
     """
     :param cfg_geom: repository mesh configuration cfg.repository_mesh
     :param fractures:  generated fractures
@@ -243,7 +264,8 @@ def make_gmsh(cfg_mesh:'dotdict', fracture_set, mesh_seed):
 
     # factory.show()
     preserve_region_counter_after_unpickle(fracture_set)
-    geometry_set = make_geometry_box(factory, cfg_mesh, fracture_set)
+
+    geometry_set = geometry_func(factory, cfg_mesh, fracture_set)
 
     # factory.show()
     # exit(0)
@@ -290,10 +312,10 @@ def make_fractures(cfg_mesh, dfn_seed):
 
 
 @memoize
-def make_mesh(cfg_mesh, fracture_set, mesh_seed):
+def make_mesh(cfg_mesh, fracture_set, mesh_seed, geometry_func:Callable):
 
     if not Path(cfg_mesh.mesh_name + ".msh2").exists():
-        mesh_file = make_gmsh(cfg_mesh, fracture_set, mesh_seed)    # use mesh_seed for gmsh randomization
+        mesh_file = make_gmsh(cfg_mesh, fracture_set, mesh_seed, geometry_func)    # use mesh_seed for gmsh randomization
     else:
         mesh_file = File(cfg_mesh.mesh_name + ".msh2")
 

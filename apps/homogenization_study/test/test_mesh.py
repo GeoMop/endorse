@@ -2,11 +2,14 @@ import pytest
 import shutil
 from pathlib import Path
 import logging
+
+from bgem.upscale import homogenization
+
 import yaml
 
 from endorse import common
 
-from homogenization_study.create_mesh import make_fractures, make_mesh
+from homogenization_study.create_mesh import make_fractures, make_mesh, make_geometry_micro, make_geometry_homo
 from homogenization_study import job
 
 
@@ -38,6 +41,12 @@ def update_dfn_params(cfg_fr, param_dict):
         dfn_cfg = population_parametrized(cfg_fr.population, param_dict)
     else:
         raise Exception("Fracture population not set, neither template file given.")
+
+
+def update_mesh_cfg(cfg_mesh, cfg_params, new_mesh_name):
+    mcfg = common.apply_variant(cfg_mesh, cfg_params)
+    mcfg.mesh_name = new_mesh_name
+    return mcfg
 
 
 def test_mesh() -> None:
@@ -73,4 +82,9 @@ def test_mesh() -> None:
 
     with common.workdir(work_dir, clean=False):
         fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, param_dict["dfn_seed"])
-        return make_mesh(cfg.mesh, fracture_set, param_dict["meshing_seed"])
+
+        cfg_mesh = update_mesh_cfg(cfg.mesh, cfg.mlmc.levels[0].homo_params, "homogenization_mesh")
+        make_mesh(cfg_mesh, fracture_set, param_dict["meshing_seed"], geometry_func=make_geometry_homo)
+
+        cfg_mesh = update_mesh_cfg(cfg.mesh, cfg.mlmc.levels[0].params, "micro_mesh")
+        make_mesh(cfg_mesh, fracture_set, param_dict["meshing_seed"], geometry_func=make_geometry_micro)
