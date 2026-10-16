@@ -27,6 +27,13 @@ interfaces to `chodby_trans` where functionality is equivalent, allowing stable 
 
 USER: Implement `create_study_meshes` and `run_homogenization_problem`, then enable the pending integration test.
 
+Current Stage A implementation steps:
+
+1. Load the completed micro and homogenization meshes in `problem.py`.
+2. Select the homogenization-mesh bulk elements and build the averaging subproblems used by the three-load solve.
+3. Run the configured coverage preflight before any Flow123d calculation and expose the prepared state to the test.
+4. Keep the micro-mesh conductivity field and Flow123d execution as the remaining USER work.
+
 ## Stage B - single-level Monte Carlo sampling
 
 1. Copy and adapt only the required parameter-transformation, reproducible sampling, Dask, PBS, HDF restart, and
@@ -51,10 +58,17 @@ USER: Implement `create_study_meshes` and `run_homogenization_problem`, then ena
 ## AGENT Questions And Remarks
 
 - No open design questions for Stage A.
+- The micro-mesh conductivity field and microscale Flow123d configuration remain USER inputs before the three-load
+  calculation can run.
 - Before Stage B, decide whether DFN realization randomness is part of the parameter vector or is derived
   deterministically from `sample_id`.
 
 ## AGENT Log
 
+- 2026-10-16: Made micro-material region matching exact and applied the configured conductivity override to
+  `box_A`, `box_B`, `box_thin`, and `box_thick` during preparation.
+- 2026-10-15: Added conductivity-homogenization preparation: load both meshes, select all homogenization bulk
+  elements, validate the three independent loads, build and preflight the averaging domains, and call the preparation
+  from `test_mesh.py`. The micro-mesh conductivity field and Flow123d execution remain USER work.
 - 2026-10-09: Created the independent application package with its own job paths, result model, mesh and problem
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.

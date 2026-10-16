@@ -1,9 +1,6 @@
-import pytest
 import shutil
 from pathlib import Path
 import logging
-
-from bgem.upscale import homogenization
 
 import yaml
 
@@ -11,6 +8,8 @@ from endorse import common
 
 from homogenization_study.create_mesh import make_fractures, make_mesh, make_geometry_micro, make_geometry_homo
 from homogenization_study import job
+from homogenization_study.model import StudyMeshFiles
+from homogenization_study.problem import prepare_conductivity_homogenization
 
 
 def population_parametrized(fr_families, parameters):
@@ -50,6 +49,7 @@ def update_mesh_cfg(cfg_mesh, cfg_params, new_mesh_name):
 
 
 def test_mesh() -> None:
+    """Build both meshes and prepare the averaging domains for conductivity homogenization."""
     app_dir = Path(__file__).absolute().parents[1]
     work_dir = app_dir / "workdir_msh"
     job.set_workdir(work_dir)
@@ -60,6 +60,7 @@ def test_mesh() -> None:
         raise Exception(f"Input data '{job.input.dir_path}' not found in workdir '{work_dir}'")
     cfg_path = job.input.study_cfg_path
     cfg = common.config.load_config(str(cfg_path))
+    cfg.homogenization.region_conductivity = 2.0
 
     param_dict = {
         'dfn_pop_1_alpha': 2.42941414948701,
@@ -84,7 +85,32 @@ def test_mesh() -> None:
         fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, param_dict["dfn_seed"])
 
         cfg_mesh = update_mesh_cfg(cfg.mesh, cfg.mlmc.levels[0].homo_params, "homogenization_mesh")
-        make_mesh(cfg_mesh, fracture_set, param_dict["meshing_seed"], geometry_func=make_geometry_homo)
+        homogenization_mesh = make_mesh(
+            cfg_mesh,
+            fracture_set,
+            param_dict["meshing_seed"],
+            geometry_func=make_geometry_homo,
+        )
 
         cfg_mesh = update_mesh_cfg(cfg.mesh, cfg.mlmc.levels[0].params, "micro_mesh")
-        make_mesh(cfg_mesh, fracture_set, param_dict["meshing_seed"], geometry_func=make_geometry_micro)
+        micro_mesh = make_mesh(
+            cfg_mesh,
+            fracture_set,
+            param_dict["meshing_seed"],
+            geometry_func=make_geometry_micro,
+        )
+
+        prepared = prepare_conductivity_homogenization(
+            cfg,
+            StudyMeshFiles(
+                micro_mesh=micro_mesh.path,
+                homogenization_mesh=homogenization_mesh.path,
+            ),
+        )
+
+    assert prepared.homogenized_elements.size > 0
+    assert prepared.subproblems.n_subdomains == prepared.homogenized_elements.size
+    assert prepared.empty_macro_elements.size == 0
+    assert prepared.pressure_loads.shape == (3, 3)
+    assert prepared.micro_conductivity.shape == (len(prepared.micro_mesh.elements),)
+    assert prepared.micro_conductivity.max() == 2.0
