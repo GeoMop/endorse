@@ -324,7 +324,7 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
     return subprobs.subdomains_average(subdomain_load), subprobs.subdomains_average(subdomain_response)
 
 @report
-# @memoize
+@memoize
 def subproblem_input(subproblem, fields):
     mesh = subproblem.submesh
     # micro_elements = np.asarray(subproblem.micro_elements, dtype=int)
@@ -388,6 +388,7 @@ def micro_postprocess(
     return load_averages, response_averages
 
 
+@memoize
 def micro_problem(cfg, tag, subproblem, load, fields):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):

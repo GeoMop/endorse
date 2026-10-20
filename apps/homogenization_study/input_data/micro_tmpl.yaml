@@ -22,6 +22,10 @@ problem: !Coupling_Sequential
         conductivity: !FieldFE
           mesh_data_file: <mesh_file>
           field_name: conductivity
+      - region: fractures
+        cross_section: !FieldFE
+          mesh_data_file: <mesh_file>
+          field_name: cross_section
 
     output:
       fields:
@@ -31,10 +35,9 @@ problem: !Coupling_Sequential
         - velocity_p0
         - region_id
         - conductivity
-        - anisotropy
+        #- anisotropy
         - cross_section
 
-    balance:
-      cumulative: true
+    balance: {}
     output_stream:
       format: !gmsh

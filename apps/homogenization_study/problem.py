@@ -33,7 +33,7 @@ class PreparedConductivityHomogenization:
     empty_macro_elements: np.ndarray
     micro_fields: dict
 
-
+@memoize
 def merge_fr_regions(mesh: Mesh, fr_set):
     """Merge fracture element tags and expose the shared region as ``fractures``."""
     if not fr_set:
@@ -137,7 +137,8 @@ def prepare_conductivity_homogenization(
     set_field_value_on_regions(micro_mesh, micro_fields["conductivity"], cond_B, ["box_B", "box_thick"])
     set_fracture_conductivity(micro_fields, cfg, mesh=micro_mesh, fractures=fractures, el_to_fr=el_to_fr)
 
-    micro_mesh.write_fields_vtu("micro_fields.vtu", micro_fields)
+    if cfg.debug_output:
+        micro_mesh.write_fields_vtu("micro_fields.vtu", micro_fields)
 
     macro_bulk = homogenization_mesh.el_dim_slice(dim=3)
     homogenized_elements = np.arange(macro_bulk.start, macro_bulk.stop, dtype=int)
@@ -178,6 +179,7 @@ def prepare_conductivity_homogenization(
     )
 
 
+@memoize
 def run_homogenization_problem(
     cfg: dotdict,
     workdir: Path,
@@ -209,7 +211,7 @@ def run_homogenization_problem(
             averaged_loads.append(load_average)
             averaged_responses.append(response_average)
 
-    cond_tensors = prepared.subproblems.equivalent_tensor_field(
+    cond_voigt_tensors = prepared.subproblems.equivalent_tensor_field(
         np.asarray(averaged_loads),
         np.asarray(averaged_responses),
     )
@@ -219,16 +221,17 @@ def run_homogenization_problem(
     element_indices = prepared.homogenized_elements
     n_elements = len(element_indices)
 
-    conductivity_tn = np.empty((n_elements, 9))
-    conductivity_tn[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
-    voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
-    conductivity_tn[element_indices[:], :] = cond_tensors[:, voigt_indices[:]]
+    if cfg.debug_output:
+        conductivity_tn = np.empty((n_elements, 9))
+        conductivity_tn[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
+        voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
+        conductivity_tn[element_indices[:], :] = cond_voigt_tensors[:, voigt_indices[:]]
+        prepared.homogenization_mesh.write_fields_vtu("homogenization.vtu",
+                                                      dict(conductivity_tn=conductivity_tn))
 
-    prepared.homogenization_mesh.write_fields_vtu("homogenization.vtu",
-                                                  dict(conductivity_tn=conductivity_tn))
     homogenization_mesh = prepared.homogenization_mesh
     result = ConductivityFieldResult(
-        conductivity=conductivity_tn,
+        conductivity=cond_voigt_tensors,
         el_barycenter=homogenization_mesh.el_barycenters()[element_indices],
         gmsh_id=np.asarray(homogenization_mesh.el_ids, dtype=np.int64)[element_indices],
     )

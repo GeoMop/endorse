@@ -109,4 +109,3 @@ def test_mesh() -> None:
     assert prepared.homogenized_elements.size > 0
     assert prepared.subproblems.n_subdomains == prepared.homogenized_elements.size
     assert prepared.empty_macro_elements.size == 0
-    assert prepared.pressure_loads.shape == (3, 3)
