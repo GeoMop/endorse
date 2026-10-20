@@ -58,17 +58,18 @@ Current Stage A implementation steps:
 ## AGENT Questions And Remarks
 
 - No open design questions for Stage A.
-- The micro-mesh conductivity field and microscale Flow123d configuration remain USER inputs before the three-load
-  calculation can run.
+- The microscale Flow123d configuration and executable remain USER inputs before the three-load calculation can run.
 - Before Stage B, decide whether DFN realization randomness is part of the parameter vector or is derived
   deterministically from `sample_id`.
 
 ## AGENT Log
 
+- 2026-10-20: Implemented the three-load runner: execute averaged micro responses, recover six-component conductivity
+  tensors, and return stable homogenization element geometry and Gmsh ids.
 - 2026-10-16: Made micro-material region matching exact and applied the configured conductivity override to
   `box_A`, `box_B`, `box_thin`, and `box_thick` during preparation.
 - 2026-10-15: Added conductivity-homogenization preparation: load both meshes, select all homogenization bulk
   elements, validate the three independent loads, build and preflight the averaging domains, and call the preparation
-  from `test_mesh.py`. The micro-mesh conductivity field and Flow123d execution remain USER work.
+  from `test_mesh.py`. Flow123d execution remained USER work at that stage.
 - 2026-10-09: Created the independent application package with its own job paths, result model, mesh and problem
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.

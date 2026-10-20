@@ -4,10 +4,7 @@ homogenization:
   coverage_preflight: true
   # Linear scale of the averaging tetrahedron relative to its macro mesh element.
   macro_element_scale: 2.0
-  pressure_loads:
-    - [ 1.0, 0.0, 0.0 ]
-    - [ 0.0, 1.0, 0.0 ]
-    - [ 0.0, 0.0, 1.0 ]
+  pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ]
 
 ot_sensitivity: !include _ot_sensitivity.yaml
 
@@ -51,3 +48,80 @@ mesh:
     # mesh step on outer boundary
     boundary_mesh_step: 100
     fracture_mesh_step: 100
+
+transport_microscale:
+    input_template: micro_tmpl.yaml
+
+#    pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ] #, [0,1,1], [1,0,1], [1,1,0]]
+    load_field_indirect_conductivity: "conductivity"
+    response_field_p0: "velocity_p0"
+
+#    bulk_field_params: *bulk_field_params
+#    fr_field_params: *fr_field_params
+#    output_times: *output_times
+#    end_time: *end_time
+#    dt_limits: *dt_limits
+
+    flow_solver__a_tol: 1e-15
+    flow_solver__r_tol: 1e-15
+    flow_solver__options: -ksp_type cg -pc_type hypre -pc_hypre_type boomeramg  -pc_hypre_boomeramg_coarsen_type HMIS -pc_hypre_boomeramg_strong_threshold 0.5  -ksp_monitor
+
+
+machine_config:
+    # automatic resolution according to the socket.gethostname()
+    # content of the 'machine_config' dict is filled by the particular
+    # machine configuration dict
+    makovnik:
+        flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
+    paulie-MSI:  #JB
+        flow_executable:
+        # release
+        - /home/paulie/Workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
+
+        pbs: null
+    __default__: # Assumes running on charon
+        flow_executable:
+        - singularity
+        - exec
+        - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
+        - /opt/flow123d/bin/flow123d
+        # pbs:
+        #     n_cores: 18
+        #     n_nodes: 10
+        #     scratch: 100gb
+        #     mem: 80Gb
+        #     queue: default
+        #     pbs_name: chodby_trans
+        #     walltime: "24:00:00"
+        pbs:
+            n_cores: 5
+            n_nodes: 1
+            #select_flags: ['cgroups=cpuacct', 'scratch_local=10gb']
+            scratch: 100gb
+            mem: 80Gb
+            queue: charon
+            pbs_name: trans_mlmc_var
+            walltime: "04:00:00"
+    #__default__:  # assume flow123d available and no pbs
+    #    flow_executable:
+    #    - flow123d

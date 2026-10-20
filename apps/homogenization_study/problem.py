@@ -11,10 +11,10 @@ import attrs
 import numpy as np
 
 from endorse.apply_fields import fr_fields_repo
-from endorse.common import dotdict
-from endorse.common import File
+from endorse import common
+from endorse.common import dotdict, File, memoize
 from endorse.homogenisation import Subproblems, validate_subdomain_coverage
-from endorse.macro_flow_model import configured_macro_tetra
+from endorse.macro_flow_model import configured_macro_tetra, micro_load_response
 from endorse.fullscale_transport import fracture_map
 from endorse.mesh_class import Mesh, load_mesh
 
@@ -105,6 +105,7 @@ def set_fracture_conductivity(fields:dict, cfg: dotdict, mesh: Mesh, fractures:S
     fields["cross_section"][fracture_elements] = fr_cross
 
 
+@memoize
 def prepare_conductivity_homogenization(
     cfg: dotdict,
     meshes: StudyMeshFiles,
@@ -115,11 +116,9 @@ def prepare_conductivity_homogenization(
     ``homogenization.micro_conductivity`` initializes all micro elements and
     ``homogenization.region_conductivity`` overrides the four material regions.
     """
-    pressure_loads = np.asarray(cfg["homogenization"]["pressure_loads"], dtype=float)
-    if pressure_loads.shape != (3, 3):
+    pressure_loads = cfg["homogenization"]["pressure_loads"]
+    if np.asarray(pressure_loads).shape != (3, 3):
         raise ValueError(f"homogenization.pressure_loads must have shape (3, 3), got {pressure_loads.shape}.")
-    if np.linalg.matrix_rank(pressure_loads) != 3:
-        raise ValueError("homogenization.pressure_loads must contain three independent load vectors.")
 
     for mesh_path in (meshes.micro_mesh, meshes.homogenization_mesh):
         if not mesh_path.is_file():
@@ -166,7 +165,7 @@ def prepare_conductivity_homogenization(
         len(micro_mesh.elements),
         homogenized_elements.size,
         empty_macro_elements.size,
-        pressure_loads.shape[0],
+        pressure_loads,
     )
     return PreparedConductivityHomogenization(
         micro_mesh=micro_mesh,
@@ -180,15 +179,58 @@ def prepare_conductivity_homogenization(
 
 
 def run_homogenization_problem(
-    cfg: Mapping[str, Any],
+    cfg: dotdict,
     workdir: Path,
     meshes: StudyMeshFiles,
+    prepared: PreparedConductivityHomogenization | None = None,
 ) -> ConductivityFieldResult:
     """Run three Flow123d loads and return the homogenized tensor field.
 
-    Preserve the six-component ordering returned by the current
-    ``macro_flow_model`` homogenization calculation.
+    The prepared subproblems are reused for every load.  Flow123d returns
+    elementwise load and response fields; their subdomain averages are solved
+    together into the six-component Voigt tensor used by the study result.
     """
-    raise NotImplementedError(
-        "USER: implement the deterministic three-load homogenization problem."
+    if prepared is None:
+        prepared = prepare_conductivity_homogenization(cfg, meshes)
+
+    loads = prepared.pressure_loads
+    averaged_loads = []
+    averaged_responses = []
+    with common.workdir(workdir, clean=False):
+        for load_index, load in enumerate(loads):
+            logging.info("Starting homogenization pressure load %s/%s: %s", load_index + 1, len(loads), load)
+            load_average, response_average = micro_load_response(
+                cfg,
+                prepared.subproblems,
+                load_index,
+                load,
+                prepared.micro_fields,
+            )
+            averaged_loads.append(load_average)
+            averaged_responses.append(response_average)
+
+    cond_tensors = prepared.subproblems.equivalent_tensor_field(
+        np.asarray(averaged_loads),
+        np.asarray(averaged_responses),
     )
+
+    # Heterogeneous conductiity tensor stored in Voigt notation.
+    dflt_cond = -1e-16
+    element_indices = prepared.homogenized_elements
+    n_elements = len(element_indices)
+
+    conductivity_tn = np.empty((n_elements, 9))
+    conductivity_tn[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
+    voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
+    conductivity_tn[element_indices[:], :] = cond_tensors[:, voigt_indices[:]]
+
+    prepared.homogenization_mesh.write_fields_vtu("homogenization.vtu",
+                                                  dict(conductivity_tn=conductivity_tn))
+    homogenization_mesh = prepared.homogenization_mesh
+    result = ConductivityFieldResult(
+        conductivity=conductivity_tn,
+        el_barycenter=homogenization_mesh.el_barycenters()[element_indices],
+        gmsh_id=np.asarray(homogenization_mesh.el_ids, dtype=np.int64)[element_indices],
+    )
+    logging.info("Completed conductivity homogenization for %s elements.", result.n_elements)
+    return result

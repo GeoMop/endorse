@@ -311,8 +311,6 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
     Return (n_subdomains, (load_avg, respons_avg))
     TODO: finish param to Flow, test
     """
-    cfg_micro = cfg.transport_microscale
-    cfg_flow = cfg.machine_config
     def micro(iprob, subprob):
         tag = f"load_{i_load}_{iprob}"
         avg_l, avg_r = micro_problem(cfg, tag, subprob, load, fields)

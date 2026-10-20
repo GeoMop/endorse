@@ -9,7 +9,7 @@ from endorse import common
 from homogenization_study.create_mesh import make_fractures, make_mesh, make_geometry_micro, make_geometry_homo
 from homogenization_study import job
 from homogenization_study.model import StudyMeshFiles
-from homogenization_study.problem import prepare_conductivity_homogenization
+from homogenization_study.problem import prepare_conductivity_homogenization, run_homogenization_problem
 
 
 def population_parametrized(fr_families, parameters):
@@ -99,14 +99,12 @@ def test_mesh() -> None:
             geometry_func=make_geometry_micro,
         )
 
-        prepared = prepare_conductivity_homogenization(
-            cfg,
-            StudyMeshFiles(
+        meshes = StudyMeshFiles(
                 micro_mesh=micro_mesh.path,
-                homogenization_mesh=homogenization_mesh.path,
-            ),
-            fractures=fracture_set
-        )
+                homogenization_mesh=homogenization_mesh.path)
+        prepared = prepare_conductivity_homogenization(cfg, meshes, fractures=fracture_set)
+
+        result = run_homogenization_problem(cfg, work_dir, meshes, prepared)
 
     assert prepared.homogenized_elements.size > 0
     assert prepared.subproblems.n_subdomains == prepared.homogenized_elements.size
