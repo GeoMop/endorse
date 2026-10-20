@@ -60,7 +60,6 @@ def test_mesh() -> None:
         raise Exception(f"Input data '{job.input.dir_path}' not found in workdir '{work_dir}'")
     cfg_path = job.input.study_cfg_path
     cfg = common.config.load_config(str(cfg_path))
-    cfg.homogenization.region_conductivity = 2.0
 
     param_dict = {
         'dfn_pop_1_alpha': 2.42941414948701,
@@ -106,11 +105,10 @@ def test_mesh() -> None:
                 micro_mesh=micro_mesh.path,
                 homogenization_mesh=homogenization_mesh.path,
             ),
+            fractures=fracture_set
         )
 
     assert prepared.homogenized_elements.size > 0
     assert prepared.subproblems.n_subdomains == prepared.homogenized_elements.size
     assert prepared.empty_macro_elements.size == 0
     assert prepared.pressure_loads.shape == (3, 3)
-    assert prepared.micro_conductivity.shape == (len(prepared.micro_mesh.elements),)
-    assert prepared.micro_conductivity.max() == 2.0

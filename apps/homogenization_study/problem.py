@@ -10,9 +10,12 @@ from typing import Any, Sequence
 import attrs
 import numpy as np
 
+from endorse.apply_fields import fr_fields_repo
+from endorse.common import dotdict
 from endorse.common import File
 from endorse.homogenisation import Subproblems, validate_subdomain_coverage
 from endorse.macro_flow_model import configured_macro_tetra
+from endorse.fullscale_transport import fracture_map
 from endorse.mesh_class import Mesh, load_mesh
 
 from .model import ConductivityFieldResult, StudyMeshFiles
@@ -28,7 +31,23 @@ class PreparedConductivityHomogenization:
     subproblems: Subproblems
     pressure_loads: np.ndarray
     empty_macro_elements: np.ndarray
-    micro_conductivity: np.ndarray
+    micro_fields: dict
+
+
+def merge_fr_regions(mesh: Mesh, fr_set):
+    """Merge fracture element tags and expose the shared region as ``fractures``."""
+    if not fr_set:
+        return mesh, {}
+
+    el_to_ifr = fracture_map(mesh, fr_set, n_large=0, dim=3)
+    # rename region
+    fracture_region = mesh.gmsh_io.physical.pop("fr_small")
+    mesh.gmsh_io.physical["fractures"] = fracture_region
+
+    mesh_modified_filepath = Path(mesh.file.path).stem + "_modified.msh2"
+    mesh_modified_file = mesh.write_fields(mesh_modified_filepath)
+    mesh.file = mesh_modified_file
+    return mesh, el_to_ifr
 
 
 def set_field_value_on_regions(
@@ -62,9 +81,34 @@ def set_field_value_on_regions(
     field[selected_elements] = float(value)
 
 
+def set_fracture_conductivity(fields:dict, cfg: dotdict, mesh: Mesh, fractures:Sequence[Any] | None, el_to_fr):
+    if not fractures:
+        return
+    fracture_elements = mesh.el_dim_slice(dim=2)
+    default_fracture = len(fractures)
+    fracture_map_slice = [
+        el_to_fr.get(element_index, default_fracture)
+        for element_index in range(fracture_elements.start, fracture_elements.stop)
+    ]
+    fracture_field_params = dotdict.create(
+        # relative permeability with respect to ideal case given by cubic law
+        {"permeability_factor": 1.0e-2},
+    )
+    fr_cond, fr_cross, _ = fr_fields_repo(
+        cfg["mesh"]["fractures"],
+        fracture_field_params,
+        mesh.elements[fracture_elements],
+        fracture_map_slice,
+        fractures,
+    )
+    fields["conductivity"][fracture_elements] = fr_cond
+    fields["cross_section"][fracture_elements] = fr_cross
+
+
 def prepare_conductivity_homogenization(
-    cfg: Mapping[str, Any],
+    cfg: dotdict,
     meshes: StudyMeshFiles,
+    fractures: Sequence[Any] | None = None,
 ) -> PreparedConductivityHomogenization:
     """Load meshes, assign the configured micro conductivity, and construct averaging domains.
 
@@ -82,20 +126,18 @@ def prepare_conductivity_homogenization(
             raise FileNotFoundError(f"Homogenization mesh file does not exist: {mesh_path}")
 
     micro_mesh = load_mesh(File(str(meshes.micro_mesh)), heal_tol=None)
+    micro_mesh, el_to_fr = merge_fr_regions(micro_mesh, fractures)
     homogenization_mesh = load_mesh(File(str(meshes.homogenization_mesh)), heal_tol=None)
-    micro_conductivity = np.full(
-        len(micro_mesh.elements),
-        fill_value=0.0,
-        dtype=float,
-    )
+    micro_fields = {"conductivity": np.full(len(micro_mesh.elements), fill_value=0.0, dtype=float),
+                    "cross_section": np.full(len(micro_mesh.elements), fill_value=0.0, dtype=float),
+                    "region_id": micro_mesh.get_physical_ids()}
 
     cond_A = 1e-11
     cond_B = 1e-12
-    set_field_value_on_regions(micro_mesh, micro_conductivity, cond_A, ["box_A", "box_thin"])
-    set_field_value_on_regions(micro_mesh, micro_conductivity, cond_B, ["box_B", "box_thick"])
+    set_field_value_on_regions(micro_mesh, micro_fields["conductivity"], cond_A, ["box_A", "box_thin"])
+    set_field_value_on_regions(micro_mesh, micro_fields["conductivity"], cond_B, ["box_B", "box_thick"])
+    set_fracture_conductivity(micro_fields, cfg, mesh=micro_mesh, fractures=fractures, el_to_fr=el_to_fr)
 
-    micro_fields = {"conductivity": micro_conductivity,
-                    "region_id": micro_mesh.get_physical_ids()}
     micro_mesh.write_fields_vtu("micro_fields.vtu", micro_fields)
 
     macro_bulk = homogenization_mesh.el_dim_slice(dim=3)
@@ -133,7 +175,7 @@ def prepare_conductivity_homogenization(
         subproblems=subproblems,
         pressure_loads=pressure_loads,
         empty_macro_elements=empty_macro_elements,
-        micro_conductivity=micro_conductivity,
+        micro_fields=micro_fields,
     )
 
 

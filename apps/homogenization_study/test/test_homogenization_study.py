@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 
 import numpy as np
@@ -9,9 +10,7 @@ import pytest
 
 from homogenization_study import ConductivityFieldResult
 from homogenization_study import job
-from homogenization_study.create_mesh import create_study_meshes
 from homogenization_study.model import TENSOR_COMPONENTS, XYZ_COMPONENTS
-from homogenization_study.problem import run_homogenization_problem
 
 
 def test_conductivity_field_result_matches_storage_axes() -> None:
@@ -61,6 +60,15 @@ def test_study_artifact_paths_are_self_contained(tmp_path: Path) -> None:
 @pytest.mark.skip(reason="USER: deterministic study meshes and three-load homogenization are pending")
 def test_deterministic_homogenization_problem(tmp_path: Path) -> None:
     """Build both meshes and return a valid field from exactly three load cases."""
+    create_study_meshes = getattr(
+        import_module("homogenization_study.create_mesh"),
+        "create_study_meshes",
+    )
+    run_homogenization_problem = getattr(
+        import_module("homogenization_study.problem"),
+        "run_homogenization_problem",
+    )
+
     cfg = {
         "homogenization": {
             "pressure_loads": np.eye(3).tolist(),

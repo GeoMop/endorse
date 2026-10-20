@@ -164,7 +164,7 @@ def make_geometry_micro(factory, cfg_mesh:'dotdict', fracture_set):
         fractures = fracture_tools.create_fractures_rectangles(factory, fracture_set, cfg_geom.box_center, factory.rectangle())
         # vol_dict["fractures_group"] = factory.group(*fractures).intersect(vol_dict["box"])
         vol_dict["fractures_group"] = factory.group(*fractures).intersect(box)
-        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step).set_region("fractures")
+        vol_dict["fractures_group"].mesh_step(cfg_mesh.fracture_mesh_step) # .set_region("fractures")
         # determine fracture outer boundary
         # b_fractures_outer = vol_dict["fractures_group"].get_boundary()[1]
         # bnd_dict["b_fractures_outer"] = b_fractures_outer \
