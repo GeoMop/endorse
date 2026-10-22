@@ -61,15 +61,16 @@ class Output(DotDir):
 
 def set_workdir(workdir: Path, input_dir: Path | None = None) -> None:
     """Initialize input, scratch, and persistent output paths for one run."""
-    output_dir = Path(workdir)
+    output_dir = Path(workdir).expanduser().resolve()
     scratch_env = os.environ.get("SCRATCHDIR")
-    scratch_dir = Path(scratch_env) / "workdir" if scratch_env and "/job" in scratch_env else output_dir
+    scratch_dir = (Path(scratch_env).expanduser().resolve() / "workdir"
+                   if scratch_env and "/job" in scratch_env else output_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
     if input_dir is None:
-        input_dir = Path(os.environ.get(INPUT_DIR_ENV, output_dir / "input_data"))
+        input_dir = Path(os.environ.get(INPUT_DIR_ENV, output_dir / "input_data")).expanduser().resolve()
     else:
-        input_dir = Path(input_dir)
+        input_dir = Path(input_dir).expanduser().resolve()
         os.environ[INPUT_DIR_ENV] = str(input_dir)
     os.environ[OUTPUT_DIR_ENV] = str(output_dir)
 

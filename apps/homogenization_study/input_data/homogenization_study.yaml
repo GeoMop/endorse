@@ -11,7 +11,7 @@ homogenization:
 ot_sensitivity: !include _ot_sensitivity.yaml
 
 mlmc:
-  sim_class: TransportSimulation
+  sim_class: HomogenizationSimulation
   sample_mode: paired # saltelli
   levels:
     # coarsest

@@ -7,9 +7,15 @@ the six-component tensor field.
 
 from __future__ import annotations
 
+from functools import wraps
+import multiprocessing
+import os
 from pathlib import Path
 import logging
 from typing import Callable
+
+import yaml
+from loky import ProcessPoolExecutor
 
 import homogenization_study.job as job
 from bgem.gmsh.gmsh import ObjectSet
@@ -21,6 +27,61 @@ from bgem.gmsh import gmsh, options, gmsh_io, heal_mesh, field
 from bgem.stochastic import Population
 
 import homogenization_study.exception_wrapper as exp
+from homogenization_study.model import StudyMeshFiles
+from homogenization_study.ot_sa import Seed
+
+
+def run_in_subprocess(func):
+    """Run Gmsh work in a fresh process whose main thread may register signals."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        process = multiprocessing.current_process()
+        logging.info(
+            "Starting loky subprocess for %s from process=%s pid=%s ppid=%s daemon=%s",
+            func.__qualname__,
+            process.name,
+            os.getpid(),
+            os.getppid(),
+            process.daemon,
+        )
+        with ProcessPoolExecutor(max_workers=1) as executor:
+            return executor.submit(func, *args, **kwargs).result()
+    return wrapper
+
+
+def population_parametrized(fracture_families, parameters):
+    """Scale an inline fracture population using the configured sample parameters."""
+    population = fracture_families.copy()
+    for family in population:
+        family["p_32"] *= parameters["p_32_scale"]
+        family["power"] *= parameters["p_32_scale"]
+        family["tr_a"] *= parameters["p_32_scale"]
+        family["tr_b"] *= parameters["p_32_scale"]
+    return population
+
+
+def update_dfn_params(
+    cfg_fr: dotdict,
+    parameters: dict[str, float],
+    input_dir: Path | None = None,
+) -> None:
+    """Apply one sampled parameter dictionary to the fracture population."""
+    if "population_template" in cfg_fr:
+        source_dir = Path(input_dir) if input_dir is not None else job.input.dir_path
+        population_path = Path("fr_population")
+        common.substitute_placeholders(
+            file_in=source_dir / cfg_fr.population_template,
+            file_out=population_path,
+            params=parameters,
+        )
+        with population_path.open("r", encoding="utf-8") as population_file:
+            cfg_fr.population = dotdict.create(yaml.safe_load(population_file))
+        logging.info("Sampled DFN parameters:\n%s", parameters)
+        logging.info("Sampled DFN population:\n%s", cfg_fr.population)
+    elif cfg_fr.population:
+        cfg_fr.population = dotdict.create(population_parametrized(cfg_fr.population, parameters))
+    else:
+        raise ValueError("Fracture population not set and no population template provided.")
 
 
 def preserve_region_counter_after_unpickle(fracture_set) -> None:
@@ -329,11 +390,67 @@ def make_mesh(cfg_mesh, fracture_set, mesh_seed, geometry_func:Callable):
     print("Final mesh file: ", mesh_file_healed)
     return File(mesh_file_healed.name)
 
+
+def create_study_meshes(cfg: dotdict, workdir: Path) -> StudyMeshFiles:
+    """Create the fixed homogenization mesh and one parameterized micro mesh.
+
+    Both meshes are created in ``workdir`` so the returned paths are portable
+    between the driver and MLMC workers. The homogenization mesh uses the
+    coarsest configured mesh variant and is therefore created once per run.
+    """
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    dfn_seed = int(cfg.mesh.fractures.get("dfn_seed", cfg.mesh.fractures.get("seed", 1)))
+    mesh_seed = int(cfg.mesh.get("meshing_seed", 1))
+    with common.workdir(workdir, clean=False):
+        _fr_population, fracture_set, _n_large = make_fractures(cfg.mesh, dfn_seed)
+
+        level_cfg = cfg.mlmc.levels[0]
+        homo_cfg = common.apply_variant(cfg.mesh, level_cfg.get("homo_params", {}))
+        homo_cfg.mesh_name = "homogenization_mesh"
+        homogenization_mesh = make_mesh(homo_cfg, fracture_set, mesh_seed, make_geometry_homo)
+
+        micro_cfg = common.apply_variant(cfg.mesh, level_cfg.get("params", {}))
+        micro_cfg.mesh_name = "micro_mesh"
+        micro_mesh = make_mesh(micro_cfg, fracture_set, mesh_seed, make_geometry_micro)
+
+    return StudyMeshFiles(
+        micro_mesh=workdir / micro_mesh.path,
+        homogenization_mesh=workdir / homogenization_mesh.path,
+    )
+
+
+@run_in_subprocess
+def create_micro_mesh(cfg: dotdict, workdir: Path):
+    """Create one sample-specific micro mesh and return its fracture set."""
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    dfn_seed_value = float(cfg.mesh.fractures.get("dfn_seed", cfg.mesh.fractures.get("seed", 1)))
+    mesh_seed_value = float(cfg.mesh.get("meshing_seed", 1))
+    dfn_seed = int(Seed.get_seedsequence(dfn_seed_value).generate_state(1)[0])
+    mesh_seed = int(Seed.get_seedsequence(mesh_seed_value).generate_state(1)[0])
+    with common.workdir(workdir, clean=False):
+        _fr_population, fracture_set, _n_large = make_fractures(cfg.mesh, dfn_seed)
+        micro_cfg = common.apply_variant(cfg.mesh, cfg.mlmc.levels[0].get("params", {}))
+        micro_cfg.mesh_name = "micro_mesh"
+        micro_mesh = make_mesh(micro_cfg, fracture_set, mesh_seed, make_geometry_micro)
+    return workdir / micro_mesh.path, fracture_set
+
+
+def create_homogenization_mesh(cfg: dotdict, workdir: Path) -> Path:
+    """Create only the fixed homogenization mesh for a sampling run."""
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    dfn_seed = int(cfg.mesh.fractures.get("dfn_seed", cfg.mesh.fractures.get("seed", 1)))
+    mesh_seed = int(cfg.mesh.get("meshing_seed", 1))
+    with common.workdir(workdir, clean=False):
+        homo_cfg = common.apply_variant(cfg.mesh, cfg.mlmc.levels[0].get("homo_params", {}))
+        homo_cfg.mesh_name = "homogenization_mesh"
+        homogenization_mesh = make_mesh(homo_cfg, fracture_set=[], mesh_seed=mesh_seed,
+                                        geometry_func=make_geometry_homo)
+    return workdir / homogenization_mesh.path
+
 def main(cfg, workdir, dfn_seed, mesh_seed):
-
-    import chodby_trans.input_data as input_data
-    # common.EndorseCache.instance().expire_all()
-
     with common.workdir(workdir, clean=False):
         fr_pop, fracture_set, n_large = make_fractures(cfg.mesh, dfn_seed)
         return make_mesh(cfg, fracture_set, mesh_seed)

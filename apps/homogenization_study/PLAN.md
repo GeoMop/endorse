@@ -25,14 +25,24 @@ interfaces to `chodby_trans` where functionality is equivalent, allowing stable 
 8. Cover mesh persistence, stable homogenization element identity, result shape, and the three-load calculation with
    a focused integration test.
 
-USER: Implement `create_study_meshes` and `run_homogenization_problem`, then enable the pending integration test.
+Completed: `create_study_meshes` and `run_homogenization_problem` are implemented; the deterministic integration
+test remains pending a configured Flow123d run.
 
-Current Stage A implementation steps:
+Stage A implementation steps:
 
 1. Load the completed micro and homogenization meshes in `problem.py`.
 2. Select the homogenization-mesh bulk elements and build the averaging subproblems used by the three-load solve.
 3. Run the configured coverage preflight before any Flow123d calculation and expose the prepared state to the test.
 4. Keep the micro-mesh conductivity field and Flow123d execution as the remaining USER work.
+
+Current Stage B implementation steps:
+
+1. Use one `HomogenizationSimulation` MLMC level with deterministic grouped parameter planning.
+2. Build the fixed homogenization mesh once and create a sample-specific micro mesh in each worker workspace.
+3. Persist conductivity fields and diagnostics in one level-free Zarr store with stable element geometry.
+4. Resume unfinished samples through the MLMC HDF schedule and Dask sampling pool.
+5. Keep a deterministic `RandomSimulation` and PBS `submit` command for validating the sampling infrastructure
+   before running Flow123d.
 
 ## Stage B - single-level Monte Carlo sampling
 
@@ -59,13 +69,28 @@ Current Stage A implementation steps:
 
 - No open design questions for Stage A.
 - The microscale Flow123d configuration and executable remain USER inputs before the three-load calculation can run.
-- Before Stage B, decide whether DFN realization randomness is part of the parameter vector or is derived
-  deterministically from `sample_id`.
+- Stage B currently derives grouped parameter draws deterministically from the MLMC sample id; confirm whether DFN
+  realization randomness should instead be an explicit sampled parameter.
 
 ## AGENT Log
 
 - 2026-10-20: Implemented the three-load runner: execute averaged micro responses, recover six-component conductivity
   tensors, and return stable homogenization element geometry and Gmsh ids.
+- 2026-10-21: Added the single-level homogenization simulation, fixed-mesh/sample-mesh split, level-free field
+  storage contract, deterministic sample planning, and HDF/Dask restart driver.
+- 2026-10-21: Restored PBS script generation/submission and added `RandomSimulation` for infrastructure-only runs.
+- 2026-10-21: Restored automatic input-data copying when a new sampling workdir is used by the CLI driver.
+- 2026-10-21: Restricted the sampling driver to creating only the fixed homogenization mesh; workers create
+  sample-dependent micro meshes after parameter application.
+- 2026-10-21: Added HDF initialization that preserves incompatible stale restart files before creating a fresh
+  result-format-compatible store.
+- 2026-10-21: Added structural HDF validation so interrupted files missing `Levels/<id>` datasets are moved aside
+  before MLMC sampler construction.
+- 2026-10-21: Aligned HDF creation with the Chodby lifecycle: the driver opens `SampleStorageHDF` and lets
+  `Sampler.save_global_data()` create the level groups; only malformed restart files are quarantined first.
+- 2026-10-21: Resolved run, scratch, HDF, mesh, and Zarr paths before Dask scheduling so sample-directory changes
+  cannot redirect shared storage. The random run and an HDF restart both completed with 10 collected samples and
+  no failures; local testing uses one worker thread while scheduler-backed runs retain cluster parallelism.
 - 2026-10-16: Made micro-material region matching exact and applied the configured conductivity override to
   `box_A`, `box_B`, `box_thin`, and `box_thick` during preparation.
 - 2026-10-15: Added conductivity-homogenization preparation: load both meshes, select all homogenization bulk

@@ -185,6 +185,7 @@ def run_homogenization_problem(
     workdir: Path,
     meshes: StudyMeshFiles,
     prepared: PreparedConductivityHomogenization | None = None,
+    fractures: Sequence[Any] | None = None,
 ) -> ConductivityFieldResult:
     """Run three Flow123d loads and return the homogenized tensor field.
 
@@ -193,7 +194,7 @@ def run_homogenization_problem(
     together into the six-component Voigt tensor used by the study result.
     """
     if prepared is None:
-        prepared = prepare_conductivity_homogenization(cfg, meshes)
+        prepared = prepare_conductivity_homogenization(cfg, meshes, fractures=fractures)
 
     loads = prepared.pressure_loads
     averaged_loads = []

@@ -2,45 +2,18 @@ import shutil
 from pathlib import Path
 import logging
 
-import yaml
-
 from endorse import common
 
-from homogenization_study.create_mesh import make_fractures, make_mesh, make_geometry_micro, make_geometry_homo
+from homogenization_study.create_mesh import (
+    make_fractures,
+    make_geometry_homo,
+    make_geometry_micro,
+    make_mesh,
+    update_dfn_params,
+)
 from homogenization_study import job
 from homogenization_study.model import StudyMeshFiles
 from homogenization_study.problem import prepare_conductivity_homogenization, run_homogenization_problem
-
-
-def population_parametrized(fr_families, parameters):
-    new_fr_families = fr_families.copy()
-    for fr_fam in new_fr_families:
-        fr_fam['p_32'] = fr_fam['p_32'] * parameters['p_32_scale']
-        fr_fam['power'] = fr_fam['power'] * parameters['p_32_scale']
-        fr_fam['tr_a'] = fr_fam['tr_a'] * parameters['p_32_scale']
-        fr_fam['tr_b'] = fr_fam['tr_b'] * parameters['p_32_scale']
-    return new_fr_families
-
-def update_dfn_params(cfg_fr, param_dict):
-    if "population_template" in cfg_fr:
-        # replace random parameters in fracture population config
-        fr_population_fname = "fr_population"
-        common.substitute_placeholders(file_in=job.input.dir_path / cfg_fr.population_template,
-                                       file_out=fr_population_fname,
-                                       params=param_dict)
-        with Path(fr_population_fname).open("r", encoding="utf-8") as file:
-            content = file.read()
-            fr_dict = yaml.safe_load(content)
-            cfg_fr.population = common.dotdict.create(fr_dict)
-            logging.info(f"param_dict:\n{param_dict}")
-            logging.info(f"DFN REPO:\n{cfg_fr.population}")
-
-    elif len(cfg_fr.population) > 0:
-        # randomize fracture populations parameters with Forsmark data
-        dfn_cfg = population_parametrized(cfg_fr.population, param_dict)
-    else:
-        raise Exception("Fracture population not set, neither template file given.")
-
 
 def update_mesh_cfg(cfg_mesh, cfg_params, new_mesh_name):
     mcfg = common.apply_variant(cfg_mesh, cfg_params)
