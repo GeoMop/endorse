@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
+import subprocess
 
 import numpy as np
 import pytest
 
+from endorse import common
 from homogenization_study import ConductivityFieldResult
 from homogenization_study import job
 from homogenization_study.model import TENSOR_COMPONENTS, XYZ_COMPONENTS
+from homogenization_study.sensitivity_sampling import submit_pbs
 
 
 def test_conductivity_field_result_matches_storage_axes() -> None:
@@ -57,7 +60,31 @@ def test_study_artifact_paths_are_self_contained(tmp_path: Path) -> None:
     assert job.output.pbs_script == tmp_path / "homogenization_sampling.pbs"
 
 
-@pytest.mark.skip(reason="USER: deterministic study meshes and three-load homogenization are pending")
+def test_pbs_submission_runs_sampling_through_dask_cluster(tmp_path: Path) -> None:
+    """Start, use, and stop the multi-node Dask runner in a generated PBS job."""
+    job.set_workdir(tmp_path)
+    machine_cfg = {
+        "pbs": {
+            "n_nodes": 2,
+            "n_cores": 4,
+            "mem": "16gb",
+            "scratch": "20gb",
+            "walltime": "01:00:00",
+            "queue": "default",
+            "pbs_name": "homogenization",
+        }
+    }
+
+    script_path = submit_pbs(common.dotdict.create(machine_cfg), cmd="meta", submit=False)
+    script = script_path.read_text(encoding="utf-8")
+
+    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" start' in script
+    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" run meta' in script
+    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" stop' in script
+    subprocess.run(["bash", "-n", str(script_path)], check=True)
+
+
+@pytest.mark.skip(reason="integration test requires a configured Flow123d run")
 def test_deterministic_homogenization_problem(tmp_path: Path) -> None:
     """Build both meshes and return a valid field from exactly three load cases."""
     create_study_meshes = getattr(

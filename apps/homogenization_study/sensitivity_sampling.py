@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 import socket
@@ -25,6 +26,7 @@ from mlmc.sampling_pool_dask import SamplingPoolDask
 
 from homogenization_study import job
 from homogenization_study.create_mesh import create_homogenization_mesh
+from homogenization_study.dask_status import scheduler_preload_status, worker_preload_status
 from homogenization_study.model import StudyMeshFiles
 from homogenization_study.problem_simulation import (
     HomogenizationSimulation,
@@ -115,6 +117,41 @@ def sample_counts(sampler: Sampler) -> tuple[int, int]:
     return finished - failed, failed
 
 
+def wait_for_expected_workers(client: Client) -> int | None:
+    """Wait for the worker count published by the PBS Dask runner."""
+    expected_raw = os.environ.get("DASK_EXPECTED_WORKERS")
+    if expected_raw is None:
+        logging.warning("DASK_EXPECTED_WORKERS is not set; skipping the worker registration barrier.")
+        return None
+    expected = int(expected_raw)
+    timeout = float(os.environ.get("DASK_WORKER_STARTUP_TIMEOUT", "600"))
+    if expected < 1:
+        raise ValueError(f"DASK_EXPECTED_WORKERS must be positive, got {expected}.")
+    logging.info("Waiting up to %.1fs for %s Dask workers.", timeout, expected)
+    client.wait_for_workers(expected, timeout=timeout)
+    connected = len(client.scheduler_info(n_workers=-1)["workers"])
+    logging.info("Dask worker registration complete: expected=%s connected=%s.", expected, connected)
+    return connected
+
+
+def validate_cluster_preloads(client: Client) -> None:
+    """Require the scheduler and every connected worker to finish preloading."""
+    scheduler_state = client.run_on_scheduler(scheduler_preload_status)
+    if not scheduler_state.get("completed", False):
+        raise RuntimeError("Homogenization preload did not complete on the Dask scheduler.")
+    worker_states = client.run(worker_preload_status)
+    if not worker_states:
+        raise RuntimeError("No Dask workers are connected for homogenization sampling.")
+    incomplete = [address for address, state in worker_states.items() if not state.get("completed", False)]
+    if incomplete:
+        raise RuntimeError("Homogenization preload did not complete on workers: " + ", ".join(sorted(incomplete)))
+    logging.info(
+        "Verified Dask preloads: scheduler pid=%s, workers=%s.",
+        scheduler_state["pid"],
+        len(worker_states),
+    )
+
+
 def _move_stale_hdf(path: Path) -> Path:
     """Move a broken HDF file aside and return its backup path."""
     stale_path = path.with_name(path.stem + ".stale" + path.suffix)
@@ -174,6 +211,9 @@ def run_mlmc_sampling(
     workdir: Path | None = None,
 ) -> Sampler:
     """Run or resume the configured single-level sampling calculation."""
+    expected_workers = wait_for_expected_workers(client)
+    if expected_workers is not None:
+        validate_cluster_preloads(client)
     if job.output is None:
         raise RuntimeError("Call job.set_workdir before starting sampling.")
     workdir = Path(workdir or job.scratch.dir_path).resolve()
@@ -237,19 +277,32 @@ export ENDORSE_DISABLE_MEMOIZE=1
 
 OUTPUT_DIR={output_dir}
 PROJECT_DIR={project_dir}
-PYEXEC={python_executable}
+DASK_RUNNER="$PROJECT_DIR/dask_cluster.sh"
+CLUSTER_STARTED=0
+
+stop_cluster() {{
+    if [[ "$CLUSTER_STARTED" == 1 ]]; then
+        bash "$DASK_RUNNER" "$OUTPUT_DIR" stop || true
+    fi
+}}
+trap stop_cluster EXIT INT TERM
+
 mkdir -p "$OUTPUT_DIR"
-cd "$OUTPUT_DIR"
-"$PYEXEC" -u "$PROJECT_DIR/sensitivity_sampling.py" "$OUTPUT_DIR" {driver_command}
+bash "$DASK_RUNNER" "$OUTPUT_DIR" start
+CLUSTER_STARTED=1
+cd "$SCRATCHDIR"
+bash "$DASK_RUNNER" "$OUTPUT_DIR" run {driver_command}
+bash "$DASK_RUNNER" "$OUTPUT_DIR" stop
+CLUSTER_STARTED=0
+trap - EXIT INT TERM
 """
 
 
-def submit_pbs(cfg_machine: dotdict, cmd: str = "local", *, submit: bool = True) -> Path:
+def submit_pbs(cfg_machine: dotdict, cmd: str = "meta", *, submit: bool = True) -> Path:
     """Create the PBS script and optionally submit it with ``qsub``.
 
-    ``cmd`` is retained for compatibility with the Chodby launcher.  The
-    homogenization driver always executes the single-level sampling command;
-    ``local`` and ``meta`` are accepted aliases.
+    The generated job starts the adapted multi-node Dask runner, executes the
+    requested driver command against its scheduler, and stops the cluster.
     """
     if cmd not in {"local", "meta", "mlmc", "continue", "random"}:
         raise ValueError(f"Unsupported PBS command {cmd!r}.")
@@ -275,7 +328,6 @@ def submit_pbs(cfg_machine: dotdict, cmd: str = "local", *, submit: bool = True)
         "out_log": job.output.dir_path / f"{pbs.pbs_name}.out",
         "output_dir": job.output.dir_path,
         "project_dir": Path(__file__).resolve().parent,
-        "python_executable": sys.executable,
         "driver_command": cmd,
     }
     script_path.write_text(PBS_SCRIPT_TEMPLATE.format(**values), encoding="utf-8")
@@ -303,7 +355,7 @@ def main() -> None:
         return
     if command == "random":
         cfg.mlmc.sim_class = "RandomSimulation"
-    elif command not in {"local", "meta", "mlmc"}:
+    elif command not in {"local", "meta", "mlmc", "continue"}:
         raise ValueError(f"Unknown command {command!r}; use submit, local, or random.")
     scheduler = sys.argv[3] if len(sys.argv) > 3 else None
     if scheduler:
