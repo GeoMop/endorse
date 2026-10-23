@@ -8,12 +8,18 @@ import subprocess
 
 import numpy as np
 import pytest
+import xarray as xr
 
 from endorse import common
 from homogenization_study import ConductivityFieldResult
 from homogenization_study import job
 from homogenization_study.model import TENSOR_COMPONENTS, XYZ_COMPONENTS
+from homogenization_study.problem_simulation import FIELD_GROUP, ensure_field_storage, write_field_result
 from homogenization_study.sensitivity_sampling import submit_pbs
+from homogenization_study.zarr_to_fuse import convert_to_zarr_fuse, normalize_source_dataset
+
+
+SCHEMA_PATH = Path(__file__).parents[1] / "input_data" / "data_schema.yaml"
 
 
 def test_conductivity_field_result_matches_storage_axes() -> None:
@@ -54,6 +60,7 @@ def test_study_artifact_paths_are_self_contained(tmp_path: Path) -> None:
     job.set_workdir(tmp_path)
 
     assert job.input.study_cfg_path == tmp_path / "input_data" / "homogenization_study.yaml"
+    assert job.input.data_schema_yaml == tmp_path / "input_data" / "data_schema.yaml"
     assert job.output.zarr_store_path == tmp_path / "homogenization_sampling"
     assert job.output.mlmc_hdf_path == tmp_path / "homogenization_mlmc.hdf"
     assert job.output.homogenization_mesh_dir == tmp_path / "homogenization_mesh"
@@ -82,6 +89,52 @@ def test_pbs_submission_runs_sampling_through_dask_cluster(tmp_path: Path) -> No
     assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" run meta' in script
     assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" stop' in script
     subprocess.run(["bash", "-n", str(script_path)], check=True)
+
+
+def test_schema_storage_and_zarr_fuse_conversion(tmp_path: Path) -> None:
+    """Use the shared tensor schema for local storage and the independent Fuse export."""
+    source_store = tmp_path / "source.zarr"
+    destination_store = tmp_path / "fused.zarr"
+    barycenters = np.arange(15, dtype=float).reshape(5, 3)
+    gmsh_ids = np.arange(101, 106, dtype=np.int64)
+    ensure_field_storage(
+        source_store,
+        schema_path=SCHEMA_PATH,
+        n_samples=2,
+        n_elements=5,
+        parameter_names=["alpha", "beta"],
+        el_barycenter=barycenters,
+        gmsh_id=gmsh_ids,
+    )
+    conductivity = np.arange(30, dtype=float).reshape(5, 6)
+    write_field_result(
+        source_store,
+        sample_id=1,
+        conductivity=conductivity,
+        parameter_values=[0.25, 0.75],
+        return_code=0,
+        eval_time=12.5,
+    )
+
+    source = xr.open_zarr(source_store, group=FIELD_GROUP, consolidated=False)
+    assert source["conductivity"].dims == ("sample_id", "el_id", "tensor_comp")
+    assert source["conductivity"].encoding["chunks"] == (1, 5, 6)
+    assert source["parameter"].dims == ("sample_id", "param_name")
+    np.testing.assert_array_equal(source["gmsh_id"], gmsh_ids)
+    np.testing.assert_allclose(source["conductivity"].isel(sample_id=1), conductivity)
+
+    fused = convert_to_zarr_fuse(
+        source_store,
+        SCHEMA_PATH,
+        store_url=str(destination_store),
+        overwrite=True,
+    )
+    assert set(fused.data_vars) == set(source.data_vars)
+    np.testing.assert_allclose(fused["conductivity"], source["conductivity"])
+
+    legacy = source.rename({"parameter": "param_val", "param_name": "parameter"})
+    normalized = normalize_source_dataset(legacy)
+    assert normalized["parameter"].dims == ("sample_id", "param_name")
 
 
 @pytest.mark.skip(reason="integration test requires a configured Flow123d run")

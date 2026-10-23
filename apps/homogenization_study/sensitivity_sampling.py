@@ -75,6 +75,7 @@ def prepare_sampling(cfg: dotdict, meshes: StudyMeshFiles, workdir: Path):
     n_samples = int(cfg.ot_sensitivity.n_samples)
     ensure_field_storage(
         job.output.zarr_store_path,
+        schema_path=job.input.data_schema_yaml,
         n_samples=n_samples,
         n_elements=len(gmsh_id),
         parameter_names=parameter_names,

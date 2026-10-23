@@ -40,6 +40,7 @@ class Input(DotDir):
     """Input files copied into a self-contained study run."""
 
     _study_cfg_path = "homogenization_study.yaml"
+    _data_schema_yaml = "data_schema.yaml"
 
 
 class Scratch(DotDir):

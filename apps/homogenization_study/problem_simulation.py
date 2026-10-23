@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 import numpy as np
 import xarray as xr
+import yaml
 from dask.distributed import Lock, get_client
 
 from endorse import common
@@ -25,6 +26,9 @@ from homogenization_study.create_mesh import create_micro_mesh, run_in_subproces
 from homogenization_study.model import ConductivityFieldResult, StudyMeshFiles
 from homogenization_study.ot_sa import SensitivityAnalysis
 from homogenization_study.problem import run_homogenization_problem
+
+
+FIELD_GROUP = "tensors"
 
 
 @run_in_subprocess
@@ -101,47 +105,87 @@ def _sample_parameters(cfg: dotdict, sample_id: str) -> np.ndarray:
 def ensure_field_storage(
     store_path: str | Path,
     *,
+    schema_path: str | Path,
     n_samples: int,
     n_elements: int,
     parameter_names: Sequence[str],
     el_barycenter: np.ndarray,
     gmsh_id: np.ndarray,
 ) -> None:
-    """Create or validate the fixed-shape, level-free scientific Zarr store."""
+    """Create or validate the schema-defined, level-free scientific Zarr store."""
     path = Path(store_path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    with Path(schema_path).open("r", encoding="utf-8") as schema_file:
+        root_schema = yaml.safe_load(schema_file)
+    field_schema = root_schema[FIELD_GROUP]
+    variable_schema = field_schema["VARS"]
+    coordinate_schema = field_schema["COORDS"]
     barycenter = np.asarray(el_barycenter, dtype=float)
     element_ids = np.asarray(gmsh_id, dtype=np.int64)
     names = np.asarray(parameter_names, dtype=str)
     if barycenter.shape != (n_elements, 3) or element_ids.shape != (n_elements,):
         raise ValueError("Homogenization geometry does not match the declared element count.")
     if path.exists():
-        ds = xr.open_zarr(path, consolidated=False)
+        ds = xr.open_zarr(path, group=FIELD_GROUP, consolidated=False)
         if ds.sizes.get("el_id") != n_elements or not np.array_equal(ds.gmsh_id.values, element_ids):
             raise ValueError("Existing homogenization storage has incompatible element identity.")
         if not np.allclose(ds.el_barycenter.values, barycenter):
             raise ValueError("Existing homogenization storage has incompatible element geometry.")
+        if ds.sizes.get("sample_id") != n_samples or ds.sizes.get("param_name") != len(names):
+            raise ValueError("Existing homogenization storage has incompatible sample or parameter dimensions.")
         return
+
+    def metadata(name: str, definitions: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        definition = definitions[name]
+        return {key: definition[key] for key in ("unit", "description") if key in definition}
 
     ds = xr.Dataset(
         data_vars={
             "conductivity": (("sample_id", "el_id", "tensor_comp"),
-                             np.zeros((n_samples, n_elements, 6), dtype=float)),
-            "el_barycenter": (("el_id", "xyz"), barycenter),
-            "gmsh_id": (("el_id",), element_ids),
-            "param_val": (("sample_id", "parameter"), np.full((n_samples, len(names)), np.nan)),
-            "return_code": (("sample_id",), np.full(n_samples, ReturnCode.NONE, dtype=np.int32)),
-            "eval_time": (("sample_id",), np.full(n_samples, -1.0, dtype=float)),
+                             np.zeros((n_samples, n_elements, 6), dtype=float),
+                             metadata("conductivity", variable_schema)),
+            "el_barycenter": (("el_id", "xyz"), barycenter,
+                              metadata("el_barycenter", variable_schema)),
+            "gmsh_id": (("el_id",), element_ids, metadata("gmsh_id", variable_schema)),
+            "parameter": (("sample_id", "param_name"), np.full((n_samples, len(names)), np.nan),
+                          metadata("parameter", variable_schema)),
+            "return_code": (("sample_id",), np.full(n_samples, ReturnCode.NONE, dtype=np.int32),
+                            metadata("return_code", variable_schema)),
+            "eval_time": (("sample_id",), np.full(n_samples, -1.0, dtype=float),
+                          metadata("eval_time", variable_schema)),
         },
         coords={
-            "sample_id": np.arange(n_samples, dtype=np.int64),
-            "el_id": np.arange(n_elements, dtype=np.int64),
-            "parameter": names,
-            "tensor_comp": np.arange(1, 7, dtype=np.int8),
-            "xyz": np.asarray(["x", "y", "z"], dtype=str),
+            "sample_id": ("sample_id", np.arange(n_samples, dtype=np.int64),
+                          metadata("sample_id", coordinate_schema)),
+            "el_id": ("el_id", np.arange(n_elements, dtype=np.int64),
+                      metadata("el_id", coordinate_schema)),
+            "param_name": ("param_name", names, metadata("param_name", coordinate_schema)),
+            "tensor_comp": ("tensor_comp", np.arange(1, 7, dtype=np.int8),
+                            metadata("tensor_comp", coordinate_schema)),
+            "xyz": ("xyz", np.asarray(["x", "y", "z"], dtype=str),
+                    metadata("xyz", coordinate_schema)),
         },
+        attrs=dict(field_schema.get("ATTRS", {})),
     )
-    ds.to_zarr(path, mode="w", consolidated=False)
+    sample_chunk = min(int(coordinate_schema["sample_id"]["chunk_size"]), n_samples)
+    element_chunk = min(int(coordinate_schema["el_id"]["chunk_size"]), n_elements)
+    parameter_chunk = min(int(coordinate_schema["param_name"]["chunk_size"]), len(names))
+    component_chunk = min(int(coordinate_schema["tensor_comp"]["chunk_size"]), 6)
+    xyz_chunk = min(int(coordinate_schema["xyz"]["chunk_size"]), 3)
+    encoding = {
+        "conductivity": {"chunks": (sample_chunk, element_chunk, component_chunk)},
+        "el_barycenter": {"chunks": (element_chunk, xyz_chunk)},
+        "gmsh_id": {"chunks": (element_chunk,)},
+        "parameter": {"chunks": (sample_chunk, parameter_chunk)},
+        "return_code": {"chunks": (sample_chunk,)},
+        "eval_time": {"chunks": (sample_chunk,)},
+        "sample_id": {"chunks": (sample_chunk,)},
+        "el_id": {"chunks": (element_chunk,)},
+        "param_name": {"chunks": (parameter_chunk,)},
+        "tensor_comp": {"chunks": (component_chunk,)},
+        "xyz": {"chunks": (xyz_chunk,)},
+    }
+    ds.to_zarr(path, group=FIELD_GROUP, mode="w", consolidated=False, encoding=encoding)
 
 
 def write_field_result(
@@ -155,7 +199,7 @@ def write_field_result(
 ) -> None:
     """Write one sample atomically into the level-free Zarr field store."""
     path = Path(store_path)
-    ds = xr.open_zarr(path, consolidated=False)
+    ds = xr.open_zarr(path, group=FIELD_GROUP, consolidated=False)
     if not 0 <= int(sample_id) < ds.sizes["sample_id"]:
         raise IndexError(f"sample_id {sample_id} is outside the storage capacity.")
     tensor = np.zeros((ds.sizes["el_id"], 6), dtype=float)
@@ -164,8 +208,8 @@ def write_field_result(
         if tensor.shape != (ds.sizes["el_id"], 6):
             raise ValueError(f"Expected conductivity shape {(ds.sizes['el_id'], 6)}, got {tensor.shape}.")
     values = np.asarray(parameter_values, dtype=float)
-    if values.shape != (ds.sizes["parameter"],):
-        raise ValueError(f"Expected parameter vector shape {(ds.sizes['parameter'],)}, got {values.shape}.")
+    if values.shape != (ds.sizes["param_name"],):
+        raise ValueError(f"Expected parameter vector shape {(ds.sizes['param_name'],)}, got {values.shape}.")
 
     try:
         get_client()
@@ -177,11 +221,11 @@ def write_field_result(
         region = {"sample_id": slice(int(sample_id), int(sample_id) + 1)}
         update = xr.Dataset({
             "conductivity": (("sample_id", "el_id", "tensor_comp"), tensor[None, ...]),
-            "param_val": (("sample_id", "parameter"), values[None, ...]),
+            "parameter": (("sample_id", "param_name"), values[None, ...]),
             "return_code": (("sample_id",), np.asarray([return_code], dtype=np.int32)),
             "eval_time": (("sample_id",), np.asarray([eval_time], dtype=float)),
         })
-        update.to_zarr(path, mode="r+", region=region, consolidated=False)
+        update.to_zarr(path, group=FIELD_GROUP, mode="r+", region=region, consolidated=False)
     finally:
         if lock is not None:
             lock.release()

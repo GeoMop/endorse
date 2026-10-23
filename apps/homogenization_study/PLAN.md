@@ -43,6 +43,8 @@ Current Stage B implementation steps:
 4. Resume unfinished samples through the MLMC HDF schedule and Dask sampling pool.
 5. Keep a deterministic `RandomSimulation` and PBS `submit` command for validating the sampling infrastructure
    before running Flow123d.
+6. Launch PBS sampling through the adapted Dask cluster runner, wait for all allocated workers, and verify scheduler
+   and worker preloads before scheduling samples.
 
 ## Stage B - single-level Monte Carlo sampling
 
@@ -51,12 +53,16 @@ Current Stage B implementation steps:
 2. Add `HomogenizationSimulation` with one MLMC level. Return the conductivity field as the fine value and the
    MLMC-required zero coarse value.
 3. Do not expose a level dimension in scientific Zarr storage.
-4. Use coordinates `sample_id`, `el_id`, `parameter`, `tensor_comp=1..6`, and `xyz=[x,y,z]`.
+4. Use coordinates `sample_id`, `el_id`, `param_name`, `tensor_comp=1..6`, and `xyz=[x,y,z]`.
 5. Store `conductivity(sample_id,el_id,tensor_comp)`, `el_barycenter(el_id,xyz)`,
-   `param_val(sample_id,parameter)`, `return_code(sample_id)`, `eval_time(sample_id)`, and `gmsh_id(el_id)`.
+   `parameter(sample_id,param_name)`, `return_code(sample_id)`, `eval_time(sample_id)`, and `gmsh_id(el_id)`.
 6. Create the homogenization mesh once per run and require identical element ids and barycentres for every sample.
 7. Cover deterministic planning, sample workspaces, concurrent Zarr writes, failures, restart, and local Dask before
    the first MetaCentrum run.
+8. Define the local scientific store from `data_schema_empty.yaml`, including schema names, metadata, and explicit
+   sample-safe chunks.
+9. Provide an independent converter that validates the local dataset against the same schema and writes its
+   `tensors` node to a configurable Zarr Fuse destination.
 
 ## Generalization policy
 
@@ -68,9 +74,10 @@ Current Stage B implementation steps:
 ## AGENT Questions And Remarks
 
 - No open design questions for Stage A.
-- The microscale Flow123d configuration and executable remain USER inputs before the three-load calculation can run.
-- Stage B currently derives grouped parameter draws deterministically from the MLMC sample id; confirm whether DFN
-  realization randomness should instead be an explicit sampled parameter.
+- The microscale Flow123d configuration and executable are configured; the current cluster run is the integration
+  verification for the complete three-load calculation.
+- DFN and meshing realization randomness are explicit sampled parameters and are converted to reproducible integer
+  seeds before fracture generation and meshing.
 
 ## AGENT Log
 
@@ -90,7 +97,11 @@ Current Stage B implementation steps:
   `Sampler.save_global_data()` create the level groups; only malformed restart files are quarantined first.
 - 2026-10-21: Resolved run, scratch, HDF, mesh, and Zarr paths before Dask scheduling so sample-directory changes
   cannot redirect shared storage. The random run and an HDF restart both completed with 10 collected samples and
-  no failures; local testing uses one worker thread while scheduler-backed runs retain cluster parallelism.
+  no failures; local testing uses one process worker while scheduler-backed runs retain cluster parallelism.
+- 2026-10-22: Restored PBS execution through the adapted Dask cluster runner, including allocated-worker and preload
+  checks, scheduler/worker cleanup, and copying node-local sample workspaces and logs back to persistent storage.
+- 2026-10-22: Applied `data_schema_empty.yaml` to the local `tensors` Zarr group, including schema metadata and
+  sample-safe chunks, and added an independent validated Zarr-to-Zarr-Fuse converter.
 - 2026-10-16: Made micro-material region matching exact and applied the configured conductivity override to
   `box_A`, `box_B`, `box_thin`, and `box_thick` during preparation.
 - 2026-10-15: Added conductivity-homogenization preparation: load both meshes, select all homogenization bulk

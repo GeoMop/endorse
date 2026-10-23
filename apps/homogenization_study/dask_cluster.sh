@@ -46,8 +46,7 @@ stage_inputs() {
   echo "[stage] Staging inputs to each node's \$SCRATCHDIR..."
   for node in $UNIQ_HOSTS; do
     echo "--- $node ---"
-    pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"
-    # pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME"
+    pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask" "$SCRATCHDIR/workdir"
     # pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
   done
@@ -71,8 +70,6 @@ start_scheduler() {
       --dashboard-address "$DASH_ADDR" \
       --preload homogenization_study.dask_scheduler_preload \
       >"$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
-  # nohup "$DASK_SCHED" --host "$HEAD_NODE" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
-  # pbsdsh -vh "$HEAD_NODE" -- bash -lc `nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &`
   # pbsdsh -vh "$HEAD_NODE" -- cat "$SCRATCHDIR/logs/scheduler.log"
   echo $! > "$SCRATCHDIR/scheduler.pid"
 
@@ -119,14 +116,14 @@ start_workers() {
 }
 
 stop_cluster() {
-  echo "[stop] Stopping workers, copying results from scratchdir..."
+  echo "[stop] Stopping workers and copying sample workspaces and logs from scratch..."
   for node in $(sort -u "$PBS_NODEFILE"); do
     echo "--- $node ---"
     pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true &
     pbsdsh -vh "$node" -- bash "$PROJECT_DIR/dask_process_stop.sh" worker &
 
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
-    # pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/workdir_$node" &
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/workdir/" "$OUTPUT_DIR/workdir_$node/" &
     pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/"
   done
   wait
@@ -134,7 +131,7 @@ stop_cluster() {
   echo "[stop] Stopping scheduler..."
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
   pbsdsh -vh "$HEAD_NODE" -- bash "$PROJECT_DIR/dask_process_stop.sh" scheduler
-  rm -r "$SCRATCHDIR/*"
+  rm -rf "$SCRATCHDIR"/*
   
   echo "[stop] Done."
 }
