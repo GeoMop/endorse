@@ -8,14 +8,12 @@ import shutil
 import subprocess
 import socket
 import sys
-import time
 from pathlib import Path
-from typing import Any
 
+import dask
 import h5py
 import numpy as np
-import dask
-from dask.distributed import Client, LocalCluster
+from dask.distributed import Client
 
 from endorse import common
 from endorse.common import dotdict
@@ -259,9 +257,10 @@ def run_mlmc_sampling(
     return sampler
 
 
-PBS_SCRIPT_TEMPLATE = """#!/bin/bash
+PBS_SCRIPT_TEMPLATE = """
+#!/bin/bash
 #PBS -S /bin/bash
-#PBS -l select={n_nodes}:ncpus={n_cpus}:mem={mem}:scratch_local={scratch}
+#PBS -l select={n_chunks}:ncpus={n_cpus}:mem={mem}:scratch_local={scratch}
 #PBS -l place=scatter
 #PBS -l walltime={walltime}
 #PBS -q {queue}
@@ -271,106 +270,132 @@ PBS_SCRIPT_TEMPLATE = """#!/bin/bash
 #PBS -j oe
 #PBS -m e
 
-set -euo pipefail
 set -x
-export TMPDIR="$SCRATCHDIR"
+env | grep PBS_
+export TMPDIR=$SCRATCHDIR
 export ENDORSE_DISABLE_MEMOIZE=1
 
-OUTPUT_DIR={output_dir}
-PROJECT_DIR={project_dir}
-DASK_RUNNER="$PROJECT_DIR/dask_cluster.sh"
-CLUSTER_STARTED=0
+output_dir={outputdir}
 
-stop_cluster() {{
-    if [[ "$CLUSTER_STARTED" == 1 ]]; then
-        bash "$DASK_RUNNER" "$OUTPUT_DIR" stop || true
-    fi
-}}
-trap stop_cluster EXIT INT TERM
+SCRIPT_PATH={script_path}
+PROJECT_DIR=$(dirname -- $SCRIPT_PATH)
+WORK_DIRNAME="workdir"
 
-mkdir -p "$OUTPUT_DIR"
-bash "$DASK_RUNNER" "$OUTPUT_DIR" start
-CLUSTER_STARTED=1
+# A node list with each host once
+UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
+NCPUS=$(wc -l < "$PBS_NODEFILE")
+
+echo "Staging data to scratch ..."
+for node in $UNIQ_HOSTS; do
+    pbsdsh -vh "$node" -- rsync -a --delete "$output_dir/" "$SCRATCHDIR/" &
+done
+wait
+
+bash $PROJECT_DIR/dask_cluster_env.sh $output_dir start
+
 cd "$SCRATCHDIR"
-bash "$DASK_RUNNER" "$OUTPUT_DIR" run {driver_command}
-bash "$DASK_RUNNER" "$OUTPUT_DIR" stop
-CLUSTER_STARTED=0
-trap - EXIT INT TERM
+echo "START SAMPLING"
+bash $PROJECT_DIR/dask_cluster_env.sh $output_dir run {app_cmd}
+echo "FINISHED SAMPLING"
+
+echo "Copying results back ..."
+uname -n
+for node in $UNIQ_HOSTS; do
+    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$output_dir/workdir_$node" &
+done
+wait
+
+bash $PROJECT_DIR/dask_cluster_env.sh $output_dir stop
+
+clean_scratch
+
+echo "FINISHED"
 """
 
 
 def submit_pbs(cfg_machine: dotdict, cmd: str = "meta", *, submit: bool = True) -> Path:
-    """Create the PBS script and optionally submit it with ``qsub``.
-
-    The generated job starts the adapted multi-node Dask runner, executes the
-    requested driver command against its scheduler, and stops the cluster.
-    """
-    if cmd not in {"local", "meta", "mlmc", "continue", "random"}:
-        raise ValueError(f"Unsupported PBS command {cmd!r}.")
-    machine = cfg_machine.get("__resolved__", cfg_machine)
-    pbs = machine.get("pbs")
-    if not pbs and machine is not cfg_machine:
-        machine = cfg_machine.get("__default__", machine)
-        pbs = machine.get("pbs")
-    if not pbs:
-        raise ValueError("machine_config does not define PBS resources.")
-    if job.output is None:
-        raise RuntimeError("Call job.set_workdir before creating a PBS script.")
-    script_path = Path(job.output.pbs_script)
-    script_path.parent.mkdir(parents=True, exist_ok=True)
-    values = {
-        "n_nodes": int(pbs.n_nodes),
-        "n_cpus": int(pbs.n_cores),
-        "mem": pbs.mem,
-        "scratch": pbs.scratch,
-        "walltime": pbs.walltime,
-        "queue": pbs.queue,
-        "job_name": pbs.pbs_name,
-        "out_log": job.output.dir_path / f"{pbs.pbs_name}.out",
-        "output_dir": job.output.dir_path,
-        "project_dir": Path(__file__).resolve().parent,
-        "driver_command": cmd,
+    """Create the PBS script and optionally submit it with ``qsub``."""
+    cfg_machine = cfg_machine.get("__resolved__", cfg_machine)
+    cfg_pbs = cfg_machine.pbs
+    pbs_path = Path(job.output.pbs_script)
+    n_workers = int(cfg_pbs.n_nodes * (cfg_pbs.n_cores - 1) - 2)
+    parameters = {
+        "n_chunks": cfg_pbs.n_nodes,
+        "n_cpus": cfg_pbs.n_cores,
+        "queue": cfg_pbs.queue,
+        "mem": cfg_pbs.mem,
+        "scratch": cfg_pbs.scratch,
+        "walltime": cfg_pbs.walltime,
+        "job_name": cfg_pbs.pbs_name,
+        "python": sys.executable,
+        "n_workers": n_workers,
+        "script_path": Path(__file__).resolve(),
+        "workdir": job.scratch.dir_path,
+        "outputdir": job.output.dir_path,
+        "out_log": job.output.dir_path / f"{cfg_pbs.pbs_name}.out",
+        "app_cmd": cmd,
     }
-    script_path.write_text(PBS_SCRIPT_TEMPLATE.format(**values), encoding="utf-8")
-    logging.info("Wrote PBS script: %s", script_path)
+    pbs_path.write_text(PBS_SCRIPT_TEMPLATE.format(**parameters), encoding="utf-8")
+
+    qsub_cmd = ["qsub", str(pbs_path)]
+    logging.info("submit pbs: '%s'", qsub_cmd)
     if submit:
-        subprocess.run(["qsub", str(script_path)], check=True)
-    return script_path
+        subprocess.run(qsub_cmd, check=True)
+    return pbs_path
 
 
 def main() -> None:
-    """Run the local driver using the configured study workdir."""
+    """Resolve the workdir, command, and optional Dask scheduler address."""
     setup_logging()
-    workdir = (Path(sys.argv[1]) if len(sys.argv) > 1 else Path("workdir_sampling")).resolve()
-    job.set_workdir(workdir)
-    if not job.input.study_cfg_path.exists():
-        source_input = Path(__file__).resolve().parent / "input_data"
-        if not source_input.is_dir():
-            raise FileNotFoundError(f"Study input directory does not exist: {source_input}")
-        shutil.copytree(source_input, job.input.dir_path, dirs_exist_ok=True)
-        logging.info("Copied study inputs from %s to %s.", source_input, job.input.dir_path)
+    scheduler = None
+    if len(sys.argv) == 3:
+        work_dir = Path(sys.argv[1]).absolute()
+        cmd = sys.argv[2]
+    elif len(sys.argv) == 4:
+        work_dir = Path(sys.argv[1]).absolute()
+        cmd = sys.argv[2]
+        scheduler = sys.argv[3]
+    else:
+        sys.exit("Provide <workdir> <command: (submit|local|meta|mlmc|continue|random)> <command_args>.")
+
+    job.set_workdir(work_dir)
+    resolve_subcmd(cmd, work_dir, scheduler)
+
+
+def resolve_subcmd(
+    cmd: str,
+    work_dir: Path,
+    scheduler: str | None,
+    copy_flag: bool = True,
+) -> None:
+    """Resolve one sampling command using the optional external scheduler."""
+    if copy_flag:
+        shutil.copytree(Path(__file__).resolve().parent / job.input.dir_path.name,
+                        job.input.dir_path, dirs_exist_ok=True)
+
+    logging.info(job.to_str())
+    if not job.input.dir_path.exists():
+        raise FileNotFoundError(f"Input data '{job.input.dir_path}' not found in workdir '{work_dir}'")
+
     cfg = common.config.load_config(str(job.input.study_cfg_path))
-    command = sys.argv[2] if len(sys.argv) > 2 else "local"
-    if command == "submit":
-        submit_pbs(cfg.machine_config, cmd=sys.argv[3] if len(sys.argv) > 3 else "meta")
-        return
-    if command == "random":
-        cfg.mlmc.sim_class = "RandomSimulation"
-    elif command not in {"local", "meta", "mlmc", "continue"}:
-        raise ValueError(f"Unknown command {command!r}; use submit, local, or random.")
-    scheduler = sys.argv[3] if len(sys.argv) > 3 else None
-    if scheduler:
-        with Client(scheduler) as client:
-            run_mlmc_sampling(cfg, client)
+    if cmd == "submit":
+        if len(sys.argv) == 4:
+            app_cmd = sys.argv[3]
+            assert app_cmd in ["continue", "meta", "mlmc", "random"]
+            submit_pbs(cfg.machine_config, cmd=app_cmd)
+        else:
+            submit_pbs(cfg.machine_config)
         return
 
+    if cmd == "random":
+        cfg.mlmc.sim_class = "RandomSimulation"
+    elif cmd not in {"local", "meta", "mlmc", "continue"}:
+        sys.exit(f"Unknown command provided: '{cmd}'!")
+
     with dask.config.set({"distributed.worker.daemon": False}):
-        cluster = LocalCluster(processes=True, n_workers=1, threads_per_worker=1, dashboard_address=None)
-        try:
-            with Client(cluster) as client:
-                run_mlmc_sampling(cfg, client)
-        finally:
-            cluster.close()
+        client = Client(scheduler)
+        logging.info("Connected to: %s", client)
+        run_mlmc_sampling(cfg, client)
 
 
 if __name__ == "__main__":

@@ -13,9 +13,9 @@ import xarray as xr
 from endorse import common
 from homogenization_study import ConductivityFieldResult
 from homogenization_study import job
+import homogenization_study.sensitivity_sampling as sensitivity_sampling
 from homogenization_study.model import TENSOR_COMPONENTS, XYZ_COMPONENTS
 from homogenization_study.problem_simulation import FIELD_GROUP, ensure_field_storage, write_field_result
-from homogenization_study.sensitivity_sampling import submit_pbs
 from homogenization_study.zarr_to_fuse import convert_to_zarr_fuse, normalize_source_dataset
 
 
@@ -82,13 +82,95 @@ def test_pbs_submission_runs_sampling_through_dask_cluster(tmp_path: Path) -> No
         }
     }
 
-    script_path = submit_pbs(common.dotdict.create(machine_cfg), cmd="meta", submit=False)
+    script_path = sensitivity_sampling.submit_pbs(common.dotdict.create(machine_cfg), cmd="meta", submit=False)
     script = script_path.read_text(encoding="utf-8")
 
-    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" start' in script
-    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" run meta' in script
-    assert 'bash "$DASK_RUNNER" "$OUTPUT_DIR" stop' in script
+    assert 'rsync -a --delete "$output_dir/" "$SCRATCHDIR/"' in script
+    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir start" in script
+    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir run meta" in script
+    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir stop" in script
     subprocess.run(["bash", "-n", str(script_path)], check=True)
+
+
+@pytest.mark.parametrize(
+    ("command", "scheduler", "simulation_class"),
+    [
+        ("local", None, "HomogenizationSimulation"),
+        ("meta", "tcp://scheduler:8786", "HomogenizationSimulation"),
+        ("random", "tcp://scheduler:8786", "RandomSimulation"),
+    ],
+)
+def test_resolve_subcmd_passes_scheduler_to_sampling(
+    tmp_path: Path,
+    monkeypatch,
+    command: str,
+    scheduler: str | None,
+    simulation_class: str,
+) -> None:
+    """Pass local and cluster scheduler choices through the common command path."""
+    job.set_workdir(tmp_path)
+    job.input.dir_path.mkdir(parents=True)
+    cfg = common.dotdict.create({"mlmc": {"sim_class": "HomogenizationSimulation"}})
+    clients = []
+    daemon_configs = []
+    sampled = []
+
+    class ClientProbe:
+        def __init__(self, address):
+            self.scheduler = address
+            daemon_configs.append(sensitivity_sampling.dask.config.get("distributed.worker.daemon"))
+            clients.append(self)
+
+    monkeypatch.setattr(sensitivity_sampling.common.config, "load_config", lambda _path: cfg)
+    monkeypatch.setattr("homogenization_study.sensitivity_sampling.Client", ClientProbe)
+    monkeypatch.setattr(
+        sensitivity_sampling,
+        "run_mlmc_sampling",
+        lambda run_cfg, client: sampled.append((run_cfg, client)),
+    )
+
+    sensitivity_sampling.resolve_subcmd(
+        command,
+        tmp_path,
+        scheduler,
+        copy_flag=False,
+    )
+
+    assert clients[0].scheduler == scheduler
+    assert daemon_configs == [False]
+    assert sampled == [(cfg, clients[0])]
+    assert cfg.mlmc.sim_class == simulation_class
+
+
+@pytest.mark.parametrize(
+    ("command", "scheduler"),
+    [
+        ("local", None),
+        ("meta", "tcp://scheduler:8786"),
+    ],
+)
+def test_main_passes_optional_scheduler_to_resolver(
+    tmp_path: Path,
+    monkeypatch,
+    command: str,
+    scheduler: str | None,
+) -> None:
+    """Parse direct-local and cluster command lines through the same resolver."""
+    resolved = []
+    argv = ["sensitivity_sampling.py", str(tmp_path), command]
+    if scheduler is not None:
+        argv.append(scheduler)
+    monkeypatch.setattr(sensitivity_sampling.sys, "argv", argv)
+    monkeypatch.setattr(sensitivity_sampling.job, "set_workdir", lambda _path: None)
+    monkeypatch.setattr(
+        sensitivity_sampling,
+        "resolve_subcmd",
+        lambda cmd, work_dir, address: resolved.append((cmd, work_dir, address)),
+    )
+
+    sensitivity_sampling.main()
+
+    assert resolved == [(command, tmp_path.absolute(), scheduler)]
 
 
 def test_schema_storage_and_zarr_fuse_conversion(tmp_path: Path) -> None:
