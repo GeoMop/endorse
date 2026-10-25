@@ -45,6 +45,8 @@ Current Stage B implementation steps:
    before running Flow123d.
 6. Launch PBS sampling through the adapted Dask cluster runner, wait for all allocated workers, and verify scheduler
    and worker preloads before scheduling samples.
+7. Use the repository-level Dask helpers through thin application wrappers that provide the package-specific preload
+   modules while preserving the existing local and PBS command lines.
 
 ## Stage B - single-level Monte Carlo sampling
 
@@ -81,6 +83,8 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-10-25: Switched local and PBS Dask entry points to thin wrappers around the repository-level helpers while
+  preserving package-specific preload modules and node-local workdir collection.
 - 2026-10-20: Implemented the three-load runner: execute averaged micro responses, recover six-component conductivity
   tensors, and return stable homogenization element geometry and Gmsh ids.
 - 2026-10-21: Added the single-level homogenization simulation, fixed-mesh/sample-mesh split, level-free field

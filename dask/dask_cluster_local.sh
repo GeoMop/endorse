@@ -10,8 +10,15 @@ export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
-# ======= EDIT THESE PATHS =======
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Application wrappers define the package-specific paths and preload modules.
+: "${ENDORSE_DASK_APP_DIR:?ENDORSE_DASK_APP_DIR is not set}"
+: "${ENDORSE_DASK_APP_MODULE:?ENDORSE_DASK_APP_MODULE is not set}"
+: "${ENDORSE_DASK_WORKER_MODULE:?ENDORSE_DASK_WORKER_MODULE is not set}"
+: "${ENDORSE_DASK_SCHEDULER_MODULE:?ENDORSE_DASK_SCHEDULER_MODULE is not set}"
+
+# ======= SETUP PATHS =======
+DASK_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$ENDORSE_DASK_APP_DIR"
 OUTPUT_DIR=${1}
 export ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data"
 export ENDORSE_OUTPUT_DIR="$OUTPUT_DIR"
@@ -53,7 +60,7 @@ start_scheduler() {
       --host "$host_ip" \
       --port "$SCHED_PORT" \
       --dashboard-address ":${DASH_PORT}" \
-      --preload chodby_trans.dask_scheduler_preload \
+      --preload "$DASK_HELPER_DIR/dask_scheduler_preload.py" \
       >"$LOG_DIR/scheduler.log" 2>&1 < /dev/null &
 
   echo $! > "$SCHED_PID_FILE"
@@ -80,7 +87,7 @@ start_workers() {
   CMD=( "$DASK_BIN" worker "$addr"
       --nworkers 1 --nthreads 1
       --no-nanny
-      --preload chodby_trans.dask_worker_preload
+      --preload "$DASK_HELPER_DIR/dask_worker_preload.py"
       --local-directory "$RUNTIME_DIR"
       --memory-limit auto )
 

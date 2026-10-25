@@ -9,11 +9,18 @@ export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
-# ======= EDIT THESE PATHS =======
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Application wrappers define the package-specific paths and preload modules.
+: "${ENDORSE_DASK_APP_DIR:?ENDORSE_DASK_APP_DIR is not set}"
+: "${ENDORSE_DASK_APP_MODULE:?ENDORSE_DASK_APP_MODULE is not set}"
+: "${ENDORSE_DASK_WORKER_MODULE:?ENDORSE_DASK_WORKER_MODULE is not set}"
+: "${ENDORSE_DASK_SCHEDULER_MODULE:?ENDORSE_DASK_SCHEDULER_MODULE is not set}"
+
+# ======= SETUP PATHS =======
+DASK_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$ENDORSE_DASK_APP_DIR"
 OUTPUT_DIR=${1}
 EXPECTED_WORKERS_FILE="$SCRATCHDIR/DASK_EXPECTED_WORKERS.txt"
-#WORK_DIRNAME="workdir"
+# WORK_DIRNAME="${ENDORSE_DASK_WORK_DIRNAME:-}"
 
 APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
 VENV="$PROJECT_DIR/venv"
@@ -38,7 +45,7 @@ require_env() {
 
 make_venv() {
   if [[ ! -x "$PYEXEC" ]]; then
-    bash setup_venv
+    bash "$PROJECT_DIR/setup_venv"
   fi
 }
 
@@ -47,8 +54,10 @@ stage_inputs() {
   for node in $UNIQ_HOSTS; do
     echo "--- $node ---"
     pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"
-    # pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME"
-    # pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
+#    if [[ -n "$WORK_DIRNAME" ]]; then
+#      pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME"
+#    fi
+#    pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
   done
   wait
@@ -69,7 +78,7 @@ start_scheduler() {
       --host "$HEAD_NODE" \
       --port 8786 \
       --dashboard-address "$DASH_ADDR" \
-      --preload chodby_trans.dask_scheduler_preload \
+      --preload "$DASK_HELPER_DIR/dask_scheduler_preload.py" \
       >"$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # nohup "$DASK_SCHED" --host "$HEAD_NODE" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &
   # pbsdsh -vh "$HEAD_NODE" -- bash -lc `nohup "$DASK_SCHED" --host "$HEAD_IP" --port 8786 --dashboard-address "$DASH_ADDR" > "$SCRATCHDIR/logs/scheduler.log" 2>&1 < /dev/null &`
@@ -110,9 +119,13 @@ start_workers() {
     echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
     pbsdsh -vh "$HOST" -- env \
       ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}" \
+      ENDORSE_DASK_APP_MODULE="$ENDORSE_DASK_APP_MODULE" \
+      ENDORSE_DASK_WORKER_MODULE="$ENDORSE_DASK_WORKER_MODULE" \
+      ENDORSE_DASK_SCHEDULER_MODULE="$ENDORSE_DASK_SCHEDULER_MODULE" \
       ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data" \
       ENDORSE_OUTPUT_DIR="$OUTPUT_DIR" \
-      bash "$PROJECT_DIR/dask_process_start.sh" "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT"
+      bash "$DASK_HELPER_DIR/dask_process_start.sh" \
+        "$DASK_BIN" "$SCHED_ADDR" "$WORKER_COUNT" "$DASK_HELPER_DIR/dask_worker_preload.py"
   done <<< "$HOST_COUNTS"
   printf '%s\n' "$EXPECTED_WORKERS" > "$EXPECTED_WORKERS_FILE"
   echo "[worker] Workers started; expecting $EXPECTED_WORKERS registrations."
@@ -123,18 +136,21 @@ stop_cluster() {
   for node in $(sort -u "$PBS_NODEFILE"); do
     echo "--- $node ---"
     pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true &
-    pbsdsh -vh "$node" -- bash "$PROJECT_DIR/dask_process_stop.sh" worker &
+    pbsdsh -vh "$node" -- bash "$DASK_HELPER_DIR/dask_process_stop.sh" worker &
 
     pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
-    # pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/workdir_$node" &
+#    if [[ -n "$WORK_DIRNAME" ]]; then
+#      pbsdsh -vh "$node" -- rsync -a \
+#        "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/${WORK_DIRNAME}_$node/" &
+#    fi
     pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/"
   done
   wait
   
   echo "[stop] Stopping scheduler..."
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
-  pbsdsh -vh "$HEAD_NODE" -- bash "$PROJECT_DIR/dask_process_stop.sh" scheduler
-  rm -r "$SCRATCHDIR/*"
+  pbsdsh -vh "$HEAD_NODE" -- bash "$DASK_HELPER_DIR/dask_process_stop.sh" scheduler
+  rm -rf "$SCRATCHDIR"/*
   
   echo "[stop] Done."
 }
@@ -169,7 +185,7 @@ cmd=${2:-help}
 case "$cmd" in
   start)
     require_env
-    source $PROJECT_DIR/load_modules
+    source "$PROJECT_DIR/load_modules"
     make_venv
     stage_inputs
     compute_host_counts

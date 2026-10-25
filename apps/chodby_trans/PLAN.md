@@ -86,6 +86,11 @@ Resolved:
 AGENT:  write a particular steps for each goal following your understanding. But still
 make detailed goal plan very compact.
 Resolved:
+- Shared Dask helpers:
+  1. Move cluster process orchestration to the repository-level `dask` directory.
+  2. Pass application package and preload targets through explicit environment variables.
+  3. Keep the existing app-facing cluster commands as thin wrappers so PBS and local usage stay compatible.
+  4. Validate shell syntax and both application preload paths without running the full numerical models.
 - Goal 1:
   1. Introduce a new MLMC-facing `TransportSimulation` module instead of
      patching MLMC concerns into `transport_wrapper.Wrapper`.
@@ -238,6 +243,8 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-10-25: Generalized the repository-level Dask cluster and preload helpers for both applications. Kept the
+  existing app command lines through thin wrappers and preserved homogenization scratch-workdir collection.
 - 2026-10-09: Moved Goal 6 into the independent sibling package `apps/homogenization_study`. Removed the temporary
   nested `conductivity_study` package and restored transport-only ownership of `chodby_trans/job.py` and `setup.py`.
 - 2026-10-06: Added a standalone Bokeh HTML viewer for native Flow123d `water_balance.yaml` and
@@ -489,6 +496,10 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Questions And Remarks
 
+- 2026-10-25: The shared Chodby worker preload reaches `transport_simulation`, but its import currently fails in the
+  pre-existing edited `mesh/create_mesh.py`: `geometry_func: Callable` was added without importing `Callable`.
+  PyCharm also maps Chodby files to the homogenization virtual environment; the app runner itself still selects
+  `apps/chodby_trans/venv`.
 - 2026-09-16: The coarse level uses `main_line_refinement/h_inner=0.81`, while the fine level uses `1.25`.
   This makes parts of the target coarse mesh substantially finer than the source micro mesh. Is this local resolution
   inversion intentional, or should the level-specific refinement values be exchanged?

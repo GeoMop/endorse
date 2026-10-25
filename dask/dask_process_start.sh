@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Usage: dask_process_start.sh <dask-bin> <sched-addr> <count>
+# Usage: dask_process_start.sh <dask-bin> <sched-addr> <count> <preload-path>
 
 set -euo pipefail
 
 DASK_BIN=$1
 SCHED_ADDR=$2
 WORKER_COUNT=$3
+PRELOAD_PATH=$4
 
 : "${SCRATCHDIR:?SCRATCHDIR not set}"
 
@@ -18,7 +19,7 @@ export MKL_NUM_THREADS=1
 CMD=( "$DASK_BIN" worker "$SCHED_ADDR"
       --nworkers 1 --nthreads 1
       --no-nanny
-      --preload homogenization_study.dask_worker_preload
+      --preload "$PRELOAD_PATH"
       --local-directory "$SCRATCHDIR/dask"
       --memory-limit auto )
 
