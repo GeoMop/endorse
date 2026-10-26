@@ -232,6 +232,9 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-10-26: Replaced separate conductivity-tensor and scalar micro-to-macro interpolation with one
+  nearest-barycentre interpolator that preserves scalar or multicomponent field shapes, including `diff_m`.
+
 - 2026-10-06: Added a standalone Bokeh HTML viewer for native Flow123d `water_balance.yaml` and
   `mass_balance.yaml` files. Each available file gets its own tab with a balance-column selector, multi-region
   selector, time-series plot, discrete point markers with hover values, and hideable legend. One or two sample

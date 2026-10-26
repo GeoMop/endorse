@@ -279,29 +279,32 @@ def prepare_common_homogenization_mesh(cfg) -> File:
         return File(str(homo_msh_filepath))
 
 
-def interpolate_conductivity_tensor(cfg, source_mesh, conductivity_file, target_mesh):
-    conductivity_source_mesh = load_mesh(conductivity_file, heal_tol=None)
-    conductivity_source = conductivity_source_mesh.get_static_p0_values("conductivity_tn")
-    # conductivity_source.shape: N elemenets X 9
+def interpolate_field(
+        source_mesh: Mesh,
+        target_mesh: Mesh,
+        source_field: np.ndarray,
+        default_value: Union[float, np.ndarray] = 0.0,
+) -> np.ndarray:
+    """Interpolate scalar or multicomponent bulk-element values by nearest barycentre."""
+    source_field = np.asarray(source_field)
+    assert len(source_field) == len(source_mesh.elements)
+
     source_bulk = source_mesh.el_dim_slice(dim=3)
     target_bulk = target_mesh.el_dim_slice(dim=3)
     source_points = source_mesh.el_barycenters()[source_bulk]
     target_points = target_mesh.el_barycenters()[target_bulk]
 
-    default_cond = float(cfg.transport_macroscale.default_conductivity)
-    conductivity_target = np.empty((len(target_mesh.elements), 9))
-    conductivity_target[:] = np.array([default_cond, 0, 0, 0, default_cond, 0, 0, 0, default_cond])
+    component_shape = source_field.shape[1:]
+    target_field = np.empty((len(target_mesh.elements), *component_shape), dtype=float)
+    target_field[:] = default_value
 
-    interpolated_bulk = np.empty((len(target_points), conductivity_source.shape[1]))
-    for i_comp in range(conductivity_source.shape[1]):
-        values = conductivity_source[source_bulk, i_comp]
-        # linear = griddata(source_points, values, target_points, method="linear")
-        # nearest = griddata(source_points, values, target_points, method="nearest")
-        # interpolated_bulk[:, i_comp] = np.where(np.isnan(linear), nearest, linear)
-        interpolated_bulk[:, i_comp] = griddata(source_points, values, target_points, method="nearest")
-
-    conductivity_target[target_bulk, :] = interpolated_bulk
-    return conductivity_target
+    source_components = source_field[source_bulk].reshape(len(source_points), -1)
+    interpolated_components = np.column_stack([
+        griddata(source_points, values, target_points, method="nearest")
+        for values in source_components.T
+    ])
+    target_field[target_bulk] = interpolated_components.reshape(len(target_points), *component_shape)
+    return target_field
 
 
 def source_level_field(mesh,
@@ -375,25 +378,6 @@ def set_field_value_on_regions(
     return updated_field
 
 
-def interpolate_micro_field_to_macro(
-        micro_mesh: Mesh,
-        macro_mesh: Mesh,
-        micro_field: np.ndarray,
-) -> np.ndarray:
-    """Interpolate a scalar field between bulk-element barycentres using nearest neighbors."""
-    micro_bulk = micro_mesh.el_dim_slice(dim=3)
-    macro_field = np.zeros(len(macro_mesh.elements), dtype=float)
-    macro_bulk = macro_mesh.el_dim_slice(dim=3)
-    macro_field[macro_bulk] = griddata(
-        micro_mesh.el_barycenters()[micro_bulk],
-        micro_field[micro_bulk],
-        macro_mesh.el_barycenters()[macro_bulk],
-        method="linear",
-    )
-
-    return macro_field
-
-
 @memoize
 @run_in_subprocess
 def prepare_coarse_input(
@@ -457,6 +441,9 @@ def prepare_coarse_input(
         field = set_field_value_on_regions(micro_mesh, field, param_dict[backfill_param], backfill_regions)
         field = set_field_value_on_regions(micro_mesh, field, param_dict[bulk_param], bulk_regions)
         micro_fields[field_name] = field
+
+    # broadcast diff_m vector to tensors
+    micro_fields["diff_m"] = micro_fields["diff_m"][:, None] * np.eye(3).flatten()
     micro_fields["disp_t"] = micro_fields["disp_l"]/10
 
     micro_fields["source_sigma"] = source_level_field(micro_mesh, cfg.mesh.geometry, set_source_term(cfg))
@@ -488,8 +475,15 @@ def prepare_coarse_input(
     macro_mesh, el_to_ifr = create_mesh(job.scratch.dir_path, input_dir, cfg_mesh, coarse_fracture_set, n_large)
 
     # macro: bulk conductivity tensor
-    conductivity_macro = interpolate_conductivity_tensor(
-        cfg, homogenization_mesh, conductivity_file, macro_mesh
+    conductivity_source_mesh = load_mesh(conductivity_file, heal_tol=None)
+    conductivity_source = conductivity_source_mesh.get_static_p0_values("conductivity_tn")
+    default_cond = float(cfg.transport_macroscale.default_conductivity)
+    default_conductivity = np.diag([default_cond] * 3).flatten()
+    conductivity_macro = interpolate_field(
+        conductivity_source_mesh,
+        macro_mesh,
+        conductivity_source,
+        default_value=default_conductivity,
     )
 
     # macro: other fields (fr conductivity, porosity)
@@ -500,7 +494,7 @@ def prepare_coarse_input(
     # macro: add bulk conductivity tensor
     macro_fields["conductivity_tn"] = conductivity_macro
     for field_name in ["source_sigma", "porosity", "diff_m", "disp_l", "disp_t"]:
-        macro_fields[field_name] = interpolate_micro_field_to_macro(
+        macro_fields[field_name] = interpolate_field(
             micro_mesh, macro_mesh, micro_fields[field_name]
         )
     macro_fields["region_id"] = macro_mesh.get_physical_ids()
