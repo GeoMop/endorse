@@ -491,11 +491,11 @@ class Subdomain:
         #aabb = bih.AABB([center - r, center + r])
         candidates = np.asarray(micro_mesh.candidate_indices(shape.aabb(macro_el)), dtype=int)
 
-        # keep volumetric elements only
-        bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
-        candidates = candidates[
-            (bulk_micro_slice.start <= candidates) & (candidates < bulk_micro_slice.stop)
-        ]
+        # # keep volumetric elements only
+        # bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
+        # candidates = candidates[
+        #     (bulk_micro_slice.start <= candidates) & (candidates < bulk_micro_slice.stop)
+        # ]
 
         if isinstance(shape, MacroTetra):
             candidate_centers = micro_mesh.el_barycenters()[candidates]
