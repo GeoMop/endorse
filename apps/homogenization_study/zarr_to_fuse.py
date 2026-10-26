@@ -99,6 +99,8 @@ def main() -> None:
     )
     print(dataset)
     print("First 10 barycenters:\n", dataset["el_barycenter"][:10].to_numpy())
+    print("First 10 conductivity:\n", dataset["conductivity"][:10].to_numpy())
+    print("First 10 gmsh_id:\n", dataset["gmsh_id"][:10].to_numpy())
 
 
 if __name__ == "__main__":
