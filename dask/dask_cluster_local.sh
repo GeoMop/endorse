@@ -51,6 +51,32 @@ require_env() {
   fi
 }
 
+wait_for_scheduler() {
+  local timeout="${DASK_SCHEDULER_START_TIMEOUT:-180}"
+  local deadline=$((SECONDS + timeout))
+  local scheduler_log="$LOG_DIR/scheduler.log"
+  local scheduler_pid
+  scheduler_pid=$(<"$SCHED_PID_FILE")
+
+  echo "[sched] Waiting up to ${timeout}s for scheduler startup..."
+  while (( SECONDS < deadline )); do
+    if grep -Fq "Scheduler at:" "$scheduler_log"; then
+      echo "[sched] Scheduler is accepting connections."
+      return 0
+    fi
+    if ! kill -0 "$scheduler_pid" 2>/dev/null; then
+      echo "ERROR: Dask scheduler exited during startup. Last log lines:" >&2
+      tail -50 "$scheduler_log" >&2
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "ERROR: Dask scheduler did not start within ${timeout}s. Last log lines:" >&2
+  tail -50 "$scheduler_log" >&2
+  return 1
+}
+
 
 start_scheduler() {
   local host_ip="127.0.0.1"
@@ -64,8 +90,7 @@ start_scheduler() {
       >"$LOG_DIR/scheduler.log" 2>&1 < /dev/null &
 
   echo $! > "$SCHED_PID_FILE"
-  # wait briefly so the port opens
-  sleep 2
+  wait_for_scheduler
   echo "$sched_addr" > "$SCHED_ADDR_FILE"
   echo "[sched] PID $(cat "$SCHED_PID_FILE"), address $(cat "$SCHED_ADDR_FILE")"
 }

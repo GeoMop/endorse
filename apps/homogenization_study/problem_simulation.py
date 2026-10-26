@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from functools import partial
 import hashlib
 import logging
 import time
@@ -23,6 +24,12 @@ from mlmc.sim.simulation import Simulation
 import homogenization_study.job as job
 from homogenization_study.exception_wrapper import ReturnCode, WrapperException
 from homogenization_study.create_mesh import create_micro_mesh, run_in_subprocess, update_dfn_params
+from homogenization_study.mlmc_worker import (
+    HomogenizationLevelSimulation,
+    calculate_homogenization_sample,
+    calculate_random_sample,
+    return_result_format,
+)
 from homogenization_study.model import ConductivityFieldResult, StudyMeshFiles
 from homogenization_study.ot_sa import SensitivityAnalysis
 from homogenization_study.problem import run_homogenization_problem
@@ -231,12 +238,61 @@ def write_field_result(
             lock.release()
 
 
-class HomogenizationLevelSimulation(LevelSimulation):
-    """Level metadata that keeps deterministic parameter planning on the driver."""
+def run_homogenization_sample(
+    config_dict: dict[str, Any],
+    sample_input: Sequence[float],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Run one physical sample and persist both success and failure metadata."""
+    started = time.perf_counter()
+    sample_level, sample_number = parse_sample_workspace(Path.cwd())
+    job.set_workdir(Path(config_dict["workdir"]), Path(config_dict["input_dir"]))
+    cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
+    cfg, parameter_dict = apply_sample_parameters(cfg, sample_input)
+    parameter_values = full_parameter_values(cfg, parameter_dict)
+    update_dfn_params(cfg.mesh.fractures, parameter_dict, Path(config_dict["input_dir"]))
+    store_path = Path(config_dict["store_path"])
+    try:
+        fixed_meshes = StudyMeshFiles(**config_dict["meshes"])
+        micro_path, fractures = create_micro_mesh(cfg, Path.cwd())
+        meshes = StudyMeshFiles(micro_mesh=micro_path, homogenization_mesh=fixed_meshes.homogenization_mesh)
+        result = run_sample_homogenization(cfg, Path.cwd(), meshes, fractures)
+        fine = np.asarray(result.conductivity, dtype=float)
+        code = ReturnCode.OK
+    except Exception as error:
+        logging.exception("Homogenization sample L%02d/S%07d failed.", sample_level, sample_number)
+        fine = None
+        code = int(error.code) if isinstance(error, WrapperException) else ReturnCode.HOMOGENIZATION_ERROR
+    elapsed = time.perf_counter() - started
+    write_field_result(store_path, sample_id=sample_number, conductivity=fine,
+                       parameter_values=parameter_values, return_code=code, eval_time=elapsed)
+    if fine is None:
+        raise RuntimeError(f"Homogenization sample failed with return code {code}.")
+    return fine, np.zeros_like(fine)
 
-    def prepare_samples(self, sample_ids: list[str]):
-        cfg = dotdict.create(self.config_dict["root_cfg"])
-        return [(sample_id, *_sample_parameters(cfg, sample_id)) for sample_id in sample_ids]
+
+def run_random_sample(
+    config_dict: dict[str, Any],
+    sample_input: Sequence[float],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate and persist one reproducible tensor field without external solvers."""
+    started = time.perf_counter()
+    _sample_level, sample_number = parse_sample_workspace(Path.cwd())
+    cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
+    _cfg, parameter_dict = apply_sample_parameters(cfg, sample_input)
+    parameter_values = full_parameter_values(cfg, parameter_dict)
+    n_elements = int(config_dict["n_elements"])
+    base = np.arange(1, n_elements * 6 + 1, dtype=float).reshape(n_elements, 6)
+    fine = base * (1.0 + 0.01 * float(np.sum(parameter_values)))
+    elapsed = time.perf_counter() - started
+    write_field_result(
+        config_dict["store_path"],
+        sample_id=sample_number,
+        conductivity=fine,
+        parameter_values=parameter_values,
+        return_code=ReturnCode.OK,
+        eval_time=elapsed,
+    )
+    return fine, np.zeros_like(fine)
 
 
 class HomogenizationSimulation(Simulation):
@@ -271,57 +327,23 @@ class HomogenizationSimulation(Simulation):
         """Describe one conductivity tensor field with no level dimension."""
         return [QuantitySpec("conductivity", "m^2", (self.n_elements, 6), [0.0], ["homogenization"])]
 
-    @staticmethod
-    def calculate(config_dict: dict[str, Any], sample_input: Sequence[float]):
-        """Run one sample and persist both success and failure metadata."""
-        started = time.perf_counter()
-        sample_level, sample_number = parse_sample_workspace(Path.cwd())
-        job.set_workdir(Path(config_dict["workdir"]), Path(config_dict["input_dir"]))
-        cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
-        cfg, parameter_dict = apply_sample_parameters(cfg, sample_input)
-        parameter_values = full_parameter_values(cfg, parameter_dict)
-        update_dfn_params(cfg.mesh.fractures, parameter_dict, Path(config_dict["input_dir"]))
-        store_path = Path(config_dict["store_path"])
-        try:
-            fixed_meshes = StudyMeshFiles(**config_dict["meshes"])
-            micro_path, fractures = create_micro_mesh(cfg, Path.cwd())
-            meshes = StudyMeshFiles(micro_mesh=micro_path, homogenization_mesh=fixed_meshes.homogenization_mesh)
-            result = run_sample_homogenization(cfg, Path.cwd(), meshes, fractures)
-            fine = np.asarray(result.conductivity, dtype=float)
-            code = ReturnCode.OK
-        except Exception as error:
-            logging.exception("Homogenization sample L%02d/S%07d failed.", sample_level, sample_number)
-            fine = None
-            code = int(error.code) if isinstance(error, WrapperException) else ReturnCode.HOMOGENIZATION_ERROR
-        elapsed = time.perf_counter() - started
-        write_field_result(store_path, sample_id=sample_number, conductivity=fine,
-                           parameter_values=parameter_values, return_code=code, eval_time=elapsed)
-        if fine is None:
-            raise RuntimeError(f"Homogenization sample failed with return code {code}.")
-        return fine, np.zeros_like(fine)
+    def make_level_simulation(
+        self,
+        fine_level_params: list[float],
+        coarse_level_params: list[float],
+        level_id: int,
+    ) -> LevelSimulation:
+        """Bind only lightweight importable callables to the scheduled level."""
+        level_sim = self.level_instance(fine_level_params, coarse_level_params)
+        level_sim._calculate = self.calculate
+        level_sim._result_format = partial(return_result_format, self.result_format())
+        level_sim._level_id = level_id
+        return level_sim
+
+    calculate = staticmethod(calculate_homogenization_sample)
 
 
 class RandomSimulation(HomogenizationSimulation):
     """Deterministic fast simulation for validating MLMC, restart, and storage paths."""
 
-    @staticmethod
-    def calculate(config_dict: dict[str, Any], sample_input: Sequence[float]):
-        """Generate a reproducible tensor field without meshing or Flow123d."""
-        started = time.perf_counter()
-        _sample_level, sample_number = parse_sample_workspace(Path.cwd())
-        cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
-        _cfg, parameter_dict = apply_sample_parameters(cfg, sample_input)
-        parameter_values = full_parameter_values(cfg, parameter_dict)
-        n_elements = int(config_dict["n_elements"])
-        base = np.arange(1, n_elements * 6 + 1, dtype=float).reshape(n_elements, 6)
-        fine = base * (1.0 + 0.01 * float(np.sum(parameter_values)))
-        elapsed = time.perf_counter() - started
-        write_field_result(
-            config_dict["store_path"],
-            sample_id=sample_number,
-            conductivity=fine,
-            parameter_values=parameter_values,
-            return_code=ReturnCode.OK,
-            eval_time=elapsed,
-        )
-        return fine, np.zeros_like(fine)
+    calculate = staticmethod(calculate_random_sample)

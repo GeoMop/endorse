@@ -47,6 +47,10 @@ Current Stage B implementation steps:
    and worker preloads before scheduling samples.
 7. Use the repository-level Dask helpers through thin application wrappers that provide the package-specific preload
    modules while preserving the existing local and PBS command lines.
+8. Match the working Chodby driver structure for PBS staging, command resolution, and scheduler propagation in both
+   local and cluster runs, retaining only homogenization-specific commands and simulation selection.
+9. Keep scheduler deserialization lightweight by binding level metadata, calculation dispatch, and result-format
+   callables from a dedicated worker module that imports the physical model only during worker execution.
 
 ## Stage B - single-level Monte Carlo sampling
 
@@ -76,6 +80,12 @@ Current Stage B implementation steps:
 ## AGENT Questions And Remarks
 
 - No open design questions for Stage A.
+- 2026-10-25: The full `test_homogenization_study.py` run exceeded the 30-second local execution window after ten
+  progress markers. The six focused PBS and scheduler-propagation cases pass; the Flow123d integration remains
+  explicitly skipped.
+- 2026-10-25: A standalone real `LocalCluster` plus loky-child probe also produced no output before the local
+  execution timeout. The focused client-boundary regression passes; the full process path still needs the USER local
+  sampling run.
 - The microscale Flow123d configuration and executable are configured; the current cluster run is the integration
   verification for the complete three-load calculation.
 - DFN and meshing realization randomness are explicit sampled parameters and are converted to reproducible integer
@@ -83,6 +93,16 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-10-26: Added a Chodby-style lightweight `mlmc_worker` boundary for homogenization. Scheduler preload and
+  serialized level metadata no longer import the mesh or physical-model stack; workers retain the existing eager
+  preload and load the physical calculation only when executing a sample.
+- 2026-10-26: Diagnosed the first MetaCentrum run failure as a scheduler-startup race: the homogenization preload
+  spent 43 seconds initializing imports while the shared runner waited only three seconds. Replaced fixed local and
+  PBS sleeps with a bounded scheduler-readiness wait shared by both applications.
+- 2026-10-25: Restored the non-daemonic Dask worker configuration around client creation so direct local sampling
+  can start the nested loky process used by mesh generation; scheduler-backed local and PBS runs keep the same path.
+- 2026-10-25: Aligned homogenization PBS staging, CLI parsing, `resolve_subcmd()`, and scheduler propagation with the
+  working Chodby sampling driver. Added focused local, cluster, and random scheduler-path coverage.
 - 2026-10-25: Switched local and PBS Dask entry points to thin wrappers around the repository-level helpers while
   preserving package-specific preload modules and node-local workdir collection.
 - 2026-10-20: Implemented the three-load runner: execute averaged micro responses, recover six-component conductivity

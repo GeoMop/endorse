@@ -68,6 +68,32 @@ compute_host_counts() {
   HOST_COUNTS=$(sort "$PBS_NODEFILE" | uniq -c)
 }
 
+wait_for_scheduler() {
+  local timeout="${DASK_SCHEDULER_START_TIMEOUT:-180}"
+  local deadline=$((SECONDS + timeout))
+  local scheduler_log="$SCRATCHDIR/logs/scheduler.log"
+  local scheduler_pid
+  scheduler_pid=$(<"$SCRATCHDIR/scheduler.pid")
+
+  echo "[sched] Waiting up to ${timeout}s for scheduler startup..."
+  while (( SECONDS < deadline )); do
+    if grep -Fq "Scheduler at:" "$scheduler_log"; then
+      echo "[sched] Scheduler is accepting connections."
+      return 0
+    fi
+    if ! kill -0 "$scheduler_pid" 2>/dev/null; then
+      echo "ERROR: Dask scheduler exited during startup. Last log lines:" >&2
+      tail -50 "$scheduler_log" >&2
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "ERROR: Dask scheduler did not start within ${timeout}s. Last log lines:" >&2
+  tail -50 "$scheduler_log" >&2
+  return 1
+}
+
 start_scheduler() {
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
   SCHED_ADDR="tcp://${HEAD_NODE}:8786"
@@ -85,8 +111,7 @@ start_scheduler() {
   # pbsdsh -vh "$HEAD_NODE" -- cat "$SCRATCHDIR/logs/scheduler.log"
   echo $! > "$SCRATCHDIR/scheduler.pid"
 
-  # give it a moment
-  sleep 3
+  wait_for_scheduler
   # cat "pid: $SCRATCHDIR/scheduler.pid"
   # cat "$SCRATCHDIR/logs/scheduler.log"
   echo "$SCHED_ADDR" > "$SCRATCHDIR/SCHED_ADDR.txt"

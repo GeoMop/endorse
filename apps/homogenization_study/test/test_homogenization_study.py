@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import functools
 from importlib import import_module
 from pathlib import Path
 import subprocess
+import sys
 
+import cloudpickle
 import numpy as np
 import pytest
 import xarray as xr
@@ -13,13 +16,58 @@ import xarray as xr
 from endorse import common
 from homogenization_study import ConductivityFieldResult
 from homogenization_study import job
+from homogenization_study.mlmc_worker import (
+    HomogenizationLevelSimulation,
+    calculate_homogenization_sample,
+    return_result_format,
+)
 import homogenization_study.sensitivity_sampling as sensitivity_sampling
-from homogenization_study.model import TENSOR_COMPONENTS, XYZ_COMPONENTS
-from homogenization_study.problem_simulation import FIELD_GROUP, ensure_field_storage, write_field_result
+from homogenization_study.model import StudyMeshFiles, TENSOR_COMPONENTS, XYZ_COMPONENTS
+from homogenization_study.problem_simulation import (
+    FIELD_GROUP,
+    HomogenizationSimulation,
+    ensure_field_storage,
+    write_field_result,
+)
 from homogenization_study.zarr_to_fuse import convert_to_zarr_fuse, normalize_source_dataset
 
 
 SCHEMA_PATH = Path(__file__).parents[1] / "input_data" / "data_schema.yaml"
+
+
+def test_scheduler_worker_module_import_stays_lightweight() -> None:
+    """Import scheduler task definitions without loading mesh or physical-model modules."""
+    code = """
+import sys
+import homogenization_study.mlmc_worker
+assert "homogenization_study.problem_simulation" not in sys.modules
+assert "homogenization_study.create_mesh" not in sys.modules
+assert "homogenization_study.problem" not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).parents[2], check=True)
+
+
+def test_level_simulation_serializes_only_lightweight_worker_references(tmp_path: Path) -> None:
+    """Keep scheduler deserialization independent of the heavy homogenization module."""
+    job.set_workdir(tmp_path)
+    cfg = common.dotdict.create({"mlmc": {"levels": [{"task_size": 1.0}]}})
+    simulation = HomogenizationSimulation(
+        cfg=cfg,
+        workdir=tmp_path,
+        meshes=StudyMeshFiles("micro.msh", "homogenization.msh"),
+        n_elements=2,
+        store_path=tmp_path / "fields.zarr",
+    )
+
+    level_sim = simulation.make_level_simulation([1.0], [], level_id=0)
+    restored = cloudpickle.loads(cloudpickle.dumps(level_sim))
+
+    assert isinstance(restored, HomogenizationLevelSimulation)
+    assert restored._calculate is calculate_homogenization_sample
+    assert restored._calculate.__module__ == "homogenization_study.mlmc_worker"
+    assert isinstance(restored._result_format, functools.partial)
+    assert restored._result_format.func is return_result_format
+    assert restored._result_format()[0].shape == (2, 6)
 
 
 def test_conductivity_field_result_matches_storage_axes() -> None:
