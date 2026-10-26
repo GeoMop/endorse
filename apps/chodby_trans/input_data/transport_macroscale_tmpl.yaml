@@ -44,7 +44,7 @@ problem: !Coupling_Sequential
         options: <flow_solver__options>
 
     input_fields:
-      - region: [ .box, .fracture_box]
+      - region: [ .box, .fractures_box]
         bc_type: dirichlet
         bc_piezo_head: !FieldFormula
           # Kravi hora (local model) pressure gradient estimate: 20 m / 400 m = 0.05 [m/m]
