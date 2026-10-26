@@ -188,9 +188,6 @@ def prepare_fine_input(workdir, input_dir, cfg_mesh, cfg_trans, fr_set, n_large)
 
 @memoize
 def transport_prepare_run(cfg_mesh):
-    fracture_box = cfg_mesh.fractures.clip_box_ratio * np.array(cfg_mesh.geometry.box_dimensions)
-    logging.info(f"box: {cfg_mesh.geometry.box_dimensions}")
-    logging.info(f"fracture_box: {fracture_box}")
     logging.info(f"DFN REPO:\n{cfg_mesh.fractures.population}")
 
     dfn_seed_seq = ot_sa.Seed.get_seedsequence(cfg_mesh.fractures.dfn_seed)
@@ -393,6 +390,7 @@ def interpolate_micro_field_to_macro(
         macro_mesh.el_barycenters()[macro_bulk],
         method="linear",
     )
+
     return macro_field
 
 
