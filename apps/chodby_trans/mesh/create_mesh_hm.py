@@ -431,9 +431,9 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
     :param mesh_file:
     :return:
     """
-    final_mesh_filename = cfg.mesh_name + ".msh2"
+    final_mesh_filename = cfg.mesh.mesh_name + ".msh2"
 
-    factory = gmsh.GeometryOCC(cfg.mesh_name, verbose=False)
+    factory = gmsh.GeometryOCC(cfg.mesh.mesh_name, verbose=False)
     import gmsh as gmsh_orig
     gmsh_orig.option.setNumber("General.Terminal", 1)     # headless
     gmsh_orig.option.setNumber("General.NumThreads", 1)   # avoid hidden threading
@@ -458,14 +458,14 @@ def make_gmsh(cfg:'dotdict', fracture_set, mesh_seed):
 
 @exp.rethrow_as(exp.HealException, "Meshing exception")
 def make_heal_mesh(cfg, mesh_file: File):
-    mesh_file_healed = Path(cfg.mesh_name + "_healed.msh2")
+    mesh_file_healed = Path(cfg.mesh.mesh_name + "_healed.msh2")
     if not Path(mesh_file_healed).exists():
         print("HEAL MESH")
 
         # use mesh_seed for heal_mesh randomization (elements, nodes permutation)
         hm = heal_mesh.HealMesh.read_mesh(mesh_file.path, node_tol=1e-4)
         hm.heal_mesh(gamma_tol=0.002)
-        # hm.stats_to_yaml(cfg.mesh_name + "_heal_stats.yaml")
+        # hm.stats_to_yaml(cfg.mesh.mesh_name + "_heal_stats.yaml")
         hm.write(file_name=mesh_file_healed.name)
     return mesh_file_healed
 
@@ -483,10 +483,10 @@ def make_mesh(cfg, fr_pop, dfn_seed_seq, mesh_seed_seq):
         fracture_set, n_large = None, 0
 
     mesh_file = None
-    if not Path(cfg.mesh_name + ".msh2").exists():
+    if not Path(cfg.mesh.mesh_name + ".msh2").exists():
         mesh_file = make_gmsh(cfg, fracture_set, mesh_seed)    # use mesh_seed for gmsh randomization
     else:
-        mesh_file = File(cfg.mesh_name + ".msh2")
+        mesh_file = File(cfg.mesh.mesh_name + ".msh2")
 
     # the number of elements written by factory logger does not correspond to actual count
     # reader = gmsh_io.GmshIO(mesh_file.path)

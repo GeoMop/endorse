@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import *
+import json
 from functools import cached_property
 import xarray as xr
 import sys
@@ -13,6 +14,8 @@ import openturns as ot
 import pandas as pd
 from scipy.stats import alpha
 
+from functools import lru_cache
+from endorse.common import dotdict
 from chodby_trans import job
 
 """
@@ -148,14 +151,13 @@ class Parameter:
             # resolve in custom distributions
             this_module = sys.modules[__name__]
             distr_class = getattr(this_module, distr_name)
-            if isinstance(args, dict):
-                return distr_class(**args)
-            else:
-                return distr_class(*args)
-        except AttributeError:       
+        except AttributeError:
             distr_class = getattr(ot, distr_name)
+        if isinstance(args, dict):
+            return distr_class(**args)
+        else:
             return distr_class(*args)
-        
+
     @staticmethod
     def from_cfg(name, cfg, mixing_name=None):
 
@@ -777,6 +779,7 @@ class InputDesign:
 class SensitivityAnalysis:
    
     parameters: Dict[str, Parameter]
+    cfg: Dict[str, Any] = attrs.field(repr=False)
     sampler: Literal["QMC", "MonteCarlo", "LHS"] = "QMC"
     compute_s2: bool = False
     n_samples: int = 0
@@ -786,9 +789,21 @@ class SensitivityAnalysis:
         repr=False,
         )
 
-
     @staticmethod
     def from_cfg(sa_cfg):
+        """
+        Build a sensitivity analysis from a mutable config object.
+
+        The public entry point accepts a ``dotdict`` or plain ``dict`` and
+        normalizes it to a deterministic JSON cache key for the cached helper.
+        """
+        sa_cfg_json = json.dumps(dotdict.serialize(sa_cfg), sort_keys=True)
+        return SensitivityAnalysis._from_cfg_cached(sa_cfg_json)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _from_cfg_cached(sa_cfg_json: str):
+        sa_cfg = dotdict.create(json.loads(sa_cfg_json))
         param_cfg = sa_cfg['parameters']
         # parameters = {name: Parameter.from_cfg(name, p_cfg) for name, p_cfg in param_cfg.items()}
         parameters = dict()
@@ -806,12 +821,16 @@ class SensitivityAnalysis:
             else:
                 parameters[name] = Parameter.from_cfg(name, p_cfg)
 
+        info = SensitivityAnalysis._from_cfg_cached.cache_info()
+        print(info)
+
         return SensitivityAnalysis(
             parameters,
-            sa_cfg.get('sampler', "QMC"),
-            sa_cfg.get('second_order', False),
-            sa_cfg['n_samples'],
-            sa_cfg.get('err_est_confidence_level', 0.95))
+            cfg=sa_cfg,
+            sampler=sa_cfg.get('sampler', "QMC"),
+            compute_s2=sa_cfg.get('second_order', False),
+            n_samples=sa_cfg['n_samples'],
+            confidence_level=sa_cfg.get('err_est_confidence_level', 0.95))
 
     @property
     def groups(self) -> List[str]:
@@ -843,6 +862,20 @@ class SensitivityAnalysis:
             self._experiment_design = exp_design_functions[self.sampler]
         except KeyError:
             raise KeyError(f"Unknown sampler '{self.sampler}'. Valid: {list(exp_design_functions.keys())}")
+
+    def __getstate__(self):
+        """
+        Serialize through the source config and reconstruct derived objects on load.
+        """
+        return {"cfg": self.cfg}
+
+    def __setstate__(self, state):
+        """
+        Rebuild the analysis from the saved config snapshot.
+        """
+        rebuilt = type(self).from_cfg(state["cfg"])
+        for field in attrs.fields(type(self)):
+            setattr(self, field.name, getattr(rebuilt, field.name))
 
         # groups via comprehension (order preserved with dict.fromkeys)
         #self._groups: List[str] = list(dict.fromkeys([p.group for p in self.parameters.values()]))

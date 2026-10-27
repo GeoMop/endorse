@@ -2,3 +2,4 @@
 # for final dependencies use pyproject.toml
 
 pytest
+bokeh>=3.7,<4

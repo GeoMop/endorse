@@ -54,6 +54,7 @@ def plot_conc_timeseries_distribution1(
     slice_width_in: float = 0.75,  # inches
     slice_alpha: float = 0.25,
     slice_bins_y: int = 90,
+    plot_all_lines: bool = False,
 ):
     """
     Fixed vars in ds:
@@ -61,7 +62,7 @@ def plot_conc_timeseries_distribution1(
       - ds['log10_conc_q99_XYZ']     : time dependent values (dims: sim_time,QMC,IID) -> plotted as distribution
 
     Output:
-      - bottom ax: 2D histogram (remaining samples) + extreme trajectories (out-of-Q)
+      - bottom ax: 2D histogram (remaining samples) + extreme trajectories (out-of-Q), or all trajectories
       - top ax:   per-slice inset histograms (remaining samples), widths independent of log time scale
                  + quantile lines: Q, 0.25, 0.5, 0.75, 1-Q
     """
@@ -132,11 +133,15 @@ def plot_conc_timeseries_distribution1(
     # Bottom: 2D histogram (remaining samples) + extremes
     # =======================
 
-    # out-of-Q samples (extremes)
-    for s in bottom_samples:
-        ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="red", zorder=2)
-    for s in top_samples:
-        ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="blue", zorder=3)
+    if plot_all_lines:
+        for s in range(Ns):
+            ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.45, color="black", zorder=4)
+    else:
+        # out-of-Q samples (extremes)
+        for s in bottom_samples:
+            ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="red", zorder=2)
+        for s in top_samples:
+            ax_bot.plot(t, da_td[s, :], lw=0.7, alpha=0.7, color="blue", zorder=3)
 
     if rem_samples.size:
         vals = np.asarray(da_rem, dtype=float)  # (Nrem, Nt)

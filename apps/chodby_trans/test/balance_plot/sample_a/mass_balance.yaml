@@ -1,0 +1,1566 @@
+column_names: [ flux,  flux_in,  flux_out,  mass,  source,  source_in,  source_out,  flux_increment,  source_increment,  flux_cumulative,  source_cumulative,  error ]
+data:
+  - time: 0
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0, 5.65314e-09, 5.65314e-09, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .fractures_box
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_z0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_z1
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_y1
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_x0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .side_x1
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 0
+    region: ALL
+    quantity: I
+    data: [ 0, 0, 0, 0, 5.65314e-09, 5.65314e-09, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00334713, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 7.30398e-09, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0284053, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 2.29938e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.0245684, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 3.56028, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 1.82534e-08, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 4.47947e-13, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.60456e-17, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 4.62053e-13, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 1.3191e-13, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 1.40129e-24, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .fractures_box
+    quantity: I
+    data: [ -3.09423e-26, 5.96289e-31, -3.09429e-26, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -1.84193e-36, 1.08022e-37, -1.94995e-36, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -6.36174e-37, 6.95994e-38, -7.05773e-37, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_z0
+    quantity: I
+    data: [ -1.39916e-23, 1.40209e-26, -1.40057e-23, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_z1
+    quantity: I
+    data: [ -3.53608e-24, 1.28134e-26, -3.5489e-24, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_y1
+    quantity: I
+    data: [ -3.33072e-20, 2.70431e-26, -3.33072e-20, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_x0
+    quantity: I
+    data: [ -2.34775e-21, 1.92199e-24, -2.34968e-21, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .side_x1
+    quantity: I
+    data: [ -4.30638e-26, 9.52685e-27, -5.25907e-26, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -2.76639e-17, 7.41473e-22, -2.76646e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 100
+    region: ALL
+    quantity: I
+    data: [ -2.76996e-17, 7.43458e-22, -2.77003e-17, 3.61663, 0, 0, 0, -6.36546e-08, 3.61663, -6.36546e-08, 3.61663, 1.51103e-09 ]
+  - time: 200
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00539973, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 8.09448e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0486064, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.000163349, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.0454159, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 3.51704, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 6.51611e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 7.91578e-11, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 2.82848e-14, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 1.02625e-10, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 2.6539e-11, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 8.55479e-21, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .fractures_box
+    quantity: I
+    data: [ -9.29323e-24, 1.21343e-30, -9.29323e-24, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -5.56749e-35, 2.7021e-36, -5.8377e-35, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -1.77764e-34, 1.77302e-35, -1.95494e-34, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_z0
+    quantity: I
+    data: [ -2.91298e-20, 6.72492e-26, -2.91299e-20, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_z1
+    quantity: I
+    data: [ -8.0256e-21, 3.34288e-24, -8.02894e-21, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_y1
+    quantity: I
+    data: [ -6.76321e-18, 3.83903e-24, -6.76321e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_x0
+    quantity: I
+    data: [ -8.56607e-19, 3.7234e-22, -8.56979e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .side_x1
+    quantity: I
+    data: [ -5.88354e-22, 4.54906e-27, -5.88358e-22, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -3.39365e-17, 8.5517e-24, -3.39366e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 200
+    region: ALL
+    quantity: I
+    data: [ -4.15941e-17, 3.88146e-22, -4.15945e-17, 3.61663, 0, 0, 0, -1.17457e-07, -1.42251e-16, -1.81112e-07, 3.61663, 1.78464e-09 ]
+  - time: 400
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00808868, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 3.16078e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0800679, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.000877321, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.0748545, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 3.45269, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 1.43276e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 7.01933e-09, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.61769e-11, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 8.4165e-09, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 2.05001e-09, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 1.16848e-16, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .fractures_box
+    quantity: I
+    data: [ -1.25291e-21, 1.4727e-27, -1.25291e-21, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -8.15558e-34, 7.54539e-35, -8.91012e-34, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -1.5655e-32, 9.22062e-34, -1.65771e-32, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_z0
+    quantity: I
+    data: [ -1.10794e-17, 1.63075e-23, -1.10794e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_z1
+    quantity: I
+    data: [ -3.55588e-18, 1.48781e-21, -3.55737e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_y1
+    quantity: I
+    data: [ -4.2299e-16, 1.14323e-23, -4.2299e-16, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_x0
+    quantity: I
+    data: [ -1.01385e-16, 1.57358e-20, -1.01401e-16, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .side_x1
+    quantity: I
+    data: [ -6.85046e-19, 3.59811e-24, -6.8505e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -3.86803e-17, 4.77543e-24, -3.86803e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 400
+    region: ALL
+    quantity: I
+    data: [ -5.78377e-16, 1.72598e-20, -5.78394e-16, 3.61662, 0, 0, 0, -2.37315e-06, 7.86359e-16, -2.55427e-06, 3.61663, 5.27851e-09 ]
+  - time: 800
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0118446, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000367633, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.128985, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.00361908, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.114301, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 3.35725, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.00016808, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 2.58093e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.80541e-09, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 2.0214e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 4.79895e-08, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 3.27777e-13, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .fractures_box
+    quantity: I
+    data: [ -3.88345e-20, 7.3901e-28, -3.88345e-20, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -1.54491e-32, 8.72779e-34, -1.63219e-32, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -3.47152e-31, 3.99437e-36, -3.47156e-31, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_z0
+    quantity: I
+    data: [ -5.9118e-16, 2.5166e-22, -5.91181e-16, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_z1
+    quantity: I
+    data: [ -2.13876e-16, 3.96366e-20, -2.13916e-16, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_y1
+    quantity: I
+    data: [ -6.93382e-15, 0, -6.93382e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_x0
+    quantity: I
+    data: [ -2.49007e-15, 1.16457e-19, -2.49019e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .side_x1
+    quantity: I
+    data: [ -7.78964e-17, 3.65658e-22, -7.78968e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -4.25542e-17, 5.04625e-24, -4.25542e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 800
+    region: ALL
+    quantity: I
+    data: [ -1.03494e-14, 1.56716e-19, -1.03496e-14, 3.61653, 0, 0, 0, -8.93738e-05, 9.41486e-16, -9.19281e-05, 3.61663, -1.21295e-08 ]
+  - time: 2000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0187511, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00252416, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.234752, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.0175854, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.184525, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 3.15339, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.00204053, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 1.1052e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.35326e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 3.58305e-06, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 8.3634e-07, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 5.21691e-10, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .fractures_box
+    quantity: I
+    data: [ -6.26066e-19, 1.89206e-27, -6.26066e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -7.58094e-31, 1.97582e-35, -7.58113e-31, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -4.4186e-30, 0, -4.4186e-30, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_z0
+    quantity: I
+    data: [ -1.34224e-14, 2.49473e-20, -1.34224e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_z1
+    quantity: I
+    data: [ -5.367e-15, 4.10722e-19, -5.36741e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_y1
+    quantity: I
+    data: [ -6.93304e-14, 0, -6.93304e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_x0
+    quantity: I
+    data: [ -2.97328e-14, 2.01166e-18, -2.97348e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .side_x1
+    quantity: I
+    data: [ -3.32296e-15, 1.88061e-20, -3.32298e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -4.68726e-17, 1.56792e-23, -4.68726e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 2000
+    region: ALL
+    quantity: I
+    data: [ -1.21223e-13, 2.46615e-18, -1.21225e-13, 3.61359, 0, 0, 0, -0.0029468, -4.39799e-16, -0.00303873, 3.61663, -1.2558e-08 ]
+  - time: 4000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0243553, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.005776, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.34837, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.0524054, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.246227, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 2.90695, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.00904106, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.000131604, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.86914e-06, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 1.81182e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 4.19344e-06, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 4.51797e-08, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .fractures_box
+    quantity: I
+    data: [ -2.11977e-18, 3.35186e-27, -2.11977e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -5.48866e-30, 0, -5.48866e-30, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -1.42462e-29, 0, -1.42462e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_z0
+    quantity: I
+    data: [ -5.21459e-14, 1.23976e-19, -5.2146e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_z1
+    quantity: I
+    data: [ -2.18917e-14, 9.31395e-19, -2.18926e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_y1
+    quantity: I
+    data: [ -2.11959e-13, 0, -2.11959e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_x0
+    quantity: I
+    data: [ -8.49465e-14, 7.13262e-18, -8.49537e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .side_x1
+    quantity: I
+    data: [ -1.77946e-14, 3.07334e-19, -1.77949e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -4.86798e-17, 2.84502e-26, -4.86798e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 4000
+    region: ALL
+    quantity: I
+    data: [ -3.88788e-13, 8.49533e-18, -3.88797e-13, 3.59328, 0, 0, 0, -0.0203103, 1.3982e-16, -0.023349, 3.61663, -6.85024e-08 ]
+  - time: 8000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0282858, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00926106, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.467429, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.141676, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.295527, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 2.53354, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.0282268, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.000947412, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 1.81157e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 6.54507e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 1.50582e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 1.03819e-06, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .fractures_box
+    quantity: I
+    data: [ -4.22372e-18, 0, -4.22372e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -2.04625e-29, 0, -2.04625e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -3.00245e-29, 0, -3.00245e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_z0
+    quantity: I
+    data: [ -1.12392e-13, 8.21065e-19, -1.12393e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_z1
+    quantity: I
+    data: [ -4.86327e-14, 2.45863e-19, -4.8633e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_y1
+    quantity: I
+    data: [ -4.24931e-13, 0, -4.24931e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_x0
+    quantity: I
+    data: [ -1.53216e-13, 8.16317e-18, -1.53224e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .side_x1
+    quantity: I
+    data: [ -4.65662e-14, 1.03413e-18, -4.65673e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -4.74582e-17, 4.10826e-33, -4.74582e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 8000
+    region: ALL
+    quantity: I
+    data: [ -7.8579e-13, 1.02642e-17, -7.858e-13, 3.50499, 0, 0, 0, -0.0882876, -6.7638e-16, -0.111637, 3.61663, -1.15073e-07 ]
+  - time: 20000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0267403, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0110072, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.531707, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.402422, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.281711, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 1.77217, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.076862, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.00597139, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.000219722, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.000262201, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 5.73674e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 1.91319e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .fractures_box
+    quantity: I
+    data: [ -5.76075e-18, 0, -5.76075e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -8.23938e-29, 0, -8.23938e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -5.25623e-29, 0, -5.25623e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_z0
+    quantity: I
+    data: [ -1.62719e-13, 4.96252e-19, -1.6272e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_z1
+    quantity: I
+    data: [ -7.17641e-14, 4.60054e-20, -7.17641e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_y1
+    quantity: I
+    data: [ -5.85503e-13, 0, -5.85503e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_x0
+    quantity: I
+    data: [ -1.968e-13, 1.94406e-18, -1.96802e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .side_x1
+    quantity: I
+    data: [ -7.74147e-14, 2.76358e-19, -7.7415e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -3.79225e-17, 0, -3.79225e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 20000
+    region: ALL
+    quantity: I
+    data: [ -1.09424e-12, 2.76267e-18, -1.09425e-12, 3.10915, 0, 0, 0, -0.395839, 4.49182e-16, -0.507475, 3.61663, -2.19877e-07 ]
+  - time: 40000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0193487, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00892145, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.443206, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.652881, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.193913, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 1.05314, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.105028, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.0129238, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00086364, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.000637941, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000125993, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 9.6204e-05, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .fractures_box
+    quantity: I
+    data: [ -4.84897e-18, 0, -4.84897e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -1.90034e-28, 0, -1.90034e-28, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -6.22264e-29, 0, -6.22264e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_z0
+    quantity: I
+    data: [ -1.41626e-13, 0, -1.41626e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_z1
+    quantity: I
+    data: [ -6.17888e-14, 0, -6.17888e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_y1
+    quantity: I
+    data: [ -4.89598e-13, 0, -4.89598e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_x0
+    quantity: I
+    data: [ -1.64013e-13, 7.04716e-19, -1.64014e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .side_x1
+    quantity: I
+    data: [ -7.04986e-14, 1.40598e-19, -7.04987e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -2.48149e-17, 0, -2.48149e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 40000
+    region: ALL
+    quantity: I
+    data: [ -9.27554e-13, 8.45313e-19, -9.27555e-13, 2.49108, 0, 0, 0, -0.618069, -2.54334e-16, -1.12554, 3.61663, -2.84711e-07 ]
+  - time: 80000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.0100077, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00533406, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.275258, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.761375, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.088963, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.423981, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.088935, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.0156639, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00197496, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.0011933, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000237603, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.000309747, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .fractures_box
+    quantity: I
+    data: [ -2.92692e-18, 0, -2.92692e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -2.78381e-28, 0, -2.78381e-28, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -5.84994e-29, 0, -5.84994e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_z0
+    quantity: I
+    data: [ -8.8879e-14, 0, -8.8879e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_z1
+    quantity: I
+    data: [ -3.77838e-14, 0, -3.77838e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_y1
+    quantity: I
+    data: [ -2.95671e-13, 0, -2.95671e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_x0
+    quantity: I
+    data: [ -9.9291e-14, 0, -9.9291e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .side_x1
+    quantity: I
+    data: [ -4.58323e-14, 0, -4.58323e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -1.13597e-17, 0, -1.13597e-17, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 80000
+    region: ALL
+    quantity: I
+    data: [ -5.67471e-13, 0, -5.67471e-13, 1.67323, 0, 0, 0, -0.81785, 2.28225e-17, -1.94339, 3.61663, -2.54026e-07 ]
+  - time: 120000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00576404, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00342486, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.180812, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.69389, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.0458613, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.199867, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.0616311, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.0132544, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.0025635, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.00143, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000334723, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.000502042, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .fractures_box
+    quantity: I
+    data: [ -1.87229e-18, 0, -1.87229e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -2.63431e-28, 0, -2.63431e-28, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -4.86415e-29, 0, -4.86415e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_z0
+    quantity: I
+    data: [ -5.82103e-14, 0, -5.82103e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_z1
+    quantity: I
+    data: [ -2.43899e-14, 0, -2.43899e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_y1
+    quantity: I
+    data: [ -1.90529e-13, 0, -1.90529e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_x0
+    quantity: I
+    data: [ -6.37079e-14, 0, -6.37079e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .side_x1
+    quantity: I
+    data: [ -3.06627e-14, 0, -3.06627e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -5.96722e-18, 0, -5.96722e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 120000
+    region: ALL
+    quantity: I
+    data: [ -3.67508e-13, 0, -3.67508e-13, 1.20934, 0, 0, 0, -0.463897, 3.99095e-16, -2.40729, 3.61663, -2.41243e-07 ]
+  - time: 160000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00344311, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00226351, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.122269, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.597039, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.0242405, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.0954899, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.040516, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.0104327, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00289609, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.00153514, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000429036, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.000653539, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .fractures_box
+    quantity: I
+    data: [ -1.22959e-18, 0, -1.22959e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -2.22458e-28, 0, -2.22458e-28, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -3.90793e-29, 0, -3.90793e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_z0
+    quantity: I
+    data: [ -3.8911e-14, 0, -3.8911e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_z1
+    quantity: I
+    data: [ -1.61552e-14, 0, -1.61552e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_y1
+    quantity: I
+    data: [ -1.26281e-13, 0, -1.26281e-13, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_x0
+    quantity: I
+    data: [ -4.18906e-14, 0, -4.18906e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .side_x1
+    quantity: I
+    data: [ -2.08618e-14, 0, -2.08618e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -3.24396e-18, 0, -3.24396e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 160000
+    region: ALL
+    quantity: I
+    data: [ -2.44104e-13, 0, -2.44104e-13, 0.901208, 0, 0, 0, -0.308127, 1.9147e-16, -2.71542, 3.61663, -2.32165e-07 ]
+  - time: 240000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00161397, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00119781, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.067923, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.431291, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.00938604, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.0310566, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.0192706, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.00657179, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00309839, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.00162419, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000616725, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.00081937, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .fractures_box
+    quantity: I
+    data: [ -6.43552e-19, 0, -6.43552e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -1.43225e-28, 0, -1.43225e-28, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -2.55245e-29, 0, -2.55245e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_z0
+    quantity: I
+    data: [ -2.06466e-14, 0, -2.06466e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_z1
+    quantity: I
+    data: [ -8.5549e-15, 0, -8.5549e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_y1
+    quantity: I
+    data: [ -6.70274e-14, 0, -6.70274e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_x0
+    quantity: I
+    data: [ -2.18367e-14, 0, -2.18367e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .side_x1
+    quantity: I
+    data: [ -1.13569e-14, 0, -1.13569e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -1.33199e-18, 0, -1.33199e-18, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 240000
+    region: ALL
+    quantity: I
+    data: [ -1.29424e-13, 0, -1.29424e-13, 0.574469, 0, 0, 0, -0.326739, -1.97325e-17, -3.04216, 3.61663, -2.3338e-07 ]
+  - time: 320000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000840585, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000677641, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0411867, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.3126, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.00400107, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.0106809, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.00934332, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.00425798, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00305779, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.00169182, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.000797725, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.00089778, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .fractures_box
+    quantity: I
+    data: [ -3.60125e-19, 0, -3.60125e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -8.74565e-29, 0, -8.74565e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -1.67604e-29, 0, -1.67604e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_z0
+    quantity: I
+    data: [ -1.1578e-14, 0, -1.1578e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_z1
+    quantity: I
+    data: [ -4.84037e-15, 0, -4.84037e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_y1
+    quantity: I
+    data: [ -3.7981e-14, 0, -3.7981e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_x0
+    quantity: I
+    data: [ -1.20872e-14, 0, -1.20872e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .side_x1
+    quantity: I
+    data: [ -6.56924e-15, 0, -6.56924e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -6.18114e-19, 0, -6.18114e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 320000
+    region: ALL
+    quantity: I
+    data: [ -7.30568e-14, 0, -7.30568e-14, 0.390033, 0, 0, 0, -0.184436, 1.00072e-16, -3.22659, 3.61663, -2.32007e-07 ]
+  - time: 480000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000357456, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000302055, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0212691, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.189416, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.00128604, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.00254397, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.0033138, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.00224873, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00260479, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.00169868, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.00105818, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.000923422, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .fractures_box
+    quantity: I
+    data: [ -1.57921e-19, 0, -1.57921e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -3.72692e-29, 0, -3.72692e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -8.88442e-30, 0, -8.88442e-30, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_z0
+    quantity: I
+    data: [ -5.00788e-15, 0, -5.00788e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_z1
+    quantity: I
+    data: [ -2.15922e-15, 0, -2.15922e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_y1
+    quantity: I
+    data: [ -1.69352e-14, 0, -1.69352e-14, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_x0
+    quantity: I
+    data: [ -5.13297e-15, 0, -5.13297e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .side_x1
+    quantity: I
+    data: [ -3.04939e-15, 0, -3.04939e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -2.37627e-19, 0, -2.37627e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 480000
+    region: ALL
+    quantity: I
+    data: [ -3.22851e-14, 0, -3.22851e-14, 0.227022, 0, 0, 0, -0.163011, 1.88651e-17, -3.3896, 3.61663, -2.28163e-07 ]
+  - time: 640000
+    region: fr_small_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.000178688, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: fr_large_temp
+    quantity: I
+    data: [ 0, 0, 0, 0.00015156, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: box
+    quantity: I
+    data: [ 0, 0, 0, 0.0126852, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: main_tunnel
+    quantity: I
+    data: [ 0, 0, 0, 0.123571, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: plug
+    quantity: I
+    data: [ 0, 0, 0, 0.000482264, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: container
+    quantity: I
+    data: [ 0, 0, 0, 0.000735824, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_1
+    quantity: I
+    data: [ 0, 0, 0, 0.00135182, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_2
+    quantity: I
+    data: [ 0, 0, 0, 0.00129174, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_3
+    quantity: I
+    data: [ 0, 0, 0, 0.00206885, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_4
+    quantity: I
+    data: [ 0, 0, 0, 0.0015718, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_5
+    quantity: I
+    data: [ 0, 0, 0, 0.00118855, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: storage_6
+    quantity: I
+    data: [ 0, 0, 0, 0.000898951, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .fractures_box
+    quantity: I
+    data: [ -7.7725e-20, 0, -7.7725e-20, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .tunnel_head_y0
+    quantity: I
+    data: [ -1.59839e-29, 0, -1.59839e-29, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .tunnel_head_y1
+    quantity: I
+    data: [ -5.3622e-30, 0, -5.3622e-30, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_z0
+    quantity: I
+    data: [ -2.40364e-15, 0, -2.40364e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_z1
+    quantity: I
+    data: [ -1.08434e-15, 0, -1.08434e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_y0
+    quantity: I
+    data: [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_y1
+    quantity: I
+    data: [ -8.49996e-15, 0, -8.49996e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_x0
+    quantity: I
+    data: [ -2.40102e-15, 0, -2.40102e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .side_x1
+    quantity: I
+    data: [ -1.62285e-15, 0, -1.62285e-15, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: .IMPLICIT_BOUNDARY
+    quantity: I
+    data: [ -1.13881e-19, 0, -1.13881e-19, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+  - time: 640000
+    region: ALL
+    quantity: I
+    data: [ -1.6012e-14, 0, -1.6012e-14, 0.146176, 0, 0, 0, -0.0808464, -2.92735e-18, -3.47045, 3.61663, -2.25578e-07 ]

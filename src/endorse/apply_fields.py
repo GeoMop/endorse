@@ -139,7 +139,14 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
 
     cond_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * y_scaling
 
-    def cond_boreholes(bid):
+    por_min = float(cfg_bulk_fields.por_min)
+    # por_max = float(cfg_bulk_fields.por_max)
+    por_max = float(cfg_bulk_fields.por_mult) * por_min
+    por_field = np.exp((1 - theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
+
+    Y = Y + cfg_geom.main_tunnel.center[1]  # move it back - we want sbh to be around Y=0
+    def borehole_field(bid: int, field_min: float, field_max: float) -> np.ndarray:
+        """Return a borehole field with a flat cylindrical extension below its bottom tip."""
         csb = cfg_geom.storage_borehole
         r = csb.diameter/2
         d = cfg_geom.storage_borehole_distance
@@ -154,18 +161,20 @@ def bulk_fields_mockup_tunnel(cfg_geom, cfg_bulk_fields, XYZ, cond=None):
         bore_begin = cfg_geom.main_tunnel.center[2] - cfg_geom.main_tunnel.height/2
         bore_end = bore_begin - csb.length
         z_scaling = np.where( np.logical_and(Z >= bore_end, Z <= bore_begin), 1.0, 0.0)
-        bore_field = np.exp((1-theta) * np.log(cond_max) + theta * np.log(cond_min)) * z_scaling
-        return bore_field
+        bore_field = np.exp((1-theta) * np.log(field_max) + theta * np.log(field_min)) * z_scaling
+
+        tip_height = (edz_r - in_r) * r
+        tip_z_scaling = np.where(np.logical_and(Z >= bore_end - tip_height, Z <= bore_end), 1.0, 0.0)
+        tip_axial_theta = (bore_end - Z) / tip_height
+        tip_theta = np.maximum(theta, tip_axial_theta)
+        tip_field = np.exp((1-tip_theta) * np.log(field_max) + tip_theta * np.log(field_min)) * tip_z_scaling
+        return np.maximum(bore_field, tip_field)
 
     for i in range(cfg_geom.n_storage_boreholes):
-        cond_field = np.maximum(cond_field, cond_boreholes(i))
+        cond_field = np.maximum(cond_field, borehole_field(i, cond_min, cond_max))
+        por_field = np.maximum(por_field, borehole_field(i, por_min, por_max))
 
     cond_field = np.clip(cond_field, cond_min, cond_max)
-
-    por_min = float(cfg_bulk_fields.por_min)
-    # por_max = float(cfg_bulk_fields.por_max)
-    por_max = float(cfg_bulk_fields.por_mult) * por_min
-    por_field = np.exp((1-theta) * np.log(por_max) + theta * np.log(por_min)) * y_scaling
     por_field = np.clip(por_field, por_min, por_max)
 
     return cond_field, por_field
@@ -192,7 +201,7 @@ def fr_fields_repo(cfg_fr, cfg_fr_fields, fr_elements,  fr_map, fractures):
     fr_r = np.array(fr_r)
     fr_a = np.zeros_like(fr_r)
     fr_b = np.zeros_like(fr_r)
-    fr_ifamily = [fr.i_family for fr in fractures]
+    fr_ifamily = [fr.family for fr in fractures]
 
     #fr_r = np.zeros(len(fr_elements))
     #fr_a = np.zeros_like(fr_r)
