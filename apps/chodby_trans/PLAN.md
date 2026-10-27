@@ -243,6 +243,9 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Log
 
+- 2026-10-26: Replaced separate conductivity-tensor and scalar micro-to-macro interpolation with one
+  nearest-barycentre interpolator that preserves scalar or multicomponent field shapes, including `diff_m`.
+
 - 2026-10-25: Generalized the repository-level Dask cluster and preload helpers for both applications. Kept the
   existing app command lines through thin wrappers and preserved homogenization scratch-workdir collection.
 - 2026-10-09: Moved Goal 6 into the independent sibling package `apps/homogenization_study`. Removed the temporary

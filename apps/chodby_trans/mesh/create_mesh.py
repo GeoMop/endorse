@@ -584,8 +584,11 @@ def make_heal_mesh(mesh_name, mesh_file: File):
 
 @memoize
 def make_fractures(cfg_mesh, dfn_seed):
+    fracture_box = cfg_mesh.fractures.clip_box_ratio * np.array(cfg_mesh.geometry.box_dimensions)
+    logging.info(f"box: {cfg_mesh.geometry.box_dimensions}")
+    logging.info(f"fracture_box: {fracture_box}")
 
-    fr_pop = Population.from_cfg(cfg_mesh.fractures.population, cfg_mesh.geometry.box_dimensions)
+    fr_pop = Population.from_cfg(cfg_mesh.fractures.population, fracture_box)
 
     if "fractures" in cfg_mesh.geometry.include:
         fracture_set, n_large = fracture_tools.fracture_set(cfg_mesh, fr_pop, dfn_seed)
