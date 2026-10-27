@@ -1,3 +1,9 @@
+apps/chodby_trans/MLMC
+apps/chodby_trans/transport_statistics
+apps/chodby_inv/input_data
+apps/chodby_inv/*
+tests/homogenisation
+
 venv
 venv_loc
 

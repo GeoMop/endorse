@@ -1,9 +1,11 @@
 from typing import Dict, Tuple, List
 import logging
+from pathlib import Path
 
 import attrs
 import bih
 import numpy as np
+import pyvista as pv
 # from numba import njit
 import bisect
 
@@ -26,7 +28,14 @@ def element_loc_mat(all_nodes: np.array, node_indices: List[int]):
 
 #@njit
 def element_compute_volume(all_nodes: np.array, node_indices: List[int]):
-    return np.linalg.det(element_loc_mat(all_nodes, node_indices)) / 6
+    # Tetrahedron volume (n = 3) or triangle area (n = 2) i.e. fractures, else 0
+    loc_mat = element_loc_mat(all_nodes, node_indices)
+    n = loc_mat.shape[1]
+    if n == 3:
+        return abs(np.linalg.det(loc_mat)) / 6
+    if n == 2:
+        return np.linalg.norm(np.cross(loc_mat[:, 0], loc_mat[:, 1])) / 2
+    return 0.0
 
 
 @attrs.define
@@ -78,7 +87,7 @@ def _load_mesh(mesh_file: File, heal_tol):
 def mesh_compute_el_volumes(nodes:np.array, node_indices :np.array) -> np.array:
     return np.array([element_compute_volume(nodes, ni) for ni in node_indices])
 
-#@memoize
+@memoize
 def load_mesh(mesh_file: File, heal_tol=None) -> 'Mesh':
     return _load_mesh(mesh_file, heal_tol)
 
@@ -90,7 +99,7 @@ class Mesh:
     def empty(mesh_path) -> 'Mesh':
         return Mesh(GmshIO(), mesh_path)
 
-    def __init__(self, gmsh_io: GmshIO, file):
+    def __init__(self, gmsh_io: GmshIO, file, parent_element_indices=None):
 
         self.gmsh_io : GmshIO = gmsh_io
         # TODO: remove relation to file
@@ -98,6 +107,8 @@ class Mesh:
         # in order to relay on the underlaing files for the caching
         self.file : File = file
         self.reinit()
+        # if the mesh is submesh of another mesh
+        self.parent_element_indices = parent_element_indices
 
 
     def reinit(self):
@@ -136,10 +147,14 @@ class Mesh:
             self.elements.append(element)
 
     def __getstate__(self):
-        return (self.gmsh_io, self.file)
+        return (self.gmsh_io, self.file, self.parent_element_indices)
 
     def __setstate__(self, args):
-        self.gmsh_io, self.file = args
+        if len(args) == 2:
+            self.gmsh_io, self.file = args
+            self.parent_element_indices = None
+        else:
+            self.gmsh_io, self.file, self.parent_element_indices = args
         self.reinit()
 
     @property
@@ -176,9 +191,10 @@ class Mesh:
     def el_volumes(self):
         if self._el_volumes is None:
             logging.info("    element volumes reinit ...")
-            node_indices = np.array([e.node_indices for e in self.elements], dtype=int)
-            #print(f"Compute el volumes: {self.nodes.shape}, {node_indices.shape}")
-            self._el_volumes = mesh_compute_el_volumes(self.nodes, node_indices)
+            # area for 2D (fracture) elements, volume for 3D (matrice) elements; anything else 0
+            self._el_volumes = np.array(
+                [e.volume() for e in self.elements], dtype=float
+            )
         return self._el_volumes
 
 
@@ -199,6 +215,11 @@ class Mesh:
     #     return self.elements[self.el_indices[id]].vertices()
 
     def submesh(self, elements, file_path):
+        def element_key(el):
+            vertices = el.vertices()
+            order = np.lexsort(vertices.T[::-1])
+            return el.type, tuple(np.round(vertices[order].ravel(), 12))
+
         gmesh = GmshIO()
         active_nodes = np.full( (len(self.nodes),), False)
         for iel in elements:
@@ -213,7 +234,17 @@ class Mesh:
         gmesh.physical = self.gmsh_io.physical
         #gmesh.write(file_path)
         gmesh.normalize()
-        return Mesh(gmesh, "")
+        submesh = Mesh(gmesh, "")
+        # HACK to keep element indices of the parent mesh due to renumbering in gmesh.normalize()
+        parent_by_key = {
+            element_key(self.elements[iel]): iel
+            for iel in elements
+        }
+        submesh.parent_element_indices = np.array([
+            parent_by_key[element_key(el)]
+            for el in submesh.elements
+        ], dtype=int)
+        return submesh
 
     # Returns field P0 values of field.
     # Selects the closest time step lower than 'time'.
@@ -252,12 +283,41 @@ class Mesh:
         values_mesh[value_to_node_idx[:]] = values
         return values_mesh
 
+    def _pv_celltypes(self):
+        vtk_cell_types = {
+            1: pv.CellType.LINE,
+            2: pv.CellType.TRIANGLE,
+            4: pv.CellType.TETRA,
+        }
+        celltypes = np.empty(len(self.elements), dtype=np.uint8)
+        for iel, el in enumerate(self.elements):
+            try:
+                celltypes[iel] = vtk_cell_types[el.type]
+            except KeyError as exc:
+                raise ValueError(f"Unsupported element type for VTU export: {el.type}") from exc
+        return celltypes
 
-    def write_fields(self, file_name:str, fields: Dict[str, np.array]=None) -> File:
-        self.gmsh_io.write(file_name, format="msh2")
+    def write_fields_vtu(self, file_name: Path | str, fields: Dict[str, np.array]) -> File:
+        cells = [
+            np.concatenate(([len(el.node_indices)], np.asarray(el.node_indices, dtype=np.int64)))
+            for el in self.elements
+        ]
+        grid = pv.UnstructuredGrid(np.concatenate(cells), self._pv_celltypes(), self.nodes)
+        for field_name, field in fields.items():
+            field = np.asarray(field)
+            if field.shape[0] != len(self.elements):
+                raise ValueError(f"Field length {field.shape[0]} does not match number of elements {len(self.elements)}")
+            grid.cell_data[field_name] = field
+        output_file = Path(file_name)
+        grid.save(output_file)
+        return File(str(output_file))
+
+    def write_fields(self, file_name: Path | str, fields: Dict[str, np.array]=None) -> File:
+        file_path = Path(file_name)
+        self.gmsh_io.write(str(file_path), format="msh2")
         if fields is not None:
-            self.gmsh_io.write_fields(file_name, self.el_ids, fields)
-        return File(file_name)
+            self.gmsh_io.write_fields(str(file_path), self.el_ids, fields)
+        return File(str(file_path))
 
 
     def map_regions(self, new_reg_map):
