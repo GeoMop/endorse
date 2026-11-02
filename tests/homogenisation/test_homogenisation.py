@@ -230,7 +230,11 @@ def test_subdomain_create_retains_empty_selection(monkeypatch) -> None:
     monkeypatch.setattr(homogenisation.Subdomain, "select", lambda *_args: empty_selection)
 
     subdomain = homogenisation.Subdomain.create(
-        homogenisation.MacroTetra(rel_radius=1.0), micro_mesh, macro_mesh, 0
+        homogenisation.MacroTetra(rel_radius=1.0),
+        micro_mesh,
+        macro_mesh,
+        0,
+        np.ones(len(micro_mesh.elements)),
     )
 
     assert subdomain.is_empty
@@ -248,16 +252,49 @@ def test_assembly_average_matrix_skips_empty_subdomains() -> None:
         aabb=np.asarray([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
         macro_elements=np.asarray([0, 1]),
         i_subdomains=np.asarray([0, 1]),
+        cross_section=np.ones(2),
     )
     subproblem._subdomains = [
-        homogenisation.Subdomain(mesh, 0, [0, 1], [1.0, 1.0]),
-        homogenisation.Subdomain(mesh, 1, [], []),
+        homogenisation.Subdomain(mesh, 0, [0, 1], [1.0, 1.0], np.ones(2)),
+        homogenisation.Subdomain(mesh, 1, [], [], np.ones(2)),
     ]
 
     average_matrix = subproblem.assembly_average_matrix(mesh)
 
     np.testing.assert_allclose(average_matrix.toarray(), [[0.5, 0.5], [0.0, 0.0]])
     np.testing.assert_array_equal(subproblem.empty_subdomain_indices(mesh), [1])
+
+
+def test_assembly_average_matrix_caches_cross_section_weights() -> None:
+    """Apply cross sections once and reuse both element weights and the sparse matrix."""
+    element = _MacroElement(np.vstack([np.zeros(3), np.eye(3)]))
+    mesh = _Mesh([element, element, element], [20, 21, 22])
+    cross_section = np.asarray([1.0, 3.0, 0.0])
+    subproblem = homogenisation.SubMeshSubproblem(
+        macro_mesh=mesh,
+        micro_mesh=mesh,
+        macro_el_shape=homogenisation.MacroTetra(rel_radius=1.0),
+        aabb=np.asarray([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+        macro_elements=np.asarray([0]),
+        i_subdomains=np.asarray([0]),
+        cross_section=cross_section,
+    )
+    subdomain = homogenisation.Subdomain(
+        mesh,
+        0,
+        [0, 1, 2],
+        [1.0, 1.0, 1.0],
+        cross_section,
+    )
+    subproblem._subdomains = [subdomain]
+
+    weights = subdomain.weights
+    average_matrix = subproblem.assembly_average_matrix(mesh)
+
+    np.testing.assert_allclose(weights, [0.25, 0.75, 0.0])
+    np.testing.assert_allclose(average_matrix.toarray(), [[0.25, 0.75, 0.0]])
+    assert subdomain.weights is weights
+    assert subproblem.assembly_average_matrix(mesh) is average_matrix
 
 
 def test_assembly_average_matrix_accepts_all_empty_subdomains() -> None:
@@ -271,8 +308,9 @@ def test_assembly_average_matrix_accepts_all_empty_subdomains() -> None:
         aabb=np.asarray([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
         macro_elements=np.asarray([0]),
         i_subdomains=np.asarray([0]),
+        cross_section=np.ones(1),
     )
-    subproblem._subdomains = [homogenisation.Subdomain(mesh, 0, [], [])]
+    subproblem._subdomains = [homogenisation.Subdomain(mesh, 0, [], [], np.ones(1))]
 
     average_matrix = subproblem.assembly_average_matrix(mesh)
 
@@ -320,6 +358,11 @@ def test_micro_postprocess_interpolates_empty_subdomains(monkeypatch) -> None:
         "get_load_data",
         lambda _cfg, _mesh, _response: load_values,
     )
+    monkeypatch.setattr(
+        macro_flow_model,
+        "_interpolate_empty_subdomains",
+        lambda _subproblem, _mesh, _empty, values: np.asarray(values)[[1]],
+    )
     micro_model = SimpleNamespace(hydro=SimpleNamespace(spatial_file="flow_fields.msh"))
 
     load_averages, response_averages = macro_flow_model.micro_postprocess(
@@ -341,7 +384,14 @@ def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None
         assert subproblems is sentinel
         raise homogenisation.SubdomainCoverageError("preflight called")
 
-    def create_subproblems(_macro_mesh, _homogenized_els, _micro_mesh, macro_shape, _subdivision):
+    def create_subproblems(
+            _macro_mesh,
+            _homogenized_els,
+            _micro_mesh,
+            macro_shape,
+            _subdivision,
+            _cross_section,
+    ):
         assert macro_shape.rel_radius == 2.25
         return sentinel
 
@@ -355,4 +405,10 @@ def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None
     })
 
     with pytest.raises(homogenisation.SubdomainCoverageError, match="preflight called"):
-        macro_flow_model.macro_conductivity(cfg, None, None, [], {})
+        macro_flow_model.macro_conductivity(
+            cfg,
+            None,
+            None,
+            [],
+            {"cross_section": np.ones(1)},
+        )

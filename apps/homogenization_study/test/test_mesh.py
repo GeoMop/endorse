@@ -2,6 +2,8 @@ import shutil
 from pathlib import Path
 import logging
 
+import numpy as np
+
 from endorse import common
 
 from homogenization_study.create_mesh import (
@@ -14,6 +16,30 @@ from homogenization_study.create_mesh import (
 from homogenization_study import job
 from homogenization_study.model import StudyMeshFiles
 from homogenization_study.problem import prepare_conductivity_homogenization, run_homogenization_problem
+
+
+def validate_conductivity_field(result) -> None:
+    """Check positive definiteness of all homogenized conductivity tensors.
+
+    The Voigt order is ``[Kxx, Kyy, Kzz, Kxy, Kxz, Kyz]``. A symmetric
+    conductivity tensor should be positive definite for the three pressure loads.
+    """
+    xx, yy, zz, xy, xz, yz = result.conductivity.T
+    tensors = np.empty((result.n_elements, 3, 3), dtype=float)
+    tensors[:, 0, 0] = xx
+    tensors[:, 1, 1] = yy
+    tensors[:, 2, 2] = zz
+    tensors[:, 0, 1] = tensors[:, 1, 0] = xy
+    tensors[:, 0, 2] = tensors[:, 2, 0] = xz
+    tensors[:, 1, 2] = tensors[:, 2, 1] = yz
+
+    eigenvalues = np.linalg.eigvalsh(tensors)
+    invalid = np.flatnonzero(np.min(eigenvalues, axis=1) <= 0.0)
+    assert invalid.size == 0, (
+        "Homogenized conductivity tensors must be positive definite; "
+        f"invalid result rows: {invalid[:10].tolist()}"
+    )
+
 
 def update_mesh_cfg(cfg_mesh, cfg_params, new_mesh_name):
     mcfg = common.apply_variant(cfg_mesh, cfg_params)
@@ -78,7 +104,10 @@ def test_mesh() -> None:
         prepared = prepare_conductivity_homogenization(cfg, meshes, fractures=fracture_set)
 
         result = run_homogenization_problem(cfg, work_dir, meshes, prepared)
+        validate_conductivity_field(result)
 
     assert prepared.homogenized_elements.size > 0
     assert prepared.subproblems.n_subdomains == prepared.homogenized_elements.size
     assert prepared.empty_macro_elements.size == 0
+    micro_bulk = prepared.micro_mesh.el_dim_slice(dim=3)
+    assert (prepared.micro_fields["cross_section"][micro_bulk] == 1.0).all()

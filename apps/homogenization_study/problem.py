@@ -127,8 +127,10 @@ def prepare_conductivity_homogenization(
     micro_mesh = load_mesh(File(str(meshes.micro_mesh)), heal_tol=None)
     micro_mesh, el_to_fr = merge_fr_regions(micro_mesh, fractures)
     homogenization_mesh = load_mesh(File(str(meshes.homogenization_mesh)), heal_tol=None)
+    cross_section = np.zeros(len(micro_mesh.elements), dtype=float)
+    cross_section[micro_mesh.el_dim_slice(dim=3)] = 1.0
     micro_fields = {"conductivity": np.full(len(micro_mesh.elements), fill_value=0.0, dtype=float),
-                    "cross_section": np.full(len(micro_mesh.elements), fill_value=0.0, dtype=float),
+                    "cross_section": cross_section,
                     "region_id": micro_mesh.get_physical_ids()}
 
     cond_A = 1e-11
@@ -151,6 +153,7 @@ def prepare_conductivity_homogenization(
         micro_mesh,
         configured_macro_tetra(cfg),
         np.ones(3, dtype=int),
+        micro_fields["cross_section"],
     )
     empty_macro_elements = np.empty(0, dtype=int)
     if cfg["homogenization"].get("coverage_preflight", False):
@@ -217,7 +220,7 @@ def run_homogenization_problem(
         np.asarray(averaged_responses),
     )
 
-    # Heterogeneous conductiity tensor stored in Voigt notation.
+    # Heterogeneous conductivity tensor stored in Voigt notation.
     dflt_cond = -1e-16
     element_indices = prepared.homogenized_elements
     n_elements = len(element_indices)
