@@ -158,6 +158,7 @@ def test_resolve_subcmd_passes_scheduler_to_sampling(
     """Pass local and cluster scheduler choices through the common command path."""
     job.set_workdir(tmp_path)
     job.input.dir_path.mkdir(parents=True)
+    job.input.study_cfg_path.write_text("submitted input snapshot", encoding="utf-8")
     cfg = common.dotdict.create({"mlmc": {"sim_class": "HomogenizationSimulation"}})
     clients = []
     daemon_configs = []
@@ -181,10 +182,10 @@ def test_resolve_subcmd_passes_scheduler_to_sampling(
         command,
         tmp_path,
         scheduler,
-        copy_flag=False,
     )
 
     assert clients[0].scheduler == scheduler
+    assert job.input.study_cfg_path.read_text(encoding="utf-8") == "submitted input snapshot"
     assert daemon_configs == [False]
     assert sampled == [(cfg, clients[0])]
     assert cfg.mlmc.sim_class == simulation_class

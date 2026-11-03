@@ -368,10 +368,13 @@ def resolve_subcmd(
     scheduler: str | None,
     copy_flag: bool = True,
 ) -> None:
-    """Resolve one sampling command using the optional external scheduler."""
-    if copy_flag:
+    """Resolve a command, initializing missing inputs without overwriting a run's snapshot."""
+    if copy_flag and not job.input.dir_path.exists():
+        logging.info("Initializing input data in %s.", job.input.dir_path)
         shutil.copytree(Path(__file__).resolve().parent / job.input.dir_path.name,
-                        job.input.dir_path, dirs_exist_ok=True)
+                        job.input.dir_path)
+    else:
+        logging.info("Using existing input data in %s.", job.input.dir_path)
 
     logging.info(job.to_str())
     if not job.input.dir_path.exists():

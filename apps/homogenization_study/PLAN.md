@@ -93,6 +93,8 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-11-03: Preserve existing sampling input directories across PBS startup and restart; copy defaults only
+  for a missing input directory. Six focused command/PBS tests pass; full cluster execution was not run.
 - 2026-10-26: Added a Chodby-style lightweight `mlmc_worker` boundary for homogenization. Scheduler preload and
   serialized level metadata no longer import the mesh or physical-model stack; workers retain the existing eager
   preload and load the physical calculation only when executing a sample.
