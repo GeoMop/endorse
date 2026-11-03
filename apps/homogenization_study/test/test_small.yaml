@@ -1,0 +1,69 @@
+
+debug_output: true
+
+homogenization:
+  # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
+  coverage_preflight: true
+  # Linear scale of the averaging tetrahedron relative to its macro mesh element.
+  macro_element_scale: 2.0
+  pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ]
+
+mesh:
+    geometry:
+      # x,y,z dimension
+      box_dimensions: [ 100, 100, 100 ]
+      box_center: [ 0, 0, 0 ]
+      include: [fractures]
+
+    # base of the mesh file name
+    mesh_name: micro_mesh
+
+    meshing_seed: 1
+    # mesh step on outer boundary
+    boundary_mesh_step: 20
+    fracture_mesh_step: 10
+
+transport_microscale:
+    input_template: test_small_tmpl.yaml
+    load_field_indirect_conductivity: "conductivity"
+    response_field_p0: "velocity_p0"
+
+
+machine_config:
+    # automatic resolution according to the socket.gethostname()
+    # content of the 'machine_config' dict is filled by the particular
+    # machine configuration dict
+    makovnik:
+        flow_executable:
+        # release
+        - /home/jb/workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
+    paulie-MSI:  #JB
+        flow_executable:
+        # release
+        - /home/paulie/Workspace/endorse/bin/endorse_fterm
+        - --no-term
+#        - own
+#        - flow123d/endorse_ci:a785dd
+#        - flow123d/ci-gnu:4.0.0a_d61969
+#        - rel
+        - run
+#        - --profiler_path
+#        - profile
+
+
+        pbs: null
+    __default__: # Assumes running on charon
+        flow_executable:
+        - singularity
+        - exec
+        - /auto/liberec3-tul/home/pavel_exner/workspace/endorse/endorse.sif
+        - /opt/flow123d/bin/flow123d

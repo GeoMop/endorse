@@ -28,6 +28,9 @@ interfaces to `chodby_trans` where functionality is equivalent, allowing stable 
 Completed: `create_study_meshes` and `run_homogenization_problem` are implemented; the deterministic integration
 test remains pending a configured Flow123d run.
 
+Minimal debugging test: [test_small.md](test/test_small.md) specifies three shared deterministic variants,
+with the two-material fractured box as the main target and random fracture angles reserved for future sampling.
+
 Stage A implementation steps:
 
 1. Load the completed micro and homogenization meshes in `problem.py`.
@@ -77,21 +80,12 @@ Current Stage B implementation steps:
 - Move code into `src/endorse` only after both applications use the same stable contract.
 - Keep application-specific configuration, result schemas, and physical orchestration in their owning application.
 
-## AGENT Questions And Remarks
-
-- No open design questions for Stage A.
-- 2026-10-25: The full `test_homogenization_study.py` run exceeded the 30-second local execution window after ten
-  progress markers. The six focused PBS and scheduler-propagation cases pass; the Flow123d integration remains
-  explicitly skipped.
-- 2026-10-25: A standalone real `LocalCluster` plus loky-child probe also produced no output before the local
-  execution timeout. The focused client-boundary regression passes; the full process path still needs the USER local
-  sampling run.
-- The microscale Flow123d configuration and executable are configured; the current cluster run is the integration
-  verification for the complete three-load calculation.
-- DFN and meshing realization randomness are explicit sampled parameters and are converted to reproducible integer
-  seeds before fracture generation and meshing.
-
 ## AGENT Log
+
+- 2026-11-03: Documented the minimal homogenization test in `test/test_small.md`: three shared deterministic
+  variants, parameterized fracture angle in the xy plane, and a future random-angle sampling case.
+  Documentation only; simulation verification was not run.
+
 
 - 2026-11-03: Preserve existing sampling input directories across PBS startup and restart; copy defaults only
   for a missing input directory. Six focused command/PBS tests pass; full cluster execution was not run.
@@ -135,3 +129,21 @@ Current Stage B implementation steps:
   from `test_mesh.py`. Flow123d execution remained USER work at that stage.
 - 2026-10-09: Created the independent application package with its own job paths, result model, mesh and problem
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.
+
+## AGENT Questions And Remarks
+
+- No open design questions for Stage A.
+  Resolved: The original Stage A design is retained; the new small test has the deferred choices listed below.
+- 2026-11-03: Small-test implementation must select explicit matrix conductivities, fracture conductivity and
+  aperture, and numerical comparison tolerances. Measure runtime before setting a target or coarsening the mesh.
+  The future random-angle distribution and sampling checks are deliberately deferred; see `test/test_small.md`.
+- 2026-10-25: The full `test_homogenization_study.py` run exceeded the 30-second local execution window after ten
+  progress markers. The six focused PBS and scheduler-propagation cases pass; the Flow123d integration remains
+  explicitly skipped.
+- 2026-10-25: A standalone real `LocalCluster` plus loky-child probe also produced no output before the local
+  execution timeout. The focused client-boundary regression passes; the full process path still needs the USER local
+  sampling run.
+- The microscale Flow123d configuration and executable are configured; the current cluster run is the integration
+  verification for the complete three-load calculation.
+- DFN and meshing realization randomness are explicit sampled parameters and are converted to reproducible integer
+  seeds before fracture generation and meshing.
