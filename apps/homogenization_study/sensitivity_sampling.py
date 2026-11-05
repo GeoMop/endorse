@@ -249,12 +249,17 @@ def run_mlmc_sampling(
     while successful < target:
         n_running = sampler.ask_sampling_pool_for_samples(sleep=1.0, timeout=5.0)
         successful, failed = sample_counts(sampler)
-        logging.info("Successful samples: %s/%s; failed: %s", successful, target, failed)
+        logging.info("Successful samples: %s/%s; failed: %s  (running: %s)", successful, target, failed, n_running)
 
+        if n_running <= 0:
+          break
+        # cannot schedule new samples due to fixed size of zarr storage
         # schedule new samples
-        n_remaining = target - successful
-        if n_running < 0:
-            sampler.schedule_samples(level_id=0, n_samples=n_remaining)
+        # n_remaining = target - successful
+        # if n_remaining > n_running:
+        #     sampler.schedule_samples(level_id=0, n_samples=n_remaining-n_running)
+
+        # do not end on first fail
         # if failed:
         #     raise RuntimeError(
         #         f"MLMC sampling stopped with {failed} failed samples and {successful}/{target} successful samples."
