@@ -10,8 +10,15 @@ export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
-# ======= EDIT THESE PATHS =======
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Application wrappers define the package-specific paths and preload modules.
+: "${ENDORSE_DASK_APP_DIR:?ENDORSE_DASK_APP_DIR is not set}"
+: "${ENDORSE_DASK_APP_MODULE:?ENDORSE_DASK_APP_MODULE is not set}"
+: "${ENDORSE_DASK_WORKER_MODULE:?ENDORSE_DASK_WORKER_MODULE is not set}"
+: "${ENDORSE_DASK_SCHEDULER_MODULE:?ENDORSE_DASK_SCHEDULER_MODULE is not set}"
+
+# ======= SETUP PATHS =======
+DASK_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$ENDORSE_DASK_APP_DIR"
 OUTPUT_DIR=${1}
 export ENDORSE_INPUT_DIR="$OUTPUT_DIR/input_data"
 export ENDORSE_OUTPUT_DIR="$OUTPUT_DIR"
@@ -44,6 +51,32 @@ require_env() {
   fi
 }
 
+wait_for_scheduler() {
+  local timeout="${DASK_SCHEDULER_START_TIMEOUT:-180}"
+  local deadline=$((SECONDS + timeout))
+  local scheduler_log="$LOG_DIR/scheduler.log"
+  local scheduler_pid
+  scheduler_pid=$(<"$SCHED_PID_FILE")
+
+  echo "[sched] Waiting up to ${timeout}s for scheduler startup..."
+  while (( SECONDS < deadline )); do
+    if grep -Fq "Scheduler at:" "$scheduler_log"; then
+      echo "[sched] Scheduler is accepting connections."
+      return 0
+    fi
+    if ! kill -0 "$scheduler_pid" 2>/dev/null; then
+      echo "ERROR: Dask scheduler exited during startup. Last log lines:" >&2
+      tail -50 "$scheduler_log" >&2
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "ERROR: Dask scheduler did not start within ${timeout}s. Last log lines:" >&2
+  tail -50 "$scheduler_log" >&2
+  return 1
+}
+
 
 start_scheduler() {
   local host_ip="127.0.0.1"
@@ -53,12 +86,11 @@ start_scheduler() {
       --host "$host_ip" \
       --port "$SCHED_PORT" \
       --dashboard-address ":${DASH_PORT}" \
-      --preload chodby_trans.dask_scheduler_preload \
+      --preload "$DASK_HELPER_DIR/dask_scheduler_preload.py" \
       >"$LOG_DIR/scheduler.log" 2>&1 < /dev/null &
 
   echo $! > "$SCHED_PID_FILE"
-  # wait briefly so the port opens
-  sleep 2
+  wait_for_scheduler
   echo "$sched_addr" > "$SCHED_ADDR_FILE"
   echo "[sched] PID $(cat "$SCHED_PID_FILE"), address $(cat "$SCHED_ADDR_FILE")"
 }
@@ -80,7 +112,7 @@ start_workers() {
   CMD=( "$DASK_BIN" worker "$addr"
       --nworkers 1 --nthreads 1
       --no-nanny
-      --preload chodby_trans.dask_worker_preload
+      --preload "$DASK_HELPER_DIR/dask_worker_preload.py"
       --local-directory "$RUNTIME_DIR"
       --memory-limit auto )
 

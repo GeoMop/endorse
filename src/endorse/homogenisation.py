@@ -137,6 +137,8 @@ class SubMeshSubproblem:
     macro_elements: np.array
     # indices of subdomains (within list of homogenized macro elements)
     i_subdomains: np.array
+    # Micro-mesh measure multiplier; it does not affect geometrical element selection.
+    cross_section: np.ndarray
 
     _micro_elements: np.array = None
     _submesh: Mesh = None
@@ -162,8 +164,20 @@ class SubMeshSubproblem:
     def subdomains(self, output_mesh: Mesh) -> List['Subdomain']:
         """Create averaging subdomains for the subproblem output mesh."""
         if self._subdomains is None:
+            # local_cross_section = np.asarray(self.cross_section)[self.micro_elements]
+            # if local_cross_section.shape != (len(output_mesh.elements),):
+            #     raise ValueError(
+            #         f"Cross section shape {local_cross_section.shape} does not match "
+            #         f"{len(output_mesh.elements)} output-mesh elements."
+            #     )
             self._subdomains = [
-                Subdomain.create(self.macro_el_shape, output_mesh, self.macro_mesh, iel)
+                Subdomain.create(
+                    self.macro_el_shape,
+                    output_mesh,
+                    self.macro_mesh,
+                    iel,
+                    self.cross_section,
+                )
                 for iel in self.macro_elements
             ]
         #ii = 13
@@ -200,10 +214,11 @@ class SubMeshSubproblem:
             matrix_data = np.empty(0, dtype=float)
             matrix_rows = np.empty(0, dtype=int)
             matrix_cols = np.empty(0, dtype=int)
-        return sparse.coo_matrix(
+        self._average_sparse_matrix = sparse.coo_matrix(
             (matrix_data, (matrix_rows, matrix_cols)),
             shape=(len(subdomains), n_micro_els),
         ).tocsr()
+        return self._average_sparse_matrix
 
     def empty_subdomain_indices(self, output_mesh: Mesh) -> np.ndarray:
         """Return local row indices whose averaging domains contain no micro barycentres."""
@@ -213,7 +228,7 @@ class SubMeshSubproblem:
     @property
     def average_sparse_matrix(self):
         if self._average_sparse_matrix is None:
-            self._average_sparse_matrix = self.assembly_average_matrix()
+            self._average_sparse_matrix = self.assembly_average_matrix(self.submesh)
         return self._average_sparse_matrix
 
 
@@ -272,7 +287,7 @@ def subproblem_boxes(macro_boxes, subdivision):
 
 def make_subproblems(
         macro_mesh, macro_els, micro_mesh:Mesh, macro_shape:MacroShapeBase,
-        subdivision:np.array) -> List[SubMeshSubproblem]:
+        subdivision:np.array, cross_section: np.ndarray) -> List[SubMeshSubproblem]:
     """
     Could be modified
     :param micro_mesh:
@@ -293,7 +308,15 @@ def make_subproblems(
             #print(f"Macro El AABB {isub}: {macro_boxes[isub]} new AABB: {macro_shape.aabb(macro_mesh.elements[macro_els[isub]])}")
             assert np.all(box[0, :] <= macro_boxes[isub][0,:]), f"{box} >? {macro_boxes[isub]}"
             assert np.all(box[1, :] >= macro_boxes[isub][1,:]), f"{box} >? {macro_boxes[isub]}"
-        return SubMeshSubproblem(macro_mesh, micro_mesh, macro_shape, box, i_macro_els, i_subdomains)
+        return SubMeshSubproblem(
+            macro_mesh,
+            micro_mesh,
+            macro_shape,
+            box,
+            i_macro_els,
+            i_subdomains,
+            cross_section,
+        )
 
     subproblems = [
         make_sub(box, subdomains)
@@ -308,8 +331,15 @@ class Subproblems:
     subproblems: List[SubMeshSubproblem]
 
     @staticmethod
-    def create(macro_mesh, macro_els, micro_mesh, macro_shape, subdivision):
-        subprobs = make_subproblems(macro_mesh, macro_els, micro_mesh, macro_shape, subdivision)
+    def create(macro_mesh, macro_els, micro_mesh, macro_shape, subdivision, cross_section):
+        subprobs = make_subproblems(
+            macro_mesh,
+            macro_els,
+            micro_mesh,
+            macro_shape,
+            subdivision,
+            cross_section,
+        )
         return Subproblems(macro_mesh, macro_els, subprobs)
 
     def subdomains_average(self, subprob_avgs):
@@ -362,11 +392,17 @@ class Subproblems:
         assert rhs.shape == (3 * n_loads,)
         result = np.linalg.lstsq(ls_mat, rhs, rcond=None)
         cond_tn_voigt, residuals, rank, singulars = result
-        condition_number = singulars[0] / singulars[2]
-        #if condition_number > 10 or singulars[2] / singulars[3] < 10:
-        if residuals[0]/np.max(np.linalg.norm(responses_fixed, axis=1)) > 1.0e-1:
-                logging.warning(f"Badly conditioned inversion. \n cond:{cond_tn_voigt}\nResidual: {residuals}, max/min sing. :\n"
-                            f"    {singulars}\n{loads}\n")
+        residual_norm = np.linalg.norm(ls_mat @ cond_tn_voigt - rhs)
+        response_norm = np.linalg.norm(rhs)
+        relative_residual = residual_norm / response_norm
+        if relative_residual > 1.0e-1:
+            logging.warning(
+                "Poor conductivity tensor fit: relative_residual=%g rank=%s singular_values=%s loads=%s",
+                relative_residual,
+                rank,
+                singulars,
+                loads,
+            )
         return cond_tn_voigt
 
     #@report
@@ -478,6 +514,7 @@ class Subdomain:
     macro_el_idx: int
     el_indices: List[int]
     intersect_weights: List[float]
+    cross_section: np.ndarray
     _weights : np.array = None
 
     @staticmethod
@@ -491,11 +528,11 @@ class Subdomain:
         #aabb = bih.AABB([center - r, center + r])
         candidates = np.asarray(micro_mesh.candidate_indices(shape.aabb(macro_el)), dtype=int)
 
-        # keep volumetric elements only
-        bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
-        candidates = candidates[
-            (bulk_micro_slice.start <= candidates) & (candidates < bulk_micro_slice.stop)
-        ]
+        # # keep volumetric elements only
+        # bulk_micro_slice = micro_mesh.el_dim_slice(dim=3)
+        # candidates = candidates[
+        #     (bulk_micro_slice.start <= candidates) & (candidates < bulk_micro_slice.stop)
+        # ]
 
         if isinstance(shape, MacroTetra):
             candidate_centers = micro_mesh.el_barycenters()[candidates]
@@ -508,7 +545,13 @@ class Subdomain:
         return SubdomainSelection(candidates, candidates[selected], candidate_weights[selected])
 
     @staticmethod
-    def create(shape: MacroShapeBase, micro_mesh: Mesh, macro_mesh: Mesh, i_el: int) -> 'Subdomain':
+    def create(
+            shape: MacroShapeBase,
+            micro_mesh: Mesh,
+            macro_mesh: Mesh,
+            i_el: int,
+            cross_section: np.ndarray,
+    ) -> 'Subdomain':
         """
         Select micro-mesh elements interacting with macro element ``i_el``.
         """
@@ -538,6 +581,7 @@ class Subdomain:
             i_el,
             selection.element_indices.tolist(),
             selection.interaction_weights.tolist(),
+            cross_section,
         )
 
     @property
@@ -549,8 +593,16 @@ class Subdomain:
     #@report
     def weights(self):
         if self._weights is None:
-            volumes = self.mesh.el_volumes[self.el_indices] * np.array(self.intersect_weights)
-            self._weights = volumes / np.sum(volumes)
+            effective_measures = (
+                self.mesh.el_volumes[self.el_indices]
+                * self.cross_section[self.el_indices]
+                * np.asarray(self.intersect_weights)
+            )
+            total_measure = np.sum(effective_measures)
+            if total_measure == 0.0:
+                self._weights = np.zeros(len(self.el_indices), dtype=float)
+            else:
+                self._weights = effective_measures / total_measure
         return self._weights
 
     @report

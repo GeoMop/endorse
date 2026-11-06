@@ -75,7 +75,8 @@ The warning timestamp records when Dask detects the delay, not necessarily when 
 
 ## Implemented Preload Sequence
 
-Workers now start with the `chodby_trans.dask_worker_preload` Dask preload module:
+Workers now start with the repository-level `dask_worker_preload.py` module. Each application wrapper selects the
+application package and heavy worker module through environment variables:
 
 ```text
 worker process starts
@@ -92,10 +93,10 @@ sample on that worker.
 The driver-side check reports each worker's preload time, process ID, and peak resident memory. It fails before
 sampling if any connected worker has not completed the preload.
 
-The scheduler starts with the separate `chodby_trans.dask_scheduler_preload` module. It imports the lightweight
-`mlmc_worker` task module before registering workers or accepting the sampling client. This moves the scheduler's
-first task-module import out of graph submission. The driver checks and logs scheduler preload time, process ID, and
-peak resident memory before checking workers.
+The scheduler starts with the separate repository-level `dask_scheduler_preload.py` module. The application wrapper
+selects the task module imported before registering workers or accepting the sampling client. This moves the
+scheduler's first task-module import out of graph submission. The driver checks and logs scheduler preload time,
+process ID, and peak resident memory before checking workers.
 
 Worker launch scripts also set these native-library thread limits:
 

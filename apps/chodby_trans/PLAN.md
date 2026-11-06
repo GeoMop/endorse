@@ -40,6 +40,12 @@ Goal 5: Add a low-impact paired-sampling mode for coarse-model setup and varianc
         MLMC, remove `sequential_saltelli_samples.py` and
         `collect_sequential_saltelli_results.py`.
 
+Goal 6: Preparation for a study of the homogenized conductivity tensor field.
+        This work has moved to the independent sibling application `apps/homogenization_study`; its canonical plan is
+        `apps/homogenization_study/PLAN.md`. Keep the existing Chodby transport homogenization path unchanged. Future
+        comparison of the two applications should identify stable common parts suitable for `src/endorse`.
+
+
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
 details of the goals that you need to specify better or my specification is ambiguous.
 Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`,
@@ -80,6 +86,11 @@ Resolved:
 AGENT:  write a particular steps for each goal following your understanding. But still
 make detailed goal plan very compact.
 Resolved:
+- Shared Dask helpers:
+  1. Move cluster process orchestration to the repository-level `dask` directory.
+  2. Pass application package and preload targets through explicit environment variables.
+  3. Keep the existing app-facing cluster commands as thin wrappers so PBS and local usage stay compatible.
+  4. Validate shell syntax and both application preload paths without running the full numerical models.
 - Goal 1:
   1. Introduce a new MLMC-facing `TransportSimulation` module instead of
      patching MLMC concerns into `transport_wrapper.Wrapper`.
@@ -164,7 +175,7 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 3. Keep the point-coordinate calculations array-oriented so batching micro barycentres can
    reuse the same geometry algebra when the API is extended.
 
-- Goal 6:
+- Goal 5:
   1. Add an explicit `mlmc.sample_mode` switch with `saltelli` as the
      backward-compatible default and `paired` as the coarse-model diagnostic mode.
   2. Add a small paired simulation wrapper beside `TransportSaltelliSimulation`.
@@ -235,6 +246,10 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 - 2026-10-26: Replaced separate conductivity-tensor and scalar micro-to-macro interpolation with one
   nearest-barycentre interpolator that preserves scalar or multicomponent field shapes, including `diff_m`.
 
+- 2026-10-25: Generalized the repository-level Dask cluster and preload helpers for both applications. Kept the
+  existing app command lines through thin wrappers and preserved homogenization scratch-workdir collection.
+- 2026-10-09: Moved Goal 6 into the independent sibling package `apps/homogenization_study`. Removed the temporary
+  nested `conductivity_study` package and restored transport-only ownership of `chodby_trans/job.py` and `setup.py`.
 - 2026-10-06: Added a standalone Bokeh HTML viewer for native Flow123d `water_balance.yaml` and
   `mass_balance.yaml` files. Each available file gets its own tab with a balance-column selector, multi-region
   selector, time-series plot, discrete point markers with hover values, and hideable legend. One or two sample
@@ -484,6 +499,10 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Questions And Remarks
 
+- 2026-10-25: The shared Chodby worker preload reaches `transport_simulation`, but its import currently fails in the
+  pre-existing edited `mesh/create_mesh.py`: `geometry_func: Callable` was added without importing `Callable`.
+  PyCharm also maps Chodby files to the homogenization virtual environment; the app runner itself still selects
+  `apps/chodby_trans/venv`.
 - 2026-09-16: The coarse level uses `main_line_refinement/h_inner=0.81`, while the fine level uses `1.25`.
   This makes parts of the target coarse mesh substantially finer than the source micro mesh. Is this local resolution
   inversion intentional, or should the level-specific refinement values be exchanged?

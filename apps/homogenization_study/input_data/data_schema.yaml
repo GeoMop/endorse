@@ -1,0 +1,62 @@
+ATTRS:
+    STORE_URL: "file:///home/paulie/Workspace/endorse/apps/homogenization_study/workdir_test/zf_homogenization_sampling/"
+#    STORE_URL: "s3://random-tensor-fields/tensor_test.zarr" #TODO: změnit na budouci realny store
+#    S3_ENDPOINT_URL: "https://s3.cl4.du.cesnet.cz"
+
+tensors:
+    VARS:
+        conductivity:
+            unit: ""
+            description: "Hydraulic conductivity tensor component."
+            coords: ["sample_id", "el_id", "tensor_comp"]
+        el_barycenter:
+            unit: "m"
+            description: "Element barycenter."
+            coords: ["el_id", "xyz"]
+        gmsh_id:
+            type: "int64"
+            unit: ""
+            description: "Stable Gmsh element identifier."
+            coords: ["el_id"]
+        parameter:
+            unit: ""
+            description: "Free simulation parameter."
+            coords: ["sample_id", "param_name"]
+        return_code:
+            type: "int32"
+            unit: ""
+            description: "Return code of a sample."
+            coords: ["sample_id"]
+        eval_time:
+            type: "float64"
+            unit: "s"
+            description: "Length of each model evaluation computation in seconds."
+            coords: ["sample_id"]
+    COORDS:
+        sample_id:
+            type: "int"
+            unit: ""
+            description: "Unique sample index."
+            chunk_size: 1
+        el_id:
+            type: "int"
+            unit: ""
+            description: "Unique element index."
+            chunk_size: 1024
+        param_name:
+            type: "str[64]"
+            unit: ""
+            description: "Quasi Monte Carlo parameter name."
+            chunk_size: 64
+        tensor_comp:
+            type: "int"
+            unit: ""
+            description: "Hydraulic conductivity tensor component index."
+            chunk_size: 6
+        xyz:
+            type: "str[1]"
+            unit: ""
+            description: "Cartesian coordinate component."
+            chunk_size: 3
+    ATTRS:
+        description: "Random tensor fields from DFM homogenization."

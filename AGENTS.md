@@ -6,13 +6,16 @@ Endorse is a chaotic set of tools for solving real case problems using parametri
 
 
 ## Structure
-- `apps` - specific aplications with custom code, some of the code may later be moved into core library
-  `apps/chodby_trans` - You are only allowed to modify files under this directory for the near future goals.
+- `apps` - specific applications with custom code, some of the code may later be moved into the core library
+  `apps/chodby_trans` - You are only allowed to modify files under this directory for the near future goals,
+                        unless told otherwise.
                         This project directory has its own environment in `apps/chodby_trans/venv`.
                         There is a working implementation of sensitivity analysis of a 3D transport problem with random fracture network.
                         Current approach uses Saltelli schema through OpenTurns library and simple MC sampling.
                         The goal is to apply MLMC to accelerate Sobol indices estimates.
-                        
+  `apps/homogenization_study` - You are only allowed to modify files under this directory for the near future goals,
+                        unless told otherwise.
+                        This project directory has its own environment in `apps/homogenization_study/venv`.                        
 - `apps/chodby_trans/MLMC` - local only copy of current MLMC source for your reference
 - `src/endorse` - core library
 - `tests` - currently both unit tests and various numerical tests
@@ -27,7 +30,7 @@ Endorse is a chaotic set of tools for solving real case problems using parametri
 - `**/dist`
 - `**/*.egg-info`
 
-## Workflow (with exception of AGENTS.md and python_coding.md all files in apps/chodby_trans)
+## Workflow (except repository instructions and skills, workflow files live in apps/chodby_trans)
 
 - The user reviews changes in `git-cola`. Do not commit changes unless
   explicitly asked.
@@ -65,7 +68,8 @@ Subagents specific to `chodby_trans` application are defined in
 
 ## Coding Rules
 
-Include and adapt: `python_coding.md`.
+For Python implementation, refactoring, and review, use the repository skill:
+`.agents/skills/python-implementation-review/SKILL.md`.
 
 Chodby_trans -specific interpretation:
 - All MD files have hard limit 120 chars per line.

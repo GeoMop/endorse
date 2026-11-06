@@ -43,7 +43,10 @@ def macro_transport(cfg:dotdict):
         conductivity_eval = lambda XYZ: conductivity_mockup_eval(
             cfg.geometry, cfg.transport_microscale.bulk_field_params, XYZ
         )
-        fields = dict(conductivity=conductivity_eval(micro_mesh.el_barycenters().T))
+        fields = dict(
+            conductivity=conductivity_eval(micro_mesh.el_barycenters().T),
+            cross_section=np.ones(len(micro_mesh.elements), dtype=float),
+        )
         conductivity_file = macro_conductivity(
             cfg, micro_mesh, macro_mesh, macro_model_el_indices, fields
         )
@@ -153,7 +156,14 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
     #subprobs = make_subproblems(macro_mesh, micro_mesh, macro_shape, subdivision)
 
     #subdomains = [Subdomain.for_element(micro_mesh, macro_mesh.elements[ie]) for ie in homogenized_els]
-    subproblems = Subproblems.create(macro_mesh, homogenized_els, micro_mesh, macro_shape, subdivision)
+    subproblems = Subproblems.create(
+        macro_mesh,
+        homogenized_els,
+        micro_mesh,
+        macro_shape,
+        subdivision,
+        fields["cross_section"],
+    )
     if homogenization_cfg.get("coverage_preflight", False):
         validate_subdomain_coverage(subproblems)
     # debugging output of the subdomains
@@ -311,8 +321,6 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
     Return (n_subdomains, (load_avg, respons_avg))
     TODO: finish param to Flow, test
     """
-    cfg_micro = cfg.transport_microscale
-    cfg_flow = cfg.machine_config
     def micro(iprob, subprob):
         tag = f"load_{i_load}_{iprob}"
         avg_l, avg_r = micro_problem(cfg, tag, subprob, load, fields)
@@ -326,7 +334,7 @@ def micro_load_response(cfg, subprobs:Subproblems, i_load, load, fields):
     return subprobs.subdomains_average(subdomain_load), subprobs.subdomains_average(subdomain_response)
 
 @report
-# @memoize
+@memoize
 def subproblem_input(subproblem, fields):
     mesh = subproblem.submesh
     # micro_elements = np.asarray(subproblem.micro_elements, dtype=int)
@@ -378,7 +386,7 @@ def micro_postprocess(
     load_averages = avg_matrix @ load_el_values
     response_averages = avg_matrix @ response_el_values
 
-    empty_subdomains = subproblem.empty_subdomain_indices(output_mesh)
+    empty_subdomains = np.flatnonzero(np.asarray(avg_matrix.sum(axis=1)).ravel() == 0.0)
     if empty_subdomains.size:
         load_averages[empty_subdomains] = _interpolate_empty_subdomains(
             subproblem, output_mesh, empty_subdomains, load_el_values
@@ -390,6 +398,7 @@ def micro_postprocess(
     return load_averages, response_averages
 
 
+@memoize
 def micro_problem(cfg, tag, subproblem, load, fields):
     cfg_micro = cfg.transport_microscale
     with workdir(f"load_{tag}", inputs=[]):
