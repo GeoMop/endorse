@@ -254,6 +254,7 @@ def test_assembly_average_matrix_skips_empty_subdomains() -> None:
         i_subdomains=np.asarray([0, 1]),
         cross_section=np.ones(2),
     )
+    subproblem._subdomains_mesh = mesh
     subproblem._subdomains = [
         homogenisation.Subdomain(mesh, 0, [0, 1], [1.0, 1.0], np.ones(2)),
         homogenisation.Subdomain(mesh, 1, [], [], np.ones(2)),
@@ -286,6 +287,7 @@ def test_assembly_average_matrix_caches_cross_section_weights() -> None:
         [1.0, 1.0, 1.0],
         cross_section,
     )
+    subproblem._subdomains_mesh = mesh
     subproblem._subdomains = [subdomain]
 
     weights = subdomain.weights
@@ -310,6 +312,7 @@ def test_assembly_average_matrix_accepts_all_empty_subdomains() -> None:
         i_subdomains=np.asarray([0]),
         cross_section=np.ones(1),
     )
+    subproblem._subdomains_mesh = mesh
     subproblem._subdomains = [homogenisation.Subdomain(mesh, 0, [], [], np.ones(1))]
 
     average_matrix = subproblem.assembly_average_matrix(mesh)

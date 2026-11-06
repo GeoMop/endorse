@@ -22,7 +22,6 @@ problem: !Coupling_Sequential
         conductivity: !FieldFE
           mesh_data_file: <mesh_file>
           field_name: conductivity
-      - region: fractures
         cross_section: !FieldFE
           mesh_data_file: <mesh_file>
           field_name: cross_section

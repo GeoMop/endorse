@@ -81,8 +81,21 @@ def set_field_value_on_regions(
     field[selected_elements] = float(value)
 
 
-def set_fracture_conductivity(fields:dict, cfg: dotdict, mesh: Mesh, fractures:Sequence[Any] | None, el_to_fr):
+def set_fracture_conductivity(
+    fields: dict[str, np.ndarray], cfg: dotdict, mesh: Mesh,
+    fractures: Sequence[Any] | None, el_to_fr: Mapping[int, int],
+) -> None:
+    """Assign explicit deterministic properties or the sampled fracture-family law."""
     if not fractures:
+        return
+    if "fracture_conductivity" in cfg.transport_microscale:
+        conductivity = float(cfg.transport_microscale.fracture_conductivity)
+        aperture = float(cfg.transport_microscale.fracture_aperture)
+        if not np.all(np.isfinite([conductivity, aperture])) or min(conductivity, aperture) <= 0:
+            raise ValueError("Fracture conductivity and aperture must be finite and positive.")
+        indices = np.asarray(list(el_to_fr), dtype=int)
+        fields["conductivity"][indices] = conductivity
+        fields["cross_section"][indices] = aperture
         return
     fracture_elements = mesh.el_dim_slice(dim=2)
     default_fracture = len(fractures)
@@ -113,10 +126,15 @@ def prepare_conductivity_homogenization(
 ) -> PreparedConductivityHomogenization:
     """Load meshes, assign the configured micro conductivity, and construct averaging domains.
 
-    ``homogenization.micro_conductivity`` initializes all micro elements and
-    ``homogenization.region_conductivity`` overrides the four material regions.
+    ``homogenization.region_conductivity`` assigns the two matrix materials;
+    the existing values 1e-11 and 1e-12 apply when this mapping is absent.
+    Explicit fracture conductivity and aperture override the sampled family law.
     """
     pressure_loads = cfg["homogenization"]["pressure_loads"]
+    subdivision = np.asarray(cfg.homogenization.subdivision)
+    if (subdivision.shape != (3,) or not np.issubdtype(subdivision.dtype, np.integer)
+            or np.any(subdivision <= 0)):
+        raise ValueError("homogenization.subdivision must contain three positive integers.")
     if np.asarray(pressure_loads).shape != (3, 3):
         raise ValueError(f"homogenization.pressure_loads must have shape (3, 3), got {pressure_loads.shape}.")
 
@@ -133,8 +151,11 @@ def prepare_conductivity_homogenization(
                     "cross_section": cross_section,
                     "region_id": micro_mesh.get_physical_ids()}
 
-    cond_A = 1e-11
-    cond_B = 1e-12
+    region_conductivity = cfg.transport_microscale.get("region_conductivity", {"box_A": 1e-11, "box_B": 1e-12})
+    cond_A = float(region_conductivity["box_A"])
+    cond_B = float(region_conductivity["box_B"])
+    if not np.all(np.isfinite([cond_A, cond_B])) or min(cond_A, cond_B) <= 0:
+        raise ValueError("Matrix conductivities must be finite and positive.")
     set_field_value_on_regions(micro_mesh, micro_fields["conductivity"], cond_A, ["box_A", "box_thin"])
     set_field_value_on_regions(micro_mesh, micro_fields["conductivity"], cond_B, ["box_B", "box_thick"])
     set_fracture_conductivity(micro_fields, cfg, mesh=micro_mesh, fractures=fractures, el_to_fr=el_to_fr)
@@ -152,7 +173,7 @@ def prepare_conductivity_homogenization(
         homogenized_elements,
         micro_mesh,
         configured_macro_tetra(cfg),
-        np.ones(3, dtype=int),
+        subdivision,
         micro_fields["cross_section"],
     )
     empty_macro_elements = np.empty(0, dtype=int)
@@ -223,12 +244,11 @@ def run_homogenization_problem(
     # Heterogeneous conductivity tensor stored in Voigt notation.
     dflt_cond = -1e-16
     element_indices = prepared.homogenized_elements
-    n_elements = len(element_indices)
-
     if cfg.debug_output:
-        conductivity_tn = np.empty((n_elements, 9))
+        conductivity_tn = np.empty((len(prepared.homogenization_mesh.elements), 9))
         conductivity_tn[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
-        voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
+        # PE from endorse/src: voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
+        voigt_indices = [0, 3, 4, 3, 1, 5, 4, 5, 2]
         conductivity_tn[element_indices[:], :] = cond_voigt_tensors[:, voigt_indices[:]]
         prepared.homogenization_mesh.write_fields_vtu("homogenization.vtu",
                                                       dict(conductivity_tn=conductivity_tn))

@@ -2,6 +2,7 @@
 debug_output: true
 
 homogenization:
+  subdivision: [1, 1, 1]
   # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
   coverage_preflight: true
   # Linear scale of the averaging tetrahedron relative to its macro mesh element.

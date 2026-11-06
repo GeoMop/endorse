@@ -31,6 +31,17 @@ test remains pending a configured Flow123d run.
 Minimal debugging test: [test_small.md](test/test_small.md) specifies three shared deterministic variants,
 with the two-material fractured box as the main target and random fracture angles reserved for future sampling.
 
+Small-test implementation plan (2026-11-03):
+
+1. Repair the shared small-box geometry and run the three specified variants with one fixed macro mesh.
+2. Expose matrix and explicit fracture properties through the existing preparation function.
+3. Check geometry, materials, coverage, tensor positivity, uniform recovery, and fracture influence.
+4. Preserve resolved inputs, meshes, solver outputs, NumPy/VTU fields, summaries, and stage timings.
+5. Run the real nine Flow123d loads and the relevant application regression tests; record results below.
+
+Chosen test values: matrix conductivities 1e-5 and 2e-5, fracture conductivity 1e-3, aperture 0.1,
+and uniform tensor tolerance 1e-5 relative to its prescribed conductivity. Mesh steps remain 20.
+
 Stage A implementation steps:
 
 1. Load the completed micro and homogenization meshes in `problem.py`.
@@ -82,6 +93,28 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-11-06 plan: Configure homogenization subdivision, exercise the two non-fracture tests with `[2, 1, 1]`
+  before changing cross-section mapping, then map output IDs through normalized submesh parent indices and rerun.
+  Add a focused mapping regression covering reordered/subset output and mesh-dependent subdomain caching.
+  Completed: Subdivision is validated and configurable; small tests use `[2, 1, 1]`, application default is `[1, 1, 1]`.
+  Both real tests passed before the fix (28.93 s), since bulk cross sections are uniformly one.
+  The unequal-cross-section regression failed before the fix and passes after it. Final integration verification:
+  two tests passed in 28.96 s and exported conductivity fields. Mapping/core checks: 13 passed, one existing skip,
+  one legacy transport test deselected after Docker socket access failed in the sandbox; an existing radial-weight
+  divide-by-zero warning remains. Review found no blocking issues. Tensor reconstruction and fracture work are deferred.
+
+- 2026-11-05: Split the small test into independently selectable uniform, two-material, and fractured
+  pytest functions backed by one single-case runner and a fixture retaining per-test logs. Validate result identities
+  against each deterministic macro mesh. Remove the standalone CLI and document pytest selection commands.
+  Completed: One single-case runner, per-test logging fixture, and three named test functions are implemented.
+  Verification: Pytest collects all three functions. Real solver runs are deferred until the shared bugs are fixed.
+
+- 2026-11-03: Implemented the three-case small-test runner, deterministic split-box/fracture geometry, configurable
+  material properties, retained diagnostics and tensor exports. The first real uniform case completes all three
+  Flow123d solves, but shared averaging fails before conductivity export; see the unresolved core defects below.
+  Verification: 14 application contract tests pass; storage conversion and the old skipped integration were deselected.
+  The complete contract run was interrupted after 14 progress markers while executing storage conversion.
+
 - 2026-11-03: Documented the minimal homogenization test in `test/test_small.md`: three shared deterministic
   variants, parameterized fracture angle in the xy plane, and a future random-angle sampling case.
   Documentation only; simulation verification was not run.
@@ -132,11 +165,35 @@ Current Stage B implementation steps:
 
 ## AGENT Questions And Remarks
 
+- 2026-11-05: The fracture-versus-two-material tensor comparison is deferred: independent test functions must
+  not launch unselected variants or depend on another test's outputs. Per-case geometry, material, positivity,
+  uniform recovery, and macro element identity checks remain in the runner.
+
+- 2026-11-03: Step-20 macro and micro meshes left uncovered averaging domains (including Gmsh ids 161 and 257)
+  at the required scale 2. The small test uses macro step 30 and retains micro/fracture step 20.
+  Geometry and meshing finished within the five-second test run before this preflight failure.
+- 2026-11-03: Real small-test Flow123d loads exposed parent/output cross-section indexing in the shared
+  `SubMeshSubproblem.subdomains`: solver output drops boundary elements, but averaging indexes the parent array.
+  The uniform field has correct solver output and then produces invalid averaged loads. Core repair is pending.
+  USER: May this task modify shared `src/endorse` homogenization code and its regression tests
+  to resolve these blockers?
+  Resolved: On 2026-11-06 the user authorized the cross-section mapping change and regression tests.
+  The output-to-submesh-to-parent mapping now handles reordered and subset output; both non-fracture cases pass.
+- 2026-11-03: A direct `homogenize_batch` probe of the known SPD tensor with diagonal `[2, 3, 4]` and
+  off-diagonal `[Kxy, Kxz, Kyz] = [0.2, 0.3, 0.4]` returns `[0.4, 0.3, 0.2]` under identity loads.
+  Nonsymmetric independent loads increase the maximum tensor error to 0.293. The least-squares matrix and
+  reconstruction disagree on Voigt order and load/component axes. A shared-code fix and regression are pending.
+- 2026-11-03: The empty-coverage diagnostic applies tetrahedron coordinates to candidate boundary triangles,
+  causing `LinAlgError` before reporting all empty elements. This is in shared code outside this application's scope.
+- 2026-11-03: The specification mentions an offset avoiding box edges, but explicitly fixes the plane centre at
+  the origin. The implementation follows the explicit equation and centre; at 45 degrees it meets two box edges.
+
 - No open design questions for Stage A.
   Resolved: The original Stage A design is retained; the new small test has the deferred choices listed below.
 - 2026-11-03: Small-test implementation must select explicit matrix conductivities, fracture conductivity and
   aperture, and numerical comparison tolerances. Measure runtime before setting a target or coarsening the mesh.
   The future random-angle distribution and sampling checks are deliberately deferred; see `test/test_small.md`.
+  Resolved: Explicit properties and the uniform tolerance are recorded in the small-test implementation plan above.
 - 2026-10-25: The full `test_homogenization_study.py` run exceeded the 30-second local execution window after ten
   progress markers. The six focused PBS and scheduler-propagation cases pass; the Flow123d integration remains
   explicitly skipped.

@@ -16,6 +16,22 @@ HDF storage will manage samples and restart state, while Zarr will store the com
 The application is intentionally independent of `chodby_trans`. Similar modules should keep compatible concepts and
 names where practical so stable common behavior can later move into `src/endorse`.
 
+The deterministic small test uses real Flow123d solves and keeps a separate directory for each of its three cases:
+
+```bash
+venv/bin/python -m pytest test/test_small.py
+venv/bin/python -m pytest test/test_small.py::test_fractured
+venv/bin/python -m pytest test/test_small.py -k 'not uniform'
+```
+
+The three functions are `test_uniform`, `test_two_materials`, and `test_fractured`; each runs only its own variant.
+Pytest creates a fresh per-test output directory (shown in failure reports); `--basetemp` selects its parent.
+The fracture angle is configured in `test/test_small.yaml`.
+The intended outputs are `conductivity.npz`, `homogenization.vtu`,
+`micro_fields.vtu`, coverage and tensor summaries, meshes, solver files, and `run.log`.
+`homogenization.subdivision` sets the number of solver groups along x, y, z; the small tests use `[2, 1, 1]`.
+Uniform and two-material conductivity exports are verified. Remaining tensor and fracture issues are in `PLAN.md`.
+
 Sampling writes the schema-defined dataset to the `tensors` group of `homogenization_sampling`. Convert a completed
 local store to the Zarr Fuse destination declared by `input_data/data_schema_empty.yaml` with:
 

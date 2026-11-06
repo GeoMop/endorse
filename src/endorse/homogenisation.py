@@ -143,6 +143,7 @@ class SubMeshSubproblem:
     _micro_elements: np.array = None
     _submesh: Mesh = None
     _subdomains: List['Subdomain'] = None
+    _subdomains_mesh: Mesh = None
     _average_sparse_matrix: sparse.csr_matrix = None
 
     @property
@@ -163,23 +164,29 @@ class SubMeshSubproblem:
     @memoize
     def subdomains(self, output_mesh: Mesh) -> List['Subdomain']:
         """Create averaging subdomains for the subproblem output mesh."""
-        if self._subdomains is None:
-            # local_cross_section = np.asarray(self.cross_section)[self.micro_elements]
-            # if local_cross_section.shape != (len(output_mesh.elements),):
-            #     raise ValueError(
-            #         f"Cross section shape {local_cross_section.shape} does not match "
-            #         f"{len(output_mesh.elements)} output-mesh elements."
-            #     )
+        if self._subdomains is None or self._subdomains_mesh is not output_mesh:
+            submesh = self.submesh
+            output_to_submesh = np.asarray([
+                submesh.el_indices[eid] for eid in output_mesh.el_ids
+            ], dtype=int)
+            output_to_parent = submesh.parent_element_indices[output_to_submesh]
+            sub_cross_section = np.asarray(self.cross_section)[output_to_parent]
+            if sub_cross_section.shape != (len(output_mesh.elements),):
+                raise ValueError(
+                    f"Cross section shape {sub_cross_section.shape} does not match "
+                    f"{len(output_mesh.elements)} output-mesh elements."
+                )
             self._subdomains = [
                 Subdomain.create(
                     self.macro_el_shape,
                     output_mesh,
                     self.macro_mesh,
                     iel,
-                    self.cross_section,
+                    sub_cross_section,
                 )
                 for iel in self.macro_elements
             ]
+            self._subdomains_mesh = output_mesh
         #ii = 13
         #sd = self._subdomains[ii]
         #print(self.macro_mesh.elements[sd.macro_el_idx].barycenter(), "macro:", {sd.macro_el_idx}, "N:", len(sd.el_indices))

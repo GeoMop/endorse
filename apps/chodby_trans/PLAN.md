@@ -49,7 +49,7 @@ Goal 6: Preparation for a study of the homogenized conductivity tensor field.
 AGENT: Review the goals and provided materials. Report if you have lack of information or any
 details of the goals that you need to specify better or my specification is ambiguous.
 Resolved: Reviewed `AGENTS.md`, `apps/chodby_trans/README.md`, `apps/chodby_trans/SA_USAGE.md`,
-`python_coding.md`, current entry points, config, and relevant tests. Main ambiguities are recorded below in
+the Python coding guidelines, current entry points, config, and relevant tests. Main ambiguities are recorded below in
 `AGENT Questions And Remarks`.
 
 ## Current Repository State
@@ -514,8 +514,9 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
   test can be added now; explicit authorization is needed before changing the core module.
   Resolved: The user authorized edits to `homogenisation.py` and its test on this branch.
 
-- 2026-07-24: `AGENTS.md` requires `python_coding.md`, but that file is not
-  present in the repository workspace and could not be reviewed.
+- 2026-07-24: The required Python coding guidelines were unavailable in the workspace during that review.
+  Resolved: The guidelines are now consolidated in `.agents/skills/python-implementation-review/SKILL.md`
+  at the repository root and referenced by `AGENTS.md`.
 
 - 2026-06-22: Investigation note: the real fine `box_drilled` mesh path still
   drops boundary physical groups such as `.side_x0`, `.tunnel_head_y0`, and

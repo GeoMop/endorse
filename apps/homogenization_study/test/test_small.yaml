@@ -2,11 +2,13 @@
 debug_output: true
 
 homogenization:
+  subdivision: [2, 1, 1]
   # Fail before the first microscale Flow123d solve if a macro element has no contributing micro barycentre.
   coverage_preflight: true
   # Linear scale of the averaging tetrahedron relative to its macro mesh element.
   macro_element_scale: 2.0
   pressure_loads: [ [ 1,0,0 ], [ 0,1,0 ], [ 0,0,1 ] ]
+  boundary_mesh_step: 30
 
 mesh:
     geometry:
@@ -27,6 +29,12 @@ transport_microscale:
     input_template: test_small_tmpl.yaml
     load_field_indirect_conductivity: "conductivity"
     response_field_p0: "velocity_p0"
+
+    region_conductivity: { box_A: 1.0e-5, box_B: 2.0e-5 }
+    fracture_conductivity: 1.0e-3
+    fracture_aperture: 0.1
+    fracture_angle_degrees: 45.0
+    uniform_relative_tolerance: 1.0e-5
 
 
 machine_config:
