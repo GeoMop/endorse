@@ -1,3 +1,6 @@
+`homogenization/test_homogenisation.py` - tests of the experimental numerical homogenization code.
+
+
 `tests` folder contains both unit tests as well as integrate tests and numerical experiments.
 
 

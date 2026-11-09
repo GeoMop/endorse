@@ -56,6 +56,33 @@ class MacroSphere(MacroShapeBase):
         indicate = np.sum(nc * nc, axis=1) < r*r    # shape n - nodes
         return np.any(indicate)
 
+# Macro element shapes, currently just the sphere.
+# Shape works as a factory for actual macro elements
+@attrs.define
+class MacroTetra(MacroShapeBase):
+    # radius relative to average distance of vertices form te barycenter
+    # More nuances could be done about actual placing of the ball of given size to best match the tetrahedral element.
+    rel_radius: float
+
+    # could possibly calculate actual center and radius, but in fact we only needs aabb and interaction indicator for micro mesh elements
+    def aabb(self, macro_el:Element):
+        return np.array([
+            np.min(macro_el.vertices(), axis=0),
+            np.max(macro_el.vertices(), axis=0)])
+
+    def interact(self, macro_el:Element, micro_el: Element):
+        jac = macro_el.vertices()[1:, :] - macro_el.vertices()[0, :]  # jacobian of the macro element
+        inv_jac = np.linalg.inv(self.rel_radius * jac.T)
+        micro_b = micro_el.barycenter()
+        x_rel = micro_b - macro_el.vertices()[0, :]
+        x_loc = inv_jac @ x_rel
+        x_bary = np.array([1.0 - np.sum(x_loc), *x_loc])  # barycentric coordinates
+        micro_r = np.mean(np.linalg.norm(macro_el.vertices() - micro_b[None,:], axis=1))
+        neg_dist = (np.max(x_bary) + micro_r) / (2 * micro_r)
+        w = min(1.0, max(0.0, neg_dist))
+        return w
+
+
 @attrs.define
 class SubMeshSubproblem:
     """
@@ -91,27 +118,37 @@ class SubMeshSubproblem:
             print(f"Subproblem AABB: {self.aabb} submesh: {repr_aabb(self._submesh.bih.aabb())}")
         return self._submesh
 
-    @property
-    def subdomains(self):
+
+    def subdomains(self, output_mesh):
         """Create subproblem mesh."""
         if self._subdomains is None:
-            self._subdomains = [Subdomain.create(self.macro_el_shape, self.submesh, self.macro_mesh, iel) for iel in self.macro_elements]
+            self._subdomains = [Subdomain.create(self.macro_el_shape, output_mesh, self.macro_mesh, iel) for iel in self.macro_elements]
+        #ii = 13
+        #sd = self._subdomains[ii]
+        #print(self.macro_mesh.elements[sd.macro_el_idx].barycenter(), "macro:", {sd.macro_el_idx}, "N:", len(sd.el_indices))
+        #for iel in sd.el_indices:
+        #    print(iel, " : ", output_mesh.elements[iel].barycenter())
 
         return self._subdomains
 
     @report
-    def assembly_average_matrix(self):
+    def assembly_average_matrix(self, output_mesh):
+        """
+        Create sparse matrix for averaging over subdomains, shape (n_macro_el_subdomains, n_subproblem_elements).
+        """
         rows = []
         cols = []
         vals = []
-        for i_sub, sub in enumerate(self.subdomains):
+        subdomains = self.subdomains(output_mesh)
+        for i_sub, sub in enumerate(subdomains):
             sub_col = sub.el_indices
             sub_val = sub.weights
             rows.append(np.full_like(sub_col, i_sub))
             cols.append(sub_col)
             vals.append(sub_val)
+        n_micro_els = len(output_mesh.elements)
         return sparse.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
-                                 shape=(len(self.subdomains), len(self.micro_elements))).tocsr()
+                                 shape=(len(subdomains), n_micro_els)).tocsr()
 
 
     @property
@@ -122,8 +159,8 @@ class SubMeshSubproblem:
 
 
     def average(self, field:np.array):
-        assert field.shape[0] == len(self.micro_elements)
-        print(f"{self.average_sparse_matrix.shape} @ {field.shape}")
+        #assert field.shape[0] == len(self.micro_elements), f"field shape {field.shape}, nel: {len(self.micro_elements)}"
+        #print(f"{self.average_sparse_matrix.shape} @ {field.shape}")
         return self.average_sparse_matrix @ field
 
 
@@ -204,6 +241,9 @@ class Subproblems:
         return Subproblems(macro_mesh, macro_els, subprobs)
 
     def subdomains_average(self, subprob_avgs):
+        """
+        array
+        """
         subdomain_avg = np.zeros((self.n_subdomains, subprob_avgs[0].shape[1]))
         assert self.n_subdomains == sum((avg.shape[0] for avg in subprob_avgs))
         for subprob, avg in zip(self.subproblems, subprob_avgs):
@@ -217,11 +257,19 @@ class Subproblems:
 
     @staticmethod
     def equivalent_tensor_3d(loads, responses):
+        """
+        Compute single element equivalent tensor from loads and responses.
+        loads and responses have shape (n_loads, 3), where n_loads is the number of loads.
+        Solving LS problem with matrix of shape (3 * n_loads, 6) and right hand side of shape (3 * n_loads,).
+        TODO:
+        - vectorise the loads and responses, so that we can use this for elementsat once.
+        - move/merge with similar code in bgem
+        """
         # tensor pos. def.  <=> load @ response > 0
         # ... we possibly modify responses to satisfy
-        unit_loads = loads / np.linalg.norm(loads, axis=1)[:, None]
-        load_components = np.sum(responses * unit_loads, axis=1)
-        responses_fixed = responses + (np.maximum(0, load_components) - load_components)[:, None] * unit_loads
+        #unit_loads = loads / np.linalg.norm(loads, axis=1)[:, None]
+        #load_components = np.sum(responses * unit_loads, axis=1)
+        responses_fixed = responses #+ (np.maximum(0, load_components) - load_components)[:, None] * unit_loads
         # from LS problem for 6 unknowns in Voigt notation: X, YY, ZZ, YZ, XZ, XY
         # the matrix has three blocks for Vx, Vy, Vz component of the responses
         # each block has different sparsity pattern
@@ -234,14 +282,19 @@ class Subproblems:
         ls_mat_vz = np.stack([zeros, zeros, loads[:, 2], loads[:, 1], loads[:, 0], zeros], axis=1)
         rhs_vz = responses_fixed[:, 2]
         ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=0)
+        ls_mat_scale = np.average(ls_mat, axis=1)
+        #ls_mat = ls_mat / ls_mat_scale[:, None]
         rhs = np.concatenate([rhs_vx, rhs_vy, rhs_vz], axis=0)
+        #rhs = rhs / ls_mat_scale
         assert ls_mat.shape == (3 * n_loads, 6)
         assert rhs.shape == (3 * n_loads,)
         result = np.linalg.lstsq(ls_mat, rhs, rcond=None)
         cond_tn_voigt, residuals, rank, singulars = result
-        condition_number = singulars[0] / singulars[-1]
-        if condition_number > 1e3:
-            logging.warning(f"Badly conditioned inversion. Residual: {residuals}, max/min sing. : {condition_number}")
+        condition_number = singulars[0] / singulars[2]
+        #if condition_number > 10 or singulars[2] / singulars[3] < 10:
+        if residuals[0]/np.max(np.linalg.norm(responses_fixed, axis=1)) > 1.0e-1:
+                logging.warning(f"Badly conditioned inversion. \n cond:{cond_tn_voigt}\nResidual: {residuals}, max/min sing. :\n"
+                            f"    {singulars}\n{loads}\n")
         return cond_tn_voigt
 
     #@report
@@ -256,7 +309,72 @@ class Subproblems:
             loads = load_field[:, isub, :]
             responses = response_field[:, isub, :]
             tensors[isub, :] = self.equivalent_tensor_3d(loads, responses)
+        tensors = homogenize_batch(load_field.transpose([1, 0, 2]), response_field.transpose([1, 0, 2]))
         return tensors
+
+def voigt_to_tensor(v):
+    # v: (...,6) in the order [C11, C22, C33, C12, C13, C23]
+    return np.stack([
+        np.stack([v[...,0], v[...,3], v[...,4]], axis=-1),
+        np.stack([v[...,3], v[...,1], v[...,5]], axis=-1),
+        np.stack([v[...,4], v[...,5], v[...,2]], axis=-1),
+    ], axis=-2)  # -> (...,3,3)
+
+def tensor_to_voigt(C):
+    # C: (...,3,3)
+    return np.stack([
+        C[...,0,0], C[...,1,1], C[...,2,2],
+        C[...,0,1], C[...,0,2], C[...,1,2],
+    ], axis=-1)  # -> (...,6)
+
+def homogenize_batch(loads, responses, eps=1e-6):
+    """
+    loads:       (N, n_loads, 3)
+    responses:   (N, n_loads, 3)
+    returns:     cond_voigt_pd (N, 6)
+    """
+    N, nL, dim = loads.shape
+
+    # --- 1) build A_i for each batch sample ---
+    zeros = np.zeros((N, nL))
+    ls_mat_vx = np.stack([loads[:, 0], zeros, zeros, zeros, loads[:, 2], loads[:, 1]], axis=2)
+    ls_mat_vy = np.stack([zeros, loads[:, 1], zeros, loads[:, 2], zeros, loads[:, 0]], axis=2)
+    ls_mat_vz = np.stack([zeros, zeros, loads[:, 2], loads[:, 1], loads[:, 0], zeros], axis=2)
+
+    ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=1) # (N, 3*nL, 6)
+    # --- 2) batch-SVD of A -> U (N,3nL,6), S (N,6), Vt (N,6,6) ---
+    U, S, Vt = np.linalg.svd(ls_mat, full_matrices=False)
+
+    # --- 3) build batch-pseudoinverse: pinv(A_i) = V @ diag(1/S) @ U^T ---
+    # S has shape (N,6).  Make S⁺ into (N,6,6)
+    S_plus = np.zeros((N, 6, 6))
+    idx = np.arange(6)
+    S_plus[:, idx, idx] = 1.0 / S  # invert nonzero singulars
+
+    # V: (N,6,6), U_T: (N,6,3nL)ᵀ = (N,3nL,3nL)
+    V = Vt.swapaxes(1,2)
+    U_T = U.swapaxes(1,2)
+
+    # pinv_A: (N,6,3nL)
+    pinv_ls_mat = V @ (S_plus @ U_T)
+
+    # --- 4) solve all least‐squares: cond_raw = pinv_A @ rhs ---
+    rhs = responses.reshape(N, 3*nL)                # (N,3nL)
+    cond_raw = (pinv_ls_mat @ rhs[...,None])[...,0]      # (N,6)
+
+    # --- 5) rebuild 3×3, PSD‐project, and back to Voigt ---
+    C = voigt_to_tensor(cond_raw)                   # (N,3,3)
+    responses_mag = np.average(np.linalg.norm(responses, axis=2))
+    eigvals, eigvecs = np.linalg.eigh(C)            # eigvals (N,3), eigvecs (N,3,3)
+    eig_lower_bound = responses_mag * eps  # lower bound for eigenvalues
+    eigvals_clamped = np.maximum(eigvals, eig_lower_bound)      # (N,3)
+
+    # reconstruct C_pd[i] = Q_i diag(eigvals_clamped[i]) Q_i^T
+    # → we use: Q * Λ * Qᵀ = Q * (Λ * Qᵀ) per batch broadcasting
+    C_pd = eigvecs @ (eigvals_clamped[...,None] * eigvecs.swapaxes(-1,-2))
+
+    return tensor_to_voigt(C_pd)                    # (N,6)
+
 
 def repr_aabb(aabb):
     return f"AABB({aabb.min()}, {aabb.max()})"
@@ -267,6 +385,7 @@ class Subdomain:
     mesh: Mesh
     macro_el_idx: int
     el_indices: List[int]
+    intersect_weights: List[float]
     _weights : np.array = None
 
     @staticmethod
@@ -284,19 +403,21 @@ class Subdomain:
         aabb = shape.aabb(macro_el)
         candidates = micro_mesh.candidate_indices(aabb)
         assert candidates, f"MacroElShape AABB: {i_el} : {aabb} out of subproblem mesh AABB: {repr_aabb(micro_mesh.bih.aabb())}"
-        subdomain_indices = [ie for ie in candidates
-                         if shape.interact(macro_el, micro_mesh.elements[ie])]
-        #logging.info(f"Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
+        subdomain_indices = [(ie, w) for ie in candidates
+                         if (w := shape.interact(macro_el, micro_mesh.elements[ie])) > 0.0]
+        logging.info(f"Subdomain candidates: {len(candidates)}, elements: {len(subdomain_indices)}")
         assert subdomain_indices, f"Empty subdomain {aabb}, {shape._center_radius(macro_el)} . {[micro_mesh.elements[ie].barycenter() for ie in candidates]}"
+        micro_el_indices, intersect_weights = list(zip(*subdomain_indices))
         # TODO: we should also check, that subdomain is covered by micro elements, otherwise, e.g.
         # porosity and conductivity would be wrong
-        return Subdomain(micro_mesh, i_el, subdomain_indices)
+        #print(macro_el.barycenter(), "macro: ", i_el, "\n subdomain:", subdomain_indices, "AABB:", repr_aabb(aabb))
+        return Subdomain(micro_mesh, i_el, list(micro_el_indices), list(intersect_weights))
 
     @property
-    @report
+    #@report
     def weights(self):
         if self._weights is None:
-            volumes = self.mesh.el_volumes[self.el_indices]
+            volumes = self.mesh.el_volumes[self.el_indices] * np.array(self.intersect_weights)
             self._weights = volumes / np.sum(volumes)
         return self._weights
 

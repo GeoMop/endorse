@@ -5,6 +5,7 @@ venv_loc
 .dvc/tmp/
 .dvc/config.local
 
+**/joblib_cache/
 
 endorse_dvc.apps.googleusercontent.com.json
 dvc_secret_config.sh

@@ -8,6 +8,23 @@ from functools import wraps
 import time
 import os
 
+# # 1) Grab joblib’s named logger and set its level
+# joblib_logger = logging.getLogger("joblib")
+# joblib_logger.setLevel(logging.INFO)
+#
+# # 2) Create a FileHandler that writes INFO+ only to joblib_cache.log
+# joblib_handler = logging.FileHandler("joblib_cache.log", mode="a")
+# joblib_handler.setLevel(logging.INFO)
+#
+# # 3) (Optional) If you want a custom format, attach a Formatter
+# formatter = logging.Formatter(
+#     "%(asctime)s %(name)s [%(levelname)s] %(message)s"
+# )
+# joblib_handler.setFormatter(formatter)
+#
+# # 4) Only push this handler onto the 'joblib' logger (not root!)
+# joblib_logger.addHandler(joblib_handler)
+
 """
 Caching of pure function calls currently based on the joblib.
 - File wrapper class allows safe file results with appropriate hashes.
