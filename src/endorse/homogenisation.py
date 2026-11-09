@@ -347,12 +347,13 @@ class Subproblems:
         N, nL, dim = loads.shape
 
         # --- 1) build A_i for each batch sample ---
-        zeros = np.zeros((N, nL))
-        ls_mat_vx = np.stack([loads[:, :, 0], zeros, zeros, zeros, loads[:, :, 2], loads[:, :, 1]], axis=2)
-        ls_mat_vy = np.stack([zeros, loads[:, :, 1], zeros, loads[:, :, 2], zeros, loads[:, :, 0]], axis=2)
-        ls_mat_vz = np.stack([zeros, zeros, loads[:, :, 2], loads[:, :, 1], loads[:, :, 0], zeros], axis=2)
+        ls_mat = np.zeros((N, 3*nL, 6))
+        matrix_to_voigt = VOIGT_TO_TENSOR.reshape(3, 3)
+        for load_id in range(nL):
+            for component in range(3):
+                row = 3 * load_id + component
+                ls_mat[:, row, matrix_to_voigt[component]] += loads[:, load_id, :]
 
-        ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=1) # (N, 3*nL, 6)
         # --- 2) batch-SVD of A -> U (N,3nL,6), S (N,6), Vt (N,6,6) ---
         U, S, Vt = np.linalg.svd(ls_mat, full_matrices=False)
 
@@ -370,7 +371,7 @@ class Subproblems:
         pinv_ls_mat = V @ (S_plus @ U_T)
 
         # --- 4) solve all least‐squares: cond_raw = pinv_A @ rhs ---
-        rhs = responses.transpose(0, 2, 1).reshape(N, 3*nL)                # (N,3nL)
+        rhs = responses.reshape(N, 3*nL)                # (N,3nL)
         cond_raw = (pinv_ls_mat @ rhs[...,None])[...,0]      # (N,6)
 
         residuals = np.sum((ls_mat @ cond_raw[..., None] - rhs[..., None]) ** 2, axis=(1, 2))

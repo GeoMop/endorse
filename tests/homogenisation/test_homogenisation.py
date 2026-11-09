@@ -378,13 +378,14 @@ def test_voigt_maps_and_converters(batched: bool) -> None:
     np.testing.assert_array_equal(homogenisation.tensor_to_voigt(tensors), vectors)
 
 
+@pytest.mark.parametrize("strided", [False, True])
 @pytest.mark.parametrize("n_elements", [1, 2])
 @pytest.mark.parametrize("load_rows", [
     np.eye(3),
     np.array([[1., 2., 0.], [0., 1., 3.], [2., 0., 1.]]),
     np.array([[1., 2., 0.], [0., 1., 3.], [2., 0., 1.], [-1., 2., 1.]]),
 ], ids=["coordinate", "mixed", "four_loads"])
-def test_tensor_recovery_preserves_component_numbering(n_elements: int, load_rows: np.ndarray) -> None:
+def test_tensor_recovery_preserves_component_numbering(n_elements: int, load_rows: np.ndarray, strided: bool) -> None:
     """Recover literal Voigt components from exact matrix-vector responses."""
     tensors = np.array([
         [[2., .2, .3], [.2, 3., .4], [.3, .4, 4.]],
@@ -392,13 +393,78 @@ def test_tensor_recovery_preserves_component_numbering(n_elements: int, load_row
     ])[:n_elements]
     expected = np.array([[2., 3., 4., .4, .3, .2], [5., 6., 7., -.8, .7, -.6]])[:n_elements]
 
-    loads = load_rows.T                           # (3, n_loads): columns are load vectors
-    responses = tensors @ loads[None, :, :]      # (n_elements, 3, n_loads)
+    loads = load_rows.T                            # (3, n_loads): columns are load vectors
+    responses = tensors @ loads[None, :, :]        # (n_elements, 3, n_loads)
     load_field = np.stack([load_rows] * n_elements, axis=1)
     response_field = responses.transpose(2, 0, 1)  # (n_loads, n_elements, 3)
     subproblems = homogenisation.Subproblems(
         None, np.arange(n_elements), [SimpleNamespace(i_subdomains=list(range(n_elements)))])
+    if strided:
+        load_storage = np.zeros(load_field.shape[:-1] + (6,))
+        response_storage = np.zeros(response_field.shape[:-1] + (6,))
+        load_storage[..., ::2] = load_field
+        response_storage[..., ::2] = response_field
+        load_field, response_field = load_storage[..., ::2], response_storage[..., ::2]
+        assert not load_field.flags.c_contiguous
     actual = subproblems.equivalent_tensor_field(load_field, response_field)
 
     assert actual.shape == (n_elements, 6)
     np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
+
+
+def test_voigt_two_batch_axes() -> None:
+    """Preserve literal tensor components through two leading batch dimensions."""
+    vectors = np.broadcast_to([2., 3., 4., .4, .3, .2], (2, 3, 6))
+    tensors = np.broadcast_to([[2., .2, .3], [.2, 3., .4], [.3, .4, 4.]], (2, 3, 3, 3))
+    np.testing.assert_array_equal(homogenisation.voigt_to_tensor(vectors), tensors)
+    np.testing.assert_array_equal(homogenisation.tensor_to_voigt(tensors), vectors)
+    assert not homogenisation.VOIGT_TO_TENSOR.flags.writeable
+    assert not homogenisation.TENSOR_TO_VOIGT.flags.writeable
+
+
+def test_tensor_recovery_clamping() -> None:
+    """Keep the existing response-scaled eigenvalue floor for indefinite fits.
+        K = diag(-2, 3, 4) -> replace negative eig -2 to eps
+    """
+    loads = np.eye(3)[:, None, :]
+    responses = np.diag([-2., 3., 4.])[:, None, :]
+    subproblems = homogenisation.Subproblems(None, np.array([42]), [SimpleNamespace(i_subdomains=[0])])
+    actual = subproblems.equivalent_tensor_field(loads, responses)
+    np.testing.assert_allclose(actual, [[3e-6, 3., 4., 0., 0., 0.]], atol=1e-12)
+
+
+def test_tensor_recovery_poor_fit(caplog) -> None:
+    """Identify only the element whose excess load is inconsistent with the fitted tensor."""
+    loads = np.stack([np.vstack([np.eye(3), [1., 1., 1.]])] * 2, axis=1)
+    responses = 2 * loads
+    responses[-1, 1, 0] += 100.
+    subproblems = homogenisation.Subproblems(None, np.array([42, 71]), [SimpleNamespace(i_subdomains=[0, 1])])
+    with caplog.at_level(logging.WARNING):
+        subproblems.equivalent_tensor_field(loads, responses)
+    assert "element_index=1 macro_element=71" in caplog.text
+    assert "element_index=0" not in caplog.text
+
+
+def test_voigt_macro_export(monkeypatch, tmp_path) -> None:
+    """Inspect anisotropic nine-component fields passed to both macro exporters."""
+    monkeypatch.setenv("ENDORSE_DISABLE_MEMOIZE", "1")
+    captured = []
+    (tmp_path / "fields.msh").touch()
+    mesh = SimpleNamespace(
+        elements=[None, None],
+        write_fields=lambda path, fields: captured.append(fields["conductivity_tn"].copy()),
+        write_fields_vtu=lambda path, fields: captured.append(fields["conductivity_tn"].copy()),
+    )
+    subproblems = SimpleNamespace(equivalent_tensor_field=lambda *_: np.array([[2., 3., 4., .4, .3, .2]]))
+    monkeypatch.setattr(macro_flow_model.Subproblems, "create", lambda *_: subproblems)
+    monkeypatch.setattr(macro_flow_model, "micro_load_response", lambda *_: (None, None))
+    cfg = common.dotdict.create({
+        "homogenization": {"macro_element_scale": 1.},
+        "transport_microscale": {"pressure_loads": [[1., 0., 0.]]},
+        "transport_macroscale": {"default_conductivity": 9., "input_fields_file": str(tmp_path / "fields.msh")},
+    })
+    macro_flow_model.macro_conductivity(cfg, None, mesh, [1], {})
+    assert len(captured) == 2
+    for values in captured:
+        np.testing.assert_array_equal(values, [[9., 0., 0., 0., 9., 0., 0., 0., 9.],
+                                               [2., .2, .3, .2, 3., .4, .3, .4, 4.]])
