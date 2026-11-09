@@ -342,6 +342,22 @@ class Subproblems:
         assert load_field.ndim == 3
         assert load_field.shape[1] == self.n_subdomains
         assert load_field.shape[2] == 3
+        # Report non-finite inputs before they reach the batched linear algebra.
+        nonfinite_count = 0
+        for field_name, field in (("load", load_field), ("response", response_field)):
+            invalid = np.argwhere(~np.isfinite(field))
+            nonfinite_count += len(invalid)
+            if len(invalid):
+                logging.error("Non-finite tensor recovery input: field=%s count=%s shape=%s; "
+                              "reporting first 20 entries", field_name, len(invalid), field.shape)
+                for load_index, element_index, component in invalid[:20]:
+                    logging.error(
+                        "field=%s load_index=%s element_index=%s macro_element=%s component=%s value=%s",
+                        field_name, load_index, element_index, self.homogenized_els[element_index],
+                        "xyz"[component], field[load_index, element_index, component],
+                    )
+        if nonfinite_count:
+            raise ValueError(f"Non-finite tensor recovery input: {nonfinite_count} values; see error log")
         loads = load_field.transpose(1, 0, 2)
         responses = response_field.transpose(1, 0, 2)
         N, nL, dim = loads.shape

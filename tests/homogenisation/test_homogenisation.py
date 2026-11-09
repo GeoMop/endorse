@@ -468,3 +468,26 @@ def test_voigt_macro_export(monkeypatch, tmp_path) -> None:
     for values in captured:
         np.testing.assert_array_equal(values, [[9., 0., 0., 0., 9., 0., 0., 0., 9.],
                                                [2., .2, .3, .2, 3., .4, .3, .4, 4.]])
+
+
+@pytest.mark.parametrize("field_name", ["load", "response"])
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_tensor_recovery_reports_nonfinite_input(
+    field_name: str, bad_value: float, caplog, monkeypatch
+) -> None:
+    """Report invalid field coordinates and stop before entering SVD."""
+    loads = np.stack([np.eye(3)] * 2, axis=1)
+    responses = loads.copy()
+    fields = {"load": loads, "response": responses}
+    fields[field_name][1, 1, 2] = bad_value
+    subproblems = homogenisation.Subproblems(
+        None, np.array([42, 71]), [SimpleNamespace(i_subdomains=[0, 1])])
+
+    def unexpected_svd(*args, **kwargs):
+        pytest.fail("Non-finite input reached SVD")
+
+    monkeypatch.setattr(np.linalg, "svd", unexpected_svd)
+    with caplog.at_level(logging.ERROR), pytest.raises(ValueError, match="Non-finite tensor recovery input"):
+        subproblems.equivalent_tensor_field(loads, responses)
+    assert f"field={field_name} count=1" in caplog.text
+    assert "load_index=1 element_index=1 macro_element=71 component=z" in caplog.text
