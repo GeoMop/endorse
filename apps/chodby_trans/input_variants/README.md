@@ -5,12 +5,13 @@
 - `CASE_*` : original datasets with about 2048 independent samples.
 - `CASE_*_large` extended datasets with about 30 000 independent samples (work in progress)
 
-##  directory
 
+## Report
 A technical report with a detailed description of the forward model and sampling process.
 Some cases are described with smaller sample sizes.
 Sensitivity analysis is in chapter 5.
 We are preparing an SA-focused and updated version.
+
 
 ## Datasets
 
