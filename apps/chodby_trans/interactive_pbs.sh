@@ -3,11 +3,18 @@
 # Request an interactive PBS job. Adjust resources to taste.
 
 # ---- resources (edit) ----
-NODES=2
-PPN=8                    # cores per node
+# NODES=1
+# PPN=2                    # cores per node
+# MEM_PER_NODE=60gb
+# SCRATCH_PER_NODE=50gb
+# QUEUE=charon
+# WALLTIME=08:00:00
+
+NODES=1
+PPN=2                    # cores per node
 MEM_PER_NODE=60gb
-SCRATCH_PER_NODE=20gb
-QUEUE=charon_2h
+SCRATCH_PER_NODE=50gb
+QUEUE=charon
 WALLTIME=02:00:00
 
 # ---- request interactive shell ----

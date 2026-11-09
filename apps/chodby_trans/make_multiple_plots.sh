@@ -10,7 +10,13 @@ set -euo pipefail
 #   "workdir_43a_ot_2048"
 #   "workdir_43b_ot_2048"
 # )
-workdirs=(CASE_0_32k/job_*_*_*)
+#workdirs=(CASE_0_32k/job_*_*_*)
+workdirs=(
+# "CASE_0_32k"
+# "CASE_1_32k"
+# "CASE_2_32k"
+"CASE_3_32k"
+)
 STORAGE="/storage/liberec3-tul/projects/flow123d/chodby_trans"
 
 
