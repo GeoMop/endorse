@@ -1,14 +1,19 @@
 # Sensitivity analysis for near-field transport in crystalline rock
 
-## `extensive_technical_report`
+## Directory structure
+- `report` : extensive technical report
+- `CASE_*` : original datasets with about 2048 independent samples.
+- `CASE_*_large` extended datasets with about 30 000 independent samples (work in progress)
+
+##  directory
 
 A technical report with a detailed description of the forward model and sampling process.
 Some cases are described with smaller sample sizes.
 Sensitivity analysis is in chapter 5.
 We are preparing an SA-focused and updated version.
 
-
 ## Datasets
+
 
 All cases have target sample size N=2048, but some simulations failed due to meshing issues resulting
 in about 1500-2000 independent samples with all Saltelli A, B, AB, and BA evaluations completed correctly.
@@ -56,8 +61,8 @@ The `.zarr` store contains the same reduced statistics in xarray form, plus the 
 `parameter`, `group_parameters`, and `parameter_group_map` variables.
 
 
-## Cases
-Described in detail in the report.
+## `CASE_*` - short runs
+Described in detail in the report. Target sample size 2048.
 
 CASE 0
 - reference scenario
@@ -79,3 +84,28 @@ CASE 3
 - increased hydraulic conductivity and dispersivity
 - 1495/2048 valid samples
 - 27117/28672 valid evaluations
+
+
+## `CASE_*_large` - extended runs
+The same inputs and configuration, target sample count is 32768.
+
+CASE 0
+- reference scenario
+- 23779 (72.6%) valid samples
+- 434996 (94.8%) valid evaluations
+
+CASE 1
+- conservative scenario, no DFN
+- 32757 (99.9%) valid samples
+- 327665 (99.9%) valid evaluations
+
+CASE 2
+- DFN parameter groups refined: dfn_transport and dfn_pop
+- bulk and backfill parameters grouped together (mat_BB)
+- 23466 (71.6%) valid samples
+- 434780 (94.7%) valid evaluations
+
+CASE 3
+- increased hydraulic conductivity and dispersivity
+- 23749 (72.5%) valid samples
+- 434962 (94.8%) valid evaluations
