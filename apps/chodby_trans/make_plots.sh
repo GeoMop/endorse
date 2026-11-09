@@ -11,6 +11,9 @@ VENV="$PROJECT_DIR/venv"
 PYEXEC="$VENV/bin/python"
 # =================================
 
+
+"$PYEXEC" -u collect_sampling_jobs.py --case-dir "$WORKDIR" --force 2>&1 | tee "$WORKDIR/collect.log"
+
 mkdir -p "$WORKDIR/plots"
 app_cmd="read"
 "$PYEXEC" -u "$APP_PY" "$WORKDIR" "$app_cmd" 2>&1 | tee "$WORKDIR/plots/sensitivity_read.log"

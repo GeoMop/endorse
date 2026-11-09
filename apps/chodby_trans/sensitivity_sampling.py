@@ -43,7 +43,6 @@ from chodby_trans import ot_sa
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
 
-
 import logging
 def setup_logging(name="driver"):
     fmt = f"%(asctime)s [{name}] {socket.gethostname()}:%(process)d %(levelname)s: %(message)s"
@@ -764,25 +763,25 @@ def main():
 
     # resolve job dirs
     job.set_workdir(work_dir)
-    if cmd == 'submit' or cmd == 'local':
-        copy_flag = False
-        if job.input.dir_path.exists():
-            while True:
-                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
-                if user_input.lower() in ["yes", "y"]:
-                    print("Continuing...")
-                    copy_flag = True
-                    break
-                elif user_input.lower() in ["no", "n"]:
-                    print("Exiting...")
-                    break
-                else:
-                    print("Invalid input. Please enter yes/no.")
-        else:
-            copy_flag = True
+    # if cmd == 'submit' or cmd == 'local':
+    #     copy_flag = False
+    #     if job.input.dir_path.exists():
+    #         while True:
+    #             user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
+    #             if user_input.lower() in ["yes", "y"]:
+    #                 print("Continuing...")
+    #                 copy_flag = True
+    #                 break
+    #             elif user_input.lower() in ["no", "n"]:
+    #                 print("Exiting...")
+    #                 break
+    #             else:
+    #                 print("Invalid input. Please enter yes/no.")
+    #     else:
+    #         copy_flag = True
         
-        if copy_flag:
-            shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
+    #     if copy_flag:
+    #         shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
     if not job.input.dir_path.exists():
@@ -826,6 +825,7 @@ def main():
             # if needed, we have to pass the correct key which was originally used
             data_schema_key, data_schema = initialize_data_schema()
             tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
+            print(f"continue with N planned samples: {len(tags)}")
             sample_args = gather_sample_args(data_schema_key, tags, parameters)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'meta' or cmd == 'local':

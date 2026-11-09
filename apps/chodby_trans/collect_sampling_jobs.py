@@ -75,6 +75,7 @@ def job_return_code_stats(job_dir: Path) -> dict:
     import chodby_trans.sensitivity_sampling as sampling
 
     start, stop = _job_sample_range(job_dir)
+    print(f"{job_dir.name}: i_sample[{start}:{stop}]")
     job.set_workdir(job_dir)
     tags, _parameters, rc_stats = sampling.read_parameters_by_rc(ReturnCode.to_list(), make_plots=False)
     eval_to_sample = {int(i_eval): int(i_sample) for i_eval, i_sample, _i_saltelli in tags}
