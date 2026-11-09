@@ -57,10 +57,10 @@ echo "Compressing zarr storage..."
 tar_cd $ROOT 0 transport_sampling.tar.gz transport_sampling
 
 echo "Compressing logs..."
-tar_cd $ROOT $DELETE logs.tar.gz logs_charon*
+tar_cd $ROOT 0 logs.tar.gz logs_*
 
-# echo "Compressing nodes workdirs..."
-# tar_cd $ROOT $DELETE workers.tar.gz workdir_charon*
+echo "Compressing nodes workdirs..."
+tar_cd $ROOT 0 workers.tar.gz workdir_*
 
 # list
 # tar -I pigz -tf workers.tar.gz | head

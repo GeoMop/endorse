@@ -37,11 +37,11 @@ import zarr_fuse as zf
 
 import chodby_trans.job as job
 import chodby_trans.transport_wrapper as transport_wrapper
+from chodby_trans.limit_samples import sample_in_limit_samples
 from chodby_trans import ot_sa
 #from chodby_trans.sa import vector_sa_plot as vsp
 from chodby_trans import postprocess as pp
 from chodby_trans.exception_wrapper import ReturnCode
-
 
 import logging
 def setup_logging(name="driver"):
@@ -157,7 +157,7 @@ def single_sample(args):
     cfg = common.config.load_config(str(conf_file))
     cfg["data_schema_key"] = data_schema_key
 
-    if tags[1] >= cfg.ot_sensitivity.limit_samples:
+    if not sample_in_limit_samples(tags[1], cfg.ot_sensitivity.limit_samples):
         return ReturnCode.SKIP
 
     sensitivity_dir = job.scratch.sensitivity_dir
@@ -256,9 +256,9 @@ def prepare_sample_args(cfg, seed):
     recompute = cfg.ot_sensitivity.recompute_failed or cfg.ot_sensitivity.recompute_done
     if job.output.zarr_store_path.exists() and recompute:
         if cfg.ot_sensitivity.recompute_failed:
-            tags, parameters = read_parameters_by_rc(ReturnCode.failed_list())
+            tags, parameters, _rc_stats = read_parameters_by_rc(ReturnCode.failed_list(), make_plots=False)
         elif cfg.ot_sensitivity.recompute_done:
-            tags, parameters = read_parameters_by_rc([ReturnCode.OK])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.OK], make_plots=False)
     else:
         # parameters = salib_samples(cfg, seed)
         # tags = setup_data_storage(cfg, str(input_data.zarr_store_path), data_schema, parameters)
@@ -274,6 +274,11 @@ def gather_sample_args(data_schema_key, tags, parameters):
     sample_args = [(job.output.dir_path, data_schema_key, tags[idx], parameters[idx]) for idx in range(n_samples)]
     logging.info(f"eval_args:\n{sample_args[:10]}\n... n_evals={len(sample_args)}")
     return sample_args
+
+def filter_sample_args_by_limits(sample_args, limit_samples):
+    filtered_args = [args for args in sample_args if sample_in_limit_samples(args[2][1], limit_samples)]
+    logging.info("Filtered sample args by limit_samples=%s: %d -> %d", limit_samples, len(sample_args), len(filtered_args))
+    return filtered_args
 
 def all_samples(cfg, sample_args, client=None):
     
@@ -301,7 +306,12 @@ def all_samples(cfg, sample_args, client=None):
         # results = list(ex.map(single_sample, bh_args))
 
     # Dask
-    t0 = time.time()    
+    sample_args = filter_sample_args_by_limits(sample_args, cfg.ot_sensitivity.limit_samples)
+    if not sample_args:
+        logging.info("No samples within limit_samples=%s, nothing to schedule.", cfg.ot_sensitivity.limit_samples)
+        return
+
+    t0 = time.time()
     futures = client.map(single_sample, sample_args, pure=False)
     results = client.gather(futures)
     logging.info("Completed %d tasks in %.2fs", len(results), time.time() - t0)
@@ -446,7 +456,7 @@ def setup_data_storage(cfg: dotdict,
     tags = np.column_stack((range(input_design.n_evals), i_sample, i_saltelli))
     return tags
 
-def read_parameters_by_rc(rc_select: list[int]):
+def read_parameters_by_rc(rc_select: list[int], make_plots: bool = True):
     print("=========== READ ZARR ==============")
     ds = xr.open_zarr(str(job.output.zarr_store_path))
     print(ds)
@@ -459,19 +469,23 @@ def read_parameters_by_rc(rc_select: list[int]):
     v_param = ds['parameter'].to_numpy()
     v_ieval = ds['i_eval'].to_numpy()
     v_rc = ds['return_code'].to_numpy()
-    plot_failed_return_codes(v_rc, v_ieval)
+    if make_plots:
+        plot_failed_return_codes(v_rc, v_ieval)
 
     mask = np.isin(v_rc, rc_select)
-    logging.info("plotting eval time histogram...")
-    plot_sample_time_hist(ds['eval_time'].to_numpy()[mask].ravel())
+    if make_plots:
+        hist_mask = mask & (v_rc > ReturnCode.SKIP)
+        logging.info("plotting eval time histogram...")
+        plot_sample_time_hist(ds['eval_time'].to_numpy()[hist_mask].ravel())
     f_param = v_param[mask]
     f_ieval = v_ieval[mask]
     f_rc = v_rc[mask]
     logging.info(f"found n_evals: {len(f_ieval)}")
 
-    # just print a summary of found RC
-    codes = np.unique(f_rc)
-    rc_dict = {code: f_ieval[f_rc == code] for code in codes}
+    rc_dict = {
+        int(code): f_ieval[f_rc == code]
+        for code in np.unique(f_rc)
+    }
     for code, ids in rc_dict.items():
         print(f"{code}: {ids}")
 
@@ -481,7 +495,7 @@ def read_parameters_by_rc(rc_select: list[int]):
 
     tags = np.column_stack((f_ieval, f_isample, f_isaltelli))
     logging.info(f"first 20 tags:\n{tags[:20]}")
-    return tags, f_param
+    return tags, f_param, rc_dict
 
 def select_single(i_eval: int):
 
@@ -583,7 +597,7 @@ def plot_sample_time_hist(st):
             transform=plt.gca().transAxes,
             ha="left", va="top",
             fontsize=12, bbox=dict(facecolor="yellow", alpha=0.7, edgecolor="b"))
-    ax.set_title('Sample time histogram')
+    ax.set_title(f"Sample time histogram (n={st.size})")
     ax.set_ylabel('count')
     ax.legend()
     fig.tight_layout()
@@ -648,10 +662,10 @@ bash $PROJECT_DIR/cleanup_workdir.sh $output_dir
 clean_scratch
 
 
-PYEXEC="$PROJECT_DIR/venv/bin/python"
-APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
-"$PYEXEC" -u "$APP_PY" "$output_dir" read
-"$PYEXEC" -u "$APP_PY" "$output_dir" plots
+# PYEXEC="$PROJECT_DIR/venv/bin/python"
+# APP_PY="$PROJECT_DIR/sensitivity_sampling.py"
+# "$PYEXEC" -u "$APP_PY" "$output_dir" read
+# "$PYEXEC" -u "$APP_PY" "$output_dir" plots
 
 echo "FINISHED"
 """
@@ -749,25 +763,25 @@ def main():
 
     # resolve job dirs
     job.set_workdir(work_dir)
-    if cmd == 'submit' or cmd == 'local':
-        copy_flag = False
-        if job.input.dir_path.exists():
-            while True:
-                user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
-                if user_input.lower() in ["yes", "y"]:
-                    print("Continuing...")
-                    copy_flag = True
-                    break
-                elif user_input.lower() in ["no", "n"]:
-                    print("Exiting...")
-                    break
-                else:
-                    print("Invalid input. Please enter yes/no.")
-        else:
-            copy_flag = True
+    # if cmd == 'submit' or cmd == 'local':
+    #     copy_flag = False
+    #     if job.input.dir_path.exists():
+    #         while True:
+    #             user_input = input("Do you want to rewrite INPUT DATA? (yes/no): ")
+    #             if user_input.lower() in ["yes", "y"]:
+    #                 print("Continuing...")
+    #                 copy_flag = True
+    #                 break
+    #             elif user_input.lower() in ["no", "n"]:
+    #                 print("Exiting...")
+    #                 break
+    #             else:
+    #                 print("Invalid input. Please enter yes/no.")
+    #     else:
+    #         copy_flag = True
         
-        if copy_flag:
-            shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
+    #     if copy_flag:
+    #         shutil.copytree(script_path.parent / job.input.dir_path.name, job.input.dir_path, dirs_exist_ok=True)
 
     logging.info(job.to_str())
     if not job.input.dir_path.exists():
@@ -784,7 +798,7 @@ def main():
     if cmd == 'submit':
         if len(sys.argv) == 4:
             app_cmd = sys.argv[3]
-            assert app_cmd in ["read", "continue", "meta", "plots"]
+            assert app_cmd in ["read", "continue", "meta", "plots", "reduced_stats"]
             submit_pbs(cfg, cmd=app_cmd) # given app command
         else:   # default app command
             submit_pbs(cfg)
@@ -810,7 +824,8 @@ def main():
             # data_schema_key is not valid - zarr_fuse not used currently
             # if needed, we have to pass the correct key which was originally used
             data_schema_key, data_schema = initialize_data_schema()
-            tags, parameters = read_parameters_by_rc([ReturnCode.NONE])
+            tags, parameters, _rc_stats = read_parameters_by_rc([ReturnCode.NONE], make_plots=False)
+            print(f"continue with N planned samples: {len(tags)}")
             sample_args = gather_sample_args(data_schema_key, tags, parameters)
             all_samples(cfg=cfg, sample_args=sample_args, client=client)
     elif cmd == 'meta' or cmd == 'local':
@@ -824,6 +839,9 @@ def main():
     elif cmd == 'plots':
         with common.workdir(str(job.output.plots), clean=False):
             pp.make_transport_plots(cfg, seed)
+    elif cmd == 'reduced_stats':
+        with common.workdir(str(job.output.plots), clean=False):
+            pp.make_transport_plots(cfg, seed, reduced_stats=True)
 
     else:
         sys.exit(f"Unkown command provided: '{cmd}'!")

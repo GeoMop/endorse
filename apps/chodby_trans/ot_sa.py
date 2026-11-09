@@ -271,6 +271,17 @@ class InputDesign:
     def group_xr(self) -> xr.DataArray:
         return self._sample_mat_xr(self.group_mat, self.groups)
 
+    @property
+    def parameter_group_xr(self) -> xr.DataArray:
+        param_names = list(self.param_groups.keys())
+        group_names = np.asarray(list(self.param_groups.values()), dtype=object)
+        return xr.DataArray(
+            data=group_names,
+            dims=("param_name",),
+            coords={"param_name": np.asarray(param_names, dtype=object)},
+            name="parameter_group_map",
+        )
+
     def _sample_mat_xr(
             self,
             mat: np.ndarray,

@@ -18,7 +18,17 @@ from matplotlib import colors as mcolors
 from matplotlib.backends.backend_pdf import PdfPages
 
 
-matplotlib.rcParams['hatch.linewidth'] = 6
+matplotlib.rcParams.update({
+    "font.size": 22,
+    # "axes.titlesize": 16,
+    # "axes.labelsize": 14,
+    # "xtick.labelsize": 12,
+    # "ytick.labelsize": 12,
+    # "legend.fontsize": 12,
+    # "legend.title_fontsize": 12,
+    # "figure.titlesize": 16,
+    "hatch.linewidth": 6,
+})
 
 
 def floor_time_si_for_plot(si_t: np.ndarray, min_si: float = 0.01) -> np.ndarray:
