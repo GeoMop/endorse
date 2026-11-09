@@ -356,3 +356,49 @@ def test_macro_conductivity_runs_enabled_coverage_preflight(monkeypatch) -> None
 
     with pytest.raises(homogenisation.SubdomainCoverageError, match="preflight called"):
         macro_flow_model.macro_conductivity(cfg, None, None, [], {})
+
+
+@pytest.mark.parametrize("batched", [False, True])
+def test_voigt_maps_and_converters(batched: bool) -> None:
+    """Check both maps and converters against independently numbered tensors."""
+    vectors = np.array([[2., 3., 4., .4, .3, .2], [5., 6., 7., -.8, .7, -.6]])
+    tensors = np.array([
+        [[2., .2, .3], [.2, 3., .4], [.3, .4, 4.]],
+        [[5., -.6, .7], [-.6, 6., -.8], [.7, -.8, 7.]],
+    ])
+    np.testing.assert_array_equal(homogenisation.VOIGT_TO_TENSOR, [0, 5, 4, 5, 1, 3, 4, 3, 2])
+    np.testing.assert_array_equal(homogenisation.TENSOR_TO_VOIGT, [0, 4, 8, 5, 2, 1])
+    if not batched:
+        vectors, tensors = vectors[0], tensors[0]
+    expanded = vectors[..., homogenisation.VOIGT_TO_TENSOR].reshape(tensors.shape)
+    flattened = tensors.reshape(vectors.shape[:-1] + (9,))
+    np.testing.assert_array_equal(expanded, tensors)
+    np.testing.assert_array_equal(flattened[..., homogenisation.TENSOR_TO_VOIGT], vectors)
+    np.testing.assert_array_equal(homogenisation.voigt_to_tensor(vectors), tensors)
+    np.testing.assert_array_equal(homogenisation.tensor_to_voigt(tensors), vectors)
+
+
+@pytest.mark.parametrize("n_elements", [1, 2])
+@pytest.mark.parametrize("load_rows", [
+    np.eye(3),
+    np.array([[1., 2., 0.], [0., 1., 3.], [2., 0., 1.]]),
+    np.array([[1., 2., 0.], [0., 1., 3.], [2., 0., 1.], [-1., 2., 1.]]),
+], ids=["coordinate", "mixed", "four_loads"])
+def test_tensor_recovery_preserves_component_numbering(n_elements: int, load_rows: np.ndarray) -> None:
+    """Recover literal Voigt components from exact matrix-vector responses."""
+    tensors = np.array([
+        [[2., .2, .3], [.2, 3., .4], [.3, .4, 4.]],
+        [[5., -.6, .7], [-.6, 6., -.8], [.7, -.8, 7.]],
+    ])[:n_elements]
+    expected = np.array([[2., 3., 4., .4, .3, .2], [5., 6., 7., -.8, .7, -.6]])[:n_elements]
+
+    loads = load_rows.T                           # (3, n_loads): columns are load vectors
+    responses = tensors @ loads[None, :, :]      # (n_elements, 3, n_loads)
+    load_field = np.stack([load_rows] * n_elements, axis=1)
+    response_field = responses.transpose(2, 0, 1)  # (n_loads, n_elements, 3)
+    subproblems = homogenisation.Subproblems(
+        None, np.arange(n_elements), [SimpleNamespace(i_subdomains=list(range(n_elements)))])
+    actual = subproblems.equivalent_tensor_field(load_field, response_field)
+
+    assert actual.shape == (n_elements, 6)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12)
