@@ -364,131 +364,114 @@ class Subproblems:
     def n_subdomains(self):
         return sum((len(s.i_subdomains) for s in self.subproblems))
 
-    @staticmethod
-    def equivalent_tensor_3d(loads, responses):
-        """
-        Compute single element equivalent tensor from loads and responses.
-        loads and responses have shape (n_loads, 3), where n_loads is the number of loads.
-        Solving LS problem with matrix of shape (3 * n_loads, 6) and right hand side of shape (3 * n_loads,).
-        TODO:
-        - vectorise the loads and responses, so that we can use this for elementsat once.
-        - move/merge with similar code in bgem
-        """
-        # tensor pos. def.  <=> load @ response > 0
-        # ... we possibly modify responses to satisfy
-        #unit_loads = loads / np.linalg.norm(loads, axis=1)[:, None]
-        #load_components = np.sum(responses * unit_loads, axis=1)
-        responses_fixed = responses #+ (np.maximum(0, load_components) - load_components)[:, None] * unit_loads
-        # from LS problem for 6 unknowns in Voigt notation: X, YY, ZZ, YZ, XZ, XY
-        # the matrix has three blocks for Vx, Vy, Vz component of the responses
-        # each block has different sparsity pattern
-        n_loads = loads.shape[0]
-        zeros = np.zeros(n_loads)
-        ls_mat_vx = np.stack([loads[:, 0], zeros, zeros, zeros, loads[:, 2], loads[:, 1]], axis=1)
-        rhs_vx = responses_fixed[:, 0]
-        ls_mat_vy = np.stack([zeros, loads[:, 1], zeros, loads[:, 2], zeros, loads[:, 0]], axis=1)
-        rhs_vy = responses_fixed[:, 1]
-        ls_mat_vz = np.stack([zeros, zeros, loads[:, 2], loads[:, 1], loads[:, 0], zeros], axis=1)
-        rhs_vz = responses_fixed[:, 2]
-        ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=0)
-        ls_mat_scale = np.average(ls_mat, axis=1)
-        #ls_mat = ls_mat / ls_mat_scale[:, None]
-        rhs = np.concatenate([rhs_vx, rhs_vy, rhs_vz], axis=0)
-        #rhs = rhs / ls_mat_scale
-        assert ls_mat.shape == (3 * n_loads, 6)
-        assert rhs.shape == (3 * n_loads,)
-        result = np.linalg.lstsq(ls_mat, rhs, rcond=None)
-        cond_tn_voigt, residuals, rank, singulars = result
-        residual_norm = np.linalg.norm(ls_mat @ cond_tn_voigt - rhs)
-        response_norm = np.linalg.norm(rhs)
-        relative_residual = residual_norm / response_norm
-        if relative_residual > 1.0e-1:
-            logging.warning(
-                "Poor conductivity tensor fit: relative_residual=%g rank=%s singular_values=%s loads=%s",
-                relative_residual,
-                rank,
-                singulars,
-                loads,
-            )
-        return cond_tn_voigt
+    def equivalent_tensor_field(
+        self, load_field: np.ndarray, response_field: np.ndarray, eps: float = 1e-6
+    ) -> np.ndarray:
+        """Recover symmetric tensors from fields shaped (n_loads, n_elements, 3).
 
-    #@report
-    def equivalent_tensor_field(self, load_field,  response_field):
-        load_field = np.array(load_field)
-        response_field = np.array(response_field)
+        Return (n_elements, 6) in order [xx, yy, zz, yz, xz, xy], without
+        shear scaling. Batched SVD fits all elements, then eigenvalues are
+        clamped to eps times the batch-average response magnitude.
+        """
+        load_field = np.asarray(load_field)
+        response_field = np.asarray(response_field)
         assert load_field.shape == response_field.shape
+        assert load_field.ndim == 3
         assert load_field.shape[1] == self.n_subdomains
         assert load_field.shape[2] == 3
-        tensors = np.empty((self.n_subdomains, 6))
-        for isub in range(self.n_subdomains):
-            loads = load_field[:, isub, :]
-            responses = response_field[:, isub, :]
-            tensors[isub, :] = self.equivalent_tensor_3d(loads, responses)
-        tensors = homogenize_batch(load_field.transpose([1, 0, 2]), response_field.transpose([1, 0, 2]))
-        return tensors
+        # Report non-finite inputs before they reach the batched linear algebra.
+        nonfinite_count = 0
+        for field_name, field in (("load", load_field), ("response", response_field)):
+            invalid = np.argwhere(~np.isfinite(field))
+            nonfinite_count += len(invalid)
+            if len(invalid):
+                logging.error("Non-finite tensor recovery input: field=%s count=%s shape=%s; "
+                              "reporting first 20 entries", field_name, len(invalid), field.shape)
+                for load_index, element_index, component in invalid[:20]:
+                    logging.error(
+                        "field=%s load_index=%s element_index=%s macro_element=%s component=%s value=%s",
+                        field_name, load_index, element_index, self.homogenized_els[element_index],
+                        "xyz"[component], field[load_index, element_index, component],
+                    )
+        if nonfinite_count:
+            raise ValueError(f"Non-finite tensor recovery input: {nonfinite_count} values; see error log")
+        loads = load_field.transpose(1, 0, 2)
+        responses = response_field.transpose(1, 0, 2)
+        N, nL, dim = loads.shape
 
-def voigt_to_tensor(v):
-    # v: (...,6) in the order [C11, C22, C33, C12, C13, C23]
-    return np.stack([
-        np.stack([v[...,0], v[...,3], v[...,4]], axis=-1),
-        np.stack([v[...,3], v[...,1], v[...,5]], axis=-1),
-        np.stack([v[...,4], v[...,5], v[...,2]], axis=-1),
-    ], axis=-2)  # -> (...,3,3)
+        # --- 1) build A_i for each batch sample ---
+        ls_mat = np.zeros((N, 3*nL, 6))
+        matrix_to_voigt = VOIGT_TO_TENSOR.reshape(3, 3)
+        for load_id in range(nL):
+            for component in range(3):
+                row = 3 * load_id + component
+                ls_mat[:, row, matrix_to_voigt[component]] += loads[:, load_id, :]
 
-def tensor_to_voigt(C):
-    # C: (...,3,3)
-    return np.stack([
-        C[...,0,0], C[...,1,1], C[...,2,2],
-        C[...,0,1], C[...,0,2], C[...,1,2],
-    ], axis=-1)  # -> (...,6)
+        # --- 2) batch-SVD of A -> U (N,3nL,6), S (N,6), Vt (N,6,6) ---
+        U, S, Vt = np.linalg.svd(ls_mat, full_matrices=False)
 
-def homogenize_batch(loads, responses, eps=1e-6):
-    """
-    loads:       (N, n_loads, 3)
-    responses:   (N, n_loads, 3)
-    returns:     cond_voigt_pd (N, 6)
-    """
-    N, nL, dim = loads.shape
+        # --- 3) build batch-pseudoinverse: pinv(A_i) = V @ diag(1/S) @ U^T ---
+        # S has shape (N,6).  Make S⁺ into (N,6,6)
+        S_plus = np.zeros((N, 6, 6))
+        idx = np.arange(6)
+        S_plus[:, idx, idx] = 1.0 / S  # invert nonzero singulars
 
-    # --- 1) build A_i for each batch sample ---
-    zeros = np.zeros((N, nL))
-    ls_mat_vx = np.stack([loads[:, 0], zeros, zeros, zeros, loads[:, 2], loads[:, 1]], axis=2)
-    ls_mat_vy = np.stack([zeros, loads[:, 1], zeros, loads[:, 2], zeros, loads[:, 0]], axis=2)
-    ls_mat_vz = np.stack([zeros, zeros, loads[:, 2], loads[:, 1], loads[:, 0], zeros], axis=2)
+        # V: (N,6,6), U_T: (N,6,3nL)ᵀ = (N,3nL,3nL)
+        V = Vt.swapaxes(1,2)
+        U_T = U.swapaxes(1,2)
 
-    ls_mat = np.concatenate([ls_mat_vx, ls_mat_vy, ls_mat_vz], axis=1) # (N, 3*nL, 6)
-    # --- 2) batch-SVD of A -> U (N,3nL,6), S (N,6), Vt (N,6,6) ---
-    U, S, Vt = np.linalg.svd(ls_mat, full_matrices=False)
+        # pinv_A: (N,6,3nL)
+        pinv_ls_mat = V @ (S_plus @ U_T)
 
-    # --- 3) build batch-pseudoinverse: pinv(A_i) = V @ diag(1/S) @ U^T ---
-    # S has shape (N,6).  Make S⁺ into (N,6,6)
-    S_plus = np.zeros((N, 6, 6))
-    idx = np.arange(6)
-    S_plus[:, idx, idx] = 1.0 / S  # invert nonzero singulars
+        # --- 4) solve all least‐squares: cond_raw = pinv_A @ rhs ---
+        rhs = responses.reshape(N, 3*nL)                # (N,3nL)
+        cond_raw = (pinv_ls_mat @ rhs[...,None])[...,0]      # (N,6)
 
-    # V: (N,6,6), U_T: (N,6,3nL)ᵀ = (N,3nL,3nL)
-    V = Vt.swapaxes(1,2)
-    U_T = U.swapaxes(1,2)
+        residuals = np.sum((ls_mat @ cond_raw[..., None] - rhs[..., None]) ** 2, axis=(1, 2))
+        response_scale = np.max(np.linalg.norm(responses, axis=2), axis=1)
+        poor_fit = residuals > 0.1 * response_scale
+        for element in np.flatnonzero(poor_fit):
+            logging.warning(
+                "Poor tensor fit: element_index=%s macro_element=%s residual_squared=%s "
+                "response_scale=%s singular_values=%s loads=%s",
+                element, self.homogenized_els[element], residuals[element],
+                response_scale[element], S[element], loads[element],
+            )
 
-    # pinv_A: (N,6,3nL)
-    pinv_ls_mat = V @ (S_plus @ U_T)
+        # --- 5) rebuild 3×3, PSD‐project, and back to Voigt ---
+        C = voigt_to_tensor(cond_raw)                   # (N,3,3)
+        responses_mag = np.average(np.linalg.norm(responses, axis=2))
+        eigvals, eigvecs = np.linalg.eigh(C)            # eigvals (N,3), eigvecs (N,3,3)
+        eig_lower_bound = responses_mag * eps  # lower bound for eigenvalues
+        eigvals_clamped = np.maximum(eigvals, eig_lower_bound)      # (N,3)
 
-    # --- 4) solve all least‐squares: cond_raw = pinv_A @ rhs ---
-    rhs = responses.reshape(N, 3*nL)                # (N,3nL)
-    cond_raw = (pinv_ls_mat @ rhs[...,None])[...,0]      # (N,6)
+        # reconstruct C_pd[i] = Q_i diag(eigvals_clamped[i]) Q_i^T
+        # → we use: Q * Λ * Qᵀ = Q * (Λ * Qᵀ) per batch broadcasting
+        C_pd = eigvecs @ (eigvals_clamped[...,None] * eigvecs.swapaxes(-1,-2))
 
-    # --- 5) rebuild 3×3, PSD‐project, and back to Voigt ---
-    C = voigt_to_tensor(cond_raw)                   # (N,3,3)
-    responses_mag = np.average(np.linalg.norm(responses, axis=2))
-    eigvals, eigvecs = np.linalg.eigh(C)            # eigvals (N,3), eigvecs (N,3,3)
-    eig_lower_bound = responses_mag * eps  # lower bound for eigenvalues
-    eigvals_clamped = np.maximum(eigvals, eig_lower_bound)      # (N,3)
+        return tensor_to_voigt(C_pd)                    # (N,6)
 
-    # reconstruct C_pd[i] = Q_i diag(eigvals_clamped[i]) Q_i^T
-    # → we use: Q * Λ * Qᵀ = Q * (Λ * Qᵀ) per batch broadcasting
-    C_pd = eigvecs @ (eigvals_clamped[...,None] * eigvecs.swapaxes(-1,-2))
 
-    return tensor_to_voigt(C_pd)                    # (N,6)
+VOIGT_COMPONENTS = ("xx", "yy", "zz", "yz", "xz", "xy")
+VOIGT_TO_TENSOR = np.array([0, 5, 4, 5, 1, 3, 4, 3, 2])
+TENSOR_TO_VOIGT = np.array([0, 4, 8, 5, 2, 1])
+VOIGT_TO_TENSOR.flags.writeable = False
+TENSOR_TO_VOIGT.flags.writeable = False
+
+
+def voigt_to_tensor(v: np.ndarray) -> np.ndarray:
+    """Expand (..., 6) [xx, yy, zz, yz, xz, xy] to (..., 3, 3), without shear scaling."""
+    v = np.asarray(v)
+    assert v.shape[-1] == 6
+    return v[..., VOIGT_TO_TENSOR].reshape(v.shape[:-1] + (3, 3))
+
+
+def tensor_to_voigt(C: np.ndarray) -> np.ndarray:
+    """Extract (..., 6) [xx, yy, zz, yz, xz, xy] from symmetric (..., 3, 3)."""
+    C = np.asarray(C)
+    assert C.shape[-2:] == (3, 3)
+    return C.reshape(C.shape[:-2] + (9,))[..., TENSOR_TO_VOIGT]
+
 
 
 def repr_aabb(aabb):
