@@ -145,6 +145,7 @@ class SubMeshSubproblem:
     _subdomains: List['Subdomain'] = None
     _subdomains_mesh: Mesh = None
     _average_sparse_matrix: sparse.csr_matrix = None
+    _average_matrix_mesh: Mesh = None
 
     @property
     def micro_elements(self):
@@ -198,8 +199,10 @@ class SubMeshSubproblem:
     @report
     def assembly_average_matrix(self, output_mesh: Mesh) -> sparse.csr_matrix:
         """
-        Create sparse matrix for averaging over subdomains, shape (n_macro_el_subdomains, n_subproblem_elements).
+        Cache the averaging matrix for the output mesh, shape (n_macro_el_subdomains, n_subproblem_elements).
         """
+        if self._average_sparse_matrix is not None and self._average_matrix_mesh is output_mesh:
+            return self._average_sparse_matrix
         rows = []
         cols = []
         vals = []
@@ -225,6 +228,7 @@ class SubMeshSubproblem:
             (matrix_data, (matrix_rows, matrix_cols)),
             shape=(len(subdomains), n_micro_els),
         ).tocsr()
+        self._average_matrix_mesh = output_mesh
         return self._average_sparse_matrix
 
     def empty_subdomain_indices(self, output_mesh: Mesh) -> np.ndarray:
@@ -233,10 +237,9 @@ class SubMeshSubproblem:
 
 
     @property
-    def average_sparse_matrix(self):
-        if self._average_sparse_matrix is None:
-            self._average_sparse_matrix = self.assembly_average_matrix(self.submesh)
-        return self._average_sparse_matrix
+    def average_sparse_matrix(self) -> sparse.csr_matrix:
+        """Return the averaging matrix for the full subproblem mesh."""
+        return self.assembly_average_matrix(self.submesh)
 
 
     def average(self, field:np.array):

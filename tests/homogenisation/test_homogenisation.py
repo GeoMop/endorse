@@ -522,7 +522,7 @@ def test_voigt_macro_export(monkeypatch, tmp_path) -> None:
         "transport_microscale": {"pressure_loads": [[1., 0., 0.]]},
         "transport_macroscale": {"default_conductivity": 9., "input_fields_file": str(tmp_path / "fields.msh")},
     })
-    macro_flow_model.macro_conductivity(cfg, None, mesh, [1], {})
+    macro_flow_model.macro_conductivity(cfg, None, mesh, [1], {"cross_section": np.ones(1)})
     assert len(captured) == 2
     for values in captured:
         np.testing.assert_array_equal(values, [[9., 0., 0., 0., 9., 0., 0., 0., 9.],

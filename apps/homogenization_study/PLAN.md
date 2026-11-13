@@ -93,6 +93,11 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-11-13: Cache sparse averaging matrices by output-mesh identity and make the full-submesh property select
+  its own mesh. Extended cross-section mapping checks for repeated calls and mesh changes. Verification:
+  the reported cache test passes; broader checks report 37 passed, one existing skip, and transport deselected.
+  The existing radial-weight divide-by-zero warning remains; no new unresolved questions.
+
 - 2026-11-06 plan: Configure homogenization subdivision, exercise the two non-fracture tests with `[2, 1, 1]`
   before changing cross-section mapping, then map output IDs through normalized submesh parent indices and rerun.
   Add a focused mapping regression covering reordered/subset output and mesh-dependent subdomain caching.
