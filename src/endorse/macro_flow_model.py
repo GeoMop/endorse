@@ -360,11 +360,18 @@ def _interpolate_empty_subdomains(
     micro_points = output_mesh.el_barycenters()[micro_bulk]
     macro_element_indices = np.asarray(subproblem.macro_elements, dtype=int)[empty_subdomain_indices]
     macro_points = subproblem.macro_mesh.el_barycenters()[macro_element_indices]
+    # Note:
+    # Setting method="nearest" is robust and solves problem around boundary
+    # where we often get empty subdomains.
+    # On the other hand, setting "method="linear" gives often NaNs.
+    # The nearest interpolation however gives "messy" values on the boundary.
+    # We might want this still produce NaNs and fail later (in eq. tensor),
+    # and create inflated micro mesh instead.
     return griddata(
         micro_points,
         np.asarray(element_values)[micro_bulk],
         macro_points,
-        method="linear",
+        method="nearest",
     )
 
 
