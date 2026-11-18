@@ -3,7 +3,8 @@ Geometry is a cube of edge L_ext = L_ext_factor * L_inner, centered at the origi
 convention), carrying the boundary conditions. The inner averaging cube is NOT part of it -
 averaging volumes are postprocessing selections, so the mesh does not conform to them.
 
-The DFN comes from a bgem Population (cfg.fractures.stochastic)
+The DFN comes from a bgem Population (cfg.fractures.stochastic), or it is given fracture by
+fracture (cfg.fractures.fixed: center, normal, radius of each disc)
 """
 import os
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from bgem.gmsh import gmsh, gmsh_io, heal_mesh, options
-from bgem.stochastic import EllipseShape, FractureSet, Population
+from bgem.stochastic import EllipseShape, Fracture, FractureSet, Population
 from bgem.stochastic import fr_mesh
 from endorse.common import dotdict, File, memoize
 from endorse.fullscale_transport import fracture_map
@@ -82,9 +83,27 @@ class MicroMesh:
                 for rid, radius in self.fracture_radius_by_region_id.items()}
 
 
+def fixed_fractures(cfg_fixed: list) -> FractureSet:
+    # Deterministic discs (cfg.fractures.fixed), each given by its center, normal and geometric
+    # radius rho [m]. bgem's size of a disc is r = rho / R, with R = 1/sqrt(pi) the radius of the
+    # unit-area base disc (fracture_radii above does the inverse)
+    R = EllipseShape().R
+    fractures = [Fracture(EllipseShape.id, radius=float(fr["radius"]) / R,
+                          center=np.array(fr["center"], dtype=float),
+                          normal=np.array(fr["normal"], dtype=float) / np.linalg.norm(fr["normal"]))
+                 for fr in cfg_fixed]
+    fr_set = FractureSet.from_list(fractures)
+    print(f"[upscale_m dfn] {len(fr_set)} fixed fracture(s), radii "
+          f"{[float(fr['radius']) for fr in cfg_fixed]}")
+    return fr_set
+
+
 @memoize
 def make_fractures(cfg_fractures: dotdict, box) -> FractureSet:
-    # Sample the DFN for the given box (centered at origin).
+    # The fixed fractures if the config gives them, else the DFN sampled for the given box
+    # (centered at origin).
+    if cfg_fractures.get("fixed", None):
+        return fixed_fractures(cfg_fractures.fixed)
     cfg_st = cfg_fractures.stochastic
     # bgem reads the size bounds as r_min/r_max; the config uses the report's r_0/r_infty.
     # bgem ignores keys it does not know, so its names just go in alongside
@@ -123,6 +142,11 @@ def _corner_tetrahedron(factory, corner: np.ndarray, d: float):
     vol = factory.model.addVolume([factory.model.addSurfaceLoop([f_x, f_y, f_z, f_outer])])
     factory._need_synchronize = True
     return factory.object(3, vol)
+
+
+# a face of a support tetrahedron is the one on the outer side x/y/z of the corner if its center of mass lies
+# within TOL_REL_SUPPORT_FACES * L_ext of that side
+TOL_REL_SUPPORT_FACES = 1e-9
 
 
 def _support_faces(factory, tet, corner: np.ndarray, axis_names: Dict[str, str], tol: float):
@@ -186,7 +210,7 @@ def make_geometry(factory, cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_se
     if support_spec:
         support_tets = fragmented[n_main:n_main + len(support_spec)]
         for (corner, axis_names), tet in zip(support_spec, support_tets):
-            faces = _support_faces(factory, tet, corner, axis_names, tol=1e-9 * L_ext)
+            faces = _support_faces(factory, tet, corner, axis_names, tol=TOL_REL_SUPPORT_FACES * L_ext)
             geometry_final += [f.set_region('.' + name) for name, f in faces.items()]
         geometry_final.append(
             factory.group(*support_tets).set_region(cfg_geometry.support_region))
@@ -210,7 +234,7 @@ def meshing(factory, objects, mesh_filename: str, cfg_mesh: dotdict):
     factory.mesh_options.CharacteristicLengthMax = step
     factory.mesh_options.MinimumCirclePoints = int(cfg_mesh.min_circle_points)
     factory.mesh_options.MinimumCurvePoints = int(cfg_mesh.min_curve_points)
-    factory.mesh_options.ToleranceInitialDelaunay = float(cfg_mesh.tolerance_initial_delaunay)
+    factory.mesh_options.ToleranceInitialDelaunay = float(cfg_mesh.tol_gmsh_initial_delaunay)
     factory.mesh_options.Algorithm = options.Algorithm3d.Delaunay
 
     factory.make_mesh(objects, dim=3, eliminate=False)
@@ -227,8 +251,8 @@ def make_gmsh(cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_set: FractureSe
     final_mesh_filename = os.path.join(work_dir, mesh_name + ".msh")
 
     factory = gmsh.GeometryOCC(mesh_name, verbose=False)
-    factory.geom_options.Tolerance = float(cfg_mesh.tolerance)
-    factory.geom_options.ToleranceBoolean = float(cfg_mesh.tolerance_boolean)
+    factory.geom_options.Tolerance = float(cfg_mesh.tol_abs_gmsh_geometry)
+    factory.geom_options.ToleranceBoolean = float(cfg_mesh.tol_abs_gmsh_boolean)
 
     geometry_final = make_geometry(factory, cfg_geometry, cfg_mesh, fracture_set, subc_support)
 
@@ -262,7 +286,7 @@ def make_healed_mesh(cfg_geometry: dotdict, cfg_mesh: dotdict, fracture_set: Fra
     else:
         mesh_file = File(str(raw_mesh_path))
 
-    mesh_file_healed = heal_mesh_preparation(mesh_name, mesh_file, work_dir, gamma_tol=float(cfg_mesh.heal_gamma_tol))
+    mesh_file_healed = heal_mesh_preparation(mesh_name, mesh_file, work_dir, gamma_tol=float(cfg_mesh.tol_heal_gamma))
     return File(str(mesh_file_healed))
 
 
