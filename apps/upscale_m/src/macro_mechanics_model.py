@@ -119,8 +119,8 @@ def make_macro_mesh(cfg_geometry: dotdict, cfg_macro: dotdict, cfg_mesh: dotdict
             "mesh_size_min_fraction": float(cfg_macro.mesh_size_min_fraction),
         })
         factory = gmsh.GeometryOCC(mesh_path.stem, verbose=False)
-        factory.geom_options.Tolerance = float(cfg_mesh.tolerance)
-        factory.geom_options.ToleranceBoolean = float(cfg_mesh.tolerance_boolean)
+        factory.geom_options.Tolerance = float(cfg_mesh.tol_abs_gmsh_geometry)
+        factory.geom_options.ToleranceBoolean = float(cfg_mesh.tol_abs_gmsh_boolean)
         # no fractures here: make_geometry only tests len(), so an empty sequence is enough
         geometry = make_geometry(factory, macro_geometry, macro_mesh_cfg, [], subc_support)
         # the micro mesh pins its element size on the fracture group; with no fractures the box
@@ -176,8 +176,14 @@ def macro_elastic_tensor(cfg: dotdict, micro: MicroMesh, macro_mesh: Mesh,
     """
     Assembles the tensor field for one BC type from its six already solved load cases
 
-    Per macro element: six measured (eps, sigma) Voigt pairs -> a 6x6 fit -> the six 3x3 Kelvin
+    Per macro element: six measured (eps, sigma) Voigt pairs -> a 6x6 fit C -> the six 3x3 Kelvin
     columns Flow123d reads as stiffness_tensor_0 .. stiffness_tensor_5
+
+    Two fields are written, <bc_type>/<tensor_field_file> with the raw fits C (in general not
+    symmetric) and <bc_type>/<tensor_field_file_sym> with their symmetric parts 1/2 (C + C^T);
+    the macro problem uses the symmetric one if mechanics_macroscale.symmetrize is true, the
+    returned file. The largest relative asymmetry delta_sym = ||C - C^T||_F / (2 ||C||_F) (Kelvin)
+    is logged; the check of it is in the analysis of the field.
     """
     mats = cfg.materials
     aperture_by_region_id = micro.aperture_by_region_id(float(mats.aperture_per_r))
@@ -206,11 +212,22 @@ def macro_elastic_tensor(cfg: dotdict, micro: MicroMesh, macro_mesh: Mesh,
     eps_all = np.stack(eps_cases, axis=-1)
     sigma_all = np.stack(sigma_cases, axis=-1)
 
-    # one 9-component field per Kelvin column
+    # one 9-component field per Kelvin column: the raw fits C and their symmetric parts
     col_fields = np.zeros((6, len(macro_mesh.elements), 9))
+    col_fields_sym = np.zeros((6, len(macro_mesh.elements), 9))
+    # Kelvin scaling W, delta_sym is evaluated on W C W
+    W = np.diag([1.0, 1.0, 1.0, np.sqrt(2.0), np.sqrt(2.0), np.sqrt(2.0)])
+    delta_sym = np.zeros(len(homogenized))
     for i, iel in enumerate(homogenized):
         C = equivalent_tensor_6x6(eps_all[i], sigma_all[i])
         col_fields[:, iel, :] = kelvin_columns_3x3(C)
+        col_fields_sym[:, iel, :] = kelvin_columns_3x3(0.5 * (C + C.T))
+        C_hat = W @ C @ W
+        delta_sym[i] = np.linalg.norm(C_hat - C_hat.T) / (2.0 * np.linalg.norm(C_hat))
+    if len(homogenized):
+        i_max = int(np.argmax(delta_sym))
+        print(f"[upscale_m macro/{bc_type}] max delta_sym of the raw fits: {delta_sym[i_max]:.3e} "
+              f"(macro element {macro_mesh.el_ids[homogenized[i_max]]})")
 
     if support:
         # SUBC support tetrahedra carry no homogenized rock -- they are there to pin the six
@@ -218,16 +235,22 @@ def macro_elastic_tensor(cfg: dotdict, micro: MicroMesh, macro_mesh: Mesh,
         rock = kelvin_columns_3x3(isotropic_voigt(float(mats.young_modulus_rock),
                                                   float(mats.poisson_ratio_rock)))
         col_fields[:, support, :] = rock[:, None, :]
+        col_fields_sym[:, support, :] = rock[:, None, :]
         print(f"[upscale_m macro/{bc_type}] {len(support)} support element(s): isotropic rock")
 
-    field_path = Path(bc_type) / cfg.mechanics_macroscale.tensor_field_file
-    prefix = str(cfg.mechanics_macroscale.tensor_field_name_prefix)
-    os.makedirs(field_path.parent, exist_ok=True)
-    fields_file(macro_mesh, {f"{prefix}{k}": col_fields[k] for k in range(6)},
-                file_name=str(field_path))
-    print(f"[upscale_m macro/{bc_type}] tensor field written: {field_path} "
-          f"({len(homogenized)} homogenized + {len(support)} support elements)")
-    return File(str(field_path))
+    cfg_macro = cfg.mechanics_macroscale
+    prefix = str(cfg_macro.tensor_field_name_prefix)
+    paths = {}
+    for name, cols in (("raw", col_fields), ("sym", col_fields_sym)):
+        key = "tensor_field_file" if name == "raw" else "tensor_field_file_sym"
+        paths[name] = Path(bc_type) / cfg_macro[key]
+        os.makedirs(paths[name].parent, exist_ok=True)
+        fields_file(macro_mesh, {f"{prefix}{k}": cols[k] for k in range(6)}, file_name=str(paths[name]))
+        print(f"[upscale_m macro/{bc_type}] tensor field ({name}) written: {paths[name]} "
+              f"({len(homogenized)} homogenized + {len(support)} support elements)")
+    used = paths["sym"] if bool(cfg_macro.symmetrize) else paths["raw"]
+    print(f"[upscale_m macro/{bc_type}] the macro problem uses {used}")
+    return File(str(used))
 
 
 def macro_problem(cfg: dotdict, tag: str, load_matrix: np.ndarray, macro_mesh: Mesh,
