@@ -280,7 +280,7 @@ PBS_SCRIPT_TEMPLATE = """
 #PBS -j oe
 #PBS -m e
 
-set -x
+set -euxo pipefail
 env | grep PBS_
 export TMPDIR=$SCRATCHDIR
 export ENDORSE_DISABLE_MEMOIZE=1
@@ -289,37 +289,57 @@ output_dir={outputdir}
 
 SCRIPT_PATH={script_path}
 PROJECT_DIR=$(dirname -- $SCRIPT_PATH)
+source "$PROJECT_DIR/../../dask/pbs_remote.sh"
 WORK_DIRNAME="workdir"
 
 # A node list with each host once
 UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
 NCPUS=$(wc -l < "$PBS_NODEFILE")
 
+cluster_started=0
+cleanup() {{
+    status=$?
+    trap - EXIT
+    set +e
+    cleanup_status=0
+    if (( cluster_started )); then
+        bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" stop || cleanup_status=$?
+        echo "Copying results back ..."
+        for node in $UNIQ_HOSTS; do
+            pbs_remote "$node" bash -c '
+                set -euo pipefail
+                if [[ -d "$SCRATCHDIR/$1" ]]; then
+                    rsync -a "$SCRATCHDIR/$1/" "$2/"
+                fi
+            ' bash "$WORK_DIRNAME" "$output_dir/workdir_$node" || cleanup_status=$?
+        done
+    fi
+    if (( cleanup_status == 0 )); then
+        clean_scratch || cleanup_status=$?
+    else
+        echo "ERROR: Cleanup failed; scratch retained to avoid losing results or logs." >&2
+    fi
+    if (( status == 0 )); then status=$cleanup_status; fi
+    if (( status == 0 )); then echo "FINISHED"; fi
+    exit "$status"
+}}
+trap cleanup EXIT
+
 echo "Staging data to scratch ..."
 for node in $UNIQ_HOSTS; do
-    pbsdsh -vh "$node" -- rsync -a --delete "$output_dir/" "$SCRATCHDIR/" &
+    pbs_remote "$node" bash -c '
+        set -euo pipefail
+        rsync -a --delete "$1/" "$SCRATCHDIR/"
+    ' bash "$output_dir"
 done
-wait
 
-bash $PROJECT_DIR/dask_cluster_env.sh $output_dir start
+cluster_started=1
+bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" start
 
 cd "$SCRATCHDIR"
 echo "START SAMPLING"
-bash $PROJECT_DIR/dask_cluster_env.sh $output_dir run {app_cmd}
+bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" run {app_cmd}
 echo "FINISHED SAMPLING"
-
-echo "Copying results back ..."
-uname -n
-for node in $UNIQ_HOSTS; do
-    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/$WORK_DIRNAME/" "$output_dir/workdir_$node" &
-done
-wait
-
-bash $PROJECT_DIR/dask_cluster_env.sh $output_dir stop
-
-clean_scratch
-
-echo "FINISHED"
 """
 
 

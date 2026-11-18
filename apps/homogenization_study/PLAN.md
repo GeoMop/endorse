@@ -49,6 +49,13 @@ Stage A implementation steps:
 3. Run the configured coverage preflight before any Flow123d calculation and expose the prepared state to the test.
 4. Keep the micro-mesh conductivity field and Flow123d execution as the remaining USER work.
 
+MetaCentrum startup repair (2026-11-18):
+
+1. Reproduce heterogeneous scratch roots and failure propagation with shell integration regressions.
+2. Resolve remote scratch paths in the PBS template and shared Dask staging/log collection helper.
+3. Check staging and worker-start failures; retain driver status through result collection and cluster cleanup.
+4. Run focused regressions and application contract tests; cluster verification remains a subsequent PBS run.
+
 Current Stage B implementation steps:
 
 1. Use one `HomogenizationSimulation` MLMC level with deterministic grouped parameter planning.
@@ -92,6 +99,26 @@ Current Stage B implementation steps:
 - Keep application-specific configuration, result schemas, and physical orchestration in their owning application.
 
 ## AGENT Log
+
+- 2026-11-18: Restored the `pkill` worker fallback after each node's PID-based stop, as requested.
+  Run it synchronously before log collection and tolerate no matching processes. Verification: nine shell
+  regressions, Bash syntax, and diff checks pass. No real PBS rerun; no new unresolved questions.
+
+- 2026-11-18: Repaired remote scratch handling in the homogenization PBS template and shared Dask helper.
+  Added a checked remote-command helper because PBS can report a remote failure while returning local success.
+  Staging now runs synchronously and fails immediately. The PBS exit handler preserves the original failure,
+  stops the cluster, collects results, and retains scratch when cleanup fails. Shared stop no longer deletes scratch.
+  Verification: 23 tests passed, one existing Flow123d integration skip, and one storage-conversion deselection;
+  the unrestricted contract run was interrupted after stalling at storage conversion. Shell syntax and diff checks pass.
+  The new shell regressions reproduce separate scratch roots and masked remote errors without running a model.
+  Real PBS and physical-model runs remain pending; regenerate the PBS script before resubmission.
+
+- 2026-11-18: Investigated MetaCentrum job 25594775 in `workdir_08` using PBS, scheduler, and worker logs.
+  Sampling stopped at the worker-registration barrier: only 28 of 48 workers arrived within 600 seconds.
+  Remote staging expanded the head node's `/scratch/local.ssd` path before `pbsdsh`; charon06 and charon09
+  use `/scratch.ssd`, so their log directories were never created and both ten-worker launchers exited.
+  Reviewed the PBS template, shared cluster helpers, sampling call path, and `test_small.py`.
+  Investigation only; no implementation changes or cluster rerun. Follow-up repairs are listed below.
 
 - 2026-11-13: Cache sparse averaging matrices by output-mesh identity and make the full-submesh property select
   its own mesh. Extended cross-section mapping checks for repeated calls and mesh changes. Verification:
@@ -169,6 +196,17 @@ Current Stage B implementation steps:
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.
 
 ## AGENT Questions And Remarks
+
+- 2026-11-18: MetaCentrum startup remains blocked by head-node expansion of `$SCRATCHDIR` in remote commands.
+  Resolve scratch paths on each remote node for PBS input staging and result collection, and shared Dask
+  directory creation and log collection (`dask/dask_cluster.sh`). The worker launcher already uses remote scratch.
+  Preserve and propagate staging, worker-start, and sampling failures while still collecting logs and cleaning up:
+  this job continued after remote errors and printed `FINISHED SAMPLING` after the driver traceback.
+  The shared helper is outside the currently authorized application edit scope. No repair was made.
+  Verification uses retained logs and source inspection; a heterogeneous-node PBS rerun is pending.
+  Resolved: The user authorized the suggested shared-helper and application fixes on 2026-11-18.
+  Remote scratch expansion and failure propagation are repaired and covered by shell regressions.
+  A real heterogeneous-node PBS rerun is still required to verify the cluster environment.
 
 - 2026-11-05: The fracture-versus-two-material tensor comparison is deferred: independent test functions must
   not launch unselected variants or depend on another test's outputs. Per-case geometry, material, positivity,

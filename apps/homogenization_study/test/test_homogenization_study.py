@@ -133,10 +133,9 @@ def test_pbs_submission_runs_sampling_through_dask_cluster(tmp_path: Path) -> No
     script_path = sensitivity_sampling.submit_pbs(common.dotdict.create(machine_cfg), cmd="meta", submit=False)
     script = script_path.read_text(encoding="utf-8")
 
-    assert 'rsync -a --delete "$output_dir/" "$SCRATCHDIR/"' in script
-    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir start" in script
-    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir run meta" in script
-    assert "bash $PROJECT_DIR/dask_cluster_env.sh $output_dir stop" in script
+    assert 'bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" start' in script
+    assert 'bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" run meta' in script
+    assert 'bash "$PROJECT_DIR/dask_cluster_env.sh" "$output_dir" stop' in script
     subprocess.run(["bash", "-n", str(script_path)], check=True)
 
 

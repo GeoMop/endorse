@@ -17,6 +17,7 @@ export MKL_NUM_THREADS=1
 
 # ======= SETUP PATHS =======
 DASK_HELPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$DASK_HELPER_DIR/pbs_remote.sh"
 PROJECT_DIR="$ENDORSE_DASK_APP_DIR"
 OUTPUT_DIR=${1}
 EXPECTED_WORKERS_FILE="$SCRATCHDIR/DASK_EXPECTED_WORKERS.txt"
@@ -53,12 +54,12 @@ stage_inputs() {
   echo "[stage] Staging inputs to each node's \$SCRATCHDIR..."
   for node in $UNIQ_HOSTS; do
     echo "--- $node ---"
-    pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"
+    pbs_remote "$node" bash -c 'set -euo pipefail; mkdir -p "$SCRATCHDIR/logs" "$SCRATCHDIR/dask"'
 #    if [[ -n "$WORK_DIRNAME" ]]; then
 #      pbsdsh -vh "$node" -- mkdir -p "$SCRATCHDIR/$WORK_DIRNAME"
 #    fi
 #    pbsdsh -vh "$node" -- rsync -a "$OUTPUT_DIR/" "$SCRATCHDIR/"
-    pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
+    pbs_remote "$node" bash -c 'ls -la "$SCRATCHDIR"'
   done
   wait
 }
@@ -142,7 +143,7 @@ start_workers() {
     # pbsdsh -vh "$HOST" -- python --version
     # pbsdsh -vh "$HOST" -- bash "$PROJECT_DIR"/dask_process_start.sh "$DASK_BIN" "$SCHED_ADDR" "$COUNT"
     echo "--- $HOST ($COUNT slots, $WORKER_COUNT workers) ---"
-    pbsdsh -vh "$HOST" -- env \
+    pbs_remote "$HOST" env \
       ENDORSE_DISABLE_MEMOIZE="${ENDORSE_DISABLE_MEMOIZE:-}" \
       ENDORSE_DASK_APP_MODULE="$ENDORSE_DASK_APP_MODULE" \
       ENDORSE_DASK_WORKER_MODULE="$ENDORSE_DASK_WORKER_MODULE" \
@@ -158,26 +159,37 @@ start_workers() {
 
 stop_cluster() {
   echo "[stop] Stopping workers, copying results from scratchdir..."
+  local status=0
   for node in $(sort -u "$PBS_NODEFILE"); do
     echo "--- $node ---"
-    pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true &
-    pbsdsh -vh "$node" -- bash "$DASK_HELPER_DIR/dask_process_stop.sh" worker &
+    pbs_remote "$node" bash "$DASK_HELPER_DIR/dask_process_stop.sh" worker || status=$?
+    pbsdsh -vh "$node" -- pkill -f "$DASK_BIN worker" || true
 
-    pbsdsh -vh "$node" -- bash -lc "ls -la \"\$SCRATCHDIR\""
+    pbs_remote "$node" bash -c 'ls -la "$SCRATCHDIR"' || status=$?
 #    if [[ -n "$WORK_DIRNAME" ]]; then
 #      pbsdsh -vh "$node" -- rsync -a \
 #        "$SCRATCHDIR/$WORK_DIRNAME/" "$OUTPUT_DIR/${WORK_DIRNAME}_$node/" &
 #    fi
-    pbsdsh -vh "$node" -- rsync -a "$SCRATCHDIR/logs/" "$OUTPUT_DIR/logs_$node/"
   done
-  wait
   
   echo "[stop] Stopping scheduler..."
   HEAD_NODE=$(head -n1 "$PBS_NODEFILE")
-  pbsdsh -vh "$HEAD_NODE" -- bash "$DASK_HELPER_DIR/dask_process_stop.sh" scheduler
-  rm -rf "$SCRATCHDIR"/*
+  pbs_remote "$HEAD_NODE" bash "$DASK_HELPER_DIR/dask_process_stop.sh" scheduler || status=$?
+  for node in $UNIQ_HOSTS; do
+    pbs_remote "$node" bash -c '
+      set -euo pipefail
+      if [[ -d "$SCRATCHDIR/logs" ]]; then
+        rsync -a "$SCRATCHDIR/logs/" "$1/"
+      fi
+    ' bash "$OUTPUT_DIR/logs_$node" || status=$?
+  done
   
-  echo "[stop] Done."
+  if (( status == 0 )); then
+    echo "[stop] Done. Scratch retained for the caller to clean after result collection."
+  else
+    echo "ERROR: Cluster cleanup or log collection failed; scratch retained." >&2
+  fi
+  return "$status"
 }
 
 status_cluster() {
