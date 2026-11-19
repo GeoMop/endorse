@@ -56,6 +56,13 @@ MetaCentrum startup repair (2026-11-18):
 3. Check staging and worker-start failures; retain driver status through result collection and cluster cleanup.
 4. Run focused regressions and application contract tests; cluster verification remains a subsequent PBS run.
 
+PBS completion-check correction (2026-11-18):
+
+1. Reproduce `workdir_04` with remote task output routed separately from local `pbsdsh` diagnostics.
+2. Replace the stdout acknowledgement with exactly one verbose task-completion status; retain transport errors.
+3. Cover successful, failed, missing, malformed, and duplicate completion notices and rerun shell/contract checks.
+4. Preserve remote scratch handling and worker-stop behavior. Real MetaCentrum verification remains pending.
+
 Current Stage B implementation steps:
 
 1. Use one `HomogenizationSimulation` MLMC level with deterministic grouped parameter planning.
@@ -99,6 +106,14 @@ Current Stage B implementation steps:
 - Keep application-specific configuration, result schemas, and physical orchestration in their owning application.
 
 ## AGENT Log
+
+- 2026-11-18: Corrected the `workdir_04` false startup failure: remote stdout does not reliably enter the
+  local `pbsdsh` capture. Replaced the success marker with exactly one verbose PBS task-completion status,
+  preserving transport and remote failures and rejecting missing, malformed, or duplicate notices.
+  Updated the shell mock to route remote output separately; the corrected mock reproduced the failure before repair.
+  Verification: 16 shell regressions pass; Bash syntax and diff checks pass. The broader contract run produced
+  no output and was interrupted while the host load average exceeded 300. Storage conversion was deselected
+  because it previously stalled. Real PBS and physical-model verification remain pending; no new USER questions.
 
 - 2026-11-18: Restored the `pkill` worker fallback after each node's PID-based stop, as requested.
   Run it synchronously before log collection and tolerate no matching processes. Verification: nine shell
@@ -196,6 +211,10 @@ Current Stage B implementation steps:
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.
 
 ## AGENT Questions And Remarks
+
+- 2026-11-18: The `workdir_04` job reported remote success but aborted because the stdout marker was not captured.
+  Resolved: Parse the verbose PBS completion status and test separate remote/local output routing.
+  Local shell checks pass; a real MetaCentrum rerun is still needed to verify the complete startup path.
 
 - 2026-11-18: MetaCentrum startup remains blocked by head-node expansion of `$SCRATCHDIR` in remote commands.
   Resolve scratch paths on each remote node for PBS input staging and result collection, and shared Dask
