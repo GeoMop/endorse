@@ -107,6 +107,15 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- 2026-11-19: Hardened PBS workdir collection and shared Dask log collection after `workdir_05` finished
+  with 18 successful samples and 2 failures but no copied artifacts. Missing source directories now fail
+  instead of silently succeeding; the caller also requires each destination directory to be visible in shared
+  output before permitting scratch cleanup. Transfers print resolved host/source/destination paths and itemized
+  rsync changes. Four regression cases reproduced silent success before repair; all 20 shell tests and six
+  PBS/CLI contract tests pass afterward. Bash syntax and diff checks pass. IDE build reports success with limited
+  diagnostics; IDE inspections report six existing unresolved MLMC import references, despite passing runtime tests.
+  The user authorized the shared Dask helper edit. No cluster or physical-model rerun was performed.
+
 - 2026-11-18: Corrected the `workdir_04` false startup failure: remote stdout does not reliably enter the
   local `pbsdsh` capture. Replaced the success marker with exactly one verbose PBS task-completion status,
   preserving transport and remote failures and rejecting missing, malformed, or duplicate notices.
@@ -211,6 +220,11 @@ Current Stage B implementation steps:
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.
 
 ## AGENT Questions And Remarks
+
+- 2026-11-19: `workdir_05` shows scratch artifacts during shutdown and successful copy-task statuses, followed
+  by scratch deletion, but no transfer paths or itemized output. The historical reason for missing copies remains
+  unconfirmed. Regenerate the PBS script and rerun on the cluster to inspect the new collection diagnostics.
+  Destination-directory checks do not validate complete contents of pre-existing copies on restarted runs.
 
 - 2026-11-18: The `workdir_04` job reported remote success but aborted because the stdout marker was not captured.
   Resolved: Parse the verbose PBS completion status and test separate remote/local output routing.

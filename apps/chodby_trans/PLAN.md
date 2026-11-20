@@ -499,10 +499,19 @@ Goal 5: Verify and correct `MacroTetra.interact` kernel weights.
 
 ## AGENT Questions And Remarks
 
+- 2026-11-19: Investigated `apps/homogenization_study/workdir_05` artifact collection. PBS output reports
+  18 successful samples and 2 failures, node-local `logs` and `workdir` directories during shutdown,
+  successful copy-task exit codes, and subsequent successful scratch deletion. The generated PBS cleanup
+  silently returns success when its source-directory check fails; this shell behavior was verified locally.
 - 2026-10-25: The shared Chodby worker preload reaches `transport_simulation`, but its import currently fails in the
   pre-existing edited `mesh/create_mesh.py`: `geometry_func: Callable` was added without importing `Callable`.
   PyCharm also maps Chodby files to the homogenization virtual environment; the app runner itself still selects
   `apps/chodby_trans/venv`.
+  The reason for the missing copies remains unconfirmed: `dask/pbs_remote.sh`, `dask/dask_cluster.sh`,
+  `apps/homogenization_study/dask_cluster_env.sh`, and its `sensitivity_sampling.py` are absent locally.
+  Restore the actual cluster orchestration sources to trace remote paths and log collection before fixing.
+  Cluster verification was not run. Existing instructions restrict edits to `apps/chodby_trans`.
+
 - 2026-09-16: The coarse level uses `main_line_refinement/h_inner=0.81`, while the fine level uses `1.25`.
   This makes parts of the target coarse mesh substantially finer than the source micro mesh. Is this local resolution
   inversion intentional, or should the level-specific refinement values be exchanged?

@@ -178,10 +178,17 @@ stop_cluster() {
   for node in $UNIQ_HOSTS; do
     pbs_remote "$node" bash -c '
       set -euo pipefail
-      if [[ -d "$SCRATCHDIR/logs" ]]; then
-        rsync -a "$SCRATCHDIR/logs/" "$1/"
+      echo "Collecting logs on $(hostname): $SCRATCHDIR/logs -> $1"
+      if [[ ! -d "$SCRATCHDIR/logs" ]]; then
+        echo "ERROR: Expected log directory is missing: $SCRATCHDIR/logs" >&2
+        exit 1
       fi
+      rsync -ai "$SCRATCHDIR/logs/" "$1/"
     ' bash "$OUTPUT_DIR/logs_$node" || status=$?
+    if [[ ! -d "$OUTPUT_DIR/logs_$node" ]]; then
+      echo "ERROR: Log copy is not visible in shared output: $OUTPUT_DIR/logs_$node" >&2
+      status=1
+    fi
   done
   
   if (( status == 0 )); then

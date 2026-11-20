@@ -308,10 +308,17 @@ cleanup() {{
         for node in $UNIQ_HOSTS; do
             pbs_remote "$node" bash -c '
                 set -euo pipefail
-                if [[ -d "$SCRATCHDIR/$1" ]]; then
-                    rsync -a "$SCRATCHDIR/$1/" "$2/"
+                echo "Collecting workdir on $(hostname): $SCRATCHDIR/$1 -> $2"
+                if [[ ! -d "$SCRATCHDIR/$1" ]]; then
+                    echo "ERROR: Expected workdir is missing: $SCRATCHDIR/$1" >&2
+                    exit 1
                 fi
+                rsync -ai "$SCRATCHDIR/$1/" "$2/"
             ' bash "$WORK_DIRNAME" "$output_dir/workdir_$node" || cleanup_status=$?
+            if [[ ! -d "$output_dir/workdir_$node" ]]; then
+                echo "ERROR: Workdir copy is not visible in shared output: $output_dir/workdir_$node" >&2
+                cleanup_status=1
+            fi
         done
     fi
     if (( cleanup_status == 0 )); then
