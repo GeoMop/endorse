@@ -1,0 +1,5 @@
+# BGEM JB_homo API used by ENDORSE; do not substitute the older submodules/bgem.
+bgem @ git+https://github.com/GeoMop/bgem.git@JS_fix_healmesh_flat_tetra_hanging_nodes
+gmsh==4.15.2
+numpy>=1.26,<2
+PyYAML>=6

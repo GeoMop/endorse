@@ -1,0 +1,85 @@
+# Paths are resolved relative to this config file. CLI overrides take precedence.
+# Optional settings show their defaults and are commented out.
+input:
+  # Required: directory with DFN_gen-vars.yaml and the family NPZ/YAML files.
+  directory: DFN_gen-out_v01_d004
+
+  # Zero-based domain index in DFN_gen-vars.yaml and the input filenames (dNNN).
+  # domain_idx: 0
+
+  # Zero-based network realization, selected by the input filenames (rNNN).
+  # realization: 0
+
+  # Inclusive fracture radius interval, in scaled units. Radius means the source
+  # area-equivalent radius fracture_req = sqrt(original polygon area / pi), not
+  # the ellipse semi-major axis or a radius recomputed after clipping. null leaves
+  # that bound open. Bounds must satisfy 0 <= rmin <= rmax when supplied.
+  # Applied before cropping and meshing; original source-row IDs are preserved.
+  # rmin: null
+  # rmax: null
+
+  # Optional subdomain: [xmin, xmax, ymin, ymax, zmin, zmax], in scaled units.
+  # Bounds must have positive extents and lie within the source domain.
+  # Intersecting fracture polygons are retained even when their centers lie
+  # outside the crop, then clipped to its boundary. null uses the complete domain.
+  # Example: crop: [-0.5, 0.5, -0.5, 0.5, -0.5, 0.5]
+  # crop: null
+
+# Required: raw ASCII Gmsh 2.2 mesh path. Reports use the same filename stem.
+# If healing is enabled, its mesh is written separately as <stem>_healed.msh2.
+output: output/d004.msh2
+
+# Positive multiplier applied to source coordinates, domain bounds, and fracture
+# lengths. Source units are unspecified; use this to convert them consistently.
+# Mesh sizes, tolerance, input.crop, input.rmin, and input.rmax are specified in
+# the resulting units; they are not multiplied by coordinate_scale automatically.
+# coordinate_scale: 1.0
+
+# Uncomment mesh: together with the desired settings below. Omit unused settings;
+# do not leave an uncommented mesh: with no entries (YAML would read it as null).
+# mesh:
+
+#   Target element size on fracture surfaces and their edges, in scaled units.
+#   Must be positive. Smaller values resolve fractures more finely.
+#   fracture_size: 0.05
+
+#   Target bulk element size away from fractures; also Gmsh's maximum mesh size.
+#   In scaled units; must be positive. Normally larger than fracture_size.
+#   bulk_size: 0.25
+
+#   Distance over which the bulk size transitions from fracture_size at a fracture
+#   to bulk_size away from it. In scaled units; must be nonnegative. Zero disables
+#   the distance-based background field, leaving entity mesh sizes in effect.
+#   refinement_distance: 0.1
+
+#   OCC CAD healing tolerance, in scaled units. A positive value heals the
+#   fragmented geometry before meshing; zero or a negative value disables it.
+#   Example: 1.0e-4. This is independent of tolerance below and HealMesh gamma.
+#   Small-edge/face fixes are enabled; sewing and rebuilding solids are disabled
+#   to preserve internal fracture sheets and the partitioned bulk domain.
+#   Healing may change geometry and entity tags; area changes and geometric
+#   feature ratios are reported before/after healing. Source ownership is rebuilt.
+#   geometry_tol: 0.0
+
+#   Positive geometric tolerance, in scaled units, passed to Gmsh's geometry and
+#   Boolean operations. This is not a mesh size or a quality threshold.
+#   tolerance: 1.0e-8
+
+#   Number of Gmsh threads; integer >= 1. More threads may change meshing results.
+#   threads: 1
+
+#   Enable OpenCASCADE parallel geometry operations. Independent of threads;
+#   false keeps parallel Boolean operations disabled.
+#   occ_parallel: false
+
+#   Show Gmsh/BGEM diagnostic output. Application progress logs remain enabled
+#   independently; --verbose also enables this option.
+#   verbose: false
+
+#   Optional dimensionless HealMesh quality threshold: 0 < gamma <= 1.
+#   null disables healing. Example: 1.0e-4. A larger value requests repair of more
+#   elements; it does not guarantee valid topology or that every element passes.
+#   The same value is passed as gamma_tol; node_tol is set to 0.1 * gamma
+#   (HealMesh scales node_tol by the largest mesh bounding-box extent).
+#   The raw mesh is preserved and the healed mesh is audited separately.
+#   gamma: null
