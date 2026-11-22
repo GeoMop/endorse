@@ -4,8 +4,11 @@
 pbs_remote() {
   local node=$1
   shift
-  local output status=0
-  output=$(pbsdsh -vh "$node" -- "$@" 2>&1) || status=$?
+  local output command status=0
+  # Keep multiline argv out of PBS launch hooks. Transport shell-quoted arguments
+  # on one line; remote Bash restores them before exec, including literal newlines.
+  printf -v command '%q ' "$@"
+  output=$(pbsdsh -vh "$node" -- bash -c "exec $command" 2>&1) || status=$?
   printf '%s\n' "$output"
   if (( status != 0 )); then
     echo "ERROR: pbsdsh failed on $node (status $status): $*" >&2
