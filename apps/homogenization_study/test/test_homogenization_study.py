@@ -154,7 +154,7 @@ def test_resolve_subcmd_passes_scheduler_to_sampling(
     scheduler: str | None,
     simulation_class: str,
 ) -> None:
-    """Pass local and cluster scheduler choices through the common command path."""
+    """Check scheduler routing and daemon config using a client probe, without starting Dask."""
     job.set_workdir(tmp_path)
     job.input.dir_path.mkdir(parents=True)
     job.input.study_cfg_path.write_text("submitted input snapshot", encoding="utf-8")

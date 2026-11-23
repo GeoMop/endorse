@@ -110,14 +110,14 @@ def resubmit_unfinished_samples(sampler: Sampler) -> int:
 
 
 def sample_counts(sampler: Sampler) -> tuple[int, int]:
-    """Return successful and failed sample counts for the single level."""
+    """Return successful and failed counts; MLMC's finished count includes both."""
     finished = int(sampler.n_finished_samples[0])
     failed = len(sampler.sample_storage.failed_samples().get("0", []))
     return finished - failed, failed
 
 
 def wait_for_expected_workers(client: Client) -> int | None:
-    """Wait for the worker count published by the PBS Dask runner."""
+    """Wait for the count published by either shell runner; direct clients may omit it."""
     expected_raw = os.environ.get("DASK_EXPECTED_WORKERS")
     if expected_raw is None:
         logging.warning("DASK_EXPECTED_WORKERS is not set; skipping the worker registration barrier.")
@@ -209,7 +209,12 @@ def run_mlmc_sampling(
     meshes: StudyMeshFiles | None = None,
     workdir: Path | None = None,
 ) -> Sampler:
-    """Run or resume the configured single-level sampling calculation."""
+    """Run or resume the configured single-level sampling calculation.
+
+    Shell-launched runs wait for registrations and verify preloads before storage
+    preparation. The caller owns the client. Failed samples consume fixed Zarr
+    slots, so exhausting the pool can return fewer successes than the target.
+    """
     expected_workers = wait_for_expected_workers(client)
     if expected_workers is not None:
         validate_cluster_preloads(client)
@@ -244,6 +249,7 @@ def run_mlmc_sampling(
     scheduled = int(sampler.l_scheduled_samples()[0])
     if scheduled < target:
         sampler.schedule_samples(level_id=0, n_samples=target - scheduled)
+    # `scheduled` is the persisted count before the batch above, not its resulting total.
     logging.info("Sampling target=%s, resumed=%s, scheduled=%s.", target, resubmitted, scheduled)
     successful, failed = sample_counts(sampler)
     while successful < target:
@@ -297,6 +303,7 @@ UNIQ_HOSTS=$(sort -u "$PBS_NODEFILE")
 NCPUS=$(wc -l < "$PBS_NODEFILE")
 
 cluster_started=0
+# Preserve the driver/startup status; collect logs and workspaces before deleting scratch.
 cleanup() {{
     status=$?
     trap - EXIT
@@ -433,6 +440,7 @@ def resolve_subcmd(
         sys.exit(f"Unknown command provided: '{cmd}'!")
 
     with dask.config.set({"distributed.worker.daemon": False}):
+        # With no address, Client creates its own LocalCluster; shell runners pass an address.
         client = Client(scheduler)
         logging.info("Connected to: %s", client)
         run_mlmc_sampling(cfg, client)

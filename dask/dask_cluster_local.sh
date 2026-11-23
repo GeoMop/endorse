@@ -1,7 +1,6 @@
 #!/bin/bash
-# dask_cluster.sh
-# Start/stop a Dask (no MPI) cluster across all nodes in the *current PBS interactive job*.
-# It stages input to each node's $SCRATCHDIR, starts scheduler + workers, and prints the scheduler address.
+# Start/stop a local scheduler and separate single-threaded worker processes.
+# Runtime state lives in <workdir>/dask, logs in <workdir>/logs; no PBS staging is involved.
 
 set -euo pipefail
 
@@ -110,6 +109,7 @@ start_workers() {
   echo "[worker] Starting $procs worker process(es), 1 thread each, no nanny"
 
   CMD=( "$DASK_BIN" worker "$addr"
+      # MLMC sample execution changes process cwd; one computation thread avoids overlapping workspaces.
       --nworkers 1 --nthreads 1
       --no-nanny
       --preload "$DASK_HELPER_DIR/dask_worker_preload.py"

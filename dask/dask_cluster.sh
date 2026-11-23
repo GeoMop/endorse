@@ -1,7 +1,8 @@
 #!/bin/bash
 # dask_cluster.sh
-# Start/stop a Dask (no MPI) cluster across all nodes in the *current PBS interactive job*.
-# It stages input to each node's $SCRATCHDIR, starts scheduler + workers, and prints the scheduler address.
+# Start/stop a Dask (no MPI) cluster across nodes in the current PBS allocation.
+# The application PBS template stages inputs; this helper prepares runtime/log directories,
+# starts scheduler + workers, and runs the driver. Stop collects logs and retains scratch.
 
 set -euo pipefail
 
@@ -51,6 +52,7 @@ make_venv() {
 }
 
 stage_inputs() {
+  # Remote shells must expand SCRATCHDIR: allocated nodes can have different scratch roots.
   echo "[stage] Staging inputs to each node's \$SCRATCHDIR..."
   for node in $UNIQ_HOSTS; do
     echo "--- $node ---"
@@ -120,6 +122,7 @@ start_scheduler() {
 }
 
 start_workers() {
+  # Successful launch is not registration. The driver waits for EXPECTED_WORKERS and checks preloads.
   echo "[worker] Launching workers on each node (one process per worker slot, 1 thread each)..."
   echo "[worker] Reserving $HEAD_WORKER_RESERVE slot(s) on scheduler node $HEAD_NODE."
   echo "$SCHED_ADDR"
@@ -158,6 +161,7 @@ start_workers() {
 }
 
 stop_cluster() {
+  # Workspaces belong to the application; its EXIT handler collects them before clean_scratch.
   echo "[stop] Stopping workers, copying results from scratchdir..."
   local status=0
   for node in $(sort -u "$PBS_NODEFILE"); do

@@ -16,6 +16,8 @@ export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
+# --local-directory controls Dask spill/runtime files, not the MLMC sample workspace.
+# The pool supplies the sample workspace separately when it submits each task.
 CMD=( "$DASK_BIN" worker "$SCHED_ADDR"
       --nworkers 1 --nthreads 1
       --no-nanny

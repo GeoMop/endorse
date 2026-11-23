@@ -17,6 +17,7 @@ PRELOAD_COMPLETED = False
 APP_MODULE = os.environ["ENDORSE_DASK_APP_MODULE"]
 SCHEDULER_MODULE = os.environ["ENDORSE_DASK_SCHEDULER_MODULE"]
 importlib.import_module(SCHEDULER_MODULE)
+# Preloads are loaded by file path; publish the stable name queried by the driver's status callable.
 sys.modules[f"{APP_MODULE}.dask_scheduler_preload"] = sys.modules[__name__]
 
 PRELOAD_SECONDS = time.monotonic() - PRELOAD_STARTED_AT

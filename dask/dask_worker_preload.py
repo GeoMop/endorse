@@ -18,6 +18,7 @@ APP_MODULE = os.environ["ENDORSE_DASK_APP_MODULE"]
 WORKER_MODULE = os.environ["ENDORSE_DASK_WORKER_MODULE"]
 job = importlib.import_module(f"{APP_MODULE}.job")
 importlib.import_module(WORKER_MODULE)
+# Status probes inspect this alias without importing the heavy module in the scheduler or driver.
 sys.modules[f"{APP_MODULE}.dask_worker_preload"] = sys.modules[__name__]
 
 PRELOAD_SECONDS = time.monotonic() - PRELOAD_STARTED_AT
@@ -36,6 +37,9 @@ logger.info(
 def dask_setup(worker) -> None:
     """
     Initialize job paths before the worker registers and accepts MLMC tasks.
+
+    Import completion alone is insufficient: PRELOAD_COMPLETED becomes true only
+    after the shared input/output paths and this node's scratch context are set.
     """
     output_dir = os.environ.get(job.OUTPUT_DIR_ENV)
     input_dir = os.environ.get(job.INPUT_DIR_ENV)
