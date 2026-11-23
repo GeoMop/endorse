@@ -25,6 +25,7 @@ from mlmc.sampling_pool_dask import SamplingPoolDask
 from homogenization_study import job
 from homogenization_study.create_mesh import create_homogenization_mesh
 from homogenization_study.dask_status import scheduler_preload_status, worker_preload_status
+from homogenization_study.mlmc_worker import WorkerScratchSamplingPool
 from homogenization_study.model import StudyMeshFiles
 from homogenization_study.problem_simulation import (
     HomogenizationSimulation,
@@ -66,7 +67,7 @@ def _homogenization_geometry(meshes: StudyMeshFiles) -> tuple[np.ndarray, np.nda
     return mesh.el_barycenters()[indices], np.asarray(mesh.el_ids, dtype=np.int64)[indices]
 
 
-def prepare_sampling(cfg: dotdict, meshes: StudyMeshFiles, workdir: Path):
+def prepare_sampling(cfg: dotdict, meshes: StudyMeshFiles) -> HomogenizationSimulation:
     """Create fixed geometry metadata and the one-level simulation adapter."""
     barycenter, gmsh_id = _homogenization_geometry(meshes)
     parameter_names = full_parameter_names(cfg)
@@ -92,7 +93,6 @@ def prepare_sampling(cfg: dotdict, meshes: StudyMeshFiles, workdir: Path):
         )
     return simulation_class(
         cfg=cfg,
-        workdir=workdir,
         meshes=meshes,
         n_elements=len(gmsh_id),
         store_path=job.output.zarr_store_path,
@@ -220,17 +220,18 @@ def run_mlmc_sampling(
         validate_cluster_preloads(client)
     if job.output is None:
         raise RuntimeError("Call job.set_workdir before starting sampling.")
-    workdir = Path(workdir or job.scratch.dir_path).resolve()
-    workdir.mkdir(parents=True, exist_ok=True)
+    pool_class = WorkerScratchSamplingPool if workdir is None and job.in_pbs_job() else SamplingPoolDask
+    pool_workdir = job.scratch.dir_path if workdir is None else Path(workdir).resolve()
+    pool_workdir.mkdir(parents=True, exist_ok=True)
     if meshes is None:
         homogenization_mesh = create_homogenization_mesh(cfg, job.output.homogenization_mesh_dir)
         meshes = StudyMeshFiles(micro_mesh=Path(""), homogenization_mesh=homogenization_mesh)
 
-    simulation = prepare_sampling(cfg, meshes, workdir)
+    simulation = prepare_sampling(cfg, meshes)
     storage = initialize_hdf_storage(cfg)
-    pool = SamplingPoolDask(
+    pool = pool_class(
         client,
-        work_dir=str(workdir),
+        work_dir=str(pool_workdir),
         debug=not bool(cfg.ot_sensitivity.clean_sample_dir),
         clean=bool(cfg.ot_sensitivity.clean_sample_dir),
     )

@@ -47,13 +47,19 @@ assert "homogenization_study.problem" not in sys.modules
     subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).parents[2], check=True)
 
 
-def test_level_simulation_serializes_only_lightweight_worker_references(tmp_path: Path) -> None:
-    """Keep scheduler deserialization independent of the heavy homogenization module."""
-    job.set_workdir(tmp_path)
+def test_level_simulation_serializes_only_lightweight_worker_references(tmp_path: Path, monkeypatch) -> None:
+    """Send shared paths and lightweight callables to the scheduler."""
+    allocation = tmp_path / "node_scratch"
+    allocation.mkdir()
+    monkeypatch.setenv("PBS_JOBID", "123")
+    monkeypatch.setenv("SCRATCHDIR", str(allocation))
+    run_dir = tmp_path / "run"
+    monkeypatch.setenv(job.INPUT_DIR_ENV, str(run_dir / "input_data"))
+    monkeypatch.setenv(job.OUTPUT_DIR_ENV, str(run_dir))
+    job.set_workdir(run_dir)
     cfg = common.dotdict.create({"mlmc": {"levels": [{"task_size": 1.0}]}})
     simulation = HomogenizationSimulation(
         cfg=cfg,
-        workdir=tmp_path,
         meshes=StudyMeshFiles("micro.msh", "homogenization.msh"),
         n_elements=2,
         store_path=tmp_path / "fields.zarr",
@@ -62,6 +68,17 @@ def test_level_simulation_serializes_only_lightweight_worker_references(tmp_path
     level_sim = simulation.make_level_simulation([1.0], [], level_id=0)
     restored = cloudpickle.loads(cloudpickle.dumps(level_sim))
 
+    assert job.scratch.dir_path == allocation / "workdir"
+    assert restored.config_dict["output_dir"] == str(run_dir)
+    assert restored.config_dict["input_dir"] == str(run_dir / "input_data")
+    assert str(allocation) not in repr(restored.config_dict)
+    worker_allocation = tmp_path / "worker_scratch"
+    worker_allocation.mkdir()
+    monkeypatch.setenv("SCRATCHDIR", str(worker_allocation))
+    assert job.scratch.mlmc_output_dir == worker_allocation / "workdir" / "output"
+    monkeypatch.delenv("PBS_JOBID")
+    monkeypatch.delenv("SCRATCHDIR")
+    assert job.scratch.dir_path == run_dir
     assert isinstance(restored, HomogenizationLevelSimulation)
     assert restored._calculate is calculate_homogenization_sample
     assert restored._calculate.__module__ == "homogenization_study.mlmc_worker"

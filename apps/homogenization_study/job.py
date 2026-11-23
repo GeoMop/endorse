@@ -17,7 +17,6 @@ INPUT_DIR_ENV = "ENDORSE_INPUT_DIR"
 OUTPUT_DIR_ENV = "ENDORSE_OUTPUT_DIR"
 
 input = None
-scratch = None
 output = None
 
 
@@ -46,7 +45,7 @@ class Input(DotDir):
 class Scratch(DotDir):
     """Node-local or local working directories."""
 
-    _samples_dir = "samples"
+    _mlmc_output_dir = "output"
 
 
 class Output(DotDir):
@@ -60,13 +59,34 @@ class Output(DotDir):
     _pbs_script = "homogenization_sampling.pbs"
 
 
+def in_pbs_job() -> bool:
+    """Return whether this process belongs to a PBS job."""
+    return bool(os.environ.get("PBS_JOBID"))
+
+
+def _scratch(local_output: Output | None) -> Scratch | None:
+    if in_pbs_job() or "SCRATCHDIR" in os.environ:
+        allocation = Path(os.environ["SCRATCHDIR"])
+        if not allocation.is_absolute() or not allocation.is_dir():
+            raise ValueError(f"Expected an existing scratch directory, got {allocation}")
+        return Scratch(allocation / "workdir")
+    return Scratch(local_output.dir_path) if local_output is not None else None
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve job.scratch from the environment of the current process on access."""
+    if name == "scratch":
+        return _scratch(output)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def set_workdir(workdir: Path, input_dir: Path | None = None) -> None:
     """Initialize input, scratch, and persistent output paths for one run."""
     output_dir = Path(workdir).expanduser().resolve()
-    scratch_env = os.environ.get("SCRATCHDIR")
-    scratch_dir = (Path(scratch_env).expanduser().resolve() / "workdir"
-                   if scratch_env and "/job" in scratch_env else output_dir)
-    scratch_dir.mkdir(parents=True, exist_ok=True)
+    output_paths = Output(output_dir)
+    scratch_paths = _scratch(output_paths)
+    assert scratch_paths is not None
+    scratch_paths.dir_path.mkdir(parents=True, exist_ok=True)
 
     if input_dir is None:
         input_dir = Path(os.environ.get(INPUT_DIR_ENV, output_dir / "input_data")).expanduser().resolve()
@@ -75,10 +95,9 @@ def set_workdir(workdir: Path, input_dir: Path | None = None) -> None:
         os.environ[INPUT_DIR_ENV] = str(input_dir)
     os.environ[OUTPUT_DIR_ENV] = str(output_dir)
 
-    global input, scratch, output
+    global input, output
     input = Input(input_dir)
-    scratch = Scratch(scratch_dir)
-    output = Output(output_dir)
+    output = output_paths
 
 
 def to_str():
@@ -86,7 +105,7 @@ def to_str():
     def format_dir(d: DotDir):
         return f"{d.dir_path} [{'True' if d.dir_path.exists() else 'False'}]"
     s = s + f"input: {format_dir(input)}\n"
-    s = s + f"scratch: {format_dir(scratch)}\n"
+    s = s + f"scratch: {format_dir(_scratch(output))}\n"
     s = s + f"output: {format_dir(output)}\n"
     s = s + '-' * 50
     return s

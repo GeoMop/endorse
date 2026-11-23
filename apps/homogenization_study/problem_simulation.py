@@ -245,7 +245,7 @@ def run_homogenization_sample(
     """Run one physical sample and persist both success and failure metadata."""
     started = time.perf_counter()
     sample_level, sample_number = parse_sample_workspace(Path.cwd())
-    job.set_workdir(Path(config_dict["workdir"]), Path(config_dict["input_dir"]))
+    job.set_workdir(Path(config_dict["output_dir"]), Path(config_dict["input_dir"]))
     cfg = dotdict.create(copy.deepcopy(config_dict["root_cfg"]))
     cfg, parameter_dict = apply_sample_parameters(cfg, sample_input)
     parameter_values = full_parameter_values(cfg, parameter_dict)
@@ -298,9 +298,8 @@ def run_random_sample(
 class HomogenizationSimulation(Simulation):
     """Single-level MLMC adapter for homogenized conductivity fields."""
 
-    def __init__(self, cfg: dotdict, workdir: Path, meshes: Any, n_elements: int, store_path: Path):
+    def __init__(self, cfg: dotdict, meshes: Any, n_elements: int, store_path: Path):
         self.cfg = cfg
-        self.workdir = Path(workdir)
         self.meshes = meshes
         self.n_elements = int(n_elements)
         self.store_path = Path(store_path)
@@ -315,7 +314,7 @@ class HomogenizationSimulation(Simulation):
                     "homogenization_mesh": str(self.meshes.homogenization_mesh),
                 },
                 "store_path": str(self.store_path),
-                "workdir": str(self.workdir),
+                "output_dir": str(job.output.dir_path),
                 "input_dir": str(job.input.dir_path),
                 "n_elements": self.n_elements,
             },

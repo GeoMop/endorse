@@ -107,6 +107,35 @@ Current Stage B implementation steps:
 
 ## AGENT Log
 
+- `job.scratch` now reads the current process's `SCRATCHDIR` on access. The worker and driver use the same
+  interface, and local runs without PBS scratch use the configured output directory.
+
+- PBS scratch follow-up: `job.Scratch` resolves the node's allocation and owns the MLMC output path.
+  Simulation metadata carries shared input and output directories. The optional sampling workdir only selects
+  the pool workspace. The PBS adapter remains because the installed MLMC pool submits a driver-resolved path
+  and performs sample file retention on the driver. Removing the adapter requires MLMC support for both on workers.
+
+- PBS samples now resolve their workspace from the executing worker's `SCRATCHDIR` before MLMC creates
+  it. Workers archive or remove samples under the same root that PBS collects. Local and explicit workspace
+  calls retain the standard pool. Verification: 60 tests passed, including four worker workspace cases.
+  The live local Dask probe was interrupted after stalling. The passing workspace test uses an inline
+  Dask client and calls the actual MLMC workspace code. Zarr conversion and the physical test were deselected.
+
+- 2026-11-22: Investigated missing logs/workdirs in `workdir_test_08` (18 successful samples, 2 failed).
+  Multiline remote commands report success without their diagnostic messages or transfer side effects;
+  input staging also leaves scratch empty. First-line argv truncation reproduces these symptoms locally.
+  Encoded arguments with Bash `printf %q` in `dask/pbs_remote.sh`, sending one physical command line and
+  restoring the original argv on the remote node before exec. Remote scratch expansion remains on that node.
+  Verification: 12 shell regressions failed before repair; all 42 now pass, including successful copies with
+  real rsync and literal/empty/multiline argument preservation. Seven focused PBS/driver contracts pass.
+  Bash syntax and diff checks pass. Full model and real PBS verification were not run; no commits.
+
+- 2026-11-20: Reviewed shared Dask launchers/preloads, both application wrappers, sampling call paths, and tests.
+  Added comments describing workspace ownership, registration, preload aliases, and cleanup; added `DASK_REVIEW.md`.
+  No runtime behavior was changed. Verification: 20 PBS shell regressions and seven focused driver contracts pass.
+  Chodby test collection fails on the removed application preload import. Bash syntax and diff checks pass;
+  IDE build reports success with limited diagnostics. No PBS/model run or commits; details are in the review.
+
 - 2026-11-19: Hardened PBS workdir collection and shared Dask log collection after `workdir_05` finished
   with 18 successful samples and 2 failures but no copied artifacts. Missing source directories now fail
   instead of silently succeeding; the caller also requires each destination directory to be visible in shared
@@ -220,6 +249,29 @@ Current Stage B implementation steps:
   boundaries, configuration, and focused contract tests. The real mesh and three-load calculation remain USER work.
 
 ## AGENT Questions And Remarks
+
+- 2026-11-23: `workdir_07` completed 26 of 200 samples; 174 failed. Worker logs show 172 Dask task
+  `PermissionError` events on charon02/06 while MLMC creates sample directories. The driver passed its
+  `/scratch/local.ssd/.../workdir` to every worker, whereas those nodes use `/scratch.ssd`; this confirms the
+  worker-local workspace issue in `DASK_REVIEW.md`. Two additional physical failures report Flow123d and mesh
+  healing exceptions. The exact permission-denied pathname is absent from the logged exception. Cluster rerun
+  and physical failure diagnosis remain pending.
+  Resolved: The PBS pool now uses worker-local scratch for sample setup and file retention. Cluster verification
+  is pending. To retry recorded failures on continuation, enable `recompute_failed` in the run's copied inputs.
+
+- 2026-11-22: Multiline argv loss is inferred from `workdir_test_08` and reproduced by a transport simulation;
+  the precise cluster-side PBS/hook mechanism is unconfirmed. Deploy the updated shared `dask/pbs_remote.sh`
+  before the next run. The existing generated PBS script sources it, so regeneration is unnecessary for this fix.
+  Confirm `Collecting logs/workdir` messages, rsync itemized output, and populated `logs_<node>` / `workdir_<node>`
+  directories on the cluster. Old scratch is retained by our handler, but its continued availability depends on PBS.
+  Complete-content verification of existing copy destinations and worker-local MLMC routing remain separate follow-ups.
+  No new open `USER:` questions.
+
+- 2026-11-20: Dask review follow-ups are detailed in `DASK_REVIEW.md`: worker-local MLMC workspace resolution,
+  single-threaded direct local workers, run-specific shutdown, stale Chodby preload imports, explicit client closure,
+  and PBS path quoting. These are recommendations, not implemented fixes.
+  Open policy question: should a fully collected run with failed samples return a nonzero driver status?
+  No new `USER:` request was added; the earlier shared-code authorization question below is already resolved.
 
 - 2026-11-19: `workdir_05` shows scratch artifacts during shutdown and successful copy-task statuses, followed
   by scratch deletion, but no transfer paths or itemized output. The historical reason for missing copies remains
