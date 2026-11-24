@@ -90,3 +90,14 @@ def test_nonfinite_healed_geometry_is_rejected(tmp_path, coordinates):
     assert not result['passed']
     assert result['bulk_volume'] is None
     assert not gmsh.isInitialized()
+
+
+@pytest.mark.parametrize('gamma', ['1e-4', '1.0e-4'])
+def test_scientific_gamma_string_is_converted_before_healing(tmp_path, gamma):
+    raw = tmp_path/'scientific.msh2'
+    write_sliver(raw)
+    report = heal_mesh_file(raw, gamma)
+    assert report['gamma'] == pytest.approx(1e-4)
+    assert isinstance(report['gamma'], float)
+    assert report['node_tol'] == pytest.approx(1e-5)
+    assert report['status'] == 'completed'

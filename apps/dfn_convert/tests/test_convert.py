@@ -135,3 +135,19 @@ def test_cli_geometry_tolerance_overrides_yaml_and_reports_bulk_metrics(tmp_path
         assert report['geometry'][stage]['area_perimeter']['min'] == pytest.approx(.05)
         assert report['geometry'][stage]['volume_surface_area']['max'] == pytest.approx(1/30)
     assert report['verification']['bulk_volume'] == pytest.approx(.008)
+
+
+def test_heal_existing_accepts_scientific_gamma_from_yaml(tmp_path):
+    import numpy as np
+    from dfn_data import NetworkData
+    from mesh import MeshConfig, generate_mesh
+    raw = tmp_path/'raw.msh2'
+    generate_mesh(NetworkData(np.array([[-.5, .5]]*3), ()), MeshConfig(bulk_size=.5), raw)
+    config = tmp_path/'settings.yaml'
+    config.write_text('input:\n  directory: absent\noutput: raw.msh2\nmesh:\n  gamma: 1e-4\n')
+    run = subprocess.run([sys.executable, str(APP/'convert.py'), '--config', str(config),
+                          '--heal-existing'], cwd=tmp_path, capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    report = json.loads((tmp_path/'raw_healed.healing.json').read_text())
+    assert report['gamma'] == pytest.approx(1e-4)
+    assert report['status'] == 'completed'

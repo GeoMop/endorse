@@ -23,12 +23,15 @@ def _quality(healer, gamma):
                 upper_bounds=[float(x) if x != float('inf') else None for x in bins])
 
 
-def heal_mesh_file(mesh_file: Path, gamma: float):
+def heal_mesh_file(mesh_file: Path, gamma: float | str):
     """Run HealMesh using gamma_tol=gamma and write a separate *_healed.msh2.
 
     Gamma is HealMesh's normalized quality measure, not Gmsh minSICN.
     Healing may change geometry/connectivity; CAD area checks apply to the raw file.
     """
+    # Bare scientific notation in YAML can arrive as a string, including in
+    # --heal-existing, which bypasses MeshConfig normalization.
+    gamma = float(gamma)
     validate_gamma(gamma)
     if gmsh.isInitialized():
         raise RuntimeError('Close the active Gmsh session before running HealMesh')
