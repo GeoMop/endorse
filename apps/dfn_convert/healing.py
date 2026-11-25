@@ -8,7 +8,7 @@ import time
 import gmsh
 import numpy as np
 from mesh_verify import tetra_face_index
-from mesh_output import write_msh22
+from mesh_output import fracture_radius_by_entity, write_msh22
 from bgem.gmsh.heal_mesh import HealMesh
 
 
@@ -46,6 +46,7 @@ def heal_mesh_file(mesh_file: Path, gamma: float | str):
         with output.with_suffix('.healing.log').open('w') as log, redirect_stdout(log):
             _phase(report, report_path, 'reading', started)
             healer = HealMesh.read_mesh(str(mesh_file), node_tol=report['node_tol'])
+            radii = fracture_radius_by_entity(healer.mesh)
             report['nodes_before'] = len(healer.mesh.nodes)
             report['elements_before'] = len(healer.mesh.elements)
             report['tetrahedra_before'] = sum(e[0] == 4 for e in healer.mesh.elements.values())
@@ -59,7 +60,7 @@ def heal_mesh_file(mesh_file: Path, gamma: float | str):
             report['elements_after'] = len(healer.mesh.elements)
             report['physical_names'] = list(healer.mesh.physical)
             _phase(report, report_path, 'writing', started)
-            write_msh22(healer.mesh, output)
+            write_msh22(healer.mesh, output, radii)
             del healer
         with output.open() as stream:
             if (stream.readline().strip(), stream.readline().strip()) != ('$MeshFormat', '2.2 0 8'):

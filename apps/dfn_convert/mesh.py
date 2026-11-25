@@ -13,6 +13,7 @@ from bgem.gmsh.gmsh import GeometryOCC
 
 from dfn_data import NetworkData, clip_polygon_to_box, polygon_area, polygon_vertices
 from mesh_verify import face_keys as _face_keys, tetra_face_index
+from mesh_output import write_fracture_radius
 from healing import heal_mesh_file, validate_gamma
 from geometry_healing import geometry_metrics, heal_cad
 
@@ -87,11 +88,13 @@ def build_geometry(network: NetworkData, mesh_config: MeshConfig, factory: Geome
     for family in network.families:
         vertices = polygon_vertices(family)
         areas = polygon_area(vertices)
-        for row, family_idx, points, area in zip(family.source_rows, family.arrays['fracture_set_idx'], vertices, areas):
+        for index, (row, family_idx, points, area) in enumerate(
+                zip(family.source_rows, family.arrays['fracture_set_idx'], vertices, areas)):
             region = f'fr_s{int(family_idx):02d}_d{network.domain_idx:03d}_r{network.realization:03d}_{int(row):07d}'
             manifest.append(dict(source_id=region, region=region, source=str(family.source), source_row=int(row),
                                  family_id=int(family_idx), family_name=family.name,
-                                 source_area=float(area), clipped_area=0., status='outside'))
+                                 source_area=float(area), fracture_radius=float(family.arrays['fracture_req'][index]),
+                                 clipped_area=0., status='outside'))
             clip_start = time.perf_counter()
             points = clip_polygon_to_box(points, bounds)
             clip_seconds += time.perf_counter()-clip_start
@@ -372,6 +375,13 @@ def _generate_raw_mesh(network: NetworkData, mesh_config: MeshConfig, output: Pa
         before_verify = time.perf_counter()
         report['verification'] = verify_current_mesh(network.bounds, report['fractures'], directory=output.parent)
         report['timings']['verification'] = time.perf_counter()-before_verify
+        radii = {tag: record['fracture_radius'] for record in report['fractures']
+                 if record['status'] == 'retained' for tag in record['surface_tags']}
+        groups = [(ids, radii.get(tag, 0.0) if dim == 2 else 0.0)
+                  for dim, tag in gmsh.model.getEntities()
+                  for ids in gmsh.model.mesh.getElements(dim, tag)[1]]
+        with output.open('a') as stream:
+            write_fracture_radius(stream, sum(len(ids) for ids, _ in groups), groups)
         report['status'] = 'verified'
         return report
     except Exception as error:

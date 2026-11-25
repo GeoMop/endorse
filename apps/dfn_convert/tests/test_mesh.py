@@ -292,3 +292,31 @@ def test_scientific_notation_strings_are_normalized_before_validation(name):
     config = MeshConfig(**{name: '1e-3'})
     assert getattr(config, name) == pytest.approx(.001)
     assert isinstance(getattr(config, name), float)
+
+
+def test_fracture_radius_survives_healing(tmp_path):
+    import gmsh
+
+    network = synthetic_network([[0, 0, -.25], [0, 0, .25]],
+                                [[0, 0, 1]]*2, [.1, .2])
+    output = tmp_path/'radii.msh2'
+    report = generate_mesh(network, MeshConfig(gamma=1e-8), output)
+    radii = {tag: record['fracture_radius'] for record in report['fractures']
+             for tag in record['surface_tags']}
+    assert sorted(radii.values()) == pytest.approx(
+        network.families[0].arrays['fracture_req'])
+    for path in (output, report['healing']['output']):
+        gmsh.initialize()
+        try:
+            gmsh.open(str(path))
+            kind, ids, values, _, components = gmsh.view.getModelData(
+                gmsh.view.getTags()[0], 0)
+            assert (kind, components) == ('ElementData', 1)
+            actual = dict(zip(ids, np.ravel(values)))
+            expected = {eid: radii.get(tag, 0) if dim == 2 else 0
+                        for dim, tag in gmsh.model.getEntities()
+                        for group in gmsh.model.mesh.getElements(dim, tag)[1]
+                        for eid in group}
+            assert actual == expected
+        finally:
+            gmsh.finalize()
