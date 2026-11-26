@@ -35,7 +35,7 @@ def main(argv=None):
     parser.add_argument('--output', type=Path, help='Override mesh path (relative to current directory)')
     parser.add_argument('--crop', type=float, nargs=6, metavar=('X0', 'X1', 'Y0', 'Y1', 'Z0', 'Z1'), help='Crop in scaled coordinate units; includes polygons whose centers lie outside')
     parser.add_argument('--rmin', type=float, help='Minimum area-equivalent fracture radius, inclusive, in scaled units')
-    parser.add_argument('--rmax', type=float, help='Maximum area-equivalent fracture radius, inclusive, in scaled units')
+    parser.add_argument('--rmax', type=float, help='Maximum area-equivalent fracture radius, exclusive, in scaled units')
     parser.add_argument('--summary-only', action='store_true')
     parser.add_argument('--verify-existing', action='store_true', help='Recheck output against its saved CAD manifest without remeshing')
     parser.add_argument('--heal-existing', action='store_true', help='Run HealMesh on the output file without regenerating geometry')

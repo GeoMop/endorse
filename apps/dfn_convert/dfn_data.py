@@ -109,7 +109,7 @@ def filter_by_radius(network: NetworkData, rmin=None, rmax=None):
         raise ValueError('Radius bounds must satisfy 0 <= rmin <= rmax')
     selected = (family.select(np.flatnonzero(
         (family.arrays['fracture_req'] >= lower) &
-        (family.arrays['fracture_req'] <= upper))) for family in network.families)
+        (family.arrays['fracture_req'] < upper))) for family in network.families)
     return replace(network, families=tuple(family for family in selected if len(family)))
 
 
