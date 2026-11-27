@@ -451,10 +451,23 @@ def verify_mesh_file(output: Path):
                 gmsh.finalize()
 
 
+def _size_groups(records):
+    """Bin targets into at most five geometric bands, using each band's minimum."""
+    retained = [r for r in records if r['status'] == 'retained']
+    if not retained:
+        return []
+    sizes = np.array([r['mesh_size'] for r in retained])
+    boundaries = np.geomspace(sizes.min(), sizes.max(), 6)[1:-1]
+    bands = np.searchsorted(boundaries, sizes, side='right')
+    return [(sorted({tag for r, band in zip(retained, bands) if band == group
+                     for tag in r['surface_tags']}), float(sizes[bands == group].min()))
+            for group in np.unique(bands)]
+
+
 def _set_refinement_field(fractures, config, records=None):
     """Combine per-source fields, taking the finest size at intersections."""
-    groups = [(fractures.tags, config.fracture_size)] if records is None else [
-        (r['surface_tags'], r['mesh_size']) for r in records if r['status'] == 'retained']
+    groups = ([(fractures.tags, config.fracture_size)] if records is None
+              else _size_groups(records))
     fields = [_fracture_refinement_field(tags, size, config) for tags, size in groups]
     minimum = gmsh.model.mesh.field.add('Min')
     gmsh.model.mesh.field.setNumbers(minimum, 'FieldsList', fields)

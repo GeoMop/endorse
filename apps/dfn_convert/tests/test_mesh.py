@@ -320,3 +320,19 @@ def test_fracture_radius_survives_healing(tmp_path):
             assert actual == expected
         finally:
             gmsh.finalize()
+
+
+def test_size_groups_bound_field_count_and_preserve_resolution():
+    from mesh import _size_groups
+    sizes = np.geomspace(.05, 5, 845)
+    records = [dict(status='retained', mesh_size=float(size), surface_tags=[i+1])
+               for i, size in enumerate(sizes)]
+    records.append(dict(status='outside', mesh_size=.001, surface_tags=[]))
+    groups = _size_groups(records)
+    assert len(groups) == 5
+    assert sorted(tag for tags, _ in groups for tag in tags) == list(range(1, 846))
+    for tags, size in groups:
+        assert all(size <= sizes[tag-1] for tag in tags)
+    for record in records[:-1]:
+        record['mesh_size'] = .05
+    assert _size_groups(records) == [(list(range(1, 846)), .05)]

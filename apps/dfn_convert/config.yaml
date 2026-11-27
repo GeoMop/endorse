@@ -48,6 +48,8 @@ output: output/d004.msh2
 #   Zero gives min(bulk_size, fracture_size), independent of radius.
 #   Radius is the source radius before clipping. Shared geometry takes the finest
 #   target; fracture_size is the lower bound and bulk_size the upper bound.
+#   Background refinement uses at most five geometric size bands, each taking
+#   its smallest target to preserve resolution.
 #   alpha: 0.0
 
 #   Target bulk element size away from fractures; also Gmsh's maximum mesh size.
