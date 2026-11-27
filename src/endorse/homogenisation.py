@@ -336,12 +336,14 @@ class Subproblems:
         shear scaling. Batched SVD fits all elements, then eigenvalues are
         clamped to eps times the batch-average response magnitude.
         """
+        ndim = 3 # number of dimensions
+        nvoigt = len(TENSOR_TO_VOIGT)
         load_field = np.asarray(load_field)
         response_field = np.asarray(response_field)
         assert load_field.shape == response_field.shape
         assert load_field.ndim == 3
         assert load_field.shape[1] == self.n_subdomains
-        assert load_field.shape[2] == 3
+        assert load_field.shape[2] == ndim
         # Report non-finite inputs before they reach the batched linear algebra.
         nonfinite_count = 0
         for field_name, field in (("load", load_field), ("response", response_field)):
@@ -360,14 +362,14 @@ class Subproblems:
             raise ValueError(f"Non-finite tensor recovery input: {nonfinite_count} values; see error log")
         loads = load_field.transpose(1, 0, 2)
         responses = response_field.transpose(1, 0, 2)
-        N, nL, dim = loads.shape
+        N, nL, _ = loads.shape
 
         # --- 1) build A_i for each batch sample ---
-        ls_mat = np.zeros((N, 3*nL, 6))
-        matrix_to_voigt = VOIGT_TO_TENSOR.reshape(3, 3)
+        ls_mat = np.zeros((N, ndim*nL, nvoigt))
+        matrix_to_voigt = VOIGT_TO_TENSOR.reshape(ndim, ndim)
         for load_id in range(nL):
-            for component in range(3):
-                row = 3 * load_id + component
+            for component in range(ndim):
+                row = ndim * load_id + component
                 ls_mat[:, row, matrix_to_voigt[component]] += loads[:, load_id, :]
 
         # --- 2) batch-SVD of A -> U (N,3nL,6), S (N,6), Vt (N,6,6) ---
@@ -375,8 +377,8 @@ class Subproblems:
 
         # --- 3) build batch-pseudoinverse: pinv(A_i) = V @ diag(1/S) @ U^T ---
         # S has shape (N,6).  Make S⁺ into (N,6,6)
-        S_plus = np.zeros((N, 6, 6))
-        idx = np.arange(6)
+        S_plus = np.zeros((N, nvoigt, nvoigt))
+        idx = np.arange(nvoigt)
         S_plus[:, idx, idx] = 1.0 / S  # invert nonzero singulars
 
         # V: (N,6,6), U_T: (N,6,3nL)
@@ -387,7 +389,7 @@ class Subproblems:
         pinv_ls_mat = V @ (S_plus @ U_T)
 
         # --- 4) solve all least‐squares: cond_raw = pinv_A @ rhs ---
-        rhs = responses.reshape(N, 3*nL)                # (N,3nL)
+        rhs = responses.reshape(N, ndim*nL)                # (N,3nL)
         cond_raw = (pinv_ls_mat @ rhs[...,None])[...,0]      # (N,6)
 
         residuals = np.sum((ls_mat @ cond_raw[..., None] - rhs[..., None]) ** 2, axis=(1, 2))
