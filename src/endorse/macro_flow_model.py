@@ -15,6 +15,7 @@ from .homogenisation import (
     SubMeshSubproblem,
     Subproblems,
     validate_subdomain_coverage,
+    voigt_to_tensor,
 )
 from .mesh_class import Mesh, load_mesh
 from . import large_mesh_shift
@@ -167,13 +168,12 @@ def macro_conductivity(cfg:dotdict, micro_mesh: Mesh, macro_mesh: Mesh, homogeni
 
     # Heterogeneous conductiity tensor stored in Voigt notation.
     dflt_cond = cfg.transport_macroscale.default_conductivity
-    # TODO: possibly get just comutational elements (given computation regions)
+    # TODO: possibly get just computational elements (given computation regions)
     n_elements = len(macro_mesh.elements)
 
     conductivity = np.empty((n_elements, 9))
     conductivity[:, :] = np.array([dflt_cond, 0, 0, 0, dflt_cond, 0, 0, 0, dflt_cond])
-    voigt_indices = [0, 5, 4, 5, 1, 3, 4, 3, 2]
-    conductivity[homogenized_els[:], :] = conductivity_tensors[:, voigt_indices[:]]
+    conductivity[homogenized_els[:], :] = voigt_to_tensor(conductivity_tensors).reshape(-1, 9)
 
 
     input_fields_file = Path(cfg.transport_macroscale.input_fields_file)

@@ -6,6 +6,8 @@ from numpy import typing as npt
 import numpy as np
 import logging
 
+from .homogenisation import VOIGT_TO_TENSOR
+
 
 
 
@@ -50,11 +52,12 @@ class eq_tensor:
 
     @staticmethod
     def tn_homo_kernel_sym(dim):
+        if dim == 3:
+            return np.eye(6)[VOIGT_TO_TENSOR].reshape(3, 3, 6), VOIGT_TO_TENSOR
         ij_voigt = [
             [],
             [(0,0)],
             [(0, 0), (1, 1), (0, 1)],
-            [(0, 0), (1, 1), (2, 2), (1, 2), (2, 0), (0, 1)]
             ]
         voigt = ij_voigt[dim]
         homo_kernel_sym = np.zeros((dim, dim, len(voigt)))
