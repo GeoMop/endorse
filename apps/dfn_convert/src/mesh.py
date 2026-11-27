@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class MeshConfig:
     fracture_size: float = .05
+    alpha: float = 0.0
     bulk_size: float = .25
     tolerance: float = 1e-8
     geometry_tol: float = 0.0
@@ -42,8 +43,8 @@ class MeshConfig:
                 object.__setattr__(self, field.name, float(value))
         if self.gamma is not None:
             validate_gamma(self.gamma)
-        if min(self.fracture_size, self.bulk_size, self.tolerance) <= 0 or self.threads < 1 or self.refinement_distance < 0:
-            raise ValueError('Sizes/tolerance/threads must be positive; refinement_distance must be nonnegative')
+        if min(self.fracture_size, self.bulk_size, self.tolerance) <= 0 or self.alpha < 0 or self.threads < 1 or self.refinement_distance < 0:
+            raise ValueError('Sizes/tolerance/threads must be positive; alpha/refinement_distance must be nonnegative')
 
 
 @dataclass
@@ -164,7 +165,12 @@ def build_geometry(network: NetworkData, mesh_config: MeshConfig, factory: Geome
     for record in manifest:
         record['region'] = record['family_name']
     bulk.mesh_step(mesh_config.bulk_size)
-    fractures.mesh_step(mesh_config.fracture_size)
+    # Descending sizes ensure shared points receive the finest incident target.
+    for record in sorted(manifest, key=lambda r: r['fracture_radius'], reverse=True):
+        record['mesh_size'] = min(mesh_config.bulk_size, max(
+            mesh_config.fracture_size, mesh_config.alpha * record['fracture_radius']))
+        for tag in record.get('surface_tags', []):
+            factory.object(2, tag).mesh_step(record['mesh_size'])
     factory.synchronize()
     plane_tol = 128*np.finfo(float).eps*max(np.abs(bounds).max(), np.ptp(bounds, axis=1).max())
     boundary = []
@@ -187,7 +193,7 @@ def build_geometry(network: NetworkData, mesh_config: MeshConfig, factory: Geome
         for dimtag in edges:
             side = _plane_side(dimtag, bounds, plane_tol)
             if side:
-                boundary.append(factory.object(*dimtag).set_region('.fr_outer_'+side).mesh_step(mesh_config.fracture_size))
+                boundary.append(factory.object(*dimtag).set_region('.fr_outer_'+side))
     return GeometryResult(factory, [bulk, fractures, *boundary], manifest,
                           dict(create=created-started-clip_seconds, clip=clip_seconds,
                                fragment=fragmented-clipped, geometry_healing=healed-heal_started,
@@ -352,7 +358,7 @@ def _generate_raw_mesh(network: NetworkData, mesh_config: MeshConfig, output: Pa
         factory.write_brep(str(output.with_suffix('')))
         stage = 'mesh'
         if mesh_config.refinement_distance and geometry.objects[1].size:
-            _set_refinement_field(geometry.objects[1], mesh_config)
+            _set_refinement_field(geometry.objects[1], mesh_config, geometry.fractures)
         before_mesh = time.perf_counter()
         log.info('Meshing %s', report['entities'])
         # All construction inputs were consumed by fragmentation. Preserve the
@@ -445,21 +451,33 @@ def verify_mesh_file(output: Path):
                 gmsh.finalize()
 
 
-def _set_refinement_field(fractures, config):
+def _set_refinement_field(fractures, config, records=None):
+    """Combine per-source fields, taking the finest size at intersections."""
+    groups = [(fractures.tags, config.fracture_size)] if records is None else [
+        (r['surface_tags'], r['mesh_size']) for r in records if r['status'] == 'retained']
+    fields = [_fracture_refinement_field(tags, size, config) for tags, size in groups]
+    minimum = gmsh.model.mesh.field.add('Min')
+    gmsh.model.mesh.field.setNumbers(minimum, 'FieldsList', fields)
+    gmsh.model.mesh.field.setAsBackgroundMesh(minimum)
+    for option in ('MeshSizeExtendFromBoundary', 'MeshSizeFromPoints', 'MeshSizeFromCurvature'):
+        gmsh.option.setNumber('Mesh.'+option, 0)
+
+
+def _fracture_refinement_field(tags, size, config):
     """Grade bulk sizes without boundary-point interpolation overriding the field."""
     distance = gmsh.model.mesh.field.add('Distance')
-    gmsh.model.mesh.field.setNumbers(distance, 'SurfacesList', fractures.tags)
+    gmsh.model.mesh.field.setNumbers(distance, 'SurfacesList', tags)
     gmsh.model.mesh.field.setNumber(distance, 'Sampling', 10)
     threshold = gmsh.model.mesh.field.add('Threshold')
-    for key, value in dict(InField=distance, SizeMin=config.fracture_size,
+    for key, value in dict(InField=distance, SizeMin=size,
                            SizeMax=config.bulk_size, DistMin=0,
                            DistMax=config.refinement_distance).items():
         gmsh.model.mesh.field.setNumber(threshold, key, value)
     fine = gmsh.model.mesh.field.add('MathEval')
-    gmsh.model.mesh.field.setString(fine, 'F', str(config.fracture_size))
+    gmsh.model.mesh.field.setString(fine, 'F', str(size))
     restrict = gmsh.model.mesh.field.add('Restrict')
     gmsh.model.mesh.field.setNumber(restrict, 'InField', fine)
-    entities = set(fractures.dim_tags)
+    entities = {(2, tag) for tag in tags}
     for dimension in (2, 1):
         roots = [dt for dt in entities if dt[0] == dimension]
         for dimtag in roots:
@@ -470,6 +488,4 @@ def _set_refinement_field(fractures, config):
         gmsh.model.mesh.field.setNumbers(restrict, key, [tag for dim, tag in entities if dim == dimension])
     minimum = gmsh.model.mesh.field.add('Min')
     gmsh.model.mesh.field.setNumbers(minimum, 'FieldsList', [threshold, restrict])
-    gmsh.model.mesh.field.setAsBackgroundMesh(minimum)
-    for option in ('MeshSizeExtendFromBoundary', 'MeshSizeFromPoints', 'MeshSizeFromCurvature'):
-        gmsh.option.setNumber('Mesh.'+option, 0)
+    return minimum

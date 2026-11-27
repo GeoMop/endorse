@@ -43,6 +43,13 @@ output: output/d004.msh2
 #   Must be positive. Smaller values resolve fractures more finely.
 #   fracture_size: 0.05
 
+#   Nonnegative fracture radius scaling:
+#   step = min(bulk_size, max(fracture_size, alpha * radius)).
+#   Zero gives min(bulk_size, fracture_size), independent of radius.
+#   Radius is the source radius before clipping. Shared geometry takes the finest
+#   target; fracture_size is the lower bound and bulk_size the upper bound.
+#   alpha: 0.0
+
 #   Target bulk element size away from fractures; also Gmsh's maximum mesh size.
 #   In scaled units; must be positive. Normally larger than fracture_size.
 #   bulk_size: 0.25
